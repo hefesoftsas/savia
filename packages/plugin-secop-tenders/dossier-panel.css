@@ -80,6 +80,12 @@
   gap: 0.4rem;
   min-height: 44px;
 }
+.secop-dossier-actions .secop-icon-action {
+  width: 44px;
+  min-width: 44px;
+  padding: 0.55rem;
+  flex: 0 0 auto;
+}
 .secop-dossier :is(input, textarea, select) {
   box-sizing: border-box;
   width: 100%;

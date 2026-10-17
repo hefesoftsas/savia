@@ -506,6 +506,11 @@
         "description": "PDF analyses intentionally requested by workspace users.",
         "config": {
           "version": 2,
+          "studio": {
+            "screen": {
+              "hidden": true
+            }
+          },
           "fields": {
             "name": {
               "type": "Textbox",

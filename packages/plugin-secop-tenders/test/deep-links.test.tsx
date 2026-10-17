@@ -185,8 +185,8 @@ it("updates the route for tab navigation and clears only plugin state on Back", 
     tender: row.process_id,
     tab: "documents",
   });
-  const back = [...app.element.querySelectorAll("button")].find((button) =>
-    button.textContent?.trim().includes("Back to tenders"),
+  const back = app.element.querySelector<HTMLButtonElement>(
+    'button[aria-label="Back to tenders"]',
   );
   await act(async () => back!.click());
   expect(app.route.set).toHaveBeenLastCalledWith({}, { replace: true });

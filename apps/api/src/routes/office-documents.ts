@@ -43,6 +43,18 @@ const multipartBody = {
   required: true,
   content: { "multipart/form-data": { schema: z.object({ file: z.any() }) } },
 };
+const sourceKeySchema = z.string().trim().min(1).max(256);
+const createMultipartBody = {
+  required: true,
+  content: {
+    "multipart/form-data": {
+      schema: z.object({
+        file: z.any(),
+        sourceKey: sourceKeySchema.optional(),
+      }),
+    },
+  },
+};
 const security = [{ oauth2: ["savia.api.read"] }];
 const writeSecurity = [{ oauth2: ["savia.api.write"] }];
 const disabledResponse = {
@@ -89,7 +101,7 @@ const createDocumentRoute = createRoute({
   tags: ["Office documents"],
   summary: "Create a private office document",
   security: writeSecurity,
-  request: { body: multipartBody },
+  request: { body: createMultipartBody },
   responses: {
     ...disabledResponse,
     201: {
@@ -107,6 +119,66 @@ const createDocumentRoute = createRoute({
     422: {
       content: { "application/json": { schema: errorSchema } },
       description: "Unsupported Office document",
+    },
+  },
+});
+const sourceDocumentRoute = createRoute({
+  method: "get",
+  path: "/v1/office-documents/source",
+  tags: ["Office documents"],
+  summary: "Find the caller's private office document by source key",
+  security,
+  request: { query: z.object({ key: sourceKeySchema }) },
+  responses: {
+    ...disabledResponse,
+    200: {
+      content: {
+        "application/json": {
+          schema: envelope(summarySchema.nullable()),
+        },
+      },
+      description: "Private document summary, or null when no source is linked",
+    },
+    400: {
+      content: { "application/json": { schema: errorSchema } },
+      description: "Invalid source key",
+    },
+  },
+});
+const adoptSourceRoute = createRoute({
+  method: "post",
+  path: "/v1/office-documents/{id}/source",
+  tags: ["Office documents"],
+  summary: "Link an existing private office document to a source key",
+  security: writeSecurity,
+  request: {
+    params: idParam,
+    body: {
+      required: true,
+      content: {
+        "application/json": {
+          schema: z.object({ key: sourceKeySchema }),
+        },
+      },
+    },
+  },
+  responses: {
+    ...disabledResponse,
+    200: {
+      content: { "application/json": { schema: envelope(summarySchema) } },
+      description: "Linked document or the document already using this key",
+    },
+    400: {
+      content: { "application/json": { schema: errorSchema } },
+      description: "Invalid source key",
+    },
+    404: {
+      content: { "application/json": { schema: errorSchema } },
+      description: "Document not found",
+    },
+    409: {
+      content: { "application/json": { schema: errorSchema } },
+      description: "Document already has a different source key",
     },
   },
 });
@@ -381,6 +453,29 @@ export function registerOfficeDocumentRoutes(
     handler: (context: Context) => Promise<Response>,
   ) => app.openapi(route as never, handler as never);
   register(listRoute, (c) => run(() => service(c).list()));
+  register(sourceDocumentRoute, (c) =>
+    run(() => service(c).source(c.req.query("key") ?? "")),
+  );
+  register(adoptSourceRoute, async (c) => {
+    try {
+      const body = await c.req.json<{ key?: unknown }>();
+      if (typeof body.key !== "string")
+        throw new OfficeDocumentsError(
+          400,
+          "INVALID_SOURCE_KEY",
+          "A source key is required",
+        );
+      const key = body.key;
+      return await run(() => service(c).adoptSource(c.req.param("id")!, key));
+    } catch (failure) {
+      if (failure instanceof OfficeDocumentsError)
+        return Response.json(
+          { error: { code: failure.code, message: failure.message } },
+          { status: failure.status, headers: { "cache-control": "no-store" } },
+        );
+      throw failure;
+    }
+  });
   register(membersRoute, (c) =>
     run(() => service(c).members(c.req.query("q") ?? "")),
   );
@@ -405,14 +500,22 @@ export function registerOfficeDocumentRoutes(
   });
   register(createDocumentRoute, async (c) => {
     try {
-      const file = (await c.req.formData()).get("file");
+      const form = await c.req.formData();
+      const file = form.get("file");
+      const key = form.get("sourceKey");
       if (!(file instanceof File))
         throw new OfficeDocumentsError(
           400,
           "INVALID_FILE",
           "A file is required",
         );
-      return await run(() => service(c).create(file), 201);
+      if (key !== null && typeof key !== "string")
+        throw new OfficeDocumentsError(
+          400,
+          "INVALID_SOURCE_KEY",
+          "Source key must be text",
+        );
+      return await run(() => service(c).create(file, key ?? undefined), 201);
     } catch (failure) {
       if (failure instanceof OfficeDocumentsError)
         return Response.json(

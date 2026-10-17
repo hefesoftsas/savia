@@ -52,7 +52,12 @@ export type PluginAssistantResponse = {
     insufficientEvidence?: boolean;
   }>;
   source?: { url: string; page?: number };
-  documentActions?: Array<{ id: string; label: string; format: "docx" }>;
+  documentActions?: Array<{
+    id: string;
+    label: string;
+    format: "docx";
+    fileName?: string;
+  }>;
   document?: { url: string; fileName: string; format: "docx" };
   pendingJobId?: string;
   coverage?: { label: string; complete: boolean };
@@ -269,6 +274,12 @@ export function parsePluginAssistantResponse(
         !action.label.trim() ||
         action.label.length > 100 ||
         action.format !== "docx" ||
+        (action.fileName !== undefined &&
+          (typeof action.fileName !== "string" ||
+            !action.fileName.trim() ||
+            action.fileName.length > 200 ||
+            !action.fileName.endsWith(".docx") ||
+            /[\\/]/.test(action.fileName))) ||
         ids.has(action.id)
       )
         return null;
@@ -399,7 +410,12 @@ export function parsePluginAssistantResponse(
             nested.documentActions as NonNullable<
               PluginAssistantResponse["documentActions"]
             >
-          ).map(({ id, label, format }) => ({ id, label, format })),
+          ).map(({ id, label, format, fileName }) => ({
+            id,
+            label,
+            format,
+            ...(fileName ? { fileName } : {}),
+          })),
         }),
     ...(nested.document === undefined
       ? {}

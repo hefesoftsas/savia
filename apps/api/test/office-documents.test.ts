@@ -185,6 +185,19 @@ async function createDoc(app: OpenAPIHono, name = "Plan.docx"): Promise<any> {
   return ((await response.json()) as any).data;
 }
 
+async function createDocWithSource(
+  app: OpenAPIHono,
+  key: string,
+  file = new File([officeZip("docx")], "Plan.docx", {
+    type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  }),
+) {
+  const form = new FormData();
+  form.set("file", file);
+  form.set("sourceKey", key);
+  return app.request("/v1/office-documents", { method: "POST", body: form });
+}
+
 async function setShare(
   app: OpenAPIHono,
   id: string,
@@ -216,6 +229,131 @@ async function saveDoc(app: OpenAPIHono, id: string, version: number) {
 describe("private office document API", () => {
   beforeAll(applyMigrations);
   beforeEach(seed);
+
+  it("reuses the caller's existing source document before validating or storing another upload", async () => {
+    const owner = appFor(actor("office-owner", 9461));
+    const firstResponse = await createDocWithSource(
+      owner,
+      "proposal:secop:123",
+    );
+    const first = ((await firstResponse.json()) as any).data;
+    const saved = await saveDoc(owner, first.id, 1);
+    expect(saved.status).toBe(201);
+
+    const objectsBefore = await env.DOCUMENTS.list({
+      prefix: "9461/office-owner/",
+    });
+    const reused = await createDocWithSource(
+      owner,
+      "proposal:secop:123",
+      new File(["invalid Office package"], "bad.docx", {
+        type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      }),
+    );
+    expect(reused.status).toBe(201);
+    expect(((await reused.json()) as any).data).toMatchObject({
+      id: first.id,
+      version: 2,
+    });
+    expect(
+      (await env.DOCUMENTS.list({ prefix: "9461/office-owner/" })).objects,
+    ).toHaveLength(objectsBefore.objects.length);
+  });
+
+  it("looks up source keys only for the active tenant and owner", async () => {
+    const owner = appFor(actor("office-owner", 9461));
+    const peer = appFor(actor("office-peer", 9461));
+    const otherTenant = appFor(actor("office-other", 9462));
+    const created = await createDocWithSource(owner, "private-key");
+    const id = ((await created.json()) as any).data.id;
+
+    const ownLookup = await owner.request(
+      "/v1/office-documents/source?key=private-key",
+    );
+    expect(ownLookup.status).toBe(200);
+    expect(((await ownLookup.json()) as any).data.id).toBe(id);
+    for (const response of [
+      await peer.request("/v1/office-documents/source?key=private-key"),
+      await otherTenant.request("/v1/office-documents/source?key=private-key"),
+    ]) {
+      expect(response.status).toBe(200);
+      expect((await response.json()).data).toBeNull();
+    }
+    const peerCreated = await createDocWithSource(peer, "private-key");
+    expect(peerCreated.status).toBe(201);
+    expect(((await peerCreated.json()) as any).data.id).not.toBe(id);
+    expect(
+      (await owner.request("/v1/office-documents/source?key=unbound")).status,
+    ).toBe(200);
+  });
+
+  it("returns the winning document for concurrent creates with the same source key", async () => {
+    const owner = appFor(actor("office-owner", 9461));
+    const responses = await Promise.all([
+      createDocWithSource(owner, "concurrent-key"),
+      createDocWithSource(owner, "concurrent-key"),
+    ]);
+    expect(responses.map((response) => response.status)).toEqual([201, 201]);
+    const documents = await Promise.all(
+      responses.map(async (response) => ((await response.json()) as any).data),
+    );
+    expect(documents[0].id).toBe(documents[1].id);
+    expect(
+      (
+        await env.DB.prepare(
+          "SELECT COUNT(*) AS count FROM office_documents WHERE tenant_id=9461 AND owner_id='office-owner'",
+        ).first<{ count: number }>()
+      )?.count,
+    ).toBe(1);
+    expect(
+      (await env.DOCUMENTS.list({ prefix: "9461/office-owner/" })).objects,
+    ).toHaveLength(1);
+  });
+
+  it("adopts only the caller's existing document and never rebinds an occupied key", async () => {
+    const owner = appFor(actor("office-owner", 9461));
+    const peer = appFor(actor("office-peer", 9461));
+    const first = await createDoc(owner);
+    const firstId = first.id as string;
+    const second = await createDoc(owner);
+    const secondId = second.id as string;
+
+    const adopted = await owner.request(
+      `/v1/office-documents/${firstId}/source`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ key: "legacy-proposal" }),
+      },
+    );
+    expect(adopted.status).toBe(200);
+    expect(((await adopted.json()) as any).data.id).toBe(firstId);
+
+    const occupied = await owner.request(
+      `/v1/office-documents/${secondId}/source`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ key: "legacy-proposal" }),
+      },
+    );
+    expect(((await occupied.json()) as any).data.id).toBe(firstId);
+
+    const crossOwner = await peer.request(
+      `/v1/office-documents/${firstId}/source`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ key: "stolen-key" }),
+      },
+    );
+    expect(crossOwner.status).toBe(404);
+    const lookup = await peer.request(
+      "/v1/office-documents/source?key=stolen-key",
+    );
+    expect(lookup.status).toBe(200);
+    expect(((await lookup.json()) as any).data).toBeNull();
+  });
 
   it("shares documents with active tenant members using reader and editor roles", async () => {
     const owner = appFor(actor("office-owner", 9461));

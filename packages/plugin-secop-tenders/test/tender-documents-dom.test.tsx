@@ -79,7 +79,7 @@ async function click(text: string) {
 }
 describe("tender documents UI", () => {
   it("loads documents only for the selected process and exposes the official download plus accessible tabs", async () => {
-    const { execute } = await mount();
+    const { execute, back } = await mount();
     expect(execute).toHaveBeenCalledWith("documents", {
       input: { id_del_proceso: "CO1.REQ.123", page: 1, perPage: 20 },
     });
@@ -87,7 +87,15 @@ describe("tender documents UI", () => {
       'a[href*="RetrieveFile"]',
     )!;
     expect(link.target).toBe("_blank");
-    expect(link.textContent).toBe("Descargar en SECOP");
+    expect(link.getAttribute("aria-label")).toBe("Descargar en SECOP");
+    expect(link.title).toBe("Descargar en SECOP");
+    expect(link.querySelector("svg")).not.toBeNull();
+    const backButton = host.querySelector<HTMLButtonElement>(
+      'button[aria-label="Volver a licitaciones"]',
+    )!;
+    expect(backButton.textContent).toBe("");
+    await act(async () => backButton.click());
+    expect(back).toHaveBeenCalledOnce();
     expect(
       host.querySelector('[role="tab"][aria-selected="true"]')?.textContent,
     ).toBe("Documentos");

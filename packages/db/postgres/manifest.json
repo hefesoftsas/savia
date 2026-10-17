@@ -261,6 +261,10 @@
     {
       "filename": "0059_mcp_oauth_refresh_leases.sql",
       "sha256": "3efbcc41b66b9ef72fc35a2c2748ad3bd6398ad4924df4ed9716b4b98a7ea335"
+    },
+    {
+      "filename": "0060_office_document_source.sql",
+      "sha256": "5d64913ffeba55d1689d14a8b8e16b72f647629bf6e497ba7a65b555f721e6f1"
     }
   ],
   "sqliteOnlyDerivedTables": [
@@ -460,6 +464,11 @@
       "type": "index",
       "name": "office_document_shares_member",
       "table": "office_document_shares"
+    },
+    {
+      "type": "index",
+      "name": "office_documents_owner_source_key",
+      "table": "office_documents"
     },
     {
       "type": "index",
@@ -5978,6 +5987,14 @@
           "notnull": 1,
           "dflt_value": "1",
           "pk": 0
+        },
+        {
+          "cid": 11,
+          "name": "source_key",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
         }
       ],
       "foreignKeys": [
@@ -6004,6 +6021,14 @@
       ],
       "seedRows": 0,
       "uniqueKeys": [
+        {
+          "columns": [
+            "tenant_id",
+            "owner_id",
+            "source_key"
+          ],
+          "origin": "c"
+        },
         {
           "columns": [
             "id"

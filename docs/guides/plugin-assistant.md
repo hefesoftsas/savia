@@ -85,8 +85,8 @@ native records screen.
 
 ## Generate a provider document
 
-Providers may return up to four unique `documentActions` with `{ id, label, format: "docx" }`.
-The native chat renders these bounded actions near its header. A click invokes
+Providers may return up to four unique `documentActions` with `{ id, label, format: "docx", fileName? }`.
+The native chat renders these bounded actions near its header. When no saved draft exists, a click invokes
 `{ method: "generate-document", actionId }` through the same authorized provider
 and bound context; it does not send a chat message or replace the saved history.
 The provider returns `{ revision: 0, messages: [], document: { url, fileName, format: "docx" } }`.
@@ -104,6 +104,6 @@ No SECOP proposal logic or client-side persistence is added to Savia core.
 
 ### Generated documents in the Office suite
 
-The host exposes the generation action only after the current workspace Office policy is available and enabled. Disabling Office hides the action and cancels pending imports. The host fetches an advertised DOCX using its short-lived HTTPS URL without sending cookies or authorization headers to the provider. The provider must allow credential-free CORS reads. Savia validates and uploads the bounded file through its existing authenticated Office documents API, storing private bytes in R2 and metadata and versions in D1. Only after this save succeeds does the host open the native WASM editor. Users can reopen the saved document from Office suite, including after refreshing the page. A blocked popup does not discard a saved document: the action retains an Open document link. Changing provider or principal context cancels pending fetch/upload/navigation. Generating again creates a separate draft and never overwrites an edited version.
+The host exposes the generation action only after the current workspace Office policy is available and enabled. Disabling Office hides the action and cancels pending imports. The host fetches an advertised DOCX using its short-lived HTTPS URL without sending cookies or authorization headers to the provider. The provider must allow credential-free CORS reads. Savia validates and uploads the bounded file through its existing authenticated Office documents API, storing private bytes in R2 and metadata and versions in D1. Only after this save succeeds does the host open the native WASM editor. Users can reopen the saved document from Office suite, including after refreshing the page. A blocked popup does not discard a saved document: the action retains an Open document link. Changing provider or principal context cancels pending fetch/upload/navigation. The host first looks up a stable source key derived from the provider connection, action and canonical context, excluding transient session IDs. The key is unique per active tenant and owner. An existing draft opens at its current saved version without generation or upload; concurrent imports reuse one document. Saved edits are never overwritten. Providers may advertise a stable `fileName` to adopt the newest exactly named, owned legacy draft. Adoption is persisted on the server and cannot rebind a document already linked to another source. Lookup failures stop the action rather than creating a duplicate.
 
 The connected chat uses icon actions with tooltips and accessible names. On larger screens, Expand chat and Restore chat size change the reading width without reloading the provider or discarding the composer draft.

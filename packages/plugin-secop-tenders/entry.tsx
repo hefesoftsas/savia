@@ -78,6 +78,7 @@ const messages = {
     departmentLabel: "Departamento",
     amount: "Valor base",
     deadline: "Cierre",
+    documents: "Documentos",
     source: "Ver en SECOP",
     save: "Seguir",
     saved: "Guardada",
@@ -184,6 +185,7 @@ const messages = {
     departmentLabel: "Department",
     amount: "Base value",
     deadline: "Deadline",
+    documents: "Documents",
     source: "View on SECOP",
     save: "Track",
     saved: "Saved",
@@ -290,6 +292,7 @@ const messages = {
     departmentLabel: "Departamento",
     amount: "Valor base",
     deadline: "Prazo",
+    documents: "Documentos",
     source: "Ver no SECOP",
     save: "Acompanhar",
     saved: "Salva",
@@ -1216,6 +1219,9 @@ function Screen({ savia }: { savia: PluginApi }) {
                       <footer>
                         <button
                           type="button"
+                          className="secop-icon-action"
+                          aria-label={t.documents}
+                          title={t.documents}
                           onClick={() => openTender(row, "documents")}
                         >
                           <FileText
@@ -1223,24 +1229,21 @@ function Screen({ savia }: { savia: PluginApi }) {
                             size={16}
                             aria-hidden="true"
                           />
-                          {locale === "en"
-                            ? "Documents"
-                            : locale === "pt"
-                              ? "Documentos"
-                              : "Documentos"}
                         </button>
                         {link ? (
                           <a
                             href={link}
                             target="_blank"
                             rel="noopener noreferrer"
+                            className="secop-icon-action"
+                            aria-label={t.source}
+                            title={t.source}
                           >
                             <ExternalLink
                               className="secop-action-icon"
                               size={16}
                               aria-hidden="true"
                             />
-                            {t.source}
                           </a>
                         ) : (
                           <span className="secop-muted">
@@ -1249,6 +1252,21 @@ function Screen({ savia }: { savia: PluginApi }) {
                         )}
                         <button
                           type="button"
+                          className="secop-icon-action"
+                          aria-label={
+                            savingId === row.id
+                              ? t.saving
+                              : isSaved
+                                ? t.saved
+                                : t.save
+                          }
+                          title={
+                            savingId === row.id
+                              ? t.saving
+                              : isSaved
+                                ? t.saved
+                                : t.save
+                          }
                           disabled={isSaved || savingId === row.id}
                           onClick={() => void markInterest(row)}
                         >
@@ -1265,11 +1283,6 @@ function Screen({ savia }: { savia: PluginApi }) {
                               aria-hidden="true"
                             />
                           )}
-                          {savingId === row.id
-                            ? t.saving
-                            : isSaved
-                              ? t.saved
-                              : t.save}
                         </button>
                       </footer>
                     </article>
@@ -1387,18 +1400,28 @@ function Screen({ savia }: { savia: PluginApi }) {
                       </p>
                     </div>
                     {link && (
-                      <a href={link} target="_blank" rel="noopener noreferrer">
-                        {t.source}
+                      <a
+                        href={link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="secop-icon-action"
+                        aria-label={t.source}
+                        title={t.source}
+                      >
+                        <ExternalLink size={16} aria-hidden="true" />
                       </a>
                     )}
                   </header>
                   <button
                     type="button"
+                    className="secop-icon-action"
+                    aria-label={t.documents}
+                    title={t.documents}
                     onClick={() =>
                       openTender({ ...record, id: record.id }, "documents")
                     }
                   >
-                    {locale === "en" ? "Documents" : "Documentos"}
+                    <FileText size={16} aria-hidden="true" />
                   </button>
                   <div
                     className="secop-monitor-facts"
