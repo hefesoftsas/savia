@@ -35,6 +35,75 @@ import { withProductionBackupGate } from "./production-backup-gate.mjs";
 const execFileAsync = promisify(execFile);
 const DEFAULT_MAX_ATTEMPTS = 3;
 const RETRY_DELAYS_MS = [60_000, 120_000];
+const pulumiCommandFailures = new WeakSet();
+
+/** Return an allowlisted diagnostic. Never include arbitrary error text. */
+export function classifyProductionBackupFailure(error) {
+  if (error && (typeof error === "object" || typeof error === "function")) {
+    if (pulumiCommandFailures.has(error))
+      return "Pulumi child command failed; details withheld.";
+  }
+
+  let message = "";
+  try {
+    if (error instanceof Error) message = error.message;
+  } catch {
+    // Unusual Error proxies are treated like any other unknown failure.
+  }
+
+  const controller =
+    /^Backup barrier (acquire|status|renew|release) failed \(([1-5]\d{2})\)$/.exec(
+      message,
+    );
+  if (controller)
+    return `Backup controller ${controller[1]} request failed (HTTP ${controller[2]}).`;
+
+  const d1Provider =
+    /^D1 query failed \(([1-5]\d{2})\):/.exec(message) ??
+    /^D1 recovery verification failed \(HTTP ([1-5]\d{2})\)$/.exec(message);
+  if (d1Provider) return `D1 provider export failed (HTTP ${d1Provider[1]}).`;
+  const r2Provider = /^R2 list failed \(([1-5]\d{2})\):/.exec(message);
+  if (r2Provider) return `R2 provider listing failed (HTTP ${r2Provider[1]}).`;
+  if (
+    /^D1 recovery (?:bookmark|verification)/.test(message) ||
+    /^Refusing to finish backup with unreadable table /.test(message)
+  )
+    return "D1 provider export verification failed; details withheld.";
+  const r2Download = /^R2 object download returned HTTP ([1-5]\d{2})$/.exec(
+    message,
+  );
+  if (r2Download)
+    return `R2 provider export failed (HTTP ${r2Download[1]}); details withheld.`;
+  if (/^R2 (?:list|backup|object)/.test(message))
+    return "R2 provider export failed; details withheld.";
+
+  if (message === "SAVIA_BACKUP_CONTROL_SECRET is required")
+    return "Backup controller environment configuration is invalid.";
+  if (
+    message === "SAVIA_BACKUP_KEY must be configured as a 256-bit hex key" ||
+    message === "CLOUDFLARE_ACCOUNT_ID is required for R2 backup" ||
+    message ===
+      "CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID are required for table dumps" ||
+    message ===
+      "CLOUDFLARE_API_TOKEN is required to preserve complete R2 metadata"
+  )
+    return "Backup environment configuration is invalid.";
+  if (
+    message ===
+    "Backup controller requires an HTTPS URL without credentials or parameters"
+  )
+    return "Backup controller URL configuration is invalid.";
+  if (
+    message === "A fully qualified backup artifact path is required" ||
+    message === "Backup artifact path already exists" ||
+    /^Missing required flag: --(?:artifact|work-root|flows-snapshot)(?: |$)/.test(
+      message,
+    )
+  )
+    return "Invalid backup artifact path configuration.";
+
+  return "Capture failed; details withheld to protect credentials.";
+}
 
 async function sha256File(path) {
   const hash = createHash("sha256");
@@ -186,8 +255,21 @@ export async function runProductionBackup({
         );
       }
       try {
+        const safeRun = async (command, ...args) => {
+          try {
+            return await run(command, ...args);
+          } catch (error) {
+            if (
+              command === "pulumi" &&
+              error &&
+              (typeof error === "object" || typeof error === "function")
+            )
+              pulumiCommandFailures.add(error);
+            throw error;
+          }
+        };
         manifest = await withGate(
-          () => captureBackup(parseBackupArgs(argv), { env, run }),
+          () => captureBackup(parseBackupArgs(argv), { env, run: safeRun }),
           { env },
         );
       } catch (error) {
@@ -198,7 +280,7 @@ export async function runProductionBackup({
             `Capture stopped on attempt ${attempt} of ${maxAttempts}.`,
             isRecoveryConsistencyDrift(error)
               ? "The consistency check continued to detect writes after all bounded retries. No artifact was produced."
-              : "A permanent capture or configuration error stopped the backup. No artifact was produced.",
+              : `Failure category: ${classifyProductionBackupFailure(error)} No artifact was produced.`,
           ]);
           throw error;
         }
@@ -269,7 +351,7 @@ export async function runProductionBackup({
     if (artifactCreated) await rm(output, { force: true });
     await appendSummary(summaryPath, [
       "## Production backup failed",
-      "Validation, encryption, or encryption verification failed. No artifact was retained.",
+      `Failure category: ${classifyProductionBackupFailure(error)} No artifact was retained.`,
     ]).catch(() => {});
     throw error;
   } finally {
@@ -278,10 +360,14 @@ export async function runProductionBackup({
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  runProductionBackup(parseArgs(process.argv.slice(2))).catch(() => {
-    process.stderr.write(
-      "Production backup failed; see the step summary for the failure category.\n",
-    );
-    process.exitCode = 1;
-  });
+  (async () => {
+    try {
+      await runProductionBackup(parseArgs(process.argv.slice(2)));
+    } catch (error) {
+      process.stderr.write(
+        `Production backup failed: ${classifyProductionBackupFailure(error)}\n`,
+      );
+      process.exitCode = 1;
+    }
+  })();
 }

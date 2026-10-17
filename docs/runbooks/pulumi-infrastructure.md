@@ -236,12 +236,19 @@ independent durable custody.
 The daily runner requires `SAVIA_BACKUP_CONTROL_SECRET` in the dedicated backup
 GitHub environment and the same secret in the production API Worker. It is an
 independent control credential, not the encryption key. The optional
-`SAVIA_BACKUP_CONTROL_URL` defaults to the canonical HTTPS controller route.
+`SAVIA_BACKUP_CONTROL_URL` defaults to
+`https://savia-backup-coordinator.jose-douglas-dev.workers.dev/api/_internal/backup-gate`.
 Generated production/preview manifests attach `BACKUP_GATE` to every D1/R2 writer;
-the private `savia-backup-coordinator` Worker owns the `BackupCoordinator` namespace
-and its `v1` migration.
-Release workflows publish this owner before dependent workers. The owner has no
-application storage bindings or public route. Cross-script
+the dedicated `savia-backup-coordinator` Worker owns the `BackupCoordinator` namespace
+and its `v1` migration. Release workflows publish this owner before dependent
+workers. Its `workers.dev` entrypoint is a narrow public relay for POST requests
+to `/api/_internal/backup-gate/{acquire,status,renew,release}` only. It forwards
+those exact paths to the production `savia-agencies` service binding, where the
+existing controller checks `SAVIA_BACKUP_CONTROL_SECRET`; unauthorized requests
+receive 401 and all other paths or methods receive 404. This avoids interactive
+Bot Fight Mode challenges on the proxied application hostname for the non-browser
+backup runner without weakening the public zone's security settings. The owner
+has no application-data bindings or routes. Cross-script
 bindings use the actual environment-specific worker name, as described in
 [Cloudflare's binding configuration](https://developers.cloudflare.com/workers/wrangler/configuration/#durable-objects).
 
