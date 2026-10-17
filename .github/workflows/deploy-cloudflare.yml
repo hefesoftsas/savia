@@ -189,7 +189,7 @@ jobs:
 
       - name: Capture production backup before apply
         if: env.SAVIA_FLOWS_PROVISIONED != 'true'
-        run: node scripts/production-backup-gate.mjs --stack production --apply --out-dir "$RUNNER_TEMP/flows-release-backup"
+        run: node scripts/production-backup.mjs --artifact "$RUNNER_TEMP/flows-release-backup.enc" --work-root "$RUNNER_TEMP"
         env:
           PULUMI_BACKEND_URL: ${{ secrets.PULUMI_BACKEND_URL }}
           PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
@@ -203,7 +203,7 @@ jobs:
 
       - name: Capture production backup with existing Flows snapshot
         if: env.SAVIA_FLOWS_PROVISIONED == 'true'
-        run: node scripts/production-backup-gate.mjs --stack production --apply --confirm-quiescent production --flows-snapshot "$RUNNER_TEMP/flows-snapshot.json" --out-dir "$RUNNER_TEMP/flows-release-backup"
+        run: node scripts/production-backup.mjs --artifact "$RUNNER_TEMP/flows-release-backup.enc" --work-root "$RUNNER_TEMP" --flows-snapshot "$RUNNER_TEMP/flows-snapshot.json"
         env:
           PULUMI_BACKEND_URL: ${{ secrets.PULUMI_BACKEND_URL }}
           PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
@@ -214,16 +214,6 @@ jobs:
           SAVIA_BACKUP_CONTROL_SECRET: ${{ secrets.SAVIA_BACKUP_CONTROL_SECRET }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-
-      - name: Encrypt production recovery archive
-        shell: bash
-        run: |
-          umask 077
-          tar -czf "$RUNNER_TEMP/flows-release-backup.tar.gz" -C "$RUNNER_TEMP" flows-release-backup
-          node scripts/encrypt-flows-backup.mjs --action encrypt --input "$RUNNER_TEMP/flows-release-backup.tar.gz" --output "$RUNNER_TEMP/flows-release-backup.enc"
-          rm "$RUNNER_TEMP/flows-release-backup.tar.gz"
-        env:
-          SAVIA_BACKUP_KEY: ${{ secrets.SAVIA_BACKUP_KEY }}
 
       - name: Retain and verify encrypted production recovery archive in private R2
         run: node scripts/production-backup-r2.mjs --artifact "$RUNNER_TEMP/flows-release-backup.enc" --kind release

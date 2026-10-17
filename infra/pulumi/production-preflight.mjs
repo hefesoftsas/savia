@@ -197,6 +197,23 @@ function assertAdoptedResources(resources, outputs, accountId) {
         "Production state is missing the exact protected production backup lifecycle rule",
       );
     }
+
+    const publicAccess = resources.find((entry) =>
+      entry.urn?.endsWith("::production-backups-public-access"),
+    );
+    if (
+      !publicAccess ||
+      publicAccess.type !==
+        "cloudflare:index/r2ManagedDomain:R2ManagedDomain" ||
+      publicAccess.protect !== true ||
+      publicAccess.outputs?.accountId !== accountId ||
+      publicAccess.outputs?.bucketName !== outputs.backupBucketName ||
+      publicAccess.outputs?.enabled !== false
+    ) {
+      throw new Error(
+        "Production backup bucket must have a matching protected disabled public access domain",
+      );
+    }
   }
   if (outputs.flowsEnabled) {
     const expectedFlows = [

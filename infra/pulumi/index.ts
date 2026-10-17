@@ -112,6 +112,17 @@ const productionBackupsLifecycle = productionBackups
       stateOpts,
     )
   : null;
+if (productionBackups) {
+  new cloudflare.R2ManagedDomain(
+    "production-backups-public-access",
+    {
+      accountId,
+      bucketName: productionBackups.name,
+      enabled: false,
+    },
+    stateOpts,
+  );
+}
 
 // The self-managed Pulumi backend is optional during bootstrap. When enabled,
 // protect its bucket even in preview because it contains the state itself.

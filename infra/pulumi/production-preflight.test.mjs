@@ -134,6 +134,16 @@ const productionBackupResources = [
       ],
     },
   },
+  {
+    urn: "urn:pulumi:production::savia-cloudflare::cloudflare:index/r2ManagedDomain:R2ManagedDomain::production-backups-public-access",
+    type: "cloudflare:index/r2ManagedDomain:R2ManagedDomain",
+    protect: true,
+    outputs: {
+      accountId,
+      bucketName: productionBackupBucket,
+      enabled: false,
+    },
+  },
 ];
 const productionBackupState = {
   ...stateExport,
@@ -197,6 +207,24 @@ test("adopts the protected production backup bucket and exact lifecycle rule", (
     },
   });
   assert.equal(readiness.SAVIA_FLOWS_PROVISIONED, "false");
+
+  assert.throws(() =>
+    validateProductionReadiness({
+      outputs: productionBackupOutputs,
+      stackConfig: { ...stackConfig, backupBucket: productionBackupBucket },
+      stateExport: {
+        ...stateExport,
+        deployment: {
+          ...stateExport.deployment,
+          resources: [
+            ...stateExport.deployment.resources,
+            ...productionBackupResources.slice(0, 2),
+          ],
+        },
+      },
+      env,
+    }),
+  );
 
   for (const invalid of [
     productionBackupResources.slice(1),
@@ -293,6 +321,41 @@ test("adopts the protected production backup bucket and exact lifecycle rule", (
         },
       },
     ],
+    [
+      productionBackupResources[0],
+      productionBackupResources[1],
+      { ...productionBackupResources[2], protect: false },
+    ],
+    [
+      productionBackupResources[0],
+      productionBackupResources[1],
+      {
+        ...productionBackupResources[2],
+        outputs: { ...productionBackupResources[2].outputs, enabled: true },
+      },
+    ],
+    [
+      productionBackupResources[0],
+      productionBackupResources[1],
+      {
+        ...productionBackupResources[2],
+        outputs: {
+          ...productionBackupResources[2].outputs,
+          bucketName: "savia-documents",
+        },
+      },
+    ],
+    [
+      productionBackupResources[0],
+      productionBackupResources[1],
+      {
+        ...productionBackupResources[2],
+        outputs: {
+          ...productionBackupResources[2].outputs,
+          accountId: "b".repeat(32),
+        },
+      },
+    ],
   ]) {
     assert.throws(() =>
       validateProductionReadiness({
@@ -302,7 +365,15 @@ test("adopts the protected production backup bucket and exact lifecycle rule", (
           ...stateExport,
           deployment: {
             ...stateExport.deployment,
-            resources: [...stateExport.deployment.resources, ...invalid],
+            resources: [
+              ...stateExport.deployment.resources,
+              ...invalid,
+              ...(invalid.some((resource) =>
+                resource.urn?.endsWith("::production-backups-public-access"),
+              )
+                ? []
+                : [productionBackupResources[2]]),
+            ],
           },
         },
         env,

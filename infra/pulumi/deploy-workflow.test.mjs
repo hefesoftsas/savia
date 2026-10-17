@@ -74,10 +74,7 @@ for (const [file, stack] of [
         source,
         /node scripts\/flows-preview-recovery\.mjs --action capture --environment production/,
       );
-      assert.match(
-        source,
-        /node scripts\/production-backup-gate\.mjs --stack production --apply/,
-      );
+      assert.match(source, /node scripts\/production-backup\.mjs --artifact/);
       assert.equal(
         (
           source.match(

@@ -238,7 +238,8 @@ independent durable custody.
 
 Set the production Pulumi config `backupBucket` to `savia-production-backups`.
 Pulumi provisions a deletion-protected Standard bucket and a protected lifecycle
-rule that expires only its `production/` objects after 30 days. Preview rejects
+rule that expires only its `production/` objects after 30 days. A protected
+managed-domain resource explicitly disables public `r2.dev` access. Preview rejects
 this setting and does not provision an archive bucket. Keep public R2 access and
 custom domains disabled. The bucket is separate from documents and Pulumi state
 and is excluded from application-data snapshots.
