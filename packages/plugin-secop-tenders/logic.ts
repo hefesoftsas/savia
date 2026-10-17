@@ -25,10 +25,10 @@ export type SecopRow = Record<string, unknown> & { id: string };
 export type SearchInput = {
   vigentes?: boolean;
   q?: string;
-  estado?: string;
-  entidad?: string;
-  modalidad?: string;
-  departamento?: string;
+  estado?: string | string[];
+  entidad?: string | string[];
+  modalidad?: string | string[];
+  departamento?: string | string[];
   page?: number;
   perPage?: number;
 };
@@ -183,8 +183,15 @@ export async function searchSecop(
     "modalidad",
     "departamento",
   ] as const) {
-    const value = input[key]?.trim();
-    if (value) actionInput[key] = value;
+    const raw = input[key];
+    const value = Array.isArray(raw)
+      ? [...new Set(raw.map((item) => item.trim()).filter(Boolean))].slice(
+          0,
+          20,
+        )
+      : raw?.trim();
+    if (Array.isArray(value) ? value.length > 0 : value)
+      actionInput[key] = value;
   }
   actionInput.vigentes = input.vigentes !== false;
   actionInput.page = page;

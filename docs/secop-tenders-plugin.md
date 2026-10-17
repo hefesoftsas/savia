@@ -351,3 +351,16 @@ records. Saved interests remain accessible regardless of their deadline.
 Closing dates use the interface language and Colombia time (America/Bogota),
 including Socrata floating timestamps. Historical deadlines display a closed
 label. Missing or invalid dates never appear as usable deadlines.
+
+## Multiple filter values and resilient catalogs
+
+Version 1.8.1 supports multiple values for status, entity, modality and
+department. Values within one field are alternatives (OR); different fields
+are combined (AND). Select options without closing the list, remove individual
+chips, or add a typed value with Enter. Pagination keeps the full selection.
+Availability remains a single scope choice.
+
+Complete catalogs are cached independently from searches. Renewal runs in the
+SECOP service background; a compact retry icon appears beside an unavailable
+catalog. Existing selections and previously loaded options survive refresh
+failures. No catalog is silently replaced with the currently loaded results.
