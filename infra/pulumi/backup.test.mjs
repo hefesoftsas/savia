@@ -377,8 +377,19 @@ describe("pulumi backup", () => {
       flowsResources: null,
     };
     const commands = [];
+    let r2ListCalls = 0;
+    let authChangedAfterFinalR2 = false;
     const fetchImpl = async (url, init = {}) => {
       const path = new URL(url).pathname;
+      if (path.includes("/r2/buckets/")) {
+        r2ListCalls++;
+        if (r2ListCalls === 3) authChangedAfterFinalR2 = true;
+        return Response.json({
+          success: true,
+          result: [],
+          result_info: { is_truncated: false },
+        });
+      }
       const match = /\/database\/([^/]+)(?:\/(.*))?$/.exec(path);
       assert.ok(match, `unexpected Cloudflare URL: ${url}`);
       const [, uuid, endpoint] = match;
@@ -393,7 +404,11 @@ describe("pulumi backup", () => {
       if (endpoint === "time_travel/bookmark") {
         return Response.json({
           success: true,
-          result: { uuid, name: db.name, bookmark: `bookmark-${uuid}` },
+          result: {
+            uuid,
+            name: db.name,
+            bookmark: `bookmark-${uuid}${authChangedAfterFinalR2 && db === databases.auth ? "-changed" : ""}`,
+          },
         });
       }
       assert.equal(endpoint, "query");
@@ -566,6 +581,23 @@ describe("pulumi backup", () => {
         "export",
         "export",
       ]);
+
+      const finalR2DriftPlan = {
+        ...plan,
+        skipR2: false,
+        outDir: join(root, "final-r2-drift"),
+      };
+      await assert.rejects(
+        createBackup(finalR2DriftPlan, dependencies),
+        (error) =>
+          error.code === "RECOVERY_CONSISTENCY_DRIFT" &&
+          error.message.includes(databases.auth.name),
+      );
+      assert.equal(r2ListCalls, 3);
+      await assert.rejects(
+        access(join(finalR2DriftPlan.outDir, "manifest.json")),
+        { code: "ENOENT" },
+      );
     } finally {
       await rm(root, { recursive: true, force: true });
     }

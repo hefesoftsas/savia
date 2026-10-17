@@ -309,7 +309,9 @@ before copying, observes every D1 bookmark every ten seconds throughout the copy
 then checks the full boundary again after all D1 and R2 capture. Observations keep
 both databases active while their copies are taken sequentially. Drift or a
 failed observation prevents manifest publication; pending observations settle
-before manifest creation and the timer is removed on every exit. Each production
+before manifest creation and the timer is removed on every exit. After the final
+R2 inventories, stopping also performs a fresh D1 bookmark poll even when no
+interval read was pending, closing the final inventory-to-manifest gap. Each production
 schema dump additionally checks its own before/after bookmark. Complete R2
 inventories, including metadata and ETags, must also remain unchanged across the
 capture. The API download pins each object to its listed ETag and verifies its

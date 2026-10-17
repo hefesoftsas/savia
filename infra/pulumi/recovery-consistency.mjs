@@ -231,6 +231,13 @@ export function startD1RecoveryMonitor(boundary, options = {}) {
             failure ??= error;
           }
         }
+        if (!failure) {
+          try {
+            await poll();
+          } catch (error) {
+            failure ??= error;
+          }
+        }
         if (failure) throw failure;
       })();
     }

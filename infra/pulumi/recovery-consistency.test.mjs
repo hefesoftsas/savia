@@ -190,7 +190,30 @@ test("monitors every boundary bookmark on interval without an eager request", as
   assert.equal(state.calls.length, 4);
   await monitor();
   await monitor();
+  assert.equal(state.calls.length, 6);
   assert.equal(timer.state.cleared, 1);
+});
+
+test("final stop poll catches D1 drift after the last interval poll", async () => {
+  const { state, options } = fixture();
+  const timer = fakeTimer();
+  const boundary = await captureRecoveryBoundary(options);
+  const monitor = startD1RecoveryMonitor(boundary, {
+    accountId,
+    token: "redacted",
+    fetchImpl: options.fetchImpl,
+    setIntervalImpl: timer.setIntervalImpl,
+    clearIntervalImpl: timer.clearIntervalImpl,
+  });
+
+  state.bookmark = "00000002";
+  await assert.rejects(monitor(), (error) => {
+    assert.ok(error instanceof RecoveryConsistencyError);
+    assert.equal(error.code, "RECOVERY_CONSISTENCY_DRIFT");
+    return true;
+  });
+  assert.equal(timer.state.cleared, 1);
+  assert.equal(state.calls.length, 3);
 });
 
 test("fails closed with typed retryable drift when an interval sees a new bookmark", async () => {
@@ -284,9 +307,20 @@ test("does not overlap polls and stop waits for an in-flight read", async () => 
       result: { bookmark: "00000001" },
     }),
   });
+  await turn();
+  assert.equal(stopped, false);
+  assert.equal(calls, 2);
+  resolveFetch({
+    ok: true,
+    status: 200,
+    json: async () => ({
+      success: true,
+      result: { bookmark: "00000001" },
+    }),
+  });
   await Promise.all([firstStop, secondStop]);
   assert.equal(stopped, true);
-  assert.equal(calls, 1);
+  assert.equal(calls, 2);
 });
 
 test("rejects invalid monitor options before starting its timer", async () => {
