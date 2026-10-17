@@ -24,12 +24,11 @@ test("daily production recovery captures and retains encrypted data without depl
     source,
     /SAVIA_BACKUP_KEY: \$\{\{ secrets\.SAVIA_BACKUP_KEY \}\}/,
   );
-  assert.match(source, /retention-days: 30/);
-  assert.match(source, /if-no-files-found: error/);
-  assert.match(
-    source,
-    /path: \$\{\{ runner\.temp \}\}\/production-backup\.enc/,
-  );
+  assert.match(source, /node scripts\/production-backup-r2\.mjs --artifact/);
+  assert.match(source, /--kind daily/);
+  assert.match(source, /R2_BACKUP_ACCESS_KEY_ID:/);
+  assert.match(source, /R2_BACKUP_SECRET_ACCESS_KEY:/);
+  assert.doesNotMatch(source, /actions\/upload-artifact|retention-days:/);
   assert.match(source, /if: always\(\)/);
   assert.doesNotMatch(
     source,
@@ -48,9 +47,11 @@ test("an independent scheduled checker fails when no fresh encrypted backup is r
     "utf8",
   );
   assert.match(source, /cron: "0 \*\/6 \* \* \*"/);
-  assert.match(source, /actions: read/);
+  assert.doesNotMatch(source, /actions: read|GITHUB_TOKEN:/);
+  assert.match(source, /environment: production-backup/);
+  assert.match(source, /R2_BACKUP_ACCESS_KEY_ID:/);
+  assert.match(source, /R2_BACKUP_SECRET_ACCESS_KEY:/);
   assert.match(source, /node scripts\/check-production-backup-freshness\.mjs/);
-  assert.doesNotMatch(source, /environment: production-backup/);
 });
 
 test("release workflows create the dedicated shared namespace before deploying storage writers", async () => {
@@ -61,6 +62,15 @@ test("release workflows create the dedicated shared namespace before deploying s
     );
     const owner = source.indexOf("- name: Deploy savia backup coordinator");
     assert.ok(owner >= 0, `${name}: dedicated namespace owner is missing`);
+    const pause = source.indexOf(
+      name === "deploy-preview"
+        ? "- name: Pause Savia writes for persistence backup"
+        : "- name: Pause production Savia writes for persistence backup",
+    );
+    assert.ok(
+      pause >= 0 && owner < pause,
+      `${name}: the pause deployment already requires the coordinator namespace`,
+    );
     for (const dependent of [
       "Deploy savia-agencies",
       "Deploy savia-auth",
@@ -72,4 +82,25 @@ test("release workflows create the dedicated shared namespace before deploying s
         `${name}: ${dependent} needs the dedicated namespace first`,
       );
   }
+});
+
+test("production releases retain recovery copies in private R2 before applying infrastructure", async () => {
+  const source = await readFile(
+    new URL("../../.github/workflows/deploy-cloudflare.yml", import.meta.url),
+    "utf8",
+  );
+  assert.doesNotMatch(source, /actions\/upload-artifact/);
+  const upload = source.indexOf(
+    "node scripts/production-backup-r2.mjs --artifact",
+  );
+  assert.ok(
+    upload >= 0 &&
+      upload <
+        source.indexOf(
+          "node infra/pulumi/deploy-stack.mjs --stack production --apply",
+        ),
+  );
+  assert.match(source, /--kind release/);
+  assert.match(source, /R2_BACKUP_ACCESS_KEY_ID:/);
+  assert.match(source, /R2_BACKUP_SECRET_ACCESS_KEY:/);
 });

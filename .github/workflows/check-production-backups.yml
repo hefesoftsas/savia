@@ -6,13 +6,20 @@ on:
   workflow_dispatch:
 
 permissions:
-  actions: read
   contents: read
 
 jobs:
   freshness:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
+    environment: production-backup
+    env:
+      SAVIA_BACKUP_ENVIRONMENT: production
+      SAVIA_DEPLOY_ENVIRONMENT: production
+      SAVIA_BACKUP_BUCKET: savia-production-backups
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      R2_BACKUP_ACCESS_KEY_ID: ${{ secrets.R2_BACKUP_ACCESS_KEY_ID }}
+      R2_BACKUP_SECRET_ACCESS_KEY: ${{ secrets.R2_BACKUP_SECRET_ACCESS_KEY }}
     timeout-minutes: 10
     steps:
       - name: Check out source
@@ -23,7 +30,5 @@ jobs:
         with:
           node-version: 22
 
-      - name: Check for a retained successful production backup within 36 hours
+      - name: Check for a verified private R2 production backup within 36 hours
         run: node scripts/check-production-backup-freshness.mjs
-        env:
-          GITHUB_TOKEN: ${{ github.token }}

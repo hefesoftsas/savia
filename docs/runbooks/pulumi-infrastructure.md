@@ -221,8 +221,11 @@ Pulumi recreates empty containers; backups capture the data. Production deploys
 now require a successful encrypted backup before IaC apply and migrations.
 `.github/workflows/backup-production.yml` also declares a daily capture at
 08:23 UTC (03:23 America/Bogota) and supports manual dispatch. It shares the
-`savia-production` concurrency lock with deployment, retains only encrypted
-GitHub artifacts for 30 days, and removes plaintext files even on failure.
+`savia-production` concurrency lock with deployment, retains encrypted archives
+in the private `savia-production-backups` R2 bucket for 30 days, and removes
+plaintext files even on failure. Neither daily nor production-release workflows
+upload database archives to GitHub artifacts. GitHub stores execution logs and
+non-sensitive step summaries only.
 The schedule takes effect when the workflow reaches the default branch; no
 schedule or cloud deployment is created by editing these files locally.
 
@@ -233,6 +236,27 @@ production deployment approvals. The local workflow does not create or configure
 that environment. Preserve the stable `SAVIA_BACKUP_KEY` and Pulumi passphrase in
 independent durable custody.
 
+Set the production Pulumi config `backupBucket` to `savia-production-backups`.
+Pulumi provisions a deletion-protected Standard bucket and a protected lifecycle
+rule that expires only its `production/` objects after 30 days. Preview rejects
+this setting and does not provision an archive bucket. Keep public R2 access and
+custom domains disabled. The bucket is separate from documents and Pulumi state
+and is excluded from application-data snapshots.
+
+Provision dedicated bucket-scoped S3 Object Read & Write credentials as
+`R2_BACKUP_ACCESS_KEY_ID` and `R2_BACKUP_SECRET_ACCESS_KEY` in both production
+GitHub environments. Never reuse source-data or Pulumi-state credentials.
+`SAVIA_BACKUP_BUCKET` comes from stack outputs in capture/release jobs; the
+lightweight checker selects the same validated production bucket explicitly.
+Both require `SAVIA_BACKUP_ENVIRONMENT=production`.
+
+For the first rollout, apply the reviewed production Pulumi storage plan first,
+render its applied outputs, and seed the dedicated archive credentials before
+enabling the new daily workflow or promoting application code. Normal releases
+retain their archive before their own Pulumi apply; that order deliberately
+requires an already-provisioned archive bucket. Keep the previous recovery copy
+until the R2 upload, readback and isolated restore are verified.
+
 The daily runner requires `SAVIA_BACKUP_CONTROL_SECRET` in the dedicated backup
 GitHub environment and the same secret in the production API Worker. It is an
 independent control credential, not the encryption key. The optional
@@ -241,7 +265,8 @@ independent control credential, not the encryption key. The optional
 Generated production/preview manifests attach `BACKUP_GATE` to every D1/R2 writer;
 the dedicated `savia-backup-coordinator` Worker owns the `BackupCoordinator` namespace
 and its `v1` migration. Release workflows publish this owner before dependent
-workers. Its `workers.dev` entrypoint is a narrow public relay for POST requests
+workers, including the first maintenance/pause deployment that declares its
+namespace binding. Its `workers.dev` entrypoint is a narrow public relay for POST requests
 to `/api/_internal/backup-gate/{acquire,status,renew,release}` only. It forwards
 those exact paths to the production `savia-agencies` service binding, where the
 existing controller checks `SAVIA_BACKUP_CONTROL_SECRET`; unauthorized requests
@@ -291,23 +316,33 @@ validates all database/document targets and their hashes, compresses under a
 It retries only typed D1/R2 consistency drift, at most three attempts with 60/120
 second delays and a fresh private directory each time. Identity, schema,
 credential and validation errors fail immediately. All plaintext is removed
-on success or failure; only a verified ciphertext can reach artifact upload.
+on success or failure; only a verified ciphertext reaches R2 upload.
 
-`.github/workflows/check-production-backups.yml` checks every six hours without
-using an approval-gated environment. It fails when no nonexpired encrypted artifact
-from a successful `main` backup run is at most 36 hours old. It rejects failed
-runs, unrelated/empty artifacts, future timestamps and denied API reads. It reads
-up to 100 recent backup runs and their artifacts through `actions: read` and
-writes a GitHub step summary; configure the team's GitHub failure notifications.
-It does not send external messages. Both schedules require merging to the default
-branch; neither has been dispatched by preparing these files.
+`node scripts/production-backup-r2.mjs --artifact <absolute-output.enc> --kind daily`
+uses dedicated S3 credentials and conditional no-overwrite uploads. Keys are
+`production/<daily|release|migration>-<run>-<attempt>.enc`. It downloads the exact
+object, verifies size, SHA-256 and metadata, then writes and verifies the matching
+`.enc.commit.json` completion record. A failed or partial upload has no valid
+completion record and cannot satisfy freshness. Run identity comes from
+`GITHUB_RUN_ID`, `GITHUB_RUN_ATTEMPT` and `GITHUB_SHA` (or `SAVIA_SOURCE_SHA`).
+The AWS CLI is required; credentials are passed only in its isolated environment.
+
+`.github/workflows/check-production-backups.yml` checks R2 every six hours using
+the main-only `production-backup` environment without interactive approvals. It
+requires a verified daily completion record and its matching nonempty ciphertext
+to be at most 36 hours old. It paginates S3 listings, checks metadata, timestamps,
+size and completion-record hashes, and rejects incomplete, stale or corrupt
+records and denied reads. It does not call the GitHub artifact API or need an
+Actions token. Configure the team's GitHub failure notifications; this workflow
+writes a safe step summary and does not send external messages. Both schedules
+require merging to the default branch.
 
 Daily backup never republishes main merely to pause production. With Flows
 provisioned it requires an already paused, drained maintenance window and exports
 the Durable Objects through the private maintenance transport. Busy stores,
 missing adoption/credentials, or unavailable Time Travel bookmarks fail the job.
 Investigate failures and retry in a controlled maintenance window. A configured
-schedule is not a verified RPO: monitor successful artifacts and rehearse recovery.
+schedule is not a verified RPO: monitor committed R2 backups and rehearse recovery.
 
 Production captures both Auth and domain through read-only D1 queries using method
 `schema-dump`; it does not call the native export endpoint, which requires D1 Write.
@@ -379,9 +414,11 @@ checks and unchanged final inventories. Stale object metadata fails rather than
 silently accepting an inconsistent archive. Suggested targets remain RPO 24h,
 RTO 4h; they require monitored successful backups and quarterly recovery drills.
 
-Production artifacts use AES-256-GCM with `SAVIA_BACKUP_KEY`. Download the
-`production-backup-<run>-<attempt>` daily artifact (or the production release
-artifact), decrypt it privately, and keep the whole extracted directory:
+Production archives use AES-256-GCM with `SAVIA_BACKUP_KEY`. Download the exact
+R2 `production/daily-<run>-<attempt>.enc` object (or a release/migration object),
+verify its SHA-256 against the matching `.enc.commit.json` record, decrypt it
+privately, and keep the whole extracted directory. Use the account's S3 endpoint
+and the dedicated archive credentials, not the state-backend credentials:
 
 ```sh
 node scripts/encrypt-flows-backup.mjs --action decrypt \
@@ -392,8 +429,12 @@ node infra/pulumi/restore.mjs --manifest /secure/recovery/production-backup/mani
 ```
 
 Release archives may use `flows-release-backup/` as their root directory.
-Preserve the encryption key in an independent secret store; retention expires
-artifacts after 30 days. GitHub retention is not an immutable offsite vault.
+Preserve the encryption key in an independent secret store; the R2 lifecycle
+expires production objects after 30 days. This retention is not an immutable
+cross-account vault. During migration, upload and read back each existing GitHub
+ciphertext, rehearse its restore from the R2 download, and only then delete that
+specific GitHub artifact. Preserve preview release-proof artifacts: they contain
+promotion metadata and remain required by the production deployment gate.
 
 ## Restore (disaster)
 

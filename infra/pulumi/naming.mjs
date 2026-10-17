@@ -8,6 +8,8 @@ export const DEFAULT_PUBLIC_ORIGIN = "https://savia.app.hefesoft.com";
 export const PREVIEW_PUBLIC_ORIGIN = "https://savia-preview.hefesoft.com";
 export const PREVIEW_VECTORIZE_INDEX = "savia-pages-search-preview";
 export const BASE_STATE_BUCKET = "savia-pulumi-state";
+export const PRODUCTION_BACKUP_BUCKET = "savia-production-backups";
+export const PRODUCTION_BACKUP_RETENTION_DAYS = 30;
 
 export const BASE_WORKERS = Object.freeze({
   auth: "savia-auth",
@@ -108,6 +110,20 @@ export function stateBackendUrl(accountId, bucketName) {
   return `s3://${bucketName.trim()}?endpoint=${account}.r2.cloudflarestorage.com&region=auto&s3ForcePathStyle=true`;
 }
 
+export function productionBackupLifecycleRule() {
+  return {
+    id: "expire-production-backups-after-30-days",
+    enabled: true,
+    conditions: { prefix: "production/" },
+    deleteObjectsTransition: {
+      condition: {
+        type: "Age",
+        maxAge: PRODUCTION_BACKUP_RETENTION_DAYS * 24 * 60 * 60,
+      },
+    },
+  };
+}
+
 // Resolves deterministic infra names + validates preview/production isolation.
 // Same guardrails as render-cloudflare-production-config.mjs:
 // preview requires its own bucket, origin, and search index.
@@ -118,8 +134,17 @@ export function resolveInfraNames({
   publicOrigin = DEFAULT_PUBLIC_ORIGIN,
   authDatabaseName,
   domainDatabaseName,
+  backupBucket,
 }) {
   const env = normalizeEnvironment(environment);
+  if (backupBucket !== undefined && backupBucket !== PRODUCTION_BACKUP_BUCKET) {
+    throw new Error(
+      `backupBucket must be ${PRODUCTION_BACKUP_BUCKET} when configured`,
+    );
+  }
+  if (env === "preview" && backupBucket !== undefined) {
+    throw new Error("backupBucket is production only");
+  }
   const bucket = requiredValue(documentsBucket, "documentsBucket");
   const origin = originValue(publicOrigin);
   const searchIndex = pagesSearchIndex?.trim() || undefined;
@@ -175,6 +200,7 @@ export function resolveInfraNames({
     environment: env,
     publicOrigin: origin,
     bucket,
+    backupBucket,
     vectorizeIndex: searchIndex,
     workers: Object.freeze(
       Object.fromEntries(

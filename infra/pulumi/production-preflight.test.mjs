@@ -98,6 +98,53 @@ const env = {
   SAVIA_BACKUP_KEY: "b".repeat(64),
   SAVIA_BACKUP_CONTROL_SECRET: "c".repeat(64),
 };
+const productionBackupBucket = "savia-production-backups";
+const productionBackupOutputs = {
+  ...outputs,
+  backupBucketName: productionBackupBucket,
+  backupRetentionDays: 30,
+};
+const productionBackupResources = [
+  {
+    urn: "urn:pulumi:production::savia-cloudflare::cloudflare:index/r2Bucket:R2Bucket::production-backups",
+    type: "cloudflare:index/r2Bucket:R2Bucket",
+    protect: true,
+    outputs: {
+      name: productionBackupBucket,
+      accountId,
+      storageClass: "Standard",
+    },
+  },
+  {
+    urn: "urn:pulumi:production::savia-cloudflare::cloudflare:index/r2BucketLifecycle:R2BucketLifecycle::production-backups-lifecycle",
+    type: "cloudflare:index/r2BucketLifecycle:R2BucketLifecycle",
+    protect: true,
+    outputs: {
+      bucketName: productionBackupBucket,
+      accountId,
+      rules: [
+        {
+          id: "expire-production-backups-after-30-days",
+          enabled: true,
+          conditions: { prefix: "production/" },
+          deleteObjectsTransition: {
+            condition: { type: "Age", maxAge: 30 * 24 * 60 * 60 },
+          },
+        },
+      ],
+    },
+  },
+];
+const productionBackupState = {
+  ...stateExport,
+  deployment: {
+    ...stateExport.deployment,
+    resources: [
+      ...stateExport.deployment.resources,
+      ...productionBackupResources,
+    ],
+  },
+};
 
 test("accepts adopted, protected production state and emits current Flows flags", () => {
   assert.deepEqual(
@@ -108,6 +155,178 @@ test("accepts adopted, protected production state and emits current Flows flags"
       SAVIA_FLOWS_PLANNED: "false",
       SAVIA_FLOWS_PLANNED_EXECUTION_ENABLED: "false",
     },
+  );
+});
+
+test("allows opt-in backup config before the first Pulumi apply", () => {
+  const readiness = validateProductionReadiness({
+    outputs,
+    stackConfig: { ...stackConfig, backupBucket: productionBackupBucket },
+    stateExport,
+    env: {
+      ...env,
+      R2_BACKUP_ACCESS_KEY_ID: undefined,
+      R2_BACKUP_SECRET_ACCESS_KEY: undefined,
+    },
+  });
+  assert.equal(readiness.SAVIA_FLOWS_PROVISIONED, "false");
+});
+
+test("rejects an invalid configured backup bucket before it exists in stack outputs", () => {
+  assert.throws(
+    () =>
+      validateProductionReadiness({
+        outputs,
+        stackConfig: { ...stackConfig, backupBucket: "savia-documents" },
+        stateExport,
+        env,
+      }),
+    /backupBucket.*savia-production-backups/i,
+  );
+});
+
+test("adopts the protected production backup bucket and exact lifecycle rule", () => {
+  const readiness = validateProductionReadiness({
+    outputs: productionBackupOutputs,
+    stackConfig: { ...stackConfig, backupBucket: productionBackupBucket },
+    stateExport: productionBackupState,
+    env: {
+      ...env,
+      R2_BACKUP_ACCESS_KEY_ID: undefined,
+      R2_BACKUP_SECRET_ACCESS_KEY: undefined,
+    },
+  });
+  assert.equal(readiness.SAVIA_FLOWS_PROVISIONED, "false");
+
+  for (const invalid of [
+    productionBackupResources.slice(1),
+    [productionBackupResources[0]],
+    [
+      productionBackupResources[0],
+      {
+        ...productionBackupResources[1],
+        outputs: {
+          ...productionBackupResources[1].outputs,
+          rules: [
+            {
+              ...productionBackupResources[1].outputs.rules[0],
+              conditions: { prefix: "other/" },
+            },
+          ],
+        },
+      },
+    ],
+    [
+      productionBackupResources[0],
+      {
+        ...productionBackupResources[1],
+        outputs: {
+          ...productionBackupResources[1].outputs,
+          rules: [
+            {
+              ...productionBackupResources[1].outputs.rules[0],
+              deleteObjectsTransition: {
+                condition: { type: "Age", maxAge: 31 * 24 * 60 * 60 },
+              },
+            },
+          ],
+        },
+      },
+    ],
+    [
+      {
+        ...productionBackupResources[0],
+        outputs: { ...productionBackupResources[0].outputs, name: "wrong" },
+      },
+      productionBackupResources[1],
+    ],
+    [
+      {
+        ...productionBackupResources[0],
+        outputs: {
+          ...productionBackupResources[0].outputs,
+          accountId: "b".repeat(32),
+        },
+      },
+      productionBackupResources[1],
+    ],
+    [
+      { ...productionBackupResources[0], protect: false },
+      productionBackupResources[1],
+    ],
+    [
+      productionBackupResources[0],
+      {
+        ...productionBackupResources[1],
+        outputs: {
+          ...productionBackupResources[1].outputs,
+          bucketName: "wrong",
+        },
+      },
+    ],
+    [
+      productionBackupResources[0],
+      {
+        ...productionBackupResources[1],
+        outputs: {
+          ...productionBackupResources[1].outputs,
+          accountId: "b".repeat(32),
+        },
+      },
+    ],
+    [
+      productionBackupResources[0],
+      { ...productionBackupResources[1], protect: false },
+    ],
+    [
+      productionBackupResources[0],
+      {
+        ...productionBackupResources[1],
+        outputs: {
+          ...productionBackupResources[1].outputs,
+          rules: [
+            {
+              ...productionBackupResources[1].outputs.rules[0],
+              enabled: false,
+            },
+          ],
+        },
+      },
+    ],
+  ]) {
+    assert.throws(() =>
+      validateProductionReadiness({
+        outputs: productionBackupOutputs,
+        stackConfig: { ...stackConfig, backupBucket: productionBackupBucket },
+        stateExport: {
+          ...stateExport,
+          deployment: {
+            ...stateExport.deployment,
+            resources: [...stateExport.deployment.resources, ...invalid],
+          },
+        },
+        env,
+      }),
+    );
+  }
+
+  assert.throws(() =>
+    validateProductionReadiness({
+      outputs: productionBackupOutputs,
+      stackConfig,
+      stateExport: productionBackupState,
+      env,
+    }),
+  );
+  assert.throws(
+    () =>
+      validateProductionReadiness({
+        outputs: { ...productionBackupOutputs, backupRetentionDays: 29 },
+        stackConfig: { ...stackConfig, backupBucket: productionBackupBucket },
+        stateExport: productionBackupState,
+        env,
+      }),
+    /retention.*30/i,
   );
 });
 
@@ -142,6 +361,35 @@ test("normalizes Pulumi CLI-wrapped booleans and rejects secret or malformed con
       },
     }).flowsEnabled,
     false,
+  );
+  assert.equal(
+    normalizeProductionConfig({
+      config: {
+        ...Object.fromEntries(
+          Object.entries(stackConfig).map(([key, value]) => [
+            `savia-cloudflare:${key}`,
+            { value: String(value), secret: false },
+          ]),
+        ),
+        "savia-cloudflare:backupBucket": {
+          value: productionBackupBucket,
+          secret: false,
+        },
+      },
+    }).backupBucket,
+    productionBackupBucket,
+  );
+  assert.throws(
+    () =>
+      normalizeProductionConfig({
+        config: {
+          "savia-cloudflare:backupBucket": {
+            value: productionBackupBucket,
+            secret: true,
+          },
+        },
+      }),
+    /public scalar/i,
   );
   assert.equal(
     normalizeProductionConfig({

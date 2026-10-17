@@ -45,7 +45,7 @@ for (const [file, stack] of [
         "- name: Capture production backup before apply",
       );
       const encrypted = source.indexOf(
-        "- name: Retain encrypted production recovery archive",
+        "- name: Retain and verify encrypted production recovery archive in private R2",
       );
       const applyIndex = source.indexOf(
         "- name: Apply infrastructure before Worker deployment",
@@ -94,7 +94,7 @@ for (const [file, stack] of [
       assert.match(source, /node scripts\/verify-flows-preview\.mjs/);
       assert.match(
         source,
-        /name: savia-production-backup-\$\{\{ github\.run_id \}\}-\$\{\{ github\.run_attempt \}\}/,
+        /node scripts\/production-backup-r2\.mjs --artifact[^\n]*--kind release/,
       );
       assert.match(
         source,

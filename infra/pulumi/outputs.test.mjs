@@ -94,6 +94,64 @@ describe("pulumi stack outputs", () => {
   it("parses and validates required outputs", () => {
     const parsed = parseStackOutputs(JSON.stringify(OUTPUTS));
     assert.equal(parsed.documentsBucketName, "savia-documents-preview");
+    assert.equal(parsed.backupBucketName, null);
+    assert.equal(parsed.backupRetentionDays, null);
+  });
+
+  it("accepts legacy outputs without a backup bucket and renders disabled vars", () => {
+    const legacy = { ...OUTPUTS };
+    delete legacy.backupBucketName;
+    delete legacy.backupRetentionDays;
+    const parsed = parseStackOutputs(JSON.stringify(legacy));
+    const env = renderEnvFromOutputs(parsed, "/repo");
+    assert.equal(parsed.backupBucketName, null);
+    assert.equal(parsed.backupRetentionDays, null);
+    assert.equal(env.SAVIA_BACKUP_BUCKET, "");
+    assert.equal(env.SAVIA_BACKUP_RETENTION_DAYS, "");
+  });
+
+  it("validates and renders the opt-in production backup bucket and retention", () => {
+    const names = resolveInfraNames({
+      environment: "production",
+      documentsBucket: "savia-documents",
+      publicOrigin: "https://savia.app.hefesoft.com",
+    });
+    const production = {
+      ...OUTPUTS,
+      documentsBucketName: names.bucket,
+      resolvedEnvironment: "production",
+      resolvedPublicOrigin: names.publicOrigin,
+      workerNames: names.workers,
+      databaseNames: names.databases,
+      plannedFlowsResourceNames: names.flows,
+      backupBucketName: "savia-production-backups",
+      backupRetentionDays: 30,
+    };
+    const parsed = parseStackOutputs(JSON.stringify(production));
+    const env = renderEnvFromOutputs(parsed, "/repo");
+    assert.equal(parsed.backupBucketName, "savia-production-backups");
+    assert.equal(parsed.backupRetentionDays, 30);
+    assert.equal(env.SAVIA_BACKUP_BUCKET, "savia-production-backups");
+    assert.equal(env.SAVIA_BACKUP_RETENTION_DAYS, "30");
+
+    for (const invalid of [
+      { ...production, backupBucketName: "savia-documents" },
+      { ...production, backupBucketName: "savia-production-backups-preview" },
+      { ...production, backupRetentionDays: 29 },
+      { ...production, backupRetentionDays: null },
+      { ...production, backupBucketName: null },
+    ]) {
+      assert.throws(() => parseStackOutputs(JSON.stringify(invalid)));
+    }
+    assert.throws(() =>
+      parseStackOutputs(
+        JSON.stringify({
+          ...OUTPUTS,
+          backupBucketName: "savia-production-backups",
+          backupRetentionDays: 30,
+        }),
+      ),
+    );
   });
 
   it("accepts validated adopted production D1 names and exports them to rendering", () => {
