@@ -16,7 +16,10 @@ import { hashBackupFiles, manifestFor } from "../infra/pulumi/backup.mjs";
 import { RecoveryConsistencyError } from "../infra/pulumi/recovery-consistency.mjs";
 import { r2InventoryHash } from "../infra/pulumi/recovery-consistency.mjs";
 import { encryptBackup } from "./encrypt-flows-backup.mjs";
-import { runProductionBackup as runWithGate } from "./production-backup.mjs";
+import {
+  classifyProductionBackupFailure,
+  runProductionBackup as runWithGate,
+} from "./production-backup.mjs";
 
 const runProductionBackup = (options) =>
   runWithGate({ withGate: (capture) => capture(), ...options });
@@ -322,4 +325,136 @@ test("runner refuses capture when its write barrier cannot be acquired", async (
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test("reports safe failure categories without exposing arbitrary error text", async () => {
+  const root = await mkdtemp(join(tmpdir(), "production-backup-safe-errors-"));
+  const secret = "Bearer do-not-print-this-token";
+  const summaryPath = join(root, "summary.md");
+  try {
+    await assert.rejects(
+      runProductionBackup({
+        artifactPath: join(root, "backup.enc"),
+        workRoot: root,
+        env: { SAVIA_BACKUP_KEY: KEY },
+        summaryPath,
+        captureBackup: async () => {
+          throw new Error(`provider response contained ${secret}`);
+        },
+      }),
+    );
+    const summary = await readFile(summaryPath, "utf8");
+    assert.match(summary, /Failure category: Capture failed; details withheld/);
+    assert.doesNotMatch(summary, /do-not-print-this-token|provider response/);
+    for (const [action, status] of [
+      ["acquire", 403],
+      ["status", 409],
+      ["release", 401],
+    ]) {
+      assert.equal(
+        classifyProductionBackupFailure(
+          new Error(`Backup barrier ${action} failed (${status})`),
+        ),
+        `Backup controller ${action} request failed (HTTP ${status}).`,
+      );
+    }
+    const controllerSummaryPath = join(root, "controller-summary.md");
+    await assert.rejects(
+      runProductionBackup({
+        artifactPath: join(root, "controller-backup.enc"),
+        workRoot: root,
+        env: { SAVIA_BACKUP_KEY: KEY },
+        summaryPath: controllerSummaryPath,
+        withGate: async () => {
+          throw new Error("Backup barrier status failed (409)");
+        },
+      }),
+    );
+    const controllerSummary = await readFile(controllerSummaryPath, "utf8");
+    assert.match(
+      controllerSummary,
+      /Failure category: Backup controller status request failed \(HTTP 409\)/,
+    );
+    assert.doesNotMatch(controllerSummary, /Backup barrier status failed/);
+    assert.equal(
+      classifyProductionBackupFailure(
+        new Error(`D1 query failed (401): ${secret}`),
+      ),
+      "D1 provider export failed (HTTP 401).",
+    );
+    assert.equal(
+      classifyProductionBackupFailure(
+        new Error("D1 recovery verification failed (HTTP 403)"),
+      ),
+      "D1 provider export failed (HTTP 403).",
+    );
+    assert.equal(
+      classifyProductionBackupFailure(
+        new Error("R2 object download returned HTTP 409"),
+      ),
+      "R2 provider export failed (HTTP 409); details withheld.",
+    );
+    assert.equal(
+      classifyProductionBackupFailure(
+        new Error(`unrecognized failure ${secret}`),
+      ),
+      "Capture failed; details withheld to protect credentials.",
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("classifies Pulumi child command and invalid path or environment failures safely", async () => {
+  const root = await mkdtemp(
+    join(tmpdir(), "production-backup-classifications-"),
+  );
+  const summaryPath = join(root, "summary.md");
+  try {
+    await assert.rejects(
+      runProductionBackup({
+        artifactPath: join(root, "backup.enc"),
+        workRoot: root,
+        env: { SAVIA_BACKUP_KEY: KEY },
+        summaryPath,
+        run: async () => {
+          throw new Error("pulumi output included secret-value");
+        },
+        captureBackup: async (_plan, { run }) => run("pulumi", []),
+      }),
+    );
+    const summary = await readFile(summaryPath, "utf8");
+    assert.match(summary, /Failure category: Pulumi child command failed/);
+    assert.doesNotMatch(summary, /secret-value|pulumi output included/);
+    assert.equal(
+      classifyProductionBackupFailure(
+        new Error("A fully qualified backup artifact path is required"),
+      ),
+      "Invalid backup artifact path configuration.",
+    );
+    assert.equal(
+      classifyProductionBackupFailure(
+        new Error("SAVIA_BACKUP_CONTROL_SECRET is required"),
+      ),
+      "Backup controller environment configuration is invalid.",
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("CLI reports a safe category when required path arguments are missing", async () => {
+  await assert.rejects(
+    execFileAsync(process.execPath, ["scripts/production-backup.mjs"], {
+      env: { PATH: process.env.PATH },
+    }),
+    (error) => {
+      assert.match(
+        error.stderr,
+        /Production backup failed: Invalid backup artifact path configuration\./,
+      );
+      assert.doesNotMatch(error.stderr, /Missing required flag|<path>/);
+      return true;
+    },
+  );
 });

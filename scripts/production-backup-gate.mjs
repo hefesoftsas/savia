@@ -37,7 +37,7 @@ export async function withProductionBackupGate(
 ) {
   const url = new URL(
     env.SAVIA_BACKUP_CONTROL_URL ??
-      "https://savia.app.hefesoft.com/api/_internal/backup-gate",
+      "https://savia-backup-coordinator.jose-douglas-dev.workers.dev/api/_internal/backup-gate",
   );
   if (
     url.protocol !== "https:" ||

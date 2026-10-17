@@ -190,7 +190,11 @@ test("writes only the supported production workers and retains their runtime set
     );
     assert.equal(coordinator.name, "savia-backup-coordinator");
     assert.equal(coordinator.main, "src/index.ts");
-    assert.equal(coordinator.workers_dev, false);
+    assert.equal(coordinator.workers_dev, true);
+    assert.equal(coordinator.preview_urls, false);
+    assert.deepEqual(coordinator.services, [
+      { binding: "AGENCIES", service: "savia-agencies" },
+    ]);
     assert.deepEqual(coordinator.durable_objects.bindings, []);
     assert.deepEqual(coordinator.migrations, [
       { tag: "v1", new_sqlite_classes: ["BackupCoordinator"] },

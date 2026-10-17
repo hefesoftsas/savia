@@ -28,7 +28,7 @@ jobs:
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       SAVIA_BACKUP_CONTROL_SECRET: ${{ secrets.SAVIA_BACKUP_CONTROL_SECRET }}
-      SAVIA_BACKUP_CONTROL_URL: https://savia.app.hefesoft.com/api/_internal/backup-gate
+      SAVIA_BACKUP_CONTROL_URL: https://savia-backup-coordinator.jose-douglas-dev.workers.dev/api/_internal/backup-gate
       SAVIA_BACKUP_KEY: ${{ secrets.SAVIA_BACKUP_KEY }}
       SAVIA_FLOWS_BRIDGE_SECRET: ${{ secrets.SAVIA_FLOWS_BRIDGE_SECRET }}
       SAVIA_FLOWS_JWT_SECRET: ${{ secrets.SAVIA_FLOWS_JWT_SECRET }}

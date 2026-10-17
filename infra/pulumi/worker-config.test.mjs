@@ -306,7 +306,20 @@ test("all production and preview storage writers share their environment backup 
           : "savia-backup-coordinator",
       );
       assert.equal(coordinator.main, "src/index.ts");
-      assert.equal(coordinator.workers_dev, false);
+      assert.equal(
+        coordinator.workers_dev,
+        settings.deploymentEnvironment === "production",
+      );
+      assert.equal(coordinator.preview_urls, false);
+      assert.deepEqual(coordinator.services, [
+        {
+          binding: "AGENCIES",
+          service:
+            settings.deploymentEnvironment === "preview"
+              ? "savia-agencies-preview"
+              : "savia-agencies",
+        },
+      ]);
       assert.deepEqual(coordinator.durable_objects.bindings, []);
       assert.deepEqual(coordinator.migrations, [
         { tag: "v1", new_sqlite_classes: ["BackupCoordinator"] },

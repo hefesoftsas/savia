@@ -219,7 +219,9 @@ function backupCoordinatorConfig() {
     name: "savia-backup-coordinator",
     compatibility_date: "2026-08-31",
     main: "src/index.ts",
-    workers_dev: false,
+    workers_dev: true,
+    preview_urls: false,
+    services: [{ binding: "AGENCIES", service: "savia-agencies" }],
     durable_objects: { bindings: [] },
     migrations: [{ tag: "v1", new_sqlite_classes: ["BackupCoordinator"] }],
   };
