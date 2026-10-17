@@ -99,5 +99,11 @@ selected company profile. It checks the current complete report index and includ
 the saved requirements and source references, evidence gaps and review cautions.
 Missing company data, prices, experience and declarations remain placeholders;
 company evidence is not automatically treated as a verified compliance decision.
-The download is a short-lived private attachment served by the SECOP backend.
+The SECOP backend returns a short-lived private attachment that the host imports into the Savia Office suite before opening the editor.
 No SECOP proposal logic or client-side persistence is added to Savia core.
+
+### Generated documents in the Office suite
+
+The host exposes the generation action only after the current workspace Office policy is available and enabled. Disabling Office hides the action and cancels pending imports. The host fetches an advertised DOCX using its short-lived HTTPS URL without sending cookies or authorization headers to the provider. The provider must allow credential-free CORS reads. Savia validates and uploads the bounded file through its existing authenticated Office documents API, storing private bytes in R2 and metadata and versions in D1. Only after this save succeeds does the host open the native WASM editor. Users can reopen the saved document from Office suite, including after refreshing the page. A blocked popup does not discard a saved document: the action retains an Open document link. Changing provider or principal context cancels pending fetch/upload/navigation. Generating again creates a separate draft and never overwrites an edited version.
+
+The connected chat uses icon actions with tooltips and accessible names. On larger screens, Expand chat and Restore chat size change the reading width without reloading the provider or discarding the composer draft.

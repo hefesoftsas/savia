@@ -1,6 +1,12 @@
 import type { MessageCatalog } from "@/i18n/core";
 
 export const assistantExternalMessages = {
+  "Expand chat": ["Ampliar chat", "Expand chat", "Ampliar chat"],
+  "Restore chat size": [
+    "Restaurar tamaño del chat",
+    "Restore chat size",
+    "Restaurar tamanho do chat",
+  ],
   "Search sources": ["Buscar fuentes", "Search sources", "Buscar fontes"],
   "Reference or document name": [
     "Referencia o nombre del documento",

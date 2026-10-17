@@ -28,6 +28,10 @@ The editor uses the native ZetaOffice interface, including its menus, toolbars,
 rulers and sidebar. Savia provides the document header, save action and revision
 history around the native editor.
 
+## Generated assistant drafts
+
+A connected plugin assistant can advertise a DOCX generation action. Generating a draft saves it as a private Savia document in R2 before opening this same WASM editor. The success state includes **Open document** if the automatic tab was blocked. Find it again under **Office suite** after reloading; edits use the existing **Save** action and immutable revision history. A new generation creates a separate draft, preserving previous edits. The document name includes the assistant context to distinguish drafts.
+
 ## Sharing Savia documents
 
 The owner can choose **Share document** beside a Savia-hosted file. Search the

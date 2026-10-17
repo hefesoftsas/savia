@@ -2,6 +2,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { CheckSquare2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useMessages, type MessageCatalog } from "@/i18n/core";
 import type {
   PluginAssistantProvider,
@@ -135,12 +140,23 @@ export function AssistantTaskAction({ provider, message }: Props) {
   if (!provider.createTask || suggestions.length === 0) return null;
   if (message.stale) {
     return (
-      <div className="mt-3 flex justify-start">
+      <div className="min-w-0">
         <div className="w-full max-w-xl text-sm">
-          <Button type="button" variant="outline" size="sm" disabled>
-            <CheckSquare2 aria-hidden="true" />
-            {t("Crear pendiente")}
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="size-9 shrink-0"
+                disabled
+                aria-label={t("Crear pendiente")}
+              >
+                <CheckSquare2 className="size-4" aria-hidden="true" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top">{t("Crear pendiente")}</TooltipContent>
+          </Tooltip>
           <p className="mt-2 text-xs text-muted-foreground" role="status">
             {t(
               "Esta respuesta usa una versión anterior de la fuente. Actualiza la respuesta antes de crear un pendiente.",
@@ -265,18 +281,24 @@ function TaskActionForm({
   }
 
   return (
-    <div className="mt-3 flex justify-start">
+    <div className={expanded ? "w-full min-w-0" : "min-w-0"}>
       <div className="w-full max-w-xl text-sm">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          aria-expanded={expanded}
-          onClick={() => setExpanded((value) => !value)}
-        >
-          <CheckSquare2 aria-hidden="true" />
-          {t("Crear pendiente")}
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              className="size-9 shrink-0"
+              aria-label={t("Crear pendiente")}
+              aria-expanded={expanded}
+              onClick={() => setExpanded((value) => !value)}
+            >
+              <CheckSquare2 className="size-4" aria-hidden="true" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="top">{t("Crear pendiente")}</TooltipContent>
+        </Tooltip>
         {expanded && (
           <form
             aria-label={t("Crear pendiente")}

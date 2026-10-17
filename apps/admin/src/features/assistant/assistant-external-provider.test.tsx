@@ -8,6 +8,7 @@ import {
 } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { ExternalAssistantConversation } from "./assistant-bar";
+import { OfficeAvailabilityContext } from "@/features/office-settings/office-availability";
 import type {
   PluginAssistantProvider,
   PluginAssistantRequest,
@@ -399,6 +400,19 @@ it("reloads after a failed terminal poll and allows sending again", async () => 
 });
 
 it("generates an advertised document without replacing chat history or its draft", async () => {
+  const postForm = vi.fn(async () => ({ data: { id: "saved-proposal" } }));
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(
+      async () =>
+        new Response(new Uint8Array([80, 75]), {
+          headers: {
+            "Content-Type":
+              "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          },
+        }),
+    ),
+  );
   const replace = vi.fn();
   vi.spyOn(window, "open").mockReturnValue({
     opener: window,
@@ -444,7 +458,15 @@ it("generates an advertised document without replacing chat history or its draft
     close: vi.fn(),
   };
   render(
-    <ExternalAssistantConversation provider={current} onReturn={() => {}} />,
+    <OfficeAvailabilityContext.Provider
+      value={{ enabled: true, loading: false, error: false }}
+    >
+      <ExternalAssistantConversation
+        provider={current}
+        onReturn={() => {}}
+        apiClient={{ postForm } as never}
+      />
+    </OfficeAvailabilityContext.Provider>,
   );
   const button = await screen.findByRole("button", {
     name: "Generate proposal DOCX",
@@ -453,9 +475,10 @@ it("generates an advertised document without replacing chat history or its draft
     target: { value: "Keep this draft" },
   });
   fireEvent.click(button);
-  await screen.findByText("Download started.");
+  await screen.findByRole("link", { name: "Open document" });
+  expect(postForm).toHaveBeenCalledTimes(1);
   expect(replace).toHaveBeenCalledWith(
-    "https://provider.test/private/proposal/ticket",
+    "/office/?base=%2Fv1%2Foffice-documents&file=saved-proposal",
   );
   expect(screen.getByText("Saved dossier answer")).toBeVisible();
   expect(screen.getByLabelText("Message")).toHaveValue("Keep this draft");
@@ -463,5 +486,6 @@ it("generates an advertised document without replacing chat history or its draft
     "load",
     "generate-document",
   ]);
+  vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
