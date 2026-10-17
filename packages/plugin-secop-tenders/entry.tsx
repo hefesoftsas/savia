@@ -12,6 +12,8 @@ import {
   ExternalLink,
   FileText,
   RotateCw,
+  Trash2,
+  Save,
 } from "lucide-react";
 import type { PluginApi } from "@savia/plugin-sdk";
 import { defineReactPlugin } from "@savia/plugin-sdk/react";
@@ -34,6 +36,7 @@ import {
   getSecopDetail,
   isTrackingConflict,
   saveInterest,
+  removeInterest,
   searchSecop,
   updateInterest,
   type Interest,
@@ -59,6 +62,13 @@ function routeTab(value: string | undefined): DossierTab {
 }
 const messages = {
   es: {
+    removingInterest: "Eliminando…",
+    removeInterest: "Eliminar de mis intereses",
+    removeQuestion: "¿Eliminar este seguimiento y sus notas?",
+    confirmRemove: "Eliminar seguimiento",
+    cancelRemove: "Cancelar",
+    removedInterest: "Seguimiento eliminado.",
+    removeError: "No se pudo eliminar el seguimiento. Inténtalo de nuevo.",
     filterLimit: "Máximo 20 valores por filtro",
     removeFilter: "Quitar filtro",
     availability: "Disponibilidad",
@@ -173,6 +183,13 @@ const messages = {
     appliedFilters: "Filtros aplicados",
   },
   en: {
+    removingInterest: "Removing…",
+    removeInterest: "Remove from my interests",
+    removeQuestion: "Remove this tracking record and its notes?",
+    confirmRemove: "Remove tracking",
+    cancelRemove: "Cancel",
+    removedInterest: "Tracking removed.",
+    removeError: "Could not remove tracking. Try again.",
     filterLimit: "Maximum 20 values per filter",
     removeFilter: "Remove filter",
     availability: "Availability",
@@ -285,6 +302,13 @@ const messages = {
     appliedFilters: "Applied filters",
   },
   pt: {
+    removingInterest: "Removendo…",
+    removeInterest: "Remover dos meus interesses",
+    removeQuestion: "Remover este acompanhamento e suas notas?",
+    confirmRemove: "Remover acompanhamento",
+    cancelRemove: "Cancelar",
+    removedInterest: "Acompanhamento removido.",
+    removeError: "Não foi possível remover o acompanhamento. Tente novamente.",
     filterLimit: "Máximo de 20 valores por filtro",
     removeFilter: "Remover filtro",
     availability: "Disponibilidade",
@@ -610,6 +634,10 @@ function Screen({ savia }: { savia: PluginApi }) {
     >
   >({});
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
+  const [removingId, setRemovingId] = useState<string | null>(null);
+  const removeTrigger = useRef<HTMLButtonElement | null>(null);
+  const interestsHeading = useRef<HTMLHeadingElement>(null);
   const interestRequests = useRef(new RequestSequence()).current;
   const mounted = useRef(true);
 
@@ -849,6 +877,51 @@ function Screen({ savia }: { savia: PluginApi }) {
       } else setNotice(t.updateError);
     } finally {
       if (mounted.current) setUpdatingId(null);
+    }
+  };
+  const deleteTracking = async (record: Interest) => {
+    if (removingId || updatingId === record.id) return;
+    setRemovingId(record.id);
+    setNotice("");
+    try {
+      await removeInterest(savia, record);
+      if (!mounted.current) return;
+      setInterests((current) =>
+        current.filter((item) => item.id !== record.id),
+      );
+      setInterestTotal((current) => Math.max(0, current - 1));
+      setSavedIds((current) => {
+        const next = new Set(current);
+        next.delete(record.source_id);
+        return next;
+      });
+      setEdits((current) => {
+        const next = { ...current };
+        delete next[record.id];
+        return next;
+      });
+      setConfirmRemove(null);
+      setNotice(t.removedInterest);
+      interestsHeading.current?.focus();
+      if (interests.length === 1 && interestPage > 1)
+        await loadInterests(interestPage - 1);
+    } catch (error) {
+      if (!mounted.current) return;
+      if (isTrackingConflict(error)) {
+        setNotice(t.conflict);
+        setConfirmRemove(null);
+        try {
+          const latest = await collection.get(record.id);
+          if (mounted.current)
+            setInterests((items) =>
+              items.map((item) => (item.id === record.id ? latest : item)),
+            );
+        } catch {
+          /* Keep the visible record and the conflict notice. */
+        }
+      } else setNotice(t.removeError);
+    } finally {
+      if (mounted.current) setRemovingId(null);
     }
   };
   const statuses: InterestStatus[] = [
@@ -1405,7 +1478,9 @@ function Screen({ savia }: { savia: PluginApi }) {
       ) : (
         <section aria-labelledby="secop-interests-title">
           <div className="secop-section-head">
-            <h2 id="secop-interests-title">{t.savedList}</h2>
+            <h2 id="secop-interests-title" ref={interestsHeading} tabIndex={-1}>
+              {t.savedList}
+            </h2>
             <span>
               {interestTotal} {t.interests.toLowerCase()}
             </span>
@@ -1480,6 +1555,19 @@ function Screen({ savia }: { savia: PluginApi }) {
                         {display(record.entity, t.noData)}
                       </p>
                     </div>
+                  </header>
+                  <div className="secop-interest-actions">
+                    <button
+                      type="button"
+                      className="secop-icon-action"
+                      aria-label={t.documents}
+                      title={t.documents}
+                      onClick={() =>
+                        openTender({ ...record, id: record.id }, "documents")
+                      }
+                    >
+                      <FileText size={16} aria-hidden="true" />
+                    </button>
                     {link && (
                       <a
                         href={link}
@@ -1492,18 +1580,52 @@ function Screen({ savia }: { savia: PluginApi }) {
                         <ExternalLink size={16} aria-hidden="true" />
                       </a>
                     )}
-                  </header>
-                  <button
-                    type="button"
-                    className="secop-icon-action"
-                    aria-label={t.documents}
-                    title={t.documents}
-                    onClick={() =>
-                      openTender({ ...record, id: record.id }, "documents")
-                    }
-                  >
-                    <FileText size={16} aria-hidden="true" />
-                  </button>
+                    <button
+                      type="button"
+                      className="secop-icon-action secop-remove-interest"
+                      aria-label={`${t.removeInterest}: ${record.name}`}
+                      title={t.removeInterest}
+                      disabled={removingId !== null || updatingId === record.id}
+                      onClick={(event) => {
+                        removeTrigger.current = event.currentTarget;
+                        setConfirmRemove(record.id);
+                      }}
+                    >
+                      <Trash2 size={16} aria-hidden="true" />
+                    </button>
+                  </div>
+                  {confirmRemove === record.id && (
+                    <div
+                      className="secop-remove-confirmation"
+                      role="group"
+                      aria-label={t.removeInterest}
+                    >
+                      <p>{t.removeQuestion}</p>
+                      <div>
+                        <button
+                          type="button"
+                          autoFocus
+                          disabled={removingId === record.id}
+                          onClick={() => {
+                            setConfirmRemove(null);
+                            removeTrigger.current?.focus();
+                          }}
+                        >
+                          {t.cancelRemove}
+                        </button>
+                        <button
+                          type="button"
+                          className="secop-remove-confirm"
+                          disabled={removingId === record.id}
+                          onClick={() => void deleteTracking(record)}
+                        >
+                          {removingId === record.id
+                            ? t.saving
+                            : t.confirmRemove}
+                        </button>
+                      </div>
+                    </div>
+                  )}
                   <div
                     className="secop-monitor-facts"
                     aria-label={t.sourceStatusLabel}
@@ -1651,10 +1773,17 @@ function Screen({ savia }: { savia: PluginApi }) {
                     </span>
                     <button
                       type="button"
-                      disabled={updatingId === record.id}
+                      className="secop-icon-action secop-primary"
+                      aria-label={
+                        updatingId === record.id ? t.saving : t.saveNotes
+                      }
+                      title={updatingId === record.id ? t.saving : t.saveNotes}
+                      disabled={
+                        updatingId === record.id || removingId === record.id
+                      }
                       onClick={() => void saveTracking(record)}
                     >
-                      {updatingId === record.id ? t.saving : t.saveNotes}
+                      <Save size={16} aria-hidden="true" />
                     </button>
                   </footer>
                 </article>

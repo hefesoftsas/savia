@@ -550,3 +550,52 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+.secop-interest-actions {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.85rem 0;
+}
+.secop-interest-actions > a {
+  border: 1px solid var(--secop-line);
+  border-radius: 6px;
+  text-decoration: none;
+}
+.secop-app .secop-remove-interest {
+  color: var(--secop-muted);
+}
+.secop-app .secop-remove-interest:hover {
+  color: var(--secop-danger);
+  border-color: var(--secop-danger);
+}
+.secop-remove-confirmation {
+  margin: 0.75rem 0;
+  padding: 0.8rem;
+  border: 1px solid var(--secop-line);
+  border-radius: 6px;
+}
+.secop-remove-confirmation p {
+  margin: 0 0 0.6rem;
+}
+.secop-remove-confirmation > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.secop-app .secop-remove-confirm {
+  background: var(--secop-danger);
+  border-color: var(--secop-danger);
+  color: var(--secop-bg);
+}
+.secop-interest footer {
+  justify-content: flex-start;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.secop-interest footer .secop-icon-action {
+  order: -1;
+}

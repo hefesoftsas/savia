@@ -376,3 +376,13 @@ are grouped at the start of the form, clear of the floating assistant.
 Version 1.8.3 dismisses filter popups on an outside pointer, click or focus
 change, when focus leaves the plugin window, with Escape, or on a second toggle
 press. Opening another field closes the previous popup; selections are retained.
+
+## Removing saved interests
+
+Version 1.8.4 groups Documents, SECOP and Remove icons in one horizontal row
+for every saved interest. Remove first asks for confirmation, then deletes only
+the local tracking record and its notes through the native collection API with
+its current version. It does not delete the official tender or the SECOP dossier.
+Conflicts keep the record visible and require reviewing the latest version.
+The saved count and bookmark state update after success. Saving tracking remains
+available as a labelled Save icon at the start of each record footer.
