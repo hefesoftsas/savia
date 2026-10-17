@@ -4,7 +4,10 @@ import { EventEmitter } from "node:events";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { startPreviewMaintenanceTransport } from "./flows-maintenance-transport.mjs";
+import {
+  startFlowsMaintenanceTransport,
+  startPreviewMaintenanceTransport,
+} from "./flows-maintenance-transport.mjs";
 
 const ACCOUNT_ID = "0123456789abcdef0123456789abcdef";
 const ENV = {
@@ -90,6 +93,38 @@ test("starts a preview-only, loopback session with fixed binding and removes its
   await transport.close();
   assert.equal(child.exitCode, 0);
   await assert.rejects(readFile(configPath));
+});
+
+test("starts a production maintenance session through the private production API binding", async (t) => {
+  const files = await fixture();
+  t.after(() => rm(files.root, { recursive: true, force: true }));
+  let configPath;
+  const transport = await startFlowsMaintenanceTransport({
+    env: { ...ENV, SAVIA_DEPLOY_ENVIRONMENT: "production" },
+    createTempDir: async () => files.root,
+    removeTempDir: (path) => rm(path, { recursive: true, force: true }),
+    reservePort: async () => 18877,
+    spawnImpl: (_command, args) => {
+      configPath = args[args.indexOf("--config") + 1];
+      return fakeChild();
+    },
+    fetchImpl: async (url) => Response.json({ ready: true }),
+  });
+  const config = JSON.parse(await readFile(configPath, "utf8"));
+  assert.deepEqual(config.services, [
+    { binding: "SAVIA_HOST", service: "savia-agencies" },
+  ]);
+  await assert.rejects(
+    transport.fetchImpl(
+      "https://savia-preview.hefesoft.com/api/public/savia-flows/maintenance",
+    ),
+    /rejected destination/,
+  );
+  await transport.fetchImpl(
+    "https://savia.app.hefesoft.com/api/public/savia-flows/maintenance",
+    { method: "POST" },
+  );
+  await transport.close();
 });
 
 test("rejects production and missing credentials before spawning Wrangler", async () => {

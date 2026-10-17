@@ -201,7 +201,7 @@ test(
       const started = await startResponse.json();
       assert.equal(started.complete, false);
       assert.deepEqual(started.coverage, {
-        version: 2,
+        version: 3,
         kinds: [
           "database",
           "mailbox",
@@ -209,6 +209,13 @@ test(
           "agent-runner",
           "email-agent-runner",
         ],
+        storage: {
+          database: ["sqlite"],
+          mailbox: ["sqlite"],
+          "workflow-agent": ["sqlite", "kv"],
+          "agent-runner": ["sqlite"],
+          "email-agent-runner": ["kv"],
+        },
       });
       const expectedTargets = [
         { kind: "database", name: database.id },
@@ -337,7 +344,7 @@ test(
         workflowAgentTarget.pages.some((page) =>
           pages
             .get(page.key)
-            .schema?.some((entry) => entry.name === "cf_agents_state"),
+            .data?.schema?.some((entry) => entry.name === "cf_agents_state"),
         ),
       );
       const emailAgentTarget = completed.objects.find(
@@ -434,7 +441,7 @@ test(
         .get(workflowNamespace.idFromName(restoreNames["workflow-agent"]))
         .backupPage();
       assert.ok(
-        restoredWorkflowAgent.schema?.some(
+        restoredWorkflowAgent.data?.schema?.some(
           (entry) => entry.name === "gen_runs",
         ),
       );

@@ -157,6 +157,11 @@ test("writes only the supported production workers and retains their runtime set
     assert.deepEqual(api.durable_objects.bindings, [
       { name: "REALTIME_HUB", class_name: "RealtimeHub" },
       { name: "WHATSAPP_DISPATCHER", class_name: "WhatsappDispatcher" },
+      {
+        name: "BACKUP_GATE",
+        class_name: "BackupCoordinator",
+        script_name: "savia-backup-coordinator",
+      },
     ]);
     assert.deepEqual(api.migrations, [
       { tag: "v1", new_sqlite_classes: ["RealtimeHub"] },
@@ -174,8 +179,36 @@ test("writes only the supported production workers and retains their runtime set
         "EXTENSION_CONNECTIONS_ENCRYPTION_KEY",
         "NANGO_API_KEY",
         "SAVIA_MCP_SHARED_SECRET",
+        "SAVIA_BACKUP_CONTROL_SECRET",
       ],
     });
+    const coordinator = JSON.parse(
+      await readFile(
+        join(outputRoot, "apps/backup-coordinator/wrangler.production.jsonc"),
+        "utf8",
+      ),
+    );
+    assert.equal(coordinator.name, "savia-backup-coordinator");
+    assert.equal(coordinator.main, "src/index.ts");
+    assert.equal(coordinator.workers_dev, false);
+    assert.deepEqual(coordinator.durable_objects.bindings, []);
+    assert.deepEqual(coordinator.migrations, [
+      { tag: "v1", new_sqlite_classes: ["BackupCoordinator"] },
+    ]);
+    assert.deepEqual(
+      api.durable_objects.bindings.find(
+        (binding) => binding.name === "BACKUP_GATE",
+      ),
+      {
+        name: "BACKUP_GATE",
+        class_name: "BackupCoordinator",
+        script_name: coordinator.name,
+      },
+    );
+    assert.equal("d1_databases" in coordinator, false);
+    assert.equal("r2_buckets" in coordinator, false);
+    assert.equal("vars" in coordinator, false);
+    assert.equal("secrets" in coordinator, false);
     assert.equal("OPENROUTER_API_KEY" in api.vars, false);
     assert.equal("ASSISTANT_SETTINGS_ENCRYPTION_KEY" in api.vars, false);
     assert.equal("SAVIA_MCP_SHARED_SECRET" in api.vars, false);

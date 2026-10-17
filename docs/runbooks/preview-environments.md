@@ -22,14 +22,17 @@ GitHub Actions → **Preview environment** → Run workflow:
 - `branch`: the branch to deploy (never `main`)
 - `action`: `deploy`
 
-After a few minutes the job prints the gateway URL plus per-worker status.
+After a few minutes the job prints the gateway URL plus per-worker status. The
+preview deploy includes its own connector gateway worker and encryption secret;
+the API binds to that branch worker, and the web gateway gets the preview R2
+bucket for office assets.
 Log in with `savia.admin@example.test`; the bootstrap password is printed in
 the deploy summary (ephemeral per preview, like all its secrets).
 
 ## One-click destroy
 
 Same workflow, `action: destroy`, `confirm:` set to the exact branch name.
-Without a matching confirm the job refuses. Destroy deletes the 5 workers,
+Without a matching confirm the job refuses. Destroy deletes the 7 workers,
 both D1 databases, and empties + deletes the R2 bucket through the branch Pulumi
 stack. A missing/mismatched stack or deletion failure stops the job; the shared
 state bucket and plugin registry are never targets.
@@ -44,15 +47,16 @@ node scripts/preview-destroy.mjs --branch feat-x --force
 
 ## What a preview is (and is not)
 
-| Aspect                | Preview                                                                                      |
-| --------------------- | -------------------------------------------------------------------------------------------- |
-| Workers               | `savia-{auth,request,mcp,agencies}-preview-<slug>`, `savia-preview-<slug>`, on `workers.dev` |
-| Data                  | fresh D1s with all migrations applied; empty R2 bucket                                       |
-| Secrets               | random per preview (MCP secret shared between api+mcp)                                       |
-| Cron                  | none (the prod every-minute tick is not installed)                                           |
-| Provider live keys    | not configured (Nango/OAuth flows fail gracefully)                                           |
-| savia-request sandbox | needs the account's Workers for Platforms entitlement, like prod                             |
-| D1 budget             | 2 databases per preview (free tier allows 10 total)                                          |
+| Aspect                | Preview                                                                                                                                |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Workers               | Branch-specific auth, request, hook executor, connector gateway, MCP, API, and web gateway workers; the web gateway uses `workers.dev` |
+| Data                  | fresh D1s with all migrations applied; empty R2 bucket                                                                                 |
+| Secrets               | random per preview (connector encryption key and MCP secret shared with the relevant workers)                                          |
+| Runtime bindings      | branch-only connector service, realtime and WhatsApp Durable Objects, and rate limit namespaces                                        |
+| Cron                  | Disabled by default; `--enable-schedules` opts into the every-minute tick                                                              |
+| Provider live keys    | not configured (Nango/OAuth flows fail gracefully)                                                                                     |
+| savia-request sandbox | Private branch-specific QuickJS hook executor; no WorkerLoader binding                                                                 |
+| D1 budget             | Two D1 databases per preview; check available account capacity                                                                         |
 
 ## Safety rails
 

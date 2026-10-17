@@ -35,10 +35,11 @@ async function runWrangler(args) {
   return stdout;
 }
 
-function workerOrder(names) {
+export function workerOrder(names) {
   return [
     names.workers.gateway,
     names.workers.api,
+    names.workers.connectorGateway,
     names.workers.mcp,
     names.workers.request,
     names.workers.hookExecutor,
@@ -46,7 +47,7 @@ function workerOrder(names) {
   ];
 }
 
-function isAlreadyGone(error) {
+export function isAlreadyGone(error) {
   return /not found|does not exist|no such|404/i.test(
     String(error.stderr ?? error.stdout ?? error.message),
   );

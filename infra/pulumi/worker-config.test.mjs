@@ -176,6 +176,48 @@ test("production Flows uses the named private QuickJS executor service binding",
   }
 });
 
+test("production manifests bind the adopted D1 names from stack outputs", async () => {
+  const root = await mkdtemp(join(tmpdir(), "savia-iac-adopted-d1-"));
+  try {
+    await renderProductionConfigs({
+      ...production,
+      authDatabaseName: "savia-auth-local-canonical-20260913-v2",
+      domainDatabaseName: "savia-agencies-local-canonical-20260913-v2",
+      outputRoot: root,
+    });
+    const auth = JSON.parse(
+      await readFile(join(root, "apps/auth/wrangler.production.jsonc"), "utf8"),
+    );
+    const api = JSON.parse(
+      await readFile(join(root, "apps/api/wrangler.production.jsonc"), "utf8"),
+    );
+    const request = JSON.parse(
+      await readFile(
+        join(root, "apps/savia-request/wrangler.production.jsonc"),
+        "utf8",
+      ),
+    );
+    const connectors = JSON.parse(
+      await readFile(
+        join(root, "apps/connector-gateway/wrangler.production.jsonc"),
+        "utf8",
+      ),
+    );
+    assert.equal(
+      auth.d1_databases[0].database_name,
+      "savia-auth-local-canonical-20260913-v2",
+    );
+    for (const config of [api, request, connectors]) {
+      assert.equal(
+        config.d1_databases[0].database_name,
+        "savia-agencies-local-canonical-20260913-v2",
+      );
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("preview rejects production Flows resources before generating manifests", async () => {
   const root = await mkdtemp(join(tmpdir(), "savia-iac-workers-"));
   try {
@@ -219,4 +261,79 @@ test("execution cannot be enabled from legacy outputs without a dead-letter queu
   assert.doesNotThrow(() =>
     flowsWorkerConfig(legacy, preview.publicOrigin, "preview", false),
   );
+});
+
+test("all production and preview storage writers share their environment backup barrier", async () => {
+  for (const settings of [production, preview]) {
+    const root = await mkdtemp(join(tmpdir(), "savia-backup-gate-config-"));
+    try {
+      await renderProductionConfigs({ ...settings, outputRoot: root });
+      const configs = {};
+      for (const app of ["api", "auth", "savia-request", "connector-gateway"])
+        configs[app] = JSON.parse(
+          await readFile(
+            join(
+              root,
+              "apps",
+              app,
+              `wrangler.${settings.deploymentEnvironment}.jsonc`,
+            ),
+            "utf8",
+          ),
+        );
+      for (const [app, config] of Object.entries(configs)) {
+        assert.equal(config.vars.SAVIA_BACKUP_GATE_REQUIRED, "true");
+        const binding = config.durable_objects.bindings.find(
+          (value) => value.name === "BACKUP_GATE",
+        );
+        assert.equal(binding.class_name, "BackupCoordinator");
+      }
+      const coordinator = JSON.parse(
+        await readFile(
+          join(
+            root,
+            "apps",
+            "backup-coordinator",
+            `wrangler.${settings.deploymentEnvironment}.jsonc`,
+          ),
+          "utf8",
+        ),
+      );
+      assert.equal(
+        coordinator.name,
+        settings.deploymentEnvironment === "preview"
+          ? "savia-backup-coordinator-preview"
+          : "savia-backup-coordinator",
+      );
+      assert.equal(coordinator.main, "src/index.ts");
+      assert.equal(coordinator.workers_dev, false);
+      assert.deepEqual(coordinator.durable_objects.bindings, []);
+      assert.deepEqual(coordinator.migrations, [
+        { tag: "v1", new_sqlite_classes: ["BackupCoordinator"] },
+      ]);
+      assert.equal("d1_databases" in coordinator, false);
+      assert.equal("r2_buckets" in coordinator, false);
+      assert.equal("vars" in coordinator, false);
+      assert.equal("secrets" in coordinator, false);
+      for (const config of Object.values(configs))
+        assert.equal(
+          config.durable_objects.bindings.find(
+            (value) => value.name === "BACKUP_GATE",
+          ).script_name,
+          coordinator.name,
+        );
+      assert.equal(
+        configs.api.migrations.some((value) =>
+          value.new_sqlite_classes?.includes("BackupCoordinator"),
+        ),
+        false,
+      );
+      assert.equal(
+        configs.api.secrets.required.includes("SAVIA_BACKUP_CONTROL_SECRET"),
+        settings.deploymentEnvironment === "production",
+      );
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  }
 });

@@ -8,8 +8,42 @@ function isRecord(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
+export const FLOWS_SNAPSHOT_COVERAGE = Object.freeze({
+  version: 3,
+  kinds: [
+    "database",
+    "mailbox",
+    "workflow-agent",
+    "agent-runner",
+    "email-agent-runner",
+  ],
+  storage: {
+    database: ["sqlite"],
+    mailbox: ["sqlite"],
+    "workflow-agent": ["sqlite", "kv"],
+    "agent-runner": ["sqlite"],
+    "email-agent-runner": ["kv"],
+  },
+});
+
+export function hasCompleteFlowsCoverage(coverage) {
+  const expected = FLOWS_SNAPSHOT_COVERAGE;
+  return (
+    isRecord(coverage) &&
+    coverage.version === expected.version &&
+    JSON.stringify(coverage.kinds) === JSON.stringify(expected.kinds) &&
+    isRecord(coverage.storage) &&
+    JSON.stringify(Object.keys(coverage.storage).sort()) ===
+      JSON.stringify(Object.keys(expected.storage).sort()) &&
+    Object.entries(expected.storage).every(
+      ([kind, stores]) =>
+        JSON.stringify(coverage.storage[kind]) === JSON.stringify(stores),
+    )
+  );
+}
+
 export function validateFlowsSnapshotManifest(snapshot) {
-  if (!isRecord(snapshot) || snapshot.version !== 2) {
+  if (!isRecord(snapshot) || snapshot.version !== 3) {
     throw new Error("Unsupported Flows runtime snapshot manifest version");
   }
   if (
@@ -34,17 +68,8 @@ export function validateFlowsSnapshotManifest(snapshot) {
       "Flows runtime snapshot manifest is missing its objects list",
     );
   }
-  const expectedKinds = [
-    "database",
-    "mailbox",
-    "workflow-agent",
-    "agent-runner",
-    "email-agent-runner",
-  ];
-  if (
-    snapshot.coverage?.version !== 2 ||
-    JSON.stringify(snapshot.coverage.kinds) !== JSON.stringify(expectedKinds)
-  ) {
+  const expectedKinds = FLOWS_SNAPSHOT_COVERAGE.kinds;
+  if (!hasCompleteFlowsCoverage(snapshot.coverage)) {
     throw new Error(
       "Flows runtime snapshot does not confirm complete persistence coverage",
     );
@@ -110,8 +135,8 @@ export function validateFlowsSnapshotManifest(snapshot) {
     return { kind: object.kind, name: object.name, pages };
   });
   return {
-    version: 2,
-    coverage: { version: 2, kinds: expectedKinds },
+    version: 3,
+    coverage: FLOWS_SNAPSHOT_COVERAGE,
     id: snapshot.id,
     createdAt: snapshot.createdAt,
     executionEnabled: false,

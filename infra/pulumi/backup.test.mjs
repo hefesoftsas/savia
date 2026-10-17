@@ -1,10 +1,11 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   parseBackupArgs,
+  createBackup,
   buildD1ExportCommand,
   buildR2SyncCommand,
   buildR2ObjectGetCommand,
@@ -19,6 +20,7 @@ import {
   hashBackupFiles,
   downloadR2Objects,
 } from "./backup.mjs";
+import { resolveInfraNames } from "./naming.mjs";
 
 describe("pulumi backup", () => {
   it("parses args and requires --apply to write", () => {
@@ -312,7 +314,7 @@ describe("pulumi backup", () => {
     assert.match(hashes["d1/flows.sql"], /^[a-f0-9]{64}$/);
   });
 
-  it("requires explicit quiescence for fallback and disables it for production", () => {
+  it("requires explicit preview quiescence and verified production consistency", () => {
     assert.throws(
       () => assertSafeTableDumpFallback("preview", null),
       /confirm-quiescent/,
@@ -322,8 +324,149 @@ describe("pulumi backup", () => {
     );
     assert.throws(
       () => assertSafeTableDumpFallback("production", "production"),
-      /production.*disabled/i,
+      /verified recovery boundary/i,
     );
+    assert.doesNotThrow(() =>
+      assertSafeTableDumpFallback("production", null, true),
+    );
+  });
+
+  it("uses restore-supported schema dumps for both production D1 databases", async () => {
+    const root = await mkdtemp(
+      join(tmpdir(), "backup-production-schema-dump-"),
+    );
+    const accountId = "a".repeat(32);
+    const databases = {
+      auth: {
+        name: "savia-auth-local-canonical-20260913-v2",
+        id: "11111111-1111-4111-8111-111111111111",
+        table: "auth_records",
+      },
+      domain: {
+        name: "savia-agencies-local-canonical-20260913-v2",
+        id: "22222222-2222-4222-8222-222222222222",
+        table: "domain_records",
+      },
+    };
+    const names = resolveInfraNames({
+      environment: "production",
+      documentsBucket: "savia-documents",
+      publicOrigin: "https://savia.app.hefesoft.com",
+      authDatabaseName: databases.auth.name,
+      domainDatabaseName: databases.domain.name,
+    });
+    const outputs = {
+      cloudflareAccountId: accountId,
+      authD1Id: databases.auth.id,
+      domainD1Id: databases.domain.id,
+      documentsBucketName: "savia-documents",
+      resolvedEnvironment: "production",
+      resolvedPublicOrigin: "https://savia.app.hefesoft.com",
+      workerNames: names.workers,
+      databaseNames: names.databases,
+      plannedFlowsResourceNames: names.flows,
+      flowsEnabled: false,
+      flowsExecutionEnabled: false,
+      flowsResources: null,
+    };
+    const commands = [];
+    const fetchImpl = async (url, init = {}) => {
+      const path = new URL(url).pathname;
+      const match = /\/database\/([^/]+)(?:\/(.*))?$/.exec(path);
+      assert.ok(match, `unexpected Cloudflare URL: ${url}`);
+      const [, uuid, endpoint] = match;
+      const db = Object.values(databases).find((value) => value.id === uuid);
+      assert.ok(db, `unexpected D1 database ${uuid}`);
+      if (!endpoint) {
+        return Response.json({
+          success: true,
+          result: { uuid, name: db.name },
+        });
+      }
+      if (endpoint === "time_travel/bookmark") {
+        return Response.json({
+          success: true,
+          result: { uuid, name: db.name, bookmark: `bookmark-${uuid}` },
+        });
+      }
+      assert.equal(endpoint, "query");
+      const { sql } = JSON.parse(init.body);
+      let results = [];
+      if (sql.includes("type='table' AND substr(name,1,7) != 'sqlite_'")) {
+        results = [{ name: db.table }];
+      } else if (sql.includes("sql LIKE '%USING fts5%'")) {
+        results = [];
+      } else if (sql.includes("SELECT name, sql FROM sqlite_master")) {
+        results = [
+          {
+            name: db.table,
+            sql: `CREATE TABLE "${db.table}" ("id" INTEGER PRIMARY KEY)`,
+          },
+        ];
+      } else if (
+        sql.includes("SELECT type, name, sql, tbl_name FROM sqlite_master")
+      ) {
+        results = [];
+      } else if (sql.startsWith("PRAGMA table_info")) {
+        results = [{ name: "id" }];
+      } else if (sql.startsWith("SELECT COUNT(*)")) {
+        results = [{ c: 1 }];
+      } else if (sql.startsWith('SELECT "id" FROM')) {
+        results = sql.includes("OFFSET 0") ? [{ id: 1 }] : [];
+      } else if (sql.includes("name = 'sqlite_sequence'")) {
+        results = [];
+      }
+      return Response.json({
+        success: true,
+        result: [{ success: true, results }],
+      });
+    };
+
+    try {
+      const manifest = await createBackup(
+        {
+          stack: "production",
+          dryRun: false,
+          skipR2: true,
+          outDir: join(root, "capture"),
+          confirmQuiescent: null,
+          flowsSnapshot: null,
+          r2Concurrency: 4,
+        },
+        {
+          env: {
+            CLOUDFLARE_ACCOUNT_ID: accountId,
+            CLOUDFLARE_API_TOKEN: "token",
+          },
+          fetchImpl,
+          run: async (command, args) => {
+            commands.push([command, args]);
+            assert.equal(
+              command,
+              "pulumi",
+              "production must not use Wrangler export",
+            );
+            return { stdout: JSON.stringify(outputs), stderr: "" };
+          },
+        },
+      );
+
+      assert.deepEqual(manifest.d1Methods, {
+        [databases.auth.name]: "schema-dump",
+        [databases.domain.name]: "schema-dump",
+      });
+      assert.equal(commands.length, 1);
+      for (const db of Object.values(databases)) {
+        const sql = await readFile(
+          join(root, "capture", "d1", `${db.name}.sql`),
+          "utf8",
+        );
+        assert.match(sql, new RegExp(`CREATE TABLE \\"${db.table}\\"`));
+        assert.match(sql, new RegExp(`INSERT INTO \\"${db.table}\\"`));
+      }
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 
   it("keeps manifest paths relative to the backup directory", () => {

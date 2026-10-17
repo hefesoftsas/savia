@@ -6,6 +6,8 @@ import {
   type BackupCursor,
   type KvBackupPage,
   type SqlBackupPage,
+  type WorkflowBackupCursor,
+  type WorkflowBackupPage,
 } from "../services/durable-backup";
 import { policyStatus } from "../services/execution-policy";
 import {
@@ -22,12 +24,16 @@ type Target = {
     | "email-agent-runner";
   name: string;
   pages: { key: string; sha256: string }[];
-  next?: BackupCursor | string;
+  next?: BackupCursor | string | WorkflowBackupCursor;
   done?: boolean;
 };
 type Manifest = {
-  version: 2;
-  coverage: { version: 2; kinds: Target["kind"][] };
+  version: 3;
+  coverage: {
+    version: 3;
+    kinds: Target["kind"][];
+    storage: Record<Target["kind"], ("sqlite" | "kv")[]>;
+  };
   id: string;
   createdAt: string;
   executionEnabled: false;
@@ -42,6 +48,13 @@ const COVERED_KINDS: Target["kind"][] = [
   "agent-runner",
   "email-agent-runner",
 ];
+const STORAGE_COVERAGE: Manifest["coverage"]["storage"] = {
+  database: ["sqlite"],
+  mailbox: ["sqlite"],
+  "workflow-agent": ["sqlite", "kv"],
+  "agent-runner": ["sqlite"],
+  "email-agent-runner": ["kv"],
+};
 const keyFor = (id: string) => `${PREFIX}${id}/manifest.json`;
 const digest = async (text: string) =>
   Array.from(
@@ -113,9 +126,11 @@ function stubFor(env: Bindings, target: Target) {
   );
 }
 async function backupPage(stub: any, target: Target) {
-  return target.kind === "email-agent-runner"
-    ? stub.backupPage(target.next as string | undefined)
-    : stub.backupPage(target.next as BackupCursor | undefined);
+  if (target.kind === "email-agent-runner")
+    return stub.backupPage(target.next as string | undefined);
+  if (target.kind === "workflow-agent")
+    return stub.backupPage(target.next as WorkflowBackupCursor | undefined);
+  return stub.backupPage(target.next as BackupCursor | undefined);
 }
 export const saviaMaintenanceRoutes = new Hono<ApiContext>();
 saviaMaintenanceRoutes.post("/", async (c) => {
@@ -163,8 +178,12 @@ saviaMaintenanceRoutes.post("/", async (c) => {
           await getWorkflowAgentByName(c.env, target.name)
         ).flushForBackup();
       const manifest: Manifest = {
-        version: 2,
-        coverage: { version: 2, kinds: COVERED_KINDS },
+        version: 3,
+        coverage: {
+          version: 3,
+          kinds: COVERED_KINDS,
+          storage: STORAGE_COVERAGE,
+        },
         id,
         createdAt: new Date().toISOString(),
         executionEnabled: false,
@@ -178,10 +197,12 @@ saviaMaintenanceRoutes.post("/", async (c) => {
     if (!object) return c.json({ error: "Snapshot not found" }, 404);
     const manifest = await object.json<Manifest>();
     if (
-      manifest.version !== 2 ||
-      manifest.coverage?.version !== 2 ||
+      manifest.version !== 3 ||
+      manifest.coverage?.version !== 3 ||
       JSON.stringify(manifest.coverage.kinds) !==
         JSON.stringify(COVERED_KINDS) ||
+      JSON.stringify(manifest.coverage.storage) !==
+        JSON.stringify(STORAGE_COVERAGE) ||
       manifest.id !== id ||
       manifest.executionEnabled !== false
     )
@@ -249,28 +270,47 @@ saviaMaintenanceRoutes.post("/", async (c) => {
       const text = await saved.text();
       if ((await digest(text)) !== entry.sha256)
         throw new Error("Snapshot page checksum mismatch");
-      const page = JSON.parse(text) as SqlBackupPage | KvBackupPage;
-      if (body.page !== 0 && body.page === target.pages.length - 1) {
+      const page = JSON.parse(text) as
+        SqlBackupPage | KvBackupPage | WorkflowBackupPage;
+      if (target.kind === "workflow-agent") {
+        const mixed = page as WorkflowBackupPage;
+        if (mixed.storage === "sql" && mixed.segmentLast) {
+          const first = await c.env.RESSOURCES.get(target.pages[0].key);
+          if (!first) throw new Error("Snapshot schema missing");
+          const schemaText = await first.text();
+          if ((await digest(schemaText)) !== target.pages[0].sha256)
+            throw new Error("Snapshot schema checksum mismatch");
+          const firstSqlPage = JSON.parse(schemaText) as WorkflowBackupPage;
+          if (firstSqlPage.storage !== "sql")
+            throw new Error("Snapshot SQLite schema missing");
+          mixed.data.schema = firstSqlPage.data.schema;
+          mixed.data.sqliteSequence = firstSqlPage.data.sqliteSequence;
+        }
+      } else if (
+        target.kind !== "email-agent-runner" &&
+        body.page !== 0 &&
+        body.page === target.pages.length - 1
+      ) {
         const first = await c.env.RESSOURCES.get(target.pages[0].key);
         if (!first) throw new Error("Snapshot schema missing");
         const schemaText = await first.text();
         if ((await digest(schemaText)) !== target.pages[0].sha256)
           throw new Error("Snapshot schema checksum mismatch");
-        if (target.kind !== "email-agent-runner") {
-          (page as SqlBackupPage).schema = (
-            JSON.parse(schemaText) as SqlBackupPage
-          ).schema;
-          (page as SqlBackupPage).sqliteSequence = (
-            JSON.parse(schemaText) as SqlBackupPage
-          ).sqliteSequence;
-        }
+        (page as SqlBackupPage).schema = (
+          JSON.parse(schemaText) as SqlBackupPage
+        ).schema;
+        (page as SqlBackupPage).sqliteSequence = (
+          JSON.parse(schemaText) as SqlBackupPage
+        ).sqliteSequence;
       }
       const checkpoint = {
         snapshotId: id,
         page: body.page!,
         sha256: entry.sha256,
       };
-      if (target.kind === "email-agent-runner")
+      if (target.kind === "workflow-agent")
+        await stub.restoreBackupPage(page as WorkflowBackupPage, checkpoint);
+      else if (target.kind === "email-agent-runner")
         await stub.restoreBackupPage(
           page as KvBackupPage,
           body.page === 0,

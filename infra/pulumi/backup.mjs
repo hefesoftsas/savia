@@ -2,12 +2,21 @@
 // Pulumi recreates empty containers on disaster; this script captures the
 // data. Backups default under infra/pulumi/backups/ (gitignored) together
 // with a manifest.json consumed by restore.mjs.
-// R2 sync uses the S3-compatible API via AWS CLI; D1 uses wrangler export.
+// R2 sync uses the S3-compatible API via AWS CLI; preview D1 uses Wrangler
+// export while production uses a bookmark-verified, restore-ready schema dump.
 import { downloadR2Object } from "./r2-object-download.mjs";
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
-import { mkdir, writeFile, readdir, lstat, readFile } from "node:fs/promises";
+import {
+  mkdir,
+  writeFile,
+  readdir,
+  lstat,
+  readFile,
+  rename,
+  rm,
+} from "node:fs/promises";
 import { join, dirname, relative, isAbsolute, resolve, sep } from "node:path";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
@@ -22,6 +31,11 @@ import {
   validateFlowsSnapshotManifest,
   verifyFlowsSnapshotPages,
 } from "./flows-snapshot.mjs";
+
+import {
+  captureRecoveryBoundary,
+  verifyRecoveryBoundary,
+} from "./recovery-consistency.mjs";
 
 const execFileAsync = promisify(execFile);
 
@@ -71,11 +85,17 @@ function parseR2Concurrency(argv) {
   return Number(value);
 }
 
-export function assertSafeTableDumpFallback(stack, confirmation) {
+export function assertSafeTableDumpFallback(
+  stack,
+  confirmation,
+  verifiedBoundary = false,
+) {
   if (stack === "production") {
-    throw new Error(
-      "Production table-dump fallback is disabled because it cannot provide a consistent snapshot; use a verified export during a controlled recovery window",
-    );
+    if (!verifiedBoundary)
+      throw new Error(
+        "Production table-dump fallback requires a verified recovery boundary",
+      );
+    return;
   }
   if (confirmation !== stack) {
     throw new Error(
@@ -387,6 +407,7 @@ export async function downloadR2Objects({
           accountId,
           token,
           expectedSize: object.size,
+          ...(object.etag ? { expectedEtag: object.etag } : {}),
           contentEncoding: object.httpMetadata?.contentEncoding,
         });
       } catch (error) {
@@ -413,6 +434,7 @@ export function manifestFor({
   flowsR2 = {},
   integrity = {},
   flowsSnapshot = null,
+  recoveryConsistency = null,
 }) {
   return Object.freeze({
     version: 2,
@@ -425,6 +447,7 @@ export function manifestFor({
     r2,
     r2Buckets: flowsR2,
     ...(flowsSnapshot ? { flowsSnapshot } : {}),
+    ...(recoveryConsistency ? { recoveryConsistency } : {}),
     integrity,
   });
 }
@@ -485,8 +508,15 @@ async function assertCapturedR2Files(directory, objects) {
   }
 }
 
-async function main() {
-  const plan = parseBackupArgs(process.argv.slice(2));
+export async function createBackup(
+  plan,
+  {
+    run = execFileAsync,
+    env = process.env,
+    fetchImpl = fetch,
+    downloadImpl = downloadR2Object,
+  } = {},
+) {
   const pulumiCwd = fileURLToPath(new URL(".", import.meta.url));
   const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
   const stamp = new Date().toISOString().replace(/[:.]/g, "-");
@@ -496,16 +526,20 @@ async function main() {
     console.log(
       `Would back up stack ${plan.stack} to ${plan.outDir ?? defaultOutDir}`,
     );
-    console.log("Would export D1 databases and sync the R2 bucket.");
+    console.log(
+      "Would export D1 databases and copy R2 objects; production requires verified consistency.",
+    );
     return;
   }
-  const { stdout } = await execFileAsync(
+  const { stdout } = await run(
     "pulumi",
     ["stack", "output", "--json", "--stack", plan.stack],
     { cwd: pulumiCwd, maxBuffer: 32 * 1024 * 1024 },
   );
   const outputs = parseStackOutputs(stdout);
-  assertDeploymentAccount(outputs, process.env.CLOUDFLARE_ACCOUNT_ID);
+  assertDeploymentAccount(outputs, env.CLOUDFLARE_ACCOUNT_ID);
+  if (outputs.resolvedEnvironment !== plan.stack)
+    throw new Error("Backup stack and resolved environment disagree");
   if (outputs.flowsEnabled && plan.confirmQuiescent !== plan.stack) {
     throw new Error(
       `Flows backup requires pausing writes and --confirm-quiescent ${plan.stack}`,
@@ -532,26 +566,42 @@ async function main() {
       )
     : null;
   const outDir = plan.outDir ?? defaultOutDir;
-  const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
+  const accountId = env.CLOUDFLARE_ACCOUNT_ID;
   if (!plan.skipR2 && !accountId)
     throw new Error("CLOUDFLARE_ACCOUNT_ID is required for R2 backup");
 
-  await mkdir(join(outDir, "d1"), { recursive: true });
+  // Refuse reused directories: a previous successful manifest must never make
+  // a failed capture appear complete, and stale files must not enter a backup.
+  await mkdir(dirname(resolve(outDir)), { recursive: true });
+  await mkdir(outDir, { recursive: false, mode: 0o700 });
+  await mkdir(join(outDir, "d1"));
   const files = {};
   const methods = {};
   const skipped = [];
   const uuidByName = d1BackupTargets(outputs);
+  const token = env.CLOUDFLARE_API_TOKEN;
+  const consistencyOptions = {
+    accountId,
+    token,
+    databases: uuidByName,
+    fetchImpl,
+    buckets: plan.skipR2
+      ? []
+      : [
+          outputs.documentsBucketName,
+          ...Object.values(flowsBucketTargets(outputs)),
+        ],
+    listObjects: (bucket) =>
+      listR2Objects({ bucket, accountId, token, fetchImpl }),
+  };
+  const boundary =
+    plan.stack === "production"
+      ? await captureRecoveryBoundary(consistencyOptions)
+      : null;
   for (const dbName of Object.keys(uuidByName)) {
     const outputFile = join(outDir, "d1", `${dbName}.sql`);
-    try {
-      const [command, args] = buildD1ExportCommand(dbName, outputFile);
-      await execFileAsync(command, args, { cwd: repoRoot });
-      methods[dbName] = "export";
-      console.log(`Exported D1 ${dbName}`);
-    } catch (error) {
-      if (!isVirtualTableExportError(error)) throw error;
-      assertSafeTableDumpFallback(plan.stack, plan.confirmQuiescent);
-      const token = process.env.CLOUDFLARE_API_TOKEN;
+    if (plan.stack === "production") {
+      assertSafeTableDumpFallback(plan.stack, null, Boolean(boundary));
       if (!token || !accountId)
         throw new Error(
           "CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID are required for table dumps",
@@ -562,21 +612,57 @@ async function main() {
         token,
         outputFile,
         stack: plan.stack,
-        quiescent:
-          plan.stack !== "production" && plan.confirmQuiescent === plan.stack,
+        fetchImpl,
       });
       methods[dbName] = summary.method;
       skipped.push(...summary.skipped);
       console.log(
-        `Dumped D1 ${dbName} table-by-table (${summary.tables} tables, ${summary.rows} rows; FTS5 rebuilt from triggers on restore)`,
+        `Dumped D1 ${dbName} table-by-table (${summary.tables} tables, ${summary.rows} rows; ${summary.method === "schema-dump" ? "source schema and FTS5 rebuild preserved" : "FTS5 rebuilt from triggers on restore"})`,
       );
+    } else {
+      try {
+        const [command, args] = buildD1ExportCommand(dbName, outputFile);
+        await run(command, args, { cwd: repoRoot });
+        methods[dbName] = "export";
+        console.log(`Exported D1 ${dbName}`);
+      } catch (error) {
+        if (!isVirtualTableExportError(error)) throw error;
+        assertSafeTableDumpFallback(
+          plan.stack,
+          plan.confirmQuiescent,
+          Boolean(boundary),
+        );
+        if (dbName === outputs.databaseNames.auth)
+          throw new Error(
+            "Auth table-dump fallback is unsupported; its schema cannot be reconstructed safely",
+          );
+        const token = env.CLOUDFLARE_API_TOKEN;
+        if (!token || !accountId)
+          throw new Error(
+            "CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID are required for table dumps",
+          );
+        const summary = await dumpDatabase({
+          accountId,
+          uuid: uuidByName[dbName],
+          token,
+          outputFile,
+          stack: plan.stack,
+          fetchImpl,
+          quiescent: plan.confirmQuiescent === plan.stack,
+        });
+        methods[dbName] = summary.method;
+        skipped.push(...summary.skipped);
+        console.log(
+          `Dumped D1 ${dbName} table-by-table (${summary.tables} tables, ${summary.rows} rows; ${summary.method === "schema-dump" ? "source schema and FTS5 rebuild preserved" : "FTS5 rebuilt from triggers on restore"})`,
+        );
+      }
     }
     files[dbName] = backupRelativePath(outDir, outputFile);
   }
   let r2 = null;
   const flowsR2 = {};
   if (!plan.skipR2) {
-    const token = process.env.CLOUDFLARE_API_TOKEN;
+    const token = env.CLOUDFLARE_API_TOKEN;
     if (!token) {
       throw new Error(
         "CLOUDFLARE_API_TOKEN is required to preserve complete R2 metadata",
@@ -585,7 +671,12 @@ async function main() {
     const backupBucket = async (bucket, slot) => {
       const destDir = join(outDir, "r2", slot);
       await mkdir(destDir, { recursive: true });
-      const objects = await listR2Objects({ bucket, accountId, token });
+      const objects = await listR2Objects({
+        bucket,
+        accountId,
+        token,
+        fetchImpl,
+      });
       const seenKeys = new Set();
       for (const object of objects) {
         assertSafeR2Key(object.key);
@@ -601,13 +692,13 @@ async function main() {
       await mkdir(dirname(metadataFile), { recursive: true });
       await writeFile(metadataFile, `${JSON.stringify(metadata, null, 2)}\n`);
       let method;
-      if (hasS3Credentials()) {
+      if (hasS3Credentials(env) && plan.stack !== "production") {
         const [command, args] = buildR2SyncCommand({
           bucket,
           destDir,
           accountId,
         });
-        await execFileAsync(command, args, { cwd: repoRoot });
+        await run(command, args, { cwd: repoRoot });
         method = "s3-sync";
       } else {
         await downloadR2Objects({
@@ -617,6 +708,7 @@ async function main() {
           accountId,
           token,
           concurrency: plan.r2Concurrency,
+          downloadImpl,
         });
         method = "object-get";
       }
@@ -674,6 +766,9 @@ async function main() {
     };
   }
 
+  const recoveryConsistency = boundary
+    ? await verifyRecoveryBoundary(boundary, consistencyOptions)
+    : null;
   const integrity = await hashBackupFiles(outDir);
   const manifest = manifestFor({
     stack: plan.stack,
@@ -685,15 +780,32 @@ async function main() {
     flowsR2,
     integrity,
     flowsSnapshot,
+    recoveryConsistency,
   });
-  await writeFile(
-    join(outDir, "manifest.json"),
-    `${JSON.stringify(manifest, null, 2)}\n`,
-  );
+  await commitBackupManifest(outDir, manifest);
   console.log(`Backup complete: ${outDir}/manifest.json`);
+  return manifest;
+}
+
+export async function commitBackupManifest(
+  outDir,
+  manifest,
+  { renameFile = rename } = {},
+) {
+  const temporary = join(outDir, "manifest.json.tmp");
+  try {
+    await writeFile(temporary, `${JSON.stringify(manifest, null, 2)}\n`, {
+      flag: "wx",
+      mode: 0o600,
+    });
+    await renameFile(temporary, join(outDir, "manifest.json"));
+  } finally {
+    await rm(temporary, { force: true });
+  }
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  const main = async () => createBackup(parseBackupArgs(process.argv.slice(2)));
   main().catch((error) => {
     process.stderr.write(
       `${error instanceof Error ? error.message : String(error)}\n`,

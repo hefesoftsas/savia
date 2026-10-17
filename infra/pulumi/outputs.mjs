@@ -58,6 +58,12 @@ function validateStackOutputs(parsed) {
     documentsBucket: parsed.documentsBucketName,
     publicOrigin: parsed.resolvedPublicOrigin,
     pagesSearchIndex: parsed.vectorizeIndex,
+    ...(resolvedEnvironment === "production"
+      ? {
+          authDatabaseName: parsed.databaseNames?.auth,
+          domainDatabaseName: parsed.databaseNames?.domain,
+        }
+      : {}),
   });
   requireNonEmptyString(parsed.authD1Id, "authD1Id");
   requireNonEmptyString(parsed.domainD1Id, "domainD1Id");
@@ -137,6 +143,7 @@ export function renderEnvFromOutputs(outputs, outputRoot) {
     bucket: validated.documentsBucketName,
     publicOrigin: validated.resolvedPublicOrigin,
     environment: validated.resolvedEnvironment,
+    databases: validated.databaseNames,
   };
   const searchIndex =
     typeof validated.vectorizeIndex === "string" &&

@@ -45,6 +45,29 @@ export type KvBackupPage = {
   next: string | null;
 };
 
+export type WorkflowBackupCursor =
+  | { storage: "sql"; page: number; cursor?: BackupCursor }
+  | { storage: "kv"; page: number; cursor?: string };
+export type WorkflowBackupPage =
+  | {
+      version: 1;
+      storage: "sql";
+      segmentPage: number;
+      segmentFirst: boolean;
+      segmentLast: boolean;
+      data: SqlBackupPage;
+      next: WorkflowBackupCursor;
+    }
+  | {
+      version: 1;
+      storage: "kv";
+      segmentPage: number;
+      segmentFirst: boolean;
+      segmentLast: boolean;
+      data: KvBackupPage;
+      next: WorkflowBackupCursor | null;
+    };
+
 export function encodeKvValue(value: unknown): EncodedKvValue {
   if (value === null || typeof value === "string" || typeof value === "boolean")
     return value;
@@ -177,7 +200,8 @@ export async function exportKvPage(
   const entries: KvBackupPage["entries"] = [];
   let bytes = 0;
   for (const [key, value] of rows) {
-    if (key === "__savia_backup_restore") continue;
+    if (key === "__savia_backup_restore" || key === "__ps_name") continue;
+    if (entries.length >= PAGE_ROWS) break;
     const entry = { key, value: encodeKvValue(value) };
     const size = new TextEncoder().encode(JSON.stringify(entry)).byteLength;
     if (size > PAGE_BYTES)
@@ -186,15 +210,59 @@ export async function exportKvPage(
     entries.push(entry);
     bytes += size;
   }
-  const hasMore = [...rows.keys()].some(
-    (key) =>
-      key !== "__savia_backup_restore" &&
-      key > (entries.at(-1)?.key ?? startAfter ?? ""),
-  );
+  const lastKey = entries.at(-1)?.key;
+  const hasMore =
+    lastKey !== undefined &&
+    [...rows.keys()].some(
+      (key) =>
+        key !== "__savia_backup_restore" &&
+        key !== "__ps_name" &&
+        key > lastKey,
+    );
   return boundedPage<KvBackupPage>({
     version: 1,
     entries,
-    next: hasMore ? entries.at(-1)!.key : null,
+    next: hasMore ? lastKey! : null,
+  });
+}
+
+/** WorkflowAgent state spans SQLite and ordinary Durable Object KV storage. */
+export async function exportWorkflowBackupPage(
+  storage: DurableObjectStorage,
+  cursor?: WorkflowBackupCursor,
+): Promise<WorkflowBackupPage> {
+  if (!cursor || cursor.storage === "sql") {
+    const segmentPage = cursor?.page ?? 0;
+    if (!Number.isSafeInteger(segmentPage) || segmentPage < 0)
+      throw new Error("Invalid workflow backup cursor");
+    const data = exportSqlPage(storage.sql, cursor?.cursor);
+    const segmentLast = data.next === null;
+    return boundedPage<WorkflowBackupPage>({
+      version: 1,
+      storage: "sql",
+      segmentPage,
+      segmentFirst: segmentPage === 0,
+      segmentLast,
+      data,
+      next: data.next
+        ? { storage: "sql", page: segmentPage + 1, cursor: data.next }
+        : { storage: "kv", page: 0 },
+    });
+  }
+  const segmentPage = cursor.page;
+  if (!Number.isSafeInteger(segmentPage) || segmentPage < 0)
+    throw new Error("Invalid workflow backup cursor");
+  const data = await exportKvPage(storage, cursor.cursor);
+  return boundedPage<WorkflowBackupPage>({
+    version: 1,
+    storage: "kv",
+    segmentPage,
+    segmentFirst: segmentPage === 0,
+    segmentLast: data.next === null,
+    data,
+    next: data.next
+      ? { storage: "kv", page: segmentPage + 1, cursor: data.next }
+      : null,
   });
 }
 
@@ -281,7 +349,7 @@ const quoted = (name: string) => `"${name.replaceAll('"', '""')}"`;
 const schemaOf = (sql: SqlStorage) =>
   sql
     .exec<{ name: string; sql: string; type: string }>(
-      "SELECT name,sql,type FROM sqlite_master WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' AND name != '__savia_backup_restore' ORDER BY CASE type WHEN 'table' THEN 0 ELSE 1 END,name",
+      "SELECT name,sql,type FROM sqlite_master WHERE sql IS NOT NULL AND substr(name,1,7) != 'sqlite_' AND substr(name,1,4) != '_cf_' AND name NOT IN ('__savia_backup_restore','__savia_backup_restore_workflow') ORDER BY CASE type WHEN 'table' THEN 0 ELSE 1 END,name",
     )
     .toArray();
 
@@ -367,6 +435,130 @@ export function exportSqlPage(
   });
 }
 
+function assertSqlBackupPage(page: SqlBackupPage): void {
+  if (
+    page.version !== 1 ||
+    !Array.isArray(page.rows) ||
+    new TextEncoder().encode(JSON.stringify(page)).byteLength > 2 * PAGE_BYTES
+  )
+    throw new Error("Invalid SQL backup page");
+}
+
+function assertRestoreCheckpoint(checkpoint: BackupCheckpoint): void {
+  if (
+    !/^[A-Za-z0-9-]{1,80}$/.test(checkpoint.snapshotId) ||
+    !Number.isSafeInteger(checkpoint.page) ||
+    checkpoint.page < 0 ||
+    !/^[a-f0-9]{64}$/.test(checkpoint.sha256)
+  )
+    throw new Error("Invalid restore checkpoint");
+}
+
+function assertEmptySqlTarget(
+  sql: SqlStorage,
+  schema: SqlBackupPage["schema"],
+): void {
+  if (!schema || !Array.isArray(schema))
+    throw new Error("Backup schema required");
+  // Restoring into a populated object is deliberately forbidden. A restore is
+  // performed into empty resources or after a separately controlled reset.
+  const existingTables = schemaOf(sql).filter(
+    (entry) => entry.type === "table",
+  );
+  const populatedApplicationTables = existingTables.filter((entry) => {
+    const count = Number(
+      sql.exec(`SELECT count(*) AS count FROM ${quoted(entry.name)}`).one()
+        .count,
+    );
+    if (count === 0) return false;
+    if (entry.name === "cf_agents_state") {
+      const rows = sql
+        .exec<{ id: string; state: string | null }>(
+          "SELECT id,state FROM cf_agents_state",
+        )
+        .toArray();
+      return (
+        rows.length > 1 ||
+        rows.some((row) => row.id !== "cf_schema_version" || row.state !== "11")
+      );
+    }
+    return true;
+  });
+  if (populatedApplicationTables.length > 0)
+    throw new Error("Restore target must be empty");
+}
+
+function assertEmptyWorkflowKvTarget(storage: DurableObjectStorage): void {
+  const entries = [...storage.kv.list({ limit: 2 })];
+  // PartyServer initializes every named object with this fallback identity
+  // record. It is platform metadata, not application state to restore over.
+  const hasOnlyPartyServerName =
+    entries.length === 1 &&
+    entries[0][0] === "__ps_name" &&
+    typeof entries[0][1] === "string" &&
+    entries[0][1].length > 0;
+  if (entries.length > 0 && !hasOnlyPartyServerName)
+    throw new Error("Restore target must be empty");
+}
+
+function restoreSqlData(
+  sql: SqlStorage,
+  page: SqlBackupPage,
+  first: boolean,
+  last: boolean,
+): void {
+  if (first) {
+    assertEmptySqlTarget(sql, page.schema);
+    const existingTables = schemaOf(sql).filter(
+      (entry) => entry.type === "table",
+    );
+    // Preserve Agent SDK bootstrap tables, clearing only their bootstrap rows.
+    for (const entry of existingTables) {
+      if (entry.name.startsWith("cf_agents_"))
+        sql.exec(`DELETE FROM ${quoted(entry.name)}`);
+      else sql.exec(`DROP TABLE ${quoted(entry.name)}`);
+    }
+    for (const entry of page.schema!.filter((entry) => entry.type === "table"))
+      sql.exec(
+        entry.sql.replace(/^CREATE TABLE\s+/i, "CREATE TABLE IF NOT EXISTS "),
+      );
+  }
+  if (page.rows.length) {
+    if (!page.table || !page.columns?.length)
+      throw new Error("Backup table and columns required");
+    for (const row of page.rows) {
+      if (row.length !== page.columns.length)
+        throw new Error("Invalid backup row");
+      sql.exec(
+        `INSERT INTO ${quoted(page.table)} (${page.columns.map(quoted).join(",")}) VALUES (${row.map(() => "?").join(",")})`,
+        ...row.map((value) =>
+          value !== null && typeof value === "object"
+            ? new Uint8Array(value.blob).buffer
+            : value,
+        ),
+      );
+    }
+  }
+  if (last && page.schema)
+    for (const entry of page.schema.filter((entry) => entry.type !== "table")) {
+      const ddl = entry.sql
+        .replace(
+          /^CREATE UNIQUE INDEX\s+/i,
+          "CREATE UNIQUE INDEX IF NOT EXISTS ",
+        )
+        .replace(/^CREATE INDEX\s+/i, "CREATE INDEX IF NOT EXISTS ")
+        .replace(/^CREATE TRIGGER\s+/i, "CREATE TRIGGER IF NOT EXISTS ");
+      sql.exec(ddl);
+    }
+  if (last && page.sqliteSequence)
+    for (const { name, seq } of page.sqliteSequence) {
+      sql.exec("DELETE FROM sqlite_sequence WHERE name=?", name);
+      sql.exec("INSERT INTO sqlite_sequence(name,seq) VALUES(?,?)", name, seq);
+    }
+  if (last && sql.exec("PRAGMA foreign_key_check").toArray().length > 0)
+    throw new Error("Restore contains unresolved foreign-key references");
+}
+
 export function restoreSqlPage(
   storage: DurableObjectStorage,
   page: SqlBackupPage,
@@ -374,29 +566,134 @@ export function restoreSqlPage(
   last: boolean,
   checkpoint?: BackupCheckpoint,
 ): void {
+  assertSqlBackupPage(page);
+  if (
+    checkpoint &&
+    checkpointAlreadyApplied(storage.sql, "__savia_backup_restore", checkpoint)
+  )
+    return;
+  if (first) storage.sql.exec("PRAGMA foreign_keys = OFF");
+  try {
+    storage.transactionSync(() => {
+      const sql = storage.sql;
+      if (checkpoint) {
+        assertRestoreCheckpoint(checkpoint);
+        sql.exec(
+          "CREATE TABLE IF NOT EXISTS __savia_backup_restore (snapshot_id TEXT NOT NULL, page INTEGER NOT NULL, sha256 TEXT NOT NULL, PRIMARY KEY(snapshot_id,page))",
+        );
+        const previous = sql
+          .exec(
+            "SELECT MAX(page) AS page FROM __savia_backup_restore WHERE snapshot_id=?",
+            checkpoint.snapshotId,
+          )
+          .one().page;
+        if (checkpoint.page !== (previous === null ? 0 : Number(previous) + 1))
+          throw new Error("Restore pages must be applied in order");
+      }
+      restoreSqlData(sql, page, first, last);
+      if (checkpoint)
+        sql.exec(
+          "INSERT INTO __savia_backup_restore VALUES (?,?,?)",
+          checkpoint.snapshotId,
+          checkpoint.page,
+          checkpoint.sha256,
+        );
+    });
+  } catch (error) {
+    if (first) storage.sql.exec("PRAGMA foreign_keys = ON");
+    throw error;
+  }
+  if (last) storage.sql.exec("PRAGMA foreign_keys = ON");
+}
+
+function checkpointAlreadyApplied(
+  sql: SqlStorage,
+  table: "__savia_backup_restore" | "__savia_backup_restore_workflow",
+  checkpoint: BackupCheckpoint,
+): boolean {
+  assertRestoreCheckpoint(checkpoint);
+  const exists = sql
+    .exec<{ present: number }>(
+      "SELECT 1 AS present FROM sqlite_master WHERE type='table' AND name=?",
+      table,
+    )
+    .toArray()[0];
+  if (!exists) return false;
+  const prior = sql
+    .exec<{ sha256: string }>(
+      `SELECT sha256 FROM ${table} WHERE snapshot_id=? AND page=?`,
+      checkpoint.snapshotId,
+      checkpoint.page,
+    )
+    .toArray()[0];
+  if (!prior) return false;
+  if (prior.sha256 !== checkpoint.sha256)
+    throw new Error("Restore checkpoint checksum mismatch");
+  return true;
+}
+
+export function restoreWorkflowBackupPage(
+  storage: DurableObjectStorage,
+  page: WorkflowBackupPage,
+  checkpoint: BackupCheckpoint,
+): void {
+  assertRestoreCheckpoint(checkpoint);
   if (
     page.version !== 1 ||
-    !Array.isArray(page.rows) ||
+    !Number.isSafeInteger(page.segmentPage) ||
+    page.segmentPage < 0 ||
+    page.segmentFirst !== (page.segmentPage === 0) ||
+    page.segmentLast !== (page.data.next === null) ||
     new TextEncoder().encode(JSON.stringify(page)).byteLength > 2 * PAGE_BYTES
   )
-    throw new Error("Invalid SQL backup page");
-  if (first) storage.sql.exec("PRAGMA foreign_keys = OFF");
-  storage.transactionSync(() => {
-    const sql = storage.sql;
-    if (checkpoint) {
-      if (
-        !/^[A-Za-z0-9-]{1,80}$/.test(checkpoint.snapshotId) ||
-        !Number.isSafeInteger(checkpoint.page) ||
-        checkpoint.page < 0 ||
-        !/^[a-f0-9]{64}$/.test(checkpoint.sha256)
-      )
-        throw new Error("Invalid restore checkpoint");
+    throw new Error("Invalid mixed workflow backup page");
+  if (page.storage !== "sql" && page.storage !== "kv")
+    throw new Error("Invalid mixed workflow backup storage kind");
+  if (page.storage === "sql") {
+    assertSqlBackupPage(page.data);
+    const expectedNext = page.data.next
+      ? {
+          storage: "sql" as const,
+          page: page.segmentPage + 1,
+          cursor: page.data.next,
+        }
+      : { storage: "kv" as const, page: 0 };
+    if (JSON.stringify(page.next) !== JSON.stringify(expectedNext))
+      throw new Error("Invalid mixed workflow backup cursor");
+  } else {
+    if (
+      page.data.version !== 1 ||
+      !Array.isArray(page.data.entries) ||
+      new TextEncoder().encode(JSON.stringify(page.data)).byteLength >
+        2 * PAGE_BYTES
+    )
+      throw new Error("Invalid mixed workflow backup page");
+    const expectedNext = page.data.next
+      ? {
+          storage: "kv" as const,
+          page: page.segmentPage + 1,
+          cursor: page.data.next,
+        }
+      : null;
+    if (JSON.stringify(page.next) !== JSON.stringify(expectedNext))
+      throw new Error("Invalid mixed workflow backup cursor");
+  }
+
+  const sql = storage.sql;
+  if (
+    checkpointAlreadyApplied(sql, "__savia_backup_restore_workflow", checkpoint)
+  )
+    return;
+  if (page.storage === "sql" && page.segmentFirst)
+    sql.exec("PRAGMA foreign_keys = OFF");
+  try {
+    storage.transactionSync(() => {
       sql.exec(
-        "CREATE TABLE IF NOT EXISTS __savia_backup_restore (snapshot_id TEXT NOT NULL, page INTEGER NOT NULL, sha256 TEXT NOT NULL, PRIMARY KEY(snapshot_id,page))",
+        "CREATE TABLE IF NOT EXISTS __savia_backup_restore_workflow (snapshot_id TEXT NOT NULL, page INTEGER NOT NULL, sha256 TEXT NOT NULL, storage TEXT NOT NULL, segment_page INTEGER NOT NULL, segment_last INTEGER NOT NULL, PRIMARY KEY(snapshot_id,page))",
       );
       const prior = sql
         .exec<{ sha256: string }>(
-          "SELECT sha256 FROM __savia_backup_restore WHERE snapshot_id=? AND page=?",
+          "SELECT sha256 FROM __savia_backup_restore_workflow WHERE snapshot_id=? AND page=?",
           checkpoint.snapshotId,
           checkpoint.page,
         )
@@ -407,110 +704,80 @@ export function restoreSqlPage(
         return;
       }
       const previous = sql
-        .exec(
-          "SELECT MAX(page) AS page FROM __savia_backup_restore WHERE snapshot_id=?",
+        .exec<{
+          page: number;
+          storage: "sql" | "kv";
+          segment_page: number;
+          segment_last: number;
+        }>(
+          "SELECT page,storage,segment_page,segment_last FROM __savia_backup_restore_workflow WHERE snapshot_id=? ORDER BY page DESC LIMIT 1",
           checkpoint.snapshotId,
         )
-        .one().page;
-      if (checkpoint.page !== (previous === null ? 0 : Number(previous) + 1))
+        .toArray()[0];
+      if (checkpoint.page !== (previous ? previous.page + 1 : 0))
         throw new Error("Restore pages must be applied in order");
-    }
-    if (first) {
-      if (!page.schema || !Array.isArray(page.schema))
-        throw new Error("Backup schema required");
-      // Restoring into a populated object is deliberately forbidden. A restore
-      // is performed into empty resources or after a separately controlled reset.
-      const existingTables = schemaOf(sql).filter(
-        (entry) => entry.type === "table",
-      );
-      const populatedApplicationTables = existingTables.filter((entry) => {
-        const count = Number(
-          sql.exec(`SELECT count(*) AS count FROM ${quoted(entry.name)}`).one()
-            .count,
-        );
-        if (count === 0) return false;
-        if (entry.name === "cf_agents_state") {
-          const rows = sql
-            .exec<{ id: string; state: string | null }>(
-              "SELECT id,state FROM cf_agents_state",
-            )
-            .toArray();
-          return (
-            rows.length > 1 ||
-            rows.some(
-              (row) => row.id !== "cf_schema_version" || row.state !== "11",
-            )
-          );
-        }
-        return true;
-      });
-      if (populatedApplicationTables.length > 0)
-        throw new Error("Restore target must be empty");
-      // getAgentByName initializes the Agent SDK's SQLite tables on a fresh
-      // target. Preserve those tables, clearing their bootstrap rows before
-      // importing the snapshot; never clear app-owned populated tables.
-      for (const entry of existingTables) {
-        if (entry.name.startsWith("cf_agents_"))
-          sql.exec(`DELETE FROM ${quoted(entry.name)}`);
-        else sql.exec(`DROP TABLE ${quoted(entry.name)}`);
+      if (!previous) {
+        if (page.storage !== "sql" || page.segmentPage !== 0)
+          throw new Error("Workflow restore must begin with SQLite page zero");
+        assertEmptySqlTarget(sql, page.data.schema);
+        assertEmptyWorkflowKvTarget(storage);
+      } else if (page.storage === "sql") {
+        if (
+          previous.storage !== "sql" ||
+          previous.segment_last !== 0 ||
+          page.segmentPage !== previous.segment_page + 1
+        )
+          throw new Error("SQLite restore pages must be applied before KV");
+      } else if (previous.storage === "sql") {
+        if (previous.segment_last !== 1 || page.segmentPage !== 0)
+          throw new Error("KV restore must follow final SQLite page");
+      } else if (
+        previous.storage !== "kv" ||
+        previous.segment_last !== 0 ||
+        page.segmentPage !== previous.segment_page + 1
+      ) {
+        throw new Error("Restore pages must be applied in order");
       }
-      for (const entry of page.schema.filter((entry) => entry.type === "table"))
-        sql.exec(
-          entry.sql.replace(/^CREATE TABLE\s+/i, "CREATE TABLE IF NOT EXISTS "),
-        );
-    }
-    if (page.rows.length) {
-      if (!page.table || !page.columns?.length)
-        throw new Error("Backup table and columns required");
-      for (const row of page.rows) {
-        if (row.length !== page.columns.length)
-          throw new Error("Invalid backup row");
-        sql.exec(
-          `INSERT INTO ${quoted(page.table)} (${page.columns.map(quoted).join(",")}) VALUES (${row.map(() => "?").join(",")})`,
-          ...row.map((value) =>
-            value !== null && typeof value === "object"
-              ? new Uint8Array(value.blob).buffer
-              : value,
-          ),
-        );
-      }
-    }
-    // Schema indexes/triggers are restored by the maintenance caller after all
-    // rows, so ingestion triggers cannot duplicate captured data.
-    if (last && page.schema)
-      for (const entry of page.schema.filter(
-        (entry) => entry.type !== "table",
-      )) {
-        const ddl = entry.sql
-          .replace(
-            /^CREATE UNIQUE INDEX\s+/i,
-            "CREATE UNIQUE INDEX IF NOT EXISTS ",
+
+      if (page.storage === "sql") {
+        restoreSqlData(sql, page.data, page.segmentFirst, page.segmentLast);
+      } else {
+        for (const entry of page.data.entries) {
+          if (
+            !entry ||
+            typeof entry.key !== "string" ||
+            !entry.key.length ||
+            ["__savia_backup_restore", "__ps_name"].includes(entry.key)
           )
-          .replace(/^CREATE INDEX\s+/i, "CREATE INDEX IF NOT EXISTS ")
-          .replace(/^CREATE TRIGGER\s+/i, "CREATE TRIGGER IF NOT EXISTS ");
-        sql.exec(ddl);
+            throw new Error("Invalid KV backup entry");
+          if (
+            [
+              ...storage.kv.list({
+                start: entry.key,
+                end: `${entry.key}\u0000`,
+                limit: 1,
+              }),
+            ].length > 0
+          )
+            throw new Error("Restore target must be empty");
+          storage.kv.put(entry.key, decodeKvValue(entry.value));
+        }
       }
-    if (last && page.sqliteSequence) {
-      for (const { name, seq } of page.sqliteSequence) {
-        sql.exec("DELETE FROM sqlite_sequence WHERE name=?", name);
-        sql.exec(
-          "INSERT INTO sqlite_sequence(name,seq) VALUES(?,?)",
-          name,
-          seq,
-        );
-      }
-    }
-    if (last) {
-      if (sql.exec("PRAGMA foreign_key_check").toArray().length > 0)
-        throw new Error("Restore contains unresolved foreign-key references");
-    }
-    if (checkpoint)
       sql.exec(
-        "INSERT INTO __savia_backup_restore VALUES (?,?,?)",
+        "INSERT INTO __savia_backup_restore_workflow VALUES (?,?,?,?,?,?)",
         checkpoint.snapshotId,
         checkpoint.page,
         checkpoint.sha256,
+        page.storage,
+        page.segmentPage,
+        page.segmentLast ? 1 : 0,
       );
-  });
-  if (last) storage.sql.exec("PRAGMA foreign_keys = ON");
+    });
+  } catch (error) {
+    if (page.storage === "sql" && page.segmentFirst)
+      sql.exec("PRAGMA foreign_keys = ON");
+    throw error;
+  }
+  if (page.storage === "sql" && page.segmentLast)
+    sql.exec("PRAGMA foreign_keys = ON");
 }

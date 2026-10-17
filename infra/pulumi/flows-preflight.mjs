@@ -5,7 +5,11 @@ import { fileURLToPath } from "node:url";
 import { buildFlowsSecretUploads } from "../../scripts/flows-preview-policy.mjs";
 const exec = promisify(execFile);
 
-export function validatePlannedFlows({ provisioned, executionEnabled }, env) {
+export function validatePlannedFlows(
+  { provisioned, executionEnabled },
+  env,
+  environment = "preview",
+) {
   if (
     typeof provisioned !== "boolean" ||
     typeof executionEnabled !== "boolean" ||
@@ -23,7 +27,7 @@ export function validatePlannedFlows({ provisioned, executionEnabled }, env) {
     throw new Error(
       "SAVIA_FLOWS_BACKUP_KEY is required for encrypted recovery artifacts",
     );
-  buildFlowsSecretUploads("preview", {
+  buildFlowsSecretUploads(environment, {
     ...env,
     SAVIA_FLOWS_PROVISIONED: String(provisioned),
   });
@@ -34,11 +38,21 @@ export function validatePlannedFlows({ provisioned, executionEnabled }, env) {
 }
 async function main() {
   const cwd = fileURLToPath(new URL(".", import.meta.url));
+  const stackIndex = process.argv.indexOf("--stack");
+  const stack = stackIndex === -1 ? "preview" : process.argv[stackIndex + 1];
+  if (
+    !["preview", "production"].includes(stack) ||
+    (stackIndex >= 0 &&
+      (process.argv.length !== stackIndex + 2 ||
+        !process.argv[stackIndex + 1] ||
+        process.argv[stackIndex + 1].startsWith("--")))
+  )
+    throw new Error("Use --stack preview|production");
   const readBoolean = async (key) => {
     try {
       const { stdout } = await exec(
         "pulumi",
-        ["config", "get", key, "--stack", "preview"],
+        ["config", "get", key, "--stack", stack],
         { cwd },
       );
       const value = stdout.trim();
@@ -60,6 +74,7 @@ async function main() {
       executionEnabled: await readBoolean("flowsExecutionEnabled"),
     },
     process.env,
+    stack,
   );
   if (process.env.GITHUB_ENV)
     await appendFile(
