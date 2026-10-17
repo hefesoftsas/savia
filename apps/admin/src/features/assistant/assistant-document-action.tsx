@@ -274,14 +274,27 @@ export function AssistantDocumentAction({
               b.id.localeCompare(a.id),
           );
         if (!isCurrent()) return;
-        if (candidates[0])
-          existing = (
-            await apiClient.post<{ data: Saved }>(
-              `/v1/office-documents/${encodeURIComponent(candidates[0].id)}/source`,
-              { key: sourceKey },
-              { signal },
+        for (const candidate of candidates) {
+          try {
+            existing = (
+              await apiClient.post<{ data: Saved }>(
+                `/v1/office-documents/${encodeURIComponent(candidate.id)}/source`,
+                { key: sourceKey },
+                { signal },
+              )
+            ).data;
+          } catch (error) {
+            if (
+              !error ||
+              typeof error !== "object" ||
+              !("code" in error) ||
+              error.code !== "SOURCE_KEY_CONFLICT"
             )
-          ).data;
+              throw error;
+          }
+          if (!isCurrent()) return;
+          if (existing) break;
+        }
       }
       if (!isCurrent()) return;
       if (existing) {

@@ -497,3 +497,40 @@ it("fails closed on draft lookup errors instead of generating a duplicate", asyn
   expect(client.postForm).not.toHaveBeenCalled();
   expect(reserved.close).toHaveBeenCalled();
 });
+
+it("skips legacy documents already bound to a different context", async () => {
+  vi.spyOn(window, "open").mockReturnValue(popup() as never);
+  vi.spyOn(globalThis, "fetch").mockResolvedValue(
+    new Response(new Uint8Array([1]), { status: 200 }),
+  );
+  const client = api();
+  vi.mocked(client.get)
+    .mockResolvedValueOnce({ data: null })
+    .mockResolvedValueOnce({
+      data: [
+        {
+          id: "other_context",
+          name: "Tender-borrador.docx",
+          role: "owner",
+          updatedAt: "2026-10-17",
+        },
+      ],
+    });
+  vi.mocked(client.post).mockRejectedValue(
+    Object.assign(new Error("bound"), { code: "SOURCE_KEY_CONFLICT" }),
+  );
+  const invoke = generated();
+  render(
+    <AssistantDocumentAction
+      provider={provider(invoke)}
+      action={{ ...action, fileName: "borrador.docx" }}
+      apiClient={client}
+    />,
+    { wrapper: AvailableOffice },
+  );
+  fireEvent.click(screen.getByRole("button", { name: action.label }));
+  await screen.findByRole("link", { name: "Open document" });
+  expect(invoke).toHaveBeenCalledTimes(1);
+  expect(client.postForm).toHaveBeenCalledTimes(1);
+  expect(screen.queryByRole("alert")).toBeNull();
+});
