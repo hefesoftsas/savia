@@ -21,7 +21,9 @@ beforeAll(async () => {
     }
 });
 let calls: Record<string, unknown>[] = [];
+let fetchRequests = 0;
 const fetcher: typeof fetch = async (input, init) => {
+  fetchRequests += 1;
   const url = new URL(input instanceof Request ? input.url : String(input));
   if (url.hostname === "cloudflare-dns.com")
     return Response.json({
@@ -137,4 +139,65 @@ it("uses only a declared read tool on the current owner's source and allowlisted
     make("other")({ ...request, principalId: "other" }),
   ).rejects.toMatchObject({ status: 404 });
   expect(calls).toHaveLength(before);
+});
+
+it("forwards declared flat primitive arrays unchanged to MCP", async () => {
+  const arrayAction = storeMcpActionSchema.parse({
+    ...action,
+    inputArguments: ["q", "estado", "flags"],
+  });
+  const output = await make()({
+    ...request,
+    action: arrayAction,
+    input: {
+      q: "software",
+      estado: ["Publicado", "Abierto"],
+      flags: [null, 3, false, "value"],
+      page: 2,
+      perPage: 10,
+    },
+  });
+
+  expect(output).toMatchObject({ page: 2, perPage: 10 });
+  expect(calls.at(-1)).toMatchObject({
+    name: "buscar_licitaciones",
+    arguments: {
+      q: "software",
+      estado: ["Publicado", "Abierto"],
+      flags: [null, 3, false, "value"],
+      limit: 10,
+      offset: 10,
+    },
+  });
+});
+
+it("rejects nested, oversized, non-primitive, and undeclared arrays before source or MCP access", async () => {
+  const arrayAction = storeMcpActionSchema.parse({
+    ...action,
+    inputArguments: ["q", "estado"],
+  });
+  const fetchesBefore = fetchRequests;
+  const callsBefore = calls.length;
+  for (const estado of [
+    Array.from({ length: 21 }, (_, index) => `Estado ${index}`),
+    [["Publicado"]],
+    [{ value: "Publicado" }],
+  ]) {
+    await expect(
+      make()({
+        ...request,
+        action: arrayAction,
+        input: { q: "software", estado },
+      }),
+    ).rejects.toMatchObject({ status: 422 });
+  }
+  await expect(
+    make()({
+      ...request,
+      action: arrayAction,
+      input: { q: "software", undeclared: ["x"] },
+    }),
+  ).rejects.toMatchObject({ status: 422 });
+  expect(fetchRequests).toBe(fetchesBefore);
+  expect(calls).toHaveLength(callsBefore);
 });
