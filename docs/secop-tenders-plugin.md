@@ -338,3 +338,29 @@ minutes; return to the citation and open it again to issue a new link.
 The task collection deliberately has no custom plugin screen contribution. Savia
 therefore uses its standard records table and editor for tasks instead of
 mounting the tender search interface for that collection.
+
+## Active search and readable closing dates
+
+Version 1.8.0 defaults to **Open with a future deadline**. The SECOP service
+filters closing dates and terminal procedure states before pagination, ordering
+active results by the nearest closing date. Records without a usable deadline
+are excluded from this scope; a future date alone does not prove eligibility.
+Choose **All, including closed** to inspect historical, cancelled or undated
+records. Saved interests remain accessible regardless of their deadline.
+
+Closing dates use the interface language and Colombia time (America/Bogota),
+including Socrata floating timestamps. Historical deadlines display a closed
+label. Missing or invalid dates never appear as usable deadlines.
+
+## Multiple filter values and resilient catalogs
+
+Version 1.8.1 supports multiple values for status, entity, modality and
+department. Values within one field are alternatives (OR); different fields
+are combined (AND). Select options without closing the list, remove individual
+chips, or add a typed value with Enter. Pagination keeps the full selection.
+Availability remains a single scope choice.
+
+Complete catalogs are cached independently from searches. Renewal runs in the
+SECOP service background; a compact retry icon appears beside an unavailable
+catalog. Existing selections and previously loaded options survive refresh
+failures. No catalog is silently replaced with the currently loaded results.

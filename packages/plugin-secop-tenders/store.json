@@ -16,7 +16,14 @@
           "offsetArgument": "offset"
         }
       },
-      "inputArguments": ["q", "estado", "entidad", "modalidad", "departamento"]
+      "inputArguments": [
+        "q",
+        "estado",
+        "entidad",
+        "modalidad",
+        "departamento",
+        "vigentes"
+      ]
     },
     {
       "id": "detail",

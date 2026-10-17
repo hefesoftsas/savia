@@ -6,11 +6,18 @@ import {
   useSyncExternalStore,
   type FormEvent,
 } from "react";
-import { Bookmark, BookmarkCheck, ExternalLink, FileText } from "lucide-react";
+import {
+  Bookmark,
+  BookmarkCheck,
+  ExternalLink,
+  FileText,
+  RotateCw,
+} from "lucide-react";
 import type { PluginApi } from "@savia/plugin-sdk";
 import { defineReactPlugin } from "@savia/plugin-sdk/react";
 import "./styles.css";
 import { DossierPanel } from "./dossier-panel";
+import { formatDeadline, deadlineInstant } from "./deadline";
 import { SearchFeed } from "./search-feed";
 import { FilterAutocomplete } from "./filter-autocomplete";
 import {
@@ -52,6 +59,13 @@ function routeTab(value: string | undefined): DossierTab {
 }
 const messages = {
   es: {
+    filterLimit: "Máximo 20 valores por filtro",
+    removeFilter: "Quitar filtro",
+    availability: "Disponibilidad",
+    activeOnly: "Vigentes con cierre futuro",
+    allTenders: "Todos, incluidos cerrados",
+    closedDeadline: "Cerró",
+    colombiaTime: "Hora de Colombia",
     title: "Licitaciones SECOP",
     subtitle:
       "Busca procesos públicos y organiza el seguimiento que tu equipo decide guardar.",
@@ -139,7 +153,7 @@ const messages = {
     anyValue: "Todos",
     showOptions: "Mostrar opciones",
     loadingCatalog: "Cargando catálogo…",
-    catalogError: "No se pudo cargar el catálogo completo.",
+    catalogError: "Catálogo no disponible",
     connectionHeading: "Conecta SECOP para esta cuenta",
     connectionHelp:
       "Esta cuenta aún no tiene una conexión SECOP autorizada. Abre Fuentes de datos para conectarla, o inicia sesión con la cuenta que ya la autorizó.",
@@ -147,7 +161,7 @@ const messages = {
     optionsCount: "opciones",
     noOptions: "Sin coincidencias. Puedes escribir otro valor.",
     suggestionsHint:
-      "Opciones de los catálogos completos de SECOP; también puedes escribir otro valor.",
+      "Elige varios valores por filtro. Escribe para buscar; Enter añade otro valor.",
     searchTimeout: "SECOP tardó demasiado en responder. Inténtalo de nuevo.",
     searchAuthorization:
       "Revisa tus permisos y la conexión SECOP en Fuentes de datos para continuar.",
@@ -160,6 +174,13 @@ const messages = {
     appliedFilters: "Filtros aplicados",
   },
   en: {
+    filterLimit: "Maximum 20 values per filter",
+    removeFilter: "Remove filter",
+    availability: "Availability",
+    activeOnly: "Open with a future deadline",
+    allTenders: "All, including closed",
+    closedDeadline: "Closed",
+    colombiaTime: "Colombia time",
     title: "SECOP tenders",
     subtitle:
       "Search public procurement and track the opportunities your team chooses to save.",
@@ -245,7 +266,7 @@ const messages = {
     anyValue: "All",
     showOptions: "Show options",
     loadingCatalog: "Loading catalog…",
-    catalogError: "The complete catalog could not be loaded.",
+    catalogError: "Catalog unavailable",
     connectionHeading: "Connect SECOP for this account",
     connectionHelp:
       "This account does not have an authorized SECOP connection yet. Open Data sources to connect it, or sign in with the account that already authorized it.",
@@ -253,7 +274,7 @@ const messages = {
     optionsCount: "options",
     noOptions: "No matches. You can type another value.",
     suggestionsHint:
-      "Options come from complete SECOP catalogs; you can also type another value.",
+      "Choose several values per filter. Type to search; Enter adds another value.",
     searchTimeout: "SECOP took too long to respond. Try again.",
     searchAuthorization:
       "Check your permissions and SECOP connection in Data sources to continue.",
@@ -266,6 +287,13 @@ const messages = {
     appliedFilters: "Applied filters",
   },
   pt: {
+    filterLimit: "Máximo de 20 valores por filtro",
+    removeFilter: "Remover filtro",
+    availability: "Disponibilidade",
+    activeOnly: "Vigentes com prazo futuro",
+    allTenders: "Todos, incluindo encerrados",
+    closedDeadline: "Encerrou",
+    colombiaTime: "Horário da Colômbia",
     title: "Licitações SECOP",
     subtitle:
       "Pesquise processos públicos e acompanhe as oportunidades que sua equipe decidir salvar.",
@@ -352,7 +380,7 @@ const messages = {
     anyValue: "Todos",
     showOptions: "Mostrar opções",
     loadingCatalog: "Carregando catálogo…",
-    catalogError: "Não foi possível carregar o catálogo completo.",
+    catalogError: "Catálogo indisponível",
     connectionHeading: "Conecte o SECOP a esta conta",
     connectionHelp:
       "Esta conta ainda não tem uma conexão SECOP autorizada. Abra Fontes de dados para conectá-la ou entre com a conta que já a autorizou.",
@@ -360,7 +388,7 @@ const messages = {
     optionsCount: "opções",
     noOptions: "Sem resultados. Você pode digitar outro valor.",
     suggestionsHint:
-      "As opções vêm dos catálogos completos do SECOP; você também pode digitar outro valor.",
+      "Escolha vários valores por filtro. Digite para buscar; Enter adiciona outro valor.",
     searchTimeout: "O SECOP demorou para responder. Tente novamente.",
     searchAuthorization:
       "Verifique suas permissões e a conexão SECOP em Fontes de dados para continuar.",
@@ -425,6 +453,26 @@ function formatMonitorCheck(
   } catch {
     return fallback;
   }
+}
+function Deadline({ value, locale }: { value: unknown; locale: Locale }) {
+  const t = messages[locale];
+  const instant = deadlineInstant(value);
+  if (instant === null) return <span>{t.noData}</span>;
+  const closed = instant <= Date.now();
+  return (
+    <span className={closed ? "secop-deadline-closed" : undefined}>
+      <time dateTime={new Date(instant).toISOString()}>
+        {formatDeadline(value, locale, t.noData)}
+      </time>
+      {closed && (
+        <span className="secop-deadline-label">{t.closedDeadline}</span>
+      )}
+    </span>
+  );
+}
+
+function filterText(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value.join(", ") : (value?.trim() ?? "");
 }
 function display(value: unknown, fallback: string) {
   if (value === undefined || value === null || String(value).trim() === "")
@@ -521,7 +569,7 @@ function Screen({ savia }: { savia: PluginApi }) {
         setCatalogs((current) => ({
           ...current,
           [field]: {
-            options: [],
+            options: current[field].options,
             loading: false,
             error: true,
             connectionRequired: needsSecopConnection(error),
@@ -1013,6 +1061,21 @@ function Screen({ savia }: { savia: PluginApi }) {
                 }
               />
             </label>
+            <label className="secop-availability">
+              {t.availability}
+              <select
+                value={draft.vigentes === false ? "all" : "active"}
+                onChange={(event) =>
+                  setDraft((current) => ({
+                    ...current,
+                    vigentes: event.target.value === "active",
+                  }))
+                }
+              >
+                <option value="active">{t.activeOnly}</option>
+                <option value="all">{t.allTenders}</option>
+              </select>
+            </label>
             <div className="secop-advanced">
               {(
                 [
@@ -1026,11 +1089,20 @@ function Screen({ savia }: { savia: PluginApi }) {
                   <FilterAutocomplete
                     id={`secop-filter-${key}`}
                     label={label}
-                    value={draft[key] ?? ""}
+                    multiple
+                    value={
+                      Array.isArray(draft[key])
+                        ? (draft[key] as string[])
+                        : draft[key]
+                          ? [draft[key] as string]
+                          : []
+                    }
                     onChange={(value) =>
                       setDraft((current) => ({ ...current, [key]: value }))
                     }
                     placeholder={t.anyValue}
+                    removeLabel={t.removeFilter}
+                    limitLabel={t.filterLimit}
                     toggleLabel={`${t.showOptions}: ${label}`}
                     noOptionsLabel={
                       key !== "estado" && catalogs[key].loading
@@ -1070,11 +1142,14 @@ function Screen({ savia }: { savia: PluginApi }) {
                         <span>{t.catalogError}</span>
                         <button
                           type="button"
+                          className="secop-catalog-retry"
+                          aria-label={`${t.retry}: ${label}`}
+                          title={`${t.retry}: ${label}`}
                           onClick={() => {
                             void loadCatalog(key, catalogGeneration.current);
                           }}
                         >
-                          {t.retry}
+                          <RotateCw size={14} aria-hidden="true" />
                         </button>
                       </div>
                     ) : (
@@ -1126,10 +1201,15 @@ function Screen({ savia }: { savia: PluginApi }) {
                 </span>
               )}
             </div>
+            {searched && (
+              <p className="secop-filter-hint">
+                {criteria.vigentes === false ? t.allTenders : t.activeOnly}
+              </p>
+            )}
             {searched &&
               (
                 ["q", "estado", "entidad", "modalidad", "departamento"] as const
-              ).some((key) => criteria[key]?.trim()) && (
+              ).some((key) => filterText(criteria[key])) && (
                 <div
                   className="secop-applied-filters"
                   aria-label={t.appliedFilters}
@@ -1143,10 +1223,10 @@ function Screen({ savia }: { savia: PluginApi }) {
                       ["departamento", t.department],
                     ] as const
                   )
-                    .filter(([key]) => criteria[key]?.trim())
+                    .filter(([key]) => filterText(criteria[key]))
                     .map(([key, label]) => (
                       <span key={key}>
-                        {label}: {criteria[key]}
+                        {label}: {filterText(criteria[key])}
                       </span>
                     ))}
                 </div>
@@ -1212,8 +1292,12 @@ function Screen({ savia }: { savia: PluginApi }) {
                           <dd>{formatAmount(row.amount, locale)}</dd>
                         </div>
                         <div>
-                          <dt>{t.deadline}</dt>
-                          <dd>{display(row.deadline, t.noData)}</dd>
+                          <dt>
+                            {t.deadline} · {t.colombiaTime}
+                          </dt>
+                          <dd>
+                            <Deadline value={row.deadline} locale={locale} />
+                          </dd>
                         </div>
                       </dl>
                       <footer>
@@ -1433,7 +1517,7 @@ function Screen({ savia }: { savia: PluginApi }) {
                     </p>
                     <p>
                       <strong>{t.deadline}:</strong>{" "}
-                      {display(record.deadline, t.noData)}
+                      <Deadline value={record.deadline} locale={locale} />
                     </p>
                     <p>
                       <strong>{t.lastCheck}:</strong>{" "}

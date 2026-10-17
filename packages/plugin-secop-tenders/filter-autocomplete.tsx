@@ -6,18 +6,22 @@ import {
   type FocusEvent,
   type KeyboardEvent,
 } from "react";
+import { Check, X } from "lucide-react";
 import "./filter-autocomplete.css";
 
 type FilterAutocompleteProps = {
   id: string;
   label: string;
-  value: string;
-  onChange: (value: string) => void;
   options: string[];
   placeholder?: string;
   noOptionsLabel?: string;
   toggleLabel?: string;
-};
+  removeLabel?: string;
+  limitLabel?: string;
+} & (
+  | { multiple?: false; value: string; onChange: (value: string) => void }
+  | { multiple: true; value: string[]; onChange: (value: string[]) => void }
+);
 
 const MAX_SUGGESTIONS = 50;
 
@@ -44,16 +48,19 @@ export function filterAutocompleteOptions(
   });
 }
 
-export function FilterAutocomplete({
-  id,
-  label,
-  value,
-  onChange,
-  options,
-  placeholder,
-  noOptionsLabel = "No options found",
-  toggleLabel = "Show options",
-}: FilterAutocompleteProps) {
+export function FilterAutocomplete(props: FilterAutocompleteProps) {
+  const {
+    id,
+    label,
+    options,
+    placeholder,
+    noOptionsLabel = "No options found",
+    toggleLabel = "Show options",
+    removeLabel = "Remove",
+    limitLabel = "Maximum 20 values per filter",
+  } = props;
+  const [query, setQuery] = useState("");
+  const value = props.multiple ? query : props.value;
   const rootRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const [isOpen, setIsOpen] = useState(false);
@@ -91,8 +98,20 @@ export function FilterAutocomplete({
   }
 
   function choose(option: string) {
-    onChange(option);
-    setIsOpen(false);
+    if (props.multiple) {
+      if (props.value.length >= 20 && !props.value.includes(option)) return;
+      props.onChange(
+        props.value.includes(option)
+          ? props.value.filter((value) => value !== option)
+          : [...props.value, option].slice(0, 20),
+      );
+      setQuery("");
+      setHasTypedSinceOpen(false);
+      inputRef.current?.focus();
+    } else {
+      props.onChange(option);
+      setIsOpen(false);
+    }
     setActiveIndex(-1);
   }
 
@@ -137,6 +156,26 @@ export function FilterAutocomplete({
       return;
     }
 
+    if (
+      event.key === "Enter" &&
+      props.multiple &&
+      isOpen &&
+      !activeOption &&
+      query.trim()
+    ) {
+      event.preventDefault();
+      event.stopPropagation();
+      choose(query.trim());
+      return;
+    }
+    if (
+      event.key === "Backspace" &&
+      props.multiple &&
+      !query &&
+      props.value.length
+    ) {
+      props.onChange(props.value.slice(0, -1));
+    }
     if (event.key === "Enter" && isOpen && activeOption) {
       event.preventDefault();
       event.stopPropagation();
@@ -155,6 +194,32 @@ export function FilterAutocomplete({
   return (
     <div ref={rootRef} className="secop-autocomplete" onBlur={handleBlur}>
       <label htmlFor={id}>{label}</label>
+      {props.multiple && props.value.length > 0 && (
+        <div className="secop-filter-selections">
+          {props.value.map((selected) => (
+            <span className="secop-filter-chip" key={selected}>
+              <span title={selected}>{selected}</span>
+              <button
+                type="button"
+                aria-label={`${removeLabel}: ${selected}`}
+                title={`${removeLabel}: ${selected}`}
+                onClick={() =>
+                  props.onChange(
+                    props.value.filter((value) => value !== selected),
+                  )
+                }
+              >
+                <X size={13} aria-hidden="true" />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+      {props.multiple && props.value.length >= 20 && (
+        <span className="secop-filter-limit" role="status">
+          {limitLabel}
+        </span>
+      )}
       <div className="secop-autocomplete-control">
         <input
           ref={inputRef}
@@ -171,7 +236,8 @@ export function FilterAutocomplete({
           placeholder={placeholder}
           onFocus={openOptions}
           onChange={(event) => {
-            onChange(event.currentTarget.value);
+            if (props.multiple) setQuery(event.currentTarget.value);
+            else props.onChange(event.currentTarget.value);
             setIsOpen(true);
             setVisibleCount(MAX_SUGGESTIONS);
             setHasTypedSinceOpen(true);
@@ -213,6 +279,7 @@ export function FilterAutocomplete({
             }
           }}
           aria-label={label}
+          aria-multiselectable={props.multiple || undefined}
         >
           {suggestions.length > 0 ? (
             suggestions.map((option, index) => (
@@ -221,13 +288,35 @@ export function FilterAutocomplete({
                 key={`${option}-${index}`}
                 className="secop-autocomplete-option"
                 role="option"
-                aria-selected={activeIndex === index}
+                aria-selected={
+                  props.multiple
+                    ? props.value.includes(option)
+                    : activeIndex === index
+                }
+                data-active={activeIndex === index || undefined}
+                aria-disabled={
+                  (props.multiple &&
+                    props.value.length >= 20 &&
+                    !props.value.includes(option)) ||
+                  undefined
+                }
                 aria-setsize={matchingOptions.length}
                 aria-posinset={index + 1}
                 onPointerDown={(event) => event.preventDefault()}
                 onClick={() => choose(option)}
               >
-                {option}
+                {props.multiple && (
+                  <Check
+                    size={14}
+                    aria-hidden="true"
+                    className={
+                      props.value.includes(option)
+                        ? "secop-option-check"
+                        : "secop-option-check secop-option-unchecked"
+                    }
+                  />
+                )}
+                <span>{option}</span>
               </li>
             ))
           ) : (
