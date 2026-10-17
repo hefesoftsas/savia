@@ -216,6 +216,18 @@ describe("AssistantBar History & Thread Switching", () => {
 
     await screen.findByLabelText("Mensaje");
     expect(generalComposer).not.toBeVisible();
+    await user.click(screen.getByRole("button", { name: "Ampliar chat" }));
+    expect(
+      screen.getByRole("button", { name: "Restaurar tamaño del chat" }),
+    ).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByLabelText("Mensaje")).toBeVisible();
+    await user.click(
+      screen.getByRole("button", { name: "Restaurar tamaño del chat" }),
+    );
+    expect(
+      screen.getByRole("button", { name: "Ampliar chat" }),
+    ).toHaveAttribute("aria-pressed", "false");
+    expect(provider.invoke).toHaveBeenCalledTimes(1);
     await user.click(screen.getByRole("button", { name: "Asistente general" }));
     expect(
       await screen.findByLabelText("Mensaje para el asistente"),

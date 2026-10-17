@@ -2,6 +2,11 @@ import { useLayoutEffect, useRef, useState } from "react";
 import { ExternalLink, FileText, LoaderCircle } from "lucide-react";
 import type { ApiClient } from "@/api/api-client";
 import { Button } from "@/components/ui/button";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { officeEditorUrl } from "@/features/office/office-api";
 import { useMessages, type MessageCatalog } from "@/i18n/core";
 import {
@@ -267,25 +272,30 @@ export function AssistantDocumentAction({
 
   return (
     <div className="min-w-0 max-w-full">
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        className="h-auto min-h-9 max-w-full gap-2 whitespace-normal text-left leading-snug"
-        disabled={disabled || busy}
-        aria-busy={busy}
-        onClick={() => void generate()}
-      >
-        {busy ? (
-          <LoaderCircle
-            className="size-4 shrink-0 animate-spin motion-reduce:animate-none"
-            aria-hidden="true"
-          />
-        ) : (
-          <FileText className="size-4 shrink-0" aria-hidden="true" />
-        )}
-        <span className="min-w-0 break-words">{action.label}</span>
-      </Button>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            className="size-9 shrink-0"
+            disabled={disabled || busy}
+            aria-label={action.label}
+            aria-busy={busy}
+            onClick={() => void generate()}
+          >
+            {busy ? (
+              <LoaderCircle
+                className="size-4 animate-spin motion-reduce:animate-none"
+                aria-hidden="true"
+              />
+            ) : (
+              <FileText className="size-4" aria-hidden="true" />
+            )}
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="top">{action.label}</TooltipContent>
+      </Tooltip>
       {busy && (
         <p role="status" className="mt-1 text-xs text-muted-foreground">
           {t(

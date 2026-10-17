@@ -44,6 +44,8 @@ import {
   History,
   LoaderCircle,
   MessageSquare,
+  Maximize2,
+  Minimize2,
   Mic,
   MicOff,
   Paperclip,
@@ -426,15 +428,21 @@ export function ExternalAssistantConversation({
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex items-center justify-between gap-2 px-4 py-2">
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={onReturn}
-          className="h-8 gap-1.5 px-2"
-        >
-          <ArrowLeft className="size-4" /> {tx("General assistant")}
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={onReturn}
+              aria-label={tx("General assistant")}
+              title={tx("General assistant")}
+            >
+              <ArrowLeft className="size-4" aria-hidden="true" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>{tx("General assistant")}</TooltipContent>
+        </Tooltip>
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
@@ -2287,6 +2295,7 @@ export function AssistantConversation({
 
 export function AssistantBar() {
   const { apiClient } = useAppServices();
+  const [expanded, setExpanded] = useState(false);
   const t = useMessages(uiMessages);
   const txExternal = useMessages(assistantExternalMessages);
   const [open, setOpen] = useState(false);
@@ -2350,7 +2359,11 @@ export function AssistantBar() {
       <SheetContent
         className={cn(
           "flex h-full w-full flex-col gap-0 p-0",
-          externalProvider ? "sm:max-w-2xl" : "sm:max-w-xl",
+          expanded
+            ? "sm:w-[min(72rem,calc(100vw-2rem))] sm:max-w-none"
+            : externalProvider
+              ? "sm:max-w-2xl"
+              : "sm:max-w-xl",
         )}
       >
         <SheetHeader className="border-b border-border/60 bg-card/60 px-4 py-3 backdrop-blur-xs">
@@ -2403,6 +2416,33 @@ export function AssistantBar() {
             )}
 
             <div className="flex items-center gap-1">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="hidden sm:inline-flex"
+                    aria-label={txExternal(
+                      expanded ? "Restore chat size" : "Expand chat",
+                    )}
+                    title={txExternal(
+                      expanded ? "Restore chat size" : "Expand chat",
+                    )}
+                    aria-pressed={expanded}
+                    onClick={() => setExpanded((value) => !value)}
+                  >
+                    {expanded ? (
+                      <Minimize2 className="size-4" aria-hidden="true" />
+                    ) : (
+                      <Maximize2 className="size-4" aria-hidden="true" />
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {txExternal(expanded ? "Restore chat size" : "Expand chat")}
+                </TooltipContent>
+              </Tooltip>
               {!externalProvider && viewMode === "chat" ? (
                 <>
                   <Button
