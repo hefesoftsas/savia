@@ -341,3 +341,37 @@ from unattended production backups. The daily token retains D1 Read only;
 source-schema preservation, inner/outer Time Travel boundaries, full R2 inventory
 verification and the renewable writer barrier remain mandatory. Preview native
 exports and the refusal of legacy Auth table dumps are unchanged.
+
+## First encrypted production recovery rehearsal
+
+PR [#335](https://github.com/hefesoftsas/savia/pull/335) merged after required CI
+passed. A full read-only production capture subsequently passed all inner and
+outer D1 bookmark checks, R2 inventory checks, encrypted round-trip verification
+and manifest validation. The local encrypted recovery artifact has SHA-256
+`06b07b778916cc64081c437b3061b59a722bd4cf9ef7c49d3a68b64f284c5e2f`; plaintext capture and rehearsal files were removed.
+
+An isolated transactional SQLite replay of that exact artifact verified:
+
+- Auth: 20 regular tables and 65 rows.
+- Domain: 166 regular tables and 1,568 rows.
+- Nine retired tables with all 85 rows; 47 migration-ledger rows.
+- Both integrity checks returned `ok`, with zero foreign-key errors.
+- The domain external-content FTS5 integrity check passed; R2 contained no objects.
+
+The live barrier was also exercised against public endpoints: Auth JWKS and API
+health were unavailable while drained and returned HTTP 200 after release. The
+account-wide live binding inventory confirmed that only the four guarded app
+writers and the read-only Office gateway reference this recovery scope.
+
+Earlier captures failed closed when Auth's outer Time Travel bookmark advanced
+after its own dump finished. The successful diagnostic kept Auth active with
+verified read-only queries while copying domain; it did not relax any consistency
+check. A second capture used only ten-second read-only bookmark observations for
+both databases and also passed on its first attempt. Its exact encrypted archive
+passed the same complete local restore rehearsal. The capture implementation now
+keeps observing every D1 target through the final boundary verification, stops
+and awaits observations before manifest creation, and refuses to commit if any
+observation drifts or fails. The provider's underlying bookmark movement remains
+an inference; no consistency check was removed or relaxed. At this observation
+stage, a successful local artifact did not yet establish a successful retained
+GitHub backup run; that end-to-end workflow check is the next activation gate.

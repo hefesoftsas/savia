@@ -137,3 +137,110 @@ export async function verifyRecoveryBoundary(boundary, options) {
   }
   return current;
 }
+
+/** Poll D1 bookmarks during a long capture and fail closed on any movement. */
+export function startD1RecoveryMonitor(boundary, options = {}) {
+  const {
+    accountId,
+    token,
+    fetchImpl = fetch,
+    setIntervalImpl = setInterval,
+    clearIntervalImpl = clearInterval,
+    intervalMs = 10_000,
+  } = options;
+  assertAccountId(accountId);
+  if (
+    typeof token !== "string" ||
+    !token ||
+    typeof fetchImpl !== "function" ||
+    typeof setIntervalImpl !== "function" ||
+    typeof clearIntervalImpl !== "function" ||
+    !Number.isSafeInteger(intervalMs) ||
+    intervalMs < 1 ||
+    intervalMs > 2_147_483_647
+  )
+    throw new Error("D1 recovery monitor options are invalid");
+  if (
+    !boundary ||
+    typeof boundary !== "object" ||
+    boundary.version !== 1 ||
+    boundary.accountId !== accountId ||
+    !boundary.d1 ||
+    typeof boundary.d1 !== "object" ||
+    Array.isArray(boundary.d1) ||
+    Object.keys(boundary.d1).length === 0
+  )
+    throw new Error("D1 recovery monitor boundary is invalid");
+
+  const baseline = Object.entries(boundary.d1).map(([name, entry]) => {
+    if (
+      typeof name !== "string" ||
+      !name ||
+      !entry ||
+      typeof entry !== "object" ||
+      !UUID.test(entry.id) ||
+      typeof entry.bookmark !== "string" ||
+      !/^[a-zA-Z0-9_-]{1,512}$/.test(entry.bookmark)
+    )
+      throw new Error("D1 recovery monitor boundary is invalid");
+    return { name, id: entry.id, bookmark: entry.bookmark };
+  });
+
+  let pending;
+  let failure;
+  let stopped = false;
+  let stopPromise;
+  const poll = async () => {
+    for (const entry of baseline) {
+      const bookmark = await readD1Bookmark(entry.id, {
+        accountId,
+        token,
+        fetchImpl,
+      });
+      if (bookmark !== entry.bookmark)
+        throw new RecoveryConsistencyError(
+          `D1 ${entry.name} changed during backup; retry in a controlled maintenance window`,
+        );
+    }
+  };
+  const tick = () => {
+    if (stopped || failure || pending) return;
+    const operation = poll();
+    pending = operation;
+    void operation.then(
+      () => {
+        if (pending === operation) pending = undefined;
+      },
+      (error) => {
+        failure ??= error;
+        if (pending === operation) pending = undefined;
+      },
+    );
+  };
+  const timer = setIntervalImpl(tick, intervalMs);
+
+  return function stop() {
+    if (!stopPromise) {
+      stopped = true;
+      clearIntervalImpl(timer);
+      stopPromise = (async () => {
+        if (pending) {
+          try {
+            await pending;
+          } catch (error) {
+            failure ??= error;
+          }
+        }
+        if (!failure) {
+          try {
+            await poll();
+          } catch (error) {
+            failure ??= error;
+          }
+        }
+        if (failure) throw failure;
+      })();
+    }
+    return stopPromise;
+  };
+}

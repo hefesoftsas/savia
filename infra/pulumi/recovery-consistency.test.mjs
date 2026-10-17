@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   captureRecoveryBoundary,
+  RecoveryConsistencyError,
+  startD1RecoveryMonitor,
   verifyRecoveryBoundary,
 } from "./recovery-consistency.mjs";
 
@@ -40,6 +42,28 @@ function fixture() {
   };
   return { state, options };
 }
+
+function fakeTimer() {
+  let callback;
+  const state = { interval: null, cleared: 0, handle: Symbol("monitor") };
+  return {
+    state,
+    setIntervalImpl(next, interval) {
+      callback = next;
+      state.interval = interval;
+      return state.handle;
+    },
+    clearIntervalImpl(handle) {
+      assert.equal(handle, state.handle);
+      state.cleared += 1;
+    },
+    tick() {
+      callback?.();
+    },
+  };
+}
+
+const turn = () => new Promise((resolve) => setImmediate(resolve));
 
 test("accepts only unchanged D1 bookmarks and R2 inventories across the entire capture", async () => {
   const { state, options } = fixture();
@@ -140,4 +164,185 @@ test("classifies only capture drift as retryable, never identity or credential f
     isRecoveryConsistencyDrift(new Error("D1 changed during backup")),
     false,
   );
+});
+
+test("monitors every boundary bookmark on interval without an eager request", async () => {
+  const { state, options } = fixture();
+  const timer = fakeTimer();
+  const boundary = await captureRecoveryBoundary(options);
+  boundary.d1["savia-auth"] = {
+    id: "22222222-2222-4222-8222-222222222222",
+    bookmark: state.bookmark,
+  };
+  const monitor = startD1RecoveryMonitor(boundary, {
+    accountId,
+    token: "redacted",
+    fetchImpl: options.fetchImpl,
+    setIntervalImpl: timer.setIntervalImpl,
+    clearIntervalImpl: timer.clearIntervalImpl,
+  });
+
+  assert.equal(state.calls.length, 2);
+  assert.equal(timer.state.interval, 10_000);
+  boundary.d1["savia-agencies"].bookmark = "mutated-after-start";
+  timer.tick();
+  await turn();
+  assert.equal(state.calls.length, 4);
+  await monitor();
+  await monitor();
+  assert.equal(state.calls.length, 6);
+  assert.equal(timer.state.cleared, 1);
+});
+
+test("final stop poll catches D1 drift after the last interval poll", async () => {
+  const { state, options } = fixture();
+  const timer = fakeTimer();
+  const boundary = await captureRecoveryBoundary(options);
+  const monitor = startD1RecoveryMonitor(boundary, {
+    accountId,
+    token: "redacted",
+    fetchImpl: options.fetchImpl,
+    setIntervalImpl: timer.setIntervalImpl,
+    clearIntervalImpl: timer.clearIntervalImpl,
+  });
+
+  state.bookmark = "00000002";
+  await assert.rejects(monitor(), (error) => {
+    assert.ok(error instanceof RecoveryConsistencyError);
+    assert.equal(error.code, "RECOVERY_CONSISTENCY_DRIFT");
+    return true;
+  });
+  assert.equal(timer.state.cleared, 1);
+  assert.equal(state.calls.length, 3);
+});
+
+test("fails closed with typed retryable drift when an interval sees a new bookmark", async () => {
+  const { state, options } = fixture();
+  const timer = fakeTimer();
+  const boundary = await captureRecoveryBoundary(options);
+  const monitor = startD1RecoveryMonitor(boundary, {
+    accountId,
+    token: "redacted",
+    fetchImpl: options.fetchImpl,
+    setIntervalImpl: timer.setIntervalImpl,
+    clearIntervalImpl: timer.clearIntervalImpl,
+  });
+
+  state.bookmark = "00000002";
+  timer.tick();
+  await turn();
+  await assert.rejects(monitor(), (error) => {
+    assert.ok(error instanceof RecoveryConsistencyError);
+    assert.equal(error.code, "RECOVERY_CONSISTENCY_DRIFT");
+    assert.match(error.message, /savia-agencies changed during backup/);
+    return true;
+  });
+  assert.equal(timer.state.cleared, 1);
+});
+
+test("stores interval API failures for stop and clears the timer", async () => {
+  const { state, options } = fixture();
+  const timer = fakeTimer();
+  const boundary = await captureRecoveryBoundary(options);
+  const monitor = startD1RecoveryMonitor(boundary, {
+    accountId,
+    token: "redacted",
+    fetchImpl: options.fetchImpl,
+    setIntervalImpl: timer.setIntervalImpl,
+    clearIntervalImpl: timer.clearIntervalImpl,
+  });
+
+  state.fail = true;
+  timer.tick();
+  await turn();
+  const stop = monitor();
+  assert.equal(monitor(), stop);
+  await assert.rejects(stop, /D1 recovery verification failed/);
+  assert.equal(timer.state.cleared, 1);
+});
+
+test("does not overlap polls and stop waits for an in-flight read", async () => {
+  const timer = fakeTimer();
+  const boundary = {
+    version: 1,
+    accountId,
+    d1: { "savia-agencies": { id, bookmark: "00000001" } },
+    r2: {},
+  };
+  let calls = 0;
+  let resolveFetch;
+  const monitor = startD1RecoveryMonitor(boundary, {
+    accountId,
+    token: "redacted",
+    fetchImpl: () => {
+      calls += 1;
+      return new Promise((resolve) => {
+        resolveFetch = resolve;
+      });
+    },
+    setIntervalImpl: timer.setIntervalImpl,
+    clearIntervalImpl: timer.clearIntervalImpl,
+  });
+
+  timer.tick();
+  timer.tick();
+  assert.equal(calls, 1);
+  let stopped = false;
+  const stop = monitor();
+  assert.equal(monitor(), stop);
+  const firstStop = stop.then(() => {
+    stopped = true;
+  });
+  const secondStop = stop.then(() => {
+    stopped = true;
+  });
+  assert.equal(timer.state.cleared, 1);
+  await turn();
+  assert.equal(stopped, false);
+  resolveFetch({
+    ok: true,
+    status: 200,
+    json: async () => ({
+      success: true,
+      result: { bookmark: "00000001" },
+    }),
+  });
+  await turn();
+  assert.equal(stopped, false);
+  assert.equal(calls, 2);
+  resolveFetch({
+    ok: true,
+    status: 200,
+    json: async () => ({
+      success: true,
+      result: { bookmark: "00000001" },
+    }),
+  });
+  await Promise.all([firstStop, secondStop]);
+  assert.equal(stopped, true);
+  assert.equal(calls, 2);
+});
+
+test("rejects invalid monitor options before starting its timer", async () => {
+  const { options } = fixture();
+  const boundary = await captureRecoveryBoundary(options);
+  const timer = fakeTimer();
+  for (const invalid of [
+    { intervalMs: 0 },
+    { intervalMs: 1.5 },
+    { token: "" },
+    { setIntervalImpl: null },
+    { clearIntervalImpl: null },
+  ]) {
+    assert.throws(() =>
+      startD1RecoveryMonitor(boundary, {
+        accountId,
+        token: "redacted",
+        setIntervalImpl: timer.setIntervalImpl,
+        clearIntervalImpl: timer.clearIntervalImpl,
+        ...invalid,
+      }),
+    );
+  }
+  assert.equal(timer.state.cleared, 0);
 });
