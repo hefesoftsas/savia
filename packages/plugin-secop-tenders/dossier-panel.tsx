@@ -1289,7 +1289,7 @@ export function DossierPanel({
             )}
             {tab === "documents" && (
               <>
-                <div className="secop-dossier-section-heading">
+                <div className="secop-dossier-section-heading secop-dossier-documents-heading">
                   <h2>{t.dossierDocuments}</h2>
                   <button
                     type="button"

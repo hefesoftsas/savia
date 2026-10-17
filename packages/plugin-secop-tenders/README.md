@@ -2,7 +2,7 @@
 
 An optional Savia tenant plugin for searching live SECOP procurement records and saving selected opportunities to a workspace collection for follow-up. Search history is not persisted. The plugin has Spanish, English, and Portuguese interface copy.
 
-Version 1.8.5 keeps compact contextual actions icon-only with localized
+Version 1.8.6 keeps compact contextual actions icon-only with localized
 accessible names and tooltips. PDF analysis records remain persisted in the
 `procurement_documents` collection but are hidden from the Studio sidebar;
 preparation tasks remain available in their native records screen.

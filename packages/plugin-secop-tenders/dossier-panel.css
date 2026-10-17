@@ -356,3 +356,18 @@
   color: var(--secop-muted);
   line-height: 1.6;
 }
+
+.secop-dossier-documents-heading {
+  flex-wrap: nowrap;
+}
+.secop-dossier-documents-heading h2 {
+  min-width: 0;
+  font-size: 1rem;
+}
+.secop-dossier-documents-heading .secop-icon-action {
+  flex: 0 0 44px;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  justify-content: center;
+}
