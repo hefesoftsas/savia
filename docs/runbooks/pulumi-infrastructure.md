@@ -252,6 +252,26 @@ has no application-data bindings or routes. Cross-script
 bindings use the actual environment-specific worker name, as described in
 [Cloudflare's binding configuration](https://developers.cloudflare.com/workers/wrangler/configuration/#durable-objects).
 
+The release order assumes the target API Worker already exists. The following
+coordinator/API recovery stages require every other application service-binding
+target to be provisioned already. For a full account rebuild, first seed all
+application Worker targets with private placeholders that return 503, use the
+generated environment-specific names, and disable public routes and workers.dev.
+This follows the [existing preview bootstrap pattern](preview-production.md),
+using the correct production names for production; never reuse production targets
+for preview recovery. Replace those placeholders with the final application
+Workers only after their namespace and service targets exist.
+
+For the coordinator/API stages, first deploy the coordinator with a temporary
+bootstrap configuration that omits `services`, keeps `workers_dev` and
+`preview_urls` false, and preserves the generated name and `v1` migration. This
+creates the namespace without requiring the API. Deploy the application writers
+with their final generated `BACKUP_GATE` bindings, then redeploy the coordinator
+with its final generated service binding and exposure settings. Do not change or
+recreate its migration/namespace between these stages. This staging is required
+because [a service-binding target must exist before its caller is deployed](https://developers.cloudflare.com/workers/runtime-apis/bindings/service-bindings/#deployment).
+The daily backup does not perform bootstrap or deploy Workers.
+
 Before capture, the controller checks the live Auth, request and connector
 capabilities against its namespace. The runner closes admission, waits up to
 60 seconds for in-flight storage operations, renews a three-minute lease every
