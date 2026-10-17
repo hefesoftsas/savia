@@ -427,7 +427,7 @@ export function ExternalAssistantConversation({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex items-center justify-between gap-2 px-4 py-2">
+      <div className="flex items-start gap-2 border-b px-4 py-2">
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
@@ -443,6 +443,28 @@ export function ExternalAssistantConversation({
           </TooltipTrigger>
           <TooltipContent>{tx("General assistant")}</TooltipContent>
         </Tooltip>
+        <div className="flex min-w-0 flex-1 flex-wrap items-start gap-2">
+          {documentActions.length > 0 &&
+            apiClient &&
+            documentActions.map((action) => (
+              <AssistantDocumentAction
+                key={`${provider.sessionId}:${action.id}`}
+                provider={provider}
+                action={action}
+                apiClient={apiClient}
+                disabled={
+                  loading || sending || Boolean(conversation.pendingJobId)
+                }
+              />
+            ))}
+          {taskMessage && (
+            <AssistantTaskAction
+              key={provider.sessionId}
+              provider={provider}
+              message={taskMessage}
+            />
+          )}
+        </div>
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
@@ -481,30 +503,6 @@ export function ExternalAssistantConversation({
           <TooltipContent side="top">{tx("Copy conversation")}</TooltipContent>
         </Tooltip>
       </div>
-      {(taskMessage || documentActions.length > 0) && (
-        <div className="flex flex-wrap items-start gap-2 border-b px-4 pb-3">
-          {documentActions.length > 0 &&
-            apiClient &&
-            documentActions.map((action) => (
-              <AssistantDocumentAction
-                key={`${provider.sessionId}:${action.id}`}
-                provider={provider}
-                action={action}
-                apiClient={apiClient}
-                disabled={
-                  loading || sending || Boolean(conversation.pendingJobId)
-                }
-              />
-            ))}
-          {taskMessage && (
-            <AssistantTaskAction
-              key={provider.sessionId}
-              provider={provider}
-              message={taskMessage}
-            />
-          )}
-        </div>
-      )}
       {copyFeedback && (
         <p
           role={copyFeedback === "error" ? "alert" : "status"}
