@@ -127,6 +127,19 @@ after the compatible service is deployed and the workspace credential provisione
 
 ## Tender documents and PDF analysis
 
+Version 1.7.9 uses compact icon-only controls for contextual document, source,
+tracking and dossier actions. Each control keeps a localized accessible name and
+tooltip; the search/interests navigation and document tabs retain visible text.
+The plugin's `store.json` declares one contributed screen for
+`procurement_opportunities`. Studio also exposes native collection records as
+sidebar screens, which is why the plugin previously surfaced three entries:
+opportunities, saved PDF analyses and preparation tasks. PDF analyses are
+backend records used by the dossier's saved-analysis history, so their collection
+is retained but its `studio.screen.hidden` metadata hides only that sidebar
+entry. `secop_application_tasks` stays visible as a native records screen for
+editing and completing tasks created from the dossier assistant. Neither backing
+collection is removed, and tasks do not get an extension screen renderer.
+
 Version 1.5.3 adds decorative Lucide icons to the result actions while retaining
 visible labels and keyboard-accessible controls. Followed tenders use a checked
 bookmark to reinforce their saved state.

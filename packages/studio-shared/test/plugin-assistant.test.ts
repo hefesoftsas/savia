@@ -63,6 +63,7 @@ describe("plugin assistant bridge contracts", () => {
           id: "proposal-docx",
           label: "Generar propuesta DOCX",
           format: "docx",
+          fileName: "borrador-propuesta.docx",
         },
       ],
       document: {
@@ -78,6 +79,16 @@ describe("plugin assistant bridge contracts", () => {
     { documentActions: [{ id: "../run", label: "Export", format: "docx" }] },
     { documentActions: [{ id: "run", label: " ", format: "docx" }] },
     { documentActions: [{ id: "run", label: "Export", format: "exe" }] },
+    {
+      documentActions: [
+        {
+          id: "run",
+          label: "Export",
+          format: "docx",
+          fileName: "../other.docx",
+        },
+      ],
+    },
     {
       documentActions: Array.from({ length: 5 }, () => ({
         id: "run",

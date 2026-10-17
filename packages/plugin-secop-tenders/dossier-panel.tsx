@@ -9,6 +9,8 @@ import {
   RefreshCw,
   FolderOpen,
   ExternalLink,
+  Upload,
+  Check,
 } from "lucide-react";
 import type { PluginApi } from "@savia/plugin-sdk";
 import { TenderDocuments } from "./tender-documents";
@@ -489,10 +491,12 @@ function CitationButtons({
         <button
           key={`${c.documentVersionId}:${i}`}
           type="button"
+          aria-label={`${t.evidence} ${i + 1}${c.page ? ` · ${t.page} ${c.page}` : ""}`}
+          title={`${t.evidence} ${i + 1}${c.page ? ` · ${t.page} ${c.page}` : ""}`}
+          className="secop-icon-action"
           onClick={() => onOpen(c.documentVersionId)}
         >
-          {t.evidence} {i + 1}
-          {c.page ? ` · ${t.page} ${c.page}` : ""}
+          <FileText size={16} aria-hidden="true" />
         </button>
       ))}
     </div>
@@ -889,34 +893,50 @@ export function DossierPanel({
           <div className="secop-dossier-actions">
             <button
               type="button"
+              className="secop-icon-action"
+              aria-label={t.documentText}
+              title={t.documentText}
               disabled={
                 busy || !["ready", "review_required"].includes(doc.value.state)
               }
               onClick={() => void openEvidence(doc.id)}
             >
-              {t.documentText}
+              <FileText size={16} aria-hidden="true" />
             </button>
             {doc.value.url && (
-              <a href={doc.value.url} target="_blank" rel="noopener noreferrer">
-                {t.officialFile} <ExternalLink size={14} aria-hidden="true" />
+              <a
+                href={doc.value.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="secop-icon-action"
+                aria-label={t.officialFile}
+                title={t.officialFile}
+              >
+                <ExternalLink size={16} aria-hidden="true" />
               </a>
             )}
             {["blocked", "failed"].includes(doc.value.state) && (
               <button
                 type="button"
+                className="secop-icon-action"
+                aria-label={t.provideText}
+                title={t.provideText}
                 disabled={busy}
                 onClick={() => void ticket(doc.id)}
               >
-                {t.provideText}
+                <Upload size={16} aria-hidden="true" />
               </button>
             )}
             {doc.value.state === "review_required" && (
               <button
                 type="button"
+                className="secop-icon-action"
+                aria-label={t.reviewedExtraction}
+                title={t.reviewedExtraction}
                 disabled={busy}
                 onClick={() => void reviewDocument(doc)}
               >
-                {t.reviewedExtraction}
+                <Check size={16} aria-hidden="true" />
               </button>
             )}
           </div>
@@ -928,8 +948,14 @@ export function DossierPanel({
     <main className="secop-app secop-dossier" lang={locale}>
       <header className="secop-dossier-top">
         <div>
-          <button type="button" onClick={onBack}>
-            <ArrowLeft size={16} aria-hidden="true" /> {t.back}
+          <button
+            type="button"
+            className="secop-icon-action"
+            aria-label={t.back}
+            title={t.back}
+            onClick={onBack}
+          >
+            <ArrowLeft size={16} aria-hidden="true" />
           </button>
           <p className="secop-eyebrow">
             {t.eyebrow} · {processId}
@@ -949,10 +975,13 @@ export function DossierPanel({
             </button>
             <button
               type="button"
+              className="secop-icon-action"
+              aria-label={t.update}
+              title={t.update}
               disabled={busy}
               onClick={() => void run(() => refresh())}
             >
-              <RefreshCw size={16} aria-hidden="true" /> {t.update}
+              <RefreshCw size={16} aria-hidden="true" />
             </button>
           </div>
         )}
@@ -1223,6 +1252,9 @@ export function DossierPanel({
                           </p>
                           <button
                             type="button"
+                            className="secop-icon-action"
+                            aria-label={t.retryJob}
+                            title={t.retryJob}
                             disabled={busy}
                             onClick={() =>
                               void run(async () => {
@@ -1233,7 +1265,7 @@ export function DossierPanel({
                               })
                             }
                           >
-                            {t.retryJob}
+                            <RefreshCw size={16} aria-hidden="true" />
                           </button>
                         </div>
                       ))}
@@ -1368,10 +1400,13 @@ export function DossierPanel({
                     <div className="secop-dossier-actions">
                       <button
                         type="button"
+                        className="secop-icon-action"
+                        aria-label={t.addCompanyEvidence}
+                        title={t.addCompanyEvidence}
                         disabled={busy}
                         onClick={() => void ticket()}
                       >
-                        {t.addCompanyEvidence}
+                        <Upload size={16} aria-hidden="true" />
                       </button>
                       <button
                         type="button"
@@ -1407,6 +1442,9 @@ export function DossierPanel({
                               ) : (
                                 <button
                                   type="button"
+                                  className="secop-icon-action"
+                                  aria-label={t.confirmFact}
+                                  title={t.confirmFact}
                                   disabled={busy}
                                   onClick={() =>
                                     void run(async () => {
@@ -1421,7 +1459,7 @@ export function DossierPanel({
                                     })
                                   }
                                 >
-                                  {t.confirmFact}
+                                  <Check size={16} aria-hidden="true" />
                                 </button>
                               )}
                             </li>
@@ -1576,15 +1614,19 @@ export function DossierPanel({
                 <div className="secop-dossier-actions">
                   <button
                     type="button"
-                    className="secop-primary"
+                    className="secop-primary secop-icon-action"
+                    aria-label={t.openAssistant}
+                    title={t.openAssistant}
                     disabled={busy || !report || !savia.assistant}
                     onClick={() => void openAssistant()}
                   >
-                    <MessageSquare size={16} aria-hidden="true" />{" "}
-                    {t.openAssistant}
+                    <MessageSquare size={16} aria-hidden="true" />
                   </button>
                   <button
                     type="button"
+                    className="secop-icon-action"
+                    aria-label={t.prepareList}
+                    title={t.prepareList}
                     disabled={busy || !report || !savia.assistant}
                     onClick={() =>
                       void openAssistant(
@@ -1592,7 +1634,7 @@ export function DossierPanel({
                       )
                     }
                   >
-                    <ListChecks size={16} aria-hidden="true" /> {t.prepareList}
+                    <ListChecks size={16} aria-hidden="true" />
                   </button>
                 </div>
                 {!companyId && (

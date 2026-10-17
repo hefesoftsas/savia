@@ -180,7 +180,7 @@ export function ExternalAssistantConversation({
 }: {
   provider: PluginAssistantProvider;
   onReturn: () => void;
-  apiClient?: Pick<ApiClient, "postForm">;
+  apiClient?: Pick<ApiClient, "get" | "post" | "postForm">;
 }) {
   const [conversation, setConversation] = useState<PluginAssistantResponse>({
     revision: 0,

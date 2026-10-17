@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState } from "react";
-import { ExternalLink, FileText, LoaderCircle } from "lucide-react";
+import { FileText, LoaderCircle } from "lucide-react";
 import type { ApiClient } from "@/api/api-client";
 import { Button } from "@/components/ui/button";
 import {
@@ -48,6 +48,7 @@ export type AssistantDocumentActionDefinition = {
   id: string;
   label: string;
   format: "docx";
+  fileName?: string;
 };
 
 export function isAssistantDocumentAction(
@@ -62,7 +63,11 @@ export function isAssistantDocumentAction(
     typeof action.label === "string" &&
     action.label.trim().length > 0 &&
     action.label.length <= 200 &&
-    action.format === "docx"
+    action.format === "docx" &&
+    (action.fileName === undefined ||
+      (typeof action.fileName === "string" &&
+        action.fileName.length <= 200 &&
+        /^[^\\/]+\.docx$/.test(action.fileName)))
   );
 }
 
@@ -75,7 +80,7 @@ function contextKey(provider: PluginAssistantProvider) {
   ]);
 }
 
-function savedDocumentName(title: string, fileName: string) {
+export function savedDocumentName(title: string, fileName: string) {
   const safePart = (value: string) =>
     value
       .normalize("NFKC")
@@ -90,6 +95,33 @@ function savedDocumentName(title: string, fileName: string) {
       ?.replace(/\.docx$/i, "") ?? "";
   const safeName = safePart(basename).slice(0, 128) || "proposal";
   return `${safeTitle}-${safeName}.docx`;
+}
+
+function canonical(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
+  if (value && typeof value === "object")
+    return `{${Object.entries(value)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, item]) => `${JSON.stringify(key)}:${canonical(item)}`)
+      .join(",")}}`;
+  return JSON.stringify(value) ?? "null";
+}
+
+export async function documentSourceKey(
+  provider: PluginAssistantProvider,
+  actionId: string,
+) {
+  const input = canonical([
+    provider.connectionId ?? "",
+    provider.actionId,
+    actionId,
+    provider.context,
+  ]);
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(input),
+  );
+  return `assistant:${Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("")}`;
 }
 
 async function readBoundedDocument(response: Response, signal: AbortSignal) {
@@ -140,7 +172,7 @@ export function AssistantDocumentAction({
 }: {
   provider: PluginAssistantProvider;
   action: AssistantDocumentActionDefinition;
-  apiClient: Pick<ApiClient, "postForm">;
+  apiClient: Pick<ApiClient, "postForm" | "get" | "post">;
   disabled?: boolean;
 }) {
   const t = useMessages(messages);
@@ -211,6 +243,55 @@ export function AssistantDocumentAction({
     const isCurrent = () =>
       currentAttempt === attempt.current && !signal.aborted;
     try {
+      const sourceKey = await documentSourceKey(provider, action.id);
+      if (!isCurrent()) return;
+      type Saved = {
+        id: string;
+        name?: string;
+        role?: string;
+        updatedAt?: string;
+      };
+      let existing = (
+        await apiClient.get<{ data: Saved | null }>(
+          `/v1/office-documents/source?key=${encodeURIComponent(sourceKey)}`,
+          { signal },
+        )
+      ).data;
+      if (!isCurrent()) return;
+      // Adopt a pre-binding draft only by its complete legacy filename and
+      // current ownership. The server checks ownership again and never rebinds.
+      if (!existing && action.fileName) {
+        const expectedName = savedDocumentName(provider.title, action.fileName);
+        const candidates = (
+          await apiClient.get<{ data: Saved[] }>("/v1/office-documents", {
+            signal,
+          })
+        ).data
+          .filter((item) => item.role === "owner" && item.name === expectedName)
+          .sort(
+            (a, b) =>
+              (b.updatedAt ?? "").localeCompare(a.updatedAt ?? "") ||
+              b.id.localeCompare(a.id),
+          );
+        if (!isCurrent()) return;
+        if (candidates[0])
+          existing = (
+            await apiClient.post<{ data: Saved }>(
+              `/v1/office-documents/${encodeURIComponent(candidates[0].id)}/source`,
+              { key: sourceKey },
+              { signal },
+            )
+          ).data;
+      }
+      if (!isCurrent()) return;
+      if (existing) {
+        const href = officeEditorUrl("/v1/office-documents", existing.id);
+        if (!href) throw new Error("Invalid saved document id");
+        setSavedHref(href);
+        popup?.location.replace(href);
+        if (activePopup.current === popup) activePopup.current = null;
+        return;
+      }
       const response = await provider.invoke({
         method: "generate-document",
         actionId: action.id,
@@ -239,6 +320,7 @@ export function AssistantDocumentAction({
 
       setStage("save");
       const form = new FormData();
+      form.set("sourceKey", sourceKey);
       form.set(
         "file",
         new File(
@@ -283,27 +365,41 @@ export function AssistantDocumentAction({
     <div className="min-w-0 max-w-full">
       <Tooltip>
         <TooltipTrigger asChild>
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            className="size-9 shrink-0"
-            disabled={disabled || busy}
-            aria-label={action.label}
-            aria-busy={busy}
-            onClick={() => void generate()}
-          >
-            {busy ? (
-              <LoaderCircle
-                className="size-4 animate-spin motion-reduce:animate-none"
-                aria-hidden="true"
-              />
-            ) : (
+          {savedHref && !busy ? (
+            <a
+              href={savedHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={t("Open document")}
+              className="inline-flex size-9 shrink-0 items-center justify-center rounded-md text-primary hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
               <FileText className="size-4" aria-hidden="true" />
-            )}
-          </Button>
+            </a>
+          ) : (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="size-9 shrink-0"
+              disabled={disabled || busy}
+              aria-label={action.label}
+              aria-busy={busy}
+              onClick={() => void generate()}
+            >
+              {busy ? (
+                <LoaderCircle
+                  className="size-4 animate-spin motion-reduce:animate-none"
+                  aria-hidden="true"
+                />
+              ) : (
+                <FileText className="size-4" aria-hidden="true" />
+              )}
+            </Button>
+          )}
         </TooltipTrigger>
-        <TooltipContent side="top">{action.label}</TooltipContent>
+        <TooltipContent side="top">
+          {savedHref ? t("Open document") : action.label}
+        </TooltipContent>
       </Tooltip>
       {busy && (
         <p role="status" className="mt-1 text-xs text-muted-foreground">
@@ -315,21 +411,9 @@ export function AssistantDocumentAction({
         </p>
       )}
       {savedHref && !busy && (
-        <div
-          role="status"
-          className="mt-1 flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground"
-        >
-          <span>{t("Saved in Office suite.")}</span>
-          <a
-            className="inline-flex min-h-8 items-center gap-1 rounded-sm text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            href={savedHref}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <ExternalLink className="size-3.5" aria-hidden="true" />
-            {t("Open document")}
-          </a>
-        </div>
+        <span role="status" className="sr-only">
+          {t("Saved in Office suite.")}
+        </span>
       )}
       {error && (
         <div className="mt-1 flex flex-wrap items-center gap-x-1 text-xs text-destructive">

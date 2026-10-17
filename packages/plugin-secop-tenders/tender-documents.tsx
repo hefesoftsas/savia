@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { ArrowLeft, Download, ExternalLink } from "lucide-react";
 import type { PluginApi } from "@savia/plugin-sdk";
 import { normalizeSecopRow, saveInterest, type SecopRow } from "./logic";
 import {
@@ -362,8 +363,15 @@ export function TenderDocuments({
       : null;
   return (
     <main className="secop-app secop-document-page">
-      <button type="button" onClick={onBack} disabled={busy || !!unsaved}>
-        {t.back}
+      <button
+        type="button"
+        className="secop-icon-action"
+        aria-label={t.back}
+        title={t.back}
+        onClick={onBack}
+        disabled={busy || !!unsaved}
+      >
+        <ArrowLeft size={16} aria-hidden="true" />
       </button>
       <header className="secop-header">
         <div>
@@ -413,8 +421,15 @@ export function TenderDocuments({
             {String(row.entity ?? "")} · {String(row.source_status ?? "")}
           </p>
           {source && (
-            <a href={source} target="_blank" rel="noopener noreferrer">
-              {t.source}
+            <a
+              href={source}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="secop-icon-action"
+              aria-label={t.source}
+              title={t.source}
+            >
+              <ExternalLink size={16} aria-hidden="true" />
             </a>
           )}
         </section>
@@ -427,8 +442,15 @@ export function TenderDocuments({
           <div className="secop-section-head">
             <h2>{t.documents}</h2>
             {source && (
-              <a href={source} target="_blank" rel="noopener noreferrer">
-                {t.source}
+              <a
+                href={source}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="secop-icon-action"
+                aria-label={t.source}
+                title={t.source}
+              >
+                <ExternalLink size={16} aria-hidden="true" />
               </a>
             )}
           </div>
@@ -464,8 +486,15 @@ export function TenderDocuments({
                   </p>
                 </div>
                 <div className="secop-document-actions">
-                  <a href={item.url} target="_blank" rel="noopener noreferrer">
-                    {t.download}
+                  <a
+                    href={item.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="secop-icon-action"
+                    aria-label={t.download}
+                    title={t.download}
+                  >
+                    <Download size={16} aria-hidden="true" />
                   </a>
                   {/\.pdf$/i.test(item.name) && (
                     <button

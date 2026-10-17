@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { webcrypto } from "node:crypto";
 import {
   cleanup,
   fireEvent,
@@ -13,6 +14,11 @@ import type {
   PluginAssistantProvider,
   PluginAssistantRequest,
 } from "@savia/studio-shared/plugin-assistant";
+
+Object.defineProperty(globalThis.crypto, "subtle", {
+  value: webcrypto.subtle,
+  configurable: true,
+});
 
 afterEach(cleanup);
 
@@ -464,7 +470,13 @@ it("generates an advertised document without replacing chat history or its draft
       <ExternalAssistantConversation
         provider={current}
         onReturn={() => {}}
-        apiClient={{ postForm } as never}
+        apiClient={
+          {
+            postForm,
+            get: vi.fn(async () => ({ data: null })),
+            post: vi.fn(),
+          } as never
+        }
       />
     </OfficeAvailabilityContext.Provider>,
   );

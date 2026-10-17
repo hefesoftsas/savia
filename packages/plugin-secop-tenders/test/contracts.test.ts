@@ -33,7 +33,31 @@ describe("SECOP plugin package contracts", () => {
         (screen) => screen.object === "secop_application_tasks",
       ),
     ).toBe(false);
-    expect(manifest.version).toBe("1.7.8");
+    expect(manifest.version).toBe("1.7.9");
+  });
+
+  it("hides stored PDF-analysis records while retaining task navigation", () => {
+    const parsed = storeJsonSchema.parse(store);
+    const objects = parsed.collections.map(sanitizeStoreCollection);
+    const analysis = objects.find(
+      (item) => item.object.name === "procurement_documents",
+    )!.object;
+    const tasks = objects.find(
+      (item) => item.object.name === "secop_application_tasks",
+    )!.object;
+
+    expect(analysis.config.studio?.screen?.hidden).toBe(true);
+    expect(tasks.config.studio?.screen?.hidden).not.toBe(true);
+    expect(parsed.screens.map((screen) => screen.object)).toEqual([
+      "procurement_opportunities",
+    ]);
+    expect(objects.map((item) => item.object.name)).toEqual(
+      expect.arrayContaining([
+        "procurement_opportunities",
+        "procurement_documents",
+        "secop_application_tasks",
+      ]),
+    );
   });
 
   it("persists detailed PDF reports beyond the default text field limit", () => {

@@ -23,6 +23,7 @@ type DocumentRow = {
   storage_key: string;
   created_at: string;
   updated_at: string;
+  source_key: string | null;
   owner_display_name: string | null;
   owner_email: string;
   share_role: "reader" | "editor" | null;
@@ -41,6 +42,16 @@ export class OfficeDocumentsError extends Error {
 const randomId = () => crypto.randomUUID();
 const notFound = () =>
   new OfficeDocumentsError(404, "DOCUMENT_NOT_FOUND", "Document not found");
+const sourceKey = (value: unknown) => {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== "string" || !value.trim() || value.trim().length > 256)
+    throw new OfficeDocumentsError(
+      400,
+      "INVALID_SOURCE_KEY",
+      "Source key must contain between 1 and 256 characters",
+    );
+  return value.trim();
+};
 
 export type OfficeDocumentSummary = {
   id: string;
@@ -160,6 +171,69 @@ export class OfficeDocumentsService {
       .bind(this.actor.principal.id, tenantId, this.actor.principal.id)
       .all<DocumentRow>();
     return results.map((row) => this.summary(row));
+  }
+
+  private async findSourceKey(tenantId: number, key: string) {
+    const row = await this.db
+      .prepare(
+        `SELECT d.*,owner.display_name AS owner_display_name,owner.email AS owner_email,
+          NULL AS share_role
+        FROM office_documents d
+        JOIN identity_principal owner ON owner.id=d.owner_id AND owner.is_active=1
+        WHERE d.tenant_id=? AND d.owner_id=? AND d.source_key=? AND ${this.enabledScope("d.tenant_id")}`,
+      )
+      .bind(tenantId, this.actor.principal.id, key)
+      .first<DocumentRow>();
+    return row ?? null;
+  }
+
+  async source(key: string): Promise<OfficeDocumentSummary | null> {
+    const normalizedKey = sourceKey(key)!;
+    const tenantId = await this.tenant();
+    const row = await this.findSourceKey(tenantId, normalizedKey);
+    return row ? this.summary(row) : null;
+  }
+
+  async adoptSource(id: string, key: string): Promise<OfficeDocumentSummary> {
+    const normalizedKey = sourceKey(key)!;
+    const row = await this.load(id);
+    if (row.owner_id !== this.actor.principal.id) throw notFound();
+    const existing = await this.findSourceKey(row.tenant_id, normalizedKey);
+    if (existing) return this.summary(existing);
+    if (row.source_key && row.source_key !== normalizedKey)
+      throw new OfficeDocumentsError(
+        409,
+        "SOURCE_KEY_CONFLICT",
+        "This document is already linked to another source key",
+      );
+
+    try {
+      const result = await this.db
+        .prepare(
+          `UPDATE office_documents SET source_key=?
+          WHERE id=? AND tenant_id=? AND owner_id=? AND (source_key IS NULL OR source_key=?)`,
+        )
+        .bind(
+          normalizedKey,
+          id,
+          row.tenant_id,
+          this.actor.principal.id,
+          normalizedKey,
+        )
+        .run();
+      if (result.meta.changes === 1) return this.summary(await this.load(id));
+    } catch (error) {
+      const winner = await this.findSourceKey(row.tenant_id, normalizedKey);
+      if (winner) return this.summary(winner);
+      throw error;
+    }
+    const winner = await this.findSourceKey(row.tenant_id, normalizedKey);
+    if (winner) return this.summary(winner);
+    throw new OfficeDocumentsError(
+      409,
+      "SOURCE_KEY_CONFLICT",
+      "This document is already linked to another source key",
+    );
   }
 
   async members(query: string) {
@@ -382,8 +456,16 @@ export class OfficeDocumentsService {
     return name;
   }
 
-  async create(file: File): Promise<OfficeDocumentSummary> {
+  async create(
+    file: File,
+    sourceKeyValue?: string,
+  ): Promise<OfficeDocumentSummary> {
+    const normalizedKey = sourceKey(sourceKeyValue);
     const tenantId = await this.tenant();
+    if (normalizedKey) {
+      const existing = await this.findSourceKey(tenantId, normalizedKey);
+      if (existing) return this.summary(existing);
+    }
     const { bytes, mime } = await this.validate(file);
     const documentId = randomId();
     const storageKey = `${tenantId}/${this.actor.principal.id}/${documentId}/1/${randomId()}`;
@@ -395,8 +477,8 @@ export class OfficeDocumentsService {
       await this.db.batch([
         this.db
           .prepare(
-            `INSERT INTO office_documents(id,tenant_id,owner_id,name,mime,size,version,storage_key,created_at,updated_at)
-          SELECT ?,?,?,?,?,?,1,?,?,? FROM tenants t WHERE t.id=? AND t.is_active=1 AND ${this.scope("t", "t.id")} AND ${this.enabledScope("t.id")}`,
+            `INSERT INTO office_documents(id,tenant_id,owner_id,name,mime,size,version,storage_key,created_at,updated_at,source_key)
+          SELECT ?,?,?,?,?,?,1,?,?,?,? FROM tenants t WHERE t.id=? AND t.is_active=1 AND ${this.scope("t", "t.id")} AND ${this.enabledScope("t.id")}`,
           )
           .bind(
             documentId,
@@ -408,6 +490,7 @@ export class OfficeDocumentsService {
             storageKey,
             createdAt,
             createdAt,
+            normalizedKey ?? null,
             tenantId,
             this.actor.principal.id,
             this.actor.principal.id,
@@ -429,6 +512,10 @@ export class OfficeDocumentsService {
         .bind(documentId)
         .first();
       if (!referenced) await this.bucket.delete(storageKey);
+      if (normalizedKey) {
+        const winner = await this.findSourceKey(tenantId, normalizedKey);
+        if (winner) return this.summary(winner);
+      }
       throw error;
     }
   }

@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { webcrypto } from "node:crypto";
 import { useLayoutEffect, type PropsWithChildren } from "react";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
@@ -9,7 +10,13 @@ import { OfficeAvailabilityContext } from "@/features/office-settings/office-ava
 import {
   AssistantDocumentAction,
   type AssistantDocumentActionDefinition,
+  documentSourceKey,
 } from "./assistant-document-action";
+
+Object.defineProperty(globalThis.crypto, "subtle", {
+  value: webcrypto.subtle,
+  configurable: true,
+});
 
 const action: AssistantDocumentActionDefinition = {
   id: "proposal-docx",
@@ -73,7 +80,11 @@ function api(
     data: { id: "office_doc_123" },
   })),
 ) {
-  return { postForm } as unknown as Pick<ApiClient, "postForm">;
+  return {
+    postForm,
+    get: vi.fn(async () => ({ data: null })),
+    post: vi.fn(),
+  } as unknown as Pick<ApiClient, "postForm" | "get" | "post">;
 }
 
 function AvailableOffice({ children }: PropsWithChildren) {
@@ -306,6 +317,7 @@ it("aborts work on context change before a late provider result can fetch or nav
     wrapper: AvailableOffice,
   });
   fireEvent.click(screen.getByRole("button", { name: action.label }));
+  await vi.waitFor(() => expect(invoke).toHaveBeenCalledTimes(1));
   view.rerender(
     <ObserveProvider current={provider(invoke, { sessionId: "session-2" })} />,
   );
@@ -374,5 +386,114 @@ it("ignores duplicate clicks while generation is pending", async () => {
   renderAction(invoke);
   fireEvent.click(screen.getByRole("button", { name: action.label }));
   fireEvent.click(screen.getByRole("button", { name: action.label }));
-  expect(invoke).toHaveBeenCalledTimes(1);
+  await screen.findByText("Preparing the document…");
+  await vi.waitFor(() => expect(invoke).toHaveBeenCalledTimes(1));
+});
+
+it("reopens a bound draft without generating or uploading another copy", async () => {
+  const reserved = popup();
+  vi.spyOn(window, "open").mockReturnValue(reserved as never);
+  const invoke = generated();
+  const client = api();
+  vi.mocked(client.get).mockResolvedValue({ data: { id: "existing_edited" } });
+  renderAction(invoke, client);
+  fireEvent.click(screen.getByRole("button", { name: action.label }));
+  await screen.findByRole("link", { name: "Open document" });
+  expect(invoke).not.toHaveBeenCalled();
+  expect(client.postForm).not.toHaveBeenCalled();
+  expect(reserved.location.replace).toHaveBeenCalledWith(
+    "/office/?base=%2Fv1%2Foffice-documents&file=existing_edited",
+  );
+});
+
+it("adopts the newest exactly named owned legacy draft without replacing edits", async () => {
+  vi.spyOn(window, "open").mockReturnValue(popup() as never);
+  const client = api();
+  vi.mocked(client.get)
+    .mockResolvedValueOnce({ data: null })
+    .mockResolvedValueOnce({
+      data: [
+        {
+          id: "shared",
+          name: "Tender-borrador.docx",
+          role: "editor",
+          updatedAt: "2026-10-18",
+        },
+        {
+          id: "old",
+          name: "Tender-borrador.docx",
+          role: "owner",
+          updatedAt: "2026-10-15",
+        },
+        {
+          id: "new",
+          name: "Tender-borrador.docx",
+          role: "owner",
+          updatedAt: "2026-10-16",
+        },
+        {
+          id: "other",
+          name: "Other-borrador.docx",
+          role: "owner",
+          updatedAt: "2026-10-19",
+        },
+      ],
+    });
+  vi.mocked(client.post).mockResolvedValue({ data: { id: "new" } });
+  const invoke = generated();
+  render(
+    <AssistantDocumentAction
+      provider={provider(invoke)}
+      action={{ ...action, fileName: "borrador.docx" }}
+      apiClient={client}
+    />,
+    { wrapper: AvailableOffice },
+  );
+  fireEvent.click(screen.getByRole("button", { name: action.label }));
+  await screen.findByRole("link", { name: "Open document" });
+  expect(client.post).toHaveBeenCalledWith(
+    "/v1/office-documents/new/source",
+    { key: expect.stringMatching(/^assistant:[a-f0-9]{64}$/) },
+    { signal: expect.any(AbortSignal) },
+  );
+  expect(invoke).not.toHaveBeenCalled();
+  expect(client.postForm).not.toHaveBeenCalled();
+});
+
+it("keeps draft keys stable across sessions and property order, but separates connections and contexts", async () => {
+  const p = provider(generated());
+  const first = await documentSourceKey(p, action.id);
+  expect(
+    await documentSourceKey(
+      {
+        ...p,
+        sessionId: "fresh",
+        context: { companyId: "company-1", dossierId: "tender-1" },
+      },
+      action.id,
+    ),
+  ).toBe(first);
+  expect(
+    await documentSourceKey(
+      { ...p, context: { dossierId: "other" } },
+      action.id,
+    ),
+  ).not.toBe(first);
+  expect(
+    await documentSourceKey({ ...p, connectionId: "other" }, action.id),
+  ).not.toBe(first);
+});
+
+it("fails closed on draft lookup errors instead of generating a duplicate", async () => {
+  const reserved = popup();
+  vi.spyOn(window, "open").mockReturnValue(reserved as never);
+  const client = api();
+  vi.mocked(client.get).mockRejectedValue(new Error("unavailable"));
+  const invoke = generated();
+  renderAction(invoke, client);
+  fireEvent.click(screen.getByRole("button", { name: action.label }));
+  await screen.findByRole("alert");
+  expect(invoke).not.toHaveBeenCalled();
+  expect(client.postForm).not.toHaveBeenCalled();
+  expect(reserved.close).toHaveBeenCalled();
 });

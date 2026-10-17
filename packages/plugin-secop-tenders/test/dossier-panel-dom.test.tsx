@@ -160,7 +160,8 @@ async function mount(
 }
 async function click(label: string) {
   const button = [...host.querySelectorAll("button")].find(
-    (b) => b.textContent?.trim() === label,
+    (b) =>
+      b.textContent?.trim() === label || b.getAttribute("aria-label") === label,
   );
   expect(button).toBeDefined();
   await act(async () => button!.click());
@@ -182,6 +183,14 @@ describe("tender dossier flow", () => {
     const { openAssistant } = await mount(true, true);
     await click("Asistente");
     expect(host.querySelector("textarea")).toBeNull();
+    expect(
+      host.querySelector('button[aria-label="Abrir chat de Savia"]')
+        ?.textContent,
+    ).toBe("");
+    expect(
+      host.querySelector('button[aria-label="Preparar lista completa"]')
+        ?.textContent,
+    ).toBe("");
     await click("Preparar lista completa");
     expect(openAssistant).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -210,7 +219,9 @@ describe("tender dossier flow", () => {
     ).toBe(false);
     expect(host.textContent).toContain("Revisión de fuentes pendiente");
     await click("Asistente");
-    expect(host.textContent).toContain("Abrir chat de Savia");
+    expect(
+      host.querySelector('button[aria-label="Abrir chat de Savia"]'),
+    ).not.toBeNull();
   });
 
   it("shows cancellation for a restored active job in the dossier snapshot", async () => {
@@ -259,9 +270,13 @@ describe("tender dossier flow", () => {
     async (locale, back, citation, requirements) => {
       await mount(true, true, [], locale);
       expect(host.querySelector("main")?.getAttribute("lang")).toBe(locale);
-      expect(host.textContent).toContain(back);
+      expect(
+        host.querySelector(`button[aria-label="${back}"]`)?.textContent,
+      ).toBe("");
       await click(requirements);
-      expect(host.textContent).toContain(citation);
+      expect(
+        host.querySelector(`button[aria-label="${citation}"]`),
+      ).not.toBeNull();
     },
   );
 
