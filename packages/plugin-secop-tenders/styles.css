@@ -491,3 +491,17 @@
   max-width: 65ch;
   margin: 0.4rem 0 0.75rem;
 }
+
+.secop-availability {
+  display: grid;
+  gap: 0.35rem;
+  margin-top: 0.85rem;
+  max-width: 26rem;
+}
+.secop-deadline-closed {
+  color: var(--secop-muted);
+}
+.secop-deadline-label {
+  display: block;
+  font-size: 0.85em;
+}

@@ -2,7 +2,7 @@
 
 An optional Savia tenant plugin for searching live SECOP procurement records and saving selected opportunities to a workspace collection for follow-up. Search history is not persisted. The plugin has Spanish, English, and Portuguese interface copy.
 
-Version 1.7.9 keeps compact contextual actions icon-only with localized
+Version 1.8.0 keeps compact contextual actions icon-only with localized
 accessible names and tooltips. PDF analysis records remain persisted in the
 `procurement_documents` collection but are hidden from the Studio sidebar;
 preparation tasks remain available in their native records screen.
@@ -63,3 +63,8 @@ profile data, prices and unverified statements are left for completion. Review
 the source citations, extraction warnings, process deadline and official forms
 before signing or presenting the editable draft. The SECOP service creates and
 serves the private short-lived download; the plugin does not submit an offer.
+
+Search defaults to `vigentes: true`; the backend applies the future-deadline
+and open-state scope before pagination. Select all tenders for historical
+research. Closing dates are localized in Colombia time, with expired dates
+labelled. Saved interests are not filtered out.

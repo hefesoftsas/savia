@@ -11,6 +11,7 @@ import type { PluginApi } from "@savia/plugin-sdk";
 import { defineReactPlugin } from "@savia/plugin-sdk/react";
 import "./styles.css";
 import { DossierPanel } from "./dossier-panel";
+import { formatDeadline, deadlineInstant } from "./deadline";
 import { SearchFeed } from "./search-feed";
 import { FilterAutocomplete } from "./filter-autocomplete";
 import {
@@ -52,6 +53,11 @@ function routeTab(value: string | undefined): DossierTab {
 }
 const messages = {
   es: {
+    availability: "Disponibilidad",
+    activeOnly: "Vigentes con cierre futuro",
+    allTenders: "Todos, incluidos cerrados",
+    closedDeadline: "Cerró",
+    colombiaTime: "Hora de Colombia",
     title: "Licitaciones SECOP",
     subtitle:
       "Busca procesos públicos y organiza el seguimiento que tu equipo decide guardar.",
@@ -160,6 +166,11 @@ const messages = {
     appliedFilters: "Filtros aplicados",
   },
   en: {
+    availability: "Availability",
+    activeOnly: "Open with a future deadline",
+    allTenders: "All, including closed",
+    closedDeadline: "Closed",
+    colombiaTime: "Colombia time",
     title: "SECOP tenders",
     subtitle:
       "Search public procurement and track the opportunities your team chooses to save.",
@@ -266,6 +277,11 @@ const messages = {
     appliedFilters: "Applied filters",
   },
   pt: {
+    availability: "Disponibilidade",
+    activeOnly: "Vigentes com prazo futuro",
+    allTenders: "Todos, incluindo encerrados",
+    closedDeadline: "Encerrou",
+    colombiaTime: "Horário da Colômbia",
     title: "Licitações SECOP",
     subtitle:
       "Pesquise processos públicos e acompanhe as oportunidades que sua equipe decidir salvar.",
@@ -426,6 +442,23 @@ function formatMonitorCheck(
     return fallback;
   }
 }
+function Deadline({ value, locale }: { value: unknown; locale: Locale }) {
+  const t = messages[locale];
+  const instant = deadlineInstant(value);
+  if (instant === null) return <span>{t.noData}</span>;
+  const closed = instant <= Date.now();
+  return (
+    <span className={closed ? "secop-deadline-closed" : undefined}>
+      <time dateTime={new Date(instant).toISOString()}>
+        {formatDeadline(value, locale, t.noData)}
+      </time>
+      {closed && (
+        <span className="secop-deadline-label">{t.closedDeadline}</span>
+      )}
+    </span>
+  );
+}
+
 function display(value: unknown, fallback: string) {
   if (value === undefined || value === null || String(value).trim() === "")
     return fallback;
@@ -1013,6 +1046,21 @@ function Screen({ savia }: { savia: PluginApi }) {
                 }
               />
             </label>
+            <label className="secop-availability">
+              {t.availability}
+              <select
+                value={draft.vigentes === false ? "all" : "active"}
+                onChange={(event) =>
+                  setDraft((current) => ({
+                    ...current,
+                    vigentes: event.target.value === "active",
+                  }))
+                }
+              >
+                <option value="active">{t.activeOnly}</option>
+                <option value="all">{t.allTenders}</option>
+              </select>
+            </label>
             <div className="secop-advanced">
               {(
                 [
@@ -1126,6 +1174,11 @@ function Screen({ savia }: { savia: PluginApi }) {
                 </span>
               )}
             </div>
+            {searched && (
+              <p className="secop-filter-hint">
+                {criteria.vigentes === false ? t.allTenders : t.activeOnly}
+              </p>
+            )}
             {searched &&
               (
                 ["q", "estado", "entidad", "modalidad", "departamento"] as const
@@ -1212,8 +1265,12 @@ function Screen({ savia }: { savia: PluginApi }) {
                           <dd>{formatAmount(row.amount, locale)}</dd>
                         </div>
                         <div>
-                          <dt>{t.deadline}</dt>
-                          <dd>{display(row.deadline, t.noData)}</dd>
+                          <dt>
+                            {t.deadline} · {t.colombiaTime}
+                          </dt>
+                          <dd>
+                            <Deadline value={row.deadline} locale={locale} />
+                          </dd>
                         </div>
                       </dl>
                       <footer>
@@ -1433,7 +1490,7 @@ function Screen({ savia }: { savia: PluginApi }) {
                     </p>
                     <p>
                       <strong>{t.deadline}:</strong>{" "}
-                      {display(record.deadline, t.noData)}
+                      <Deadline value={record.deadline} locale={locale} />
                     </p>
                     <p>
                       <strong>{t.lastCheck}:</strong>{" "}
