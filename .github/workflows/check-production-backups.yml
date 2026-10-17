@@ -1,0 +1,29 @@
+name: Check production backup freshness
+
+on:
+  schedule:
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  freshness:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Check for a retained successful production backup within 36 hours
+        run: node scripts/check-production-backup-freshness.mjs
+        env:
+          GITHUB_TOKEN: ${{ github.token }}

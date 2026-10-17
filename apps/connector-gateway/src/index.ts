@@ -1,5 +1,10 @@
 import { createConnectorApp } from "./app";
 import { runtimeReleaseCatalog } from "@savia/release-catalog/runtime";
+import { guardStorageEnvironment } from "../../../packages/backup-gate/index.mjs";
+import {
+  backupCapability,
+  handleBackupControl,
+} from "../../../packages/backup-gate/control.mjs";
 
 type SaviaRequestService = Parameters<
   typeof runtimeReleaseCatalog.createConnectorActions
@@ -33,6 +38,12 @@ export default {
     request: Request,
     environment: ConnectorEnvironment,
   ): Promise<Response> {
-    return createRuntimeConnectorApp(environment).fetch(request);
+    const control = await handleBackupControl(request, environment);
+    if (control) return control;
+    const capability = backupCapability(request, environment);
+    if (capability) return capability;
+    return createRuntimeConnectorApp(
+      guardStorageEnvironment(environment),
+    ).fetch(request);
   },
 };

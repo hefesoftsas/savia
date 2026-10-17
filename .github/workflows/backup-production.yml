@@ -1,0 +1,98 @@
+name: Back up Savia production
+
+on:
+  schedule:
+    - cron: "23 8 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Share the deployment lock: never copy across a production release.
+concurrency:
+  group: savia-production
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    environment: production-backup
+    env:
+      PNPM_CONFIG_STRICT_DEP_BUILDS: "false"
+      PULUMI_BACKEND_URL: ${{ secrets.PULUMI_BACKEND_URL }}
+      PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.R2_STATE_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_STATE_SECRET_ACCESS_KEY }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      SAVIA_BACKUP_CONTROL_SECRET: ${{ secrets.SAVIA_BACKUP_CONTROL_SECRET }}
+      SAVIA_BACKUP_CONTROL_URL: https://savia.app.hefesoft.com/api/_internal/backup-gate
+      SAVIA_BACKUP_KEY: ${{ secrets.SAVIA_BACKUP_KEY }}
+      SAVIA_FLOWS_BRIDGE_SECRET: ${{ secrets.SAVIA_FLOWS_BRIDGE_SECRET }}
+      SAVIA_FLOWS_JWT_SECRET: ${{ secrets.SAVIA_FLOWS_JWT_SECRET }}
+      SAVIA_FLOWS_SECRET_MASTER_KEY: ${{ secrets.SAVIA_FLOWS_SECRET_MASTER_KEY }}
+      SAVIA_FLOWS_FORM_SIGNING_KEY: ${{ secrets.SAVIA_FLOWS_FORM_SIGNING_KEY }}
+      SAVIA_FLOWS_BACKUP_KEY: ${{ secrets.SAVIA_FLOWS_BACKUP_KEY }}
+      SAVIA_BACKUP_R2_FORCE_API: "true"
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.24.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Load infrastructure stack outputs
+        uses: ./.github/actions/pulumi-infrastructure
+        with:
+          stack: production
+
+      - name: Verify adopted production recovery prerequisites
+        run: node infra/pulumi/production-preflight.mjs
+
+      # A daily copy must not publish an unpromoted main commit just to pause
+      # traffic. Existing Flows must already be in a controlled maintenance
+      # window. The CLI verifies the pause and drains before exporting; a busy
+      # service fails this job and requires operator attention.
+      - name: Snapshot already paused Flows persistence
+        if: env.SAVIA_FLOWS_PROVISIONED == 'true'
+        run: node scripts/flows-maintenance.mjs --action backup --snapshot-file "$RUNNER_TEMP/production-flows-snapshot.json" --apply
+        env:
+          SAVIA_DEPLOY_ENVIRONMENT: production
+
+      - name: Capture and verify encrypted production persistence
+        shell: bash
+        run: |
+          backup_args=(--artifact "$RUNNER_TEMP/production-backup.enc" --work-root "$RUNNER_TEMP")
+          if [ "$SAVIA_FLOWS_PROVISIONED" = "true" ]; then
+            backup_args+=(--flows-snapshot "$RUNNER_TEMP/production-flows-snapshot.json")
+          fi
+          node scripts/production-backup.mjs "${backup_args[@]}"
+
+      - name: Retain encrypted production backup
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-backup-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/production-backup.enc
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Remove plaintext recovery files
+        if: always()
+        shell: bash
+        run: |
+          rm -rf "$RUNNER_TEMP/production-backup"
+          rm -rf "$RUNNER_TEMP"/savia-production-backup-*
+          rm -f "$RUNNER_TEMP/production-backup.tar.gz" "$RUNNER_TEMP/production-flows-snapshot.json"

@@ -5,6 +5,11 @@ import { validateRequestCachePolicy } from "./request-cache";
 import { openApi } from "./openapi";
 import { Hono } from "hono";
 import type { Env } from "./env";
+import { guardStorageEnvironment } from "../../../../packages/backup-gate/index.mjs";
+import {
+  backupCapability,
+  handleBackupControl,
+} from "../../../../packages/backup-gate/control.mjs";
 import type { Flow, Variable } from "./types";
 import {
   bundleStatus,
@@ -657,6 +662,20 @@ app.post("/v1/flows/:id/runs", async (c) => {
 app.get("/api/openapi.json", async (c) =>
   c.json(await openApi(c.env, scopeOf(c.req.raw))),
 );
+
+const appFetch = app.fetch.bind(app);
+app.fetch = async (request, environment, executionContext) => {
+  if (!environment) return appFetch(request, environment, executionContext);
+  const control = await handleBackupControl(request, environment);
+  if (control) return control;
+  const capability = backupCapability(request, environment);
+  if (capability) return capability;
+  return appFetch(
+    request,
+    guardStorageEnvironment(environment),
+    executionContext,
+  );
+};
 
 app.onError((error, c) => {
   if (databaseConflict(error))

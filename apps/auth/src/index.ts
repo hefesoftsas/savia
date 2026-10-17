@@ -1,3 +1,8 @@
+import { guardStorageEnvironment } from "../../../packages/backup-gate/index.mjs";
+import {
+  backupCapability,
+  handleBackupControl,
+} from "../../../packages/backup-gate/control.mjs";
 import { chatgptOAuthPlugins } from "./chatgpt-sign-in";
 import { getIP } from "@better-auth/core/utils/ip";
 import { limitVerificationMail } from "./pending-email-verification";
@@ -1126,11 +1131,18 @@ export function createAuthHandler(
   };
 }
 export default {
-  fetch(
+  async fetch(
     request: Request,
     environment: AuthWorkerEnvironment,
     executionContext: ExecutionContext,
   ) {
-    return createAuthHandler(environment).fetch(request, executionContext);
+    const control = await handleBackupControl(request, environment);
+    if (control) return control;
+    const capability = backupCapability(request, environment);
+    if (capability) return capability;
+    return createAuthHandler(guardStorageEnvironment(environment)).fetch(
+      request,
+      executionContext,
+    );
   },
 } satisfies ExportedHandler<AuthWorkerEnvironment>;

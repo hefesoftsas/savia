@@ -10,8 +10,11 @@ import {
   PREVIEW_PUBLIC_ORIGIN,
   normalizeEnvironment,
 } from "../infra/pulumi/naming.mjs";
-import { validateFlowsSnapshotManifest } from "../infra/pulumi/flows-snapshot.mjs";
-import { startPreviewMaintenanceTransport } from "./flows-maintenance-transport.mjs";
+import {
+  validateFlowsSnapshotManifest,
+  hasCompleteFlowsCoverage,
+} from "../infra/pulumi/flows-snapshot.mjs";
+import { startFlowsMaintenanceTransport } from "./flows-maintenance-transport.mjs";
 
 const MAX_PAGES = 10_000;
 const DEFAULT_DRAIN_TIMEOUT_SECONDS = 1200;
@@ -232,16 +235,8 @@ function validateStartedManifest(payload, expectedId = null) {
   const manifest = manifestFromResponse(payload);
   if (
     !manifest ||
-    manifest.version !== 2 ||
-    manifest.coverage?.version !== 2 ||
-    JSON.stringify(manifest.coverage.kinds) !==
-      JSON.stringify([
-        "database",
-        "mailbox",
-        "workflow-agent",
-        "agent-runner",
-        "email-agent-runner",
-      ]) ||
+    manifest.version !== 3 ||
+    !hasCompleteFlowsCoverage(manifest.coverage) ||
     typeof manifest.id !== "string" ||
     !UUID_RE.test(manifest.id) ||
     typeof manifest.createdAt !== "string" ||
@@ -482,10 +477,8 @@ async function runCli() {
   } catch {
     throw new Error("SAVIA_DEPLOY_ENVIRONMENT is invalid");
   }
-  if (environment !== "preview") return runMaintenance();
-
   validateMaintenanceEnvironment(process.env);
-  const transport = await startPreviewMaintenanceTransport({
+  const transport = await startFlowsMaintenanceTransport({
     env: process.env,
   });
   try {

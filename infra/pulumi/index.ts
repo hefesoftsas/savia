@@ -14,15 +14,16 @@ import {
 // This avoids Pulumi/Wrangler fighting over Worker scripts while giving
 // `pulumi preview` drift detection for data-plane resources.
 //
-// Vectorize search index stays Wrangler-managed: the Cloudflare Pulumi
-// provider has no first-class Vectorize resource (use a dynamic provider
-// only if you need it in state).
+// Vectorize bootstrap stays in vectorize.mjs and runs only when explicitly
+// requested. Standard deployments bind the existing index from stack outputs.
 
 const config = new pulumi.Config();
 const accountId = assertAccountId(config.require("accountId"));
 const environment = config.require("environment");
 const publicOrigin = config.require("publicOrigin");
 const documentsBucket = config.require("documentsBucket");
+const authDatabaseName = config.get("authDatabaseName");
+const domainDatabaseName = config.get("domainDatabaseName");
 const pagesSearchIndex = config.get("pagesSearchIndex");
 const shouldProvisionFlows = config.getBoolean("flowsEnabled") ?? false;
 const shouldExecuteFlows = config.getBoolean("flowsExecutionEnabled") ?? false;
@@ -37,6 +38,8 @@ const names = resolveInfraNames({
   documentsBucket,
   pagesSearchIndex,
   publicOrigin,
+  authDatabaseName,
+  domainDatabaseName,
 });
 
 // Production stateful resources cannot be deleted by accident: `protect`

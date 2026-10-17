@@ -2,7 +2,7 @@ import { mkdir, writeFile, rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { validateFlowsResources } from "./naming.mjs";
+import { resolveInfraNames, validateFlowsResources } from "./naming.mjs";
 import { flowsWorkerConfig } from "./flows-worker-config.mjs";
 import { pluginEditorWorkerConfig } from "./auxiliary-worker-config.mjs";
 
@@ -24,7 +24,7 @@ function originValue(value) {
   return origin.origin;
 }
 
-function authConfig({ authD1Id, publicOrigin }) {
+function authConfig({ authD1Id, authDatabaseName, publicOrigin }) {
   return {
     $schema: "../../node_modules/wrangler/config-schema.json",
     name: "savia-auth",
@@ -36,7 +36,7 @@ function authConfig({ authD1Id, publicOrigin }) {
     d1_databases: [
       {
         binding: "AUTH_DB",
-        database_name: "savia-auth",
+        database_name: authDatabaseName,
         database_id: authD1Id,
       },
     ],
@@ -54,6 +54,7 @@ function authConfig({ authD1Id, publicOrigin }) {
 function apiConfig({
   documentsBucket,
   domainD1Id,
+  domainDatabaseName,
   jiraIntegrationId,
   githubIntegrationId,
   zoomIntegrationId,
@@ -102,7 +103,7 @@ function apiConfig({
     d1_databases: [
       {
         binding: "DB",
-        database_name: "savia-agencies",
+        database_name: domainDatabaseName,
         database_id: domainD1Id,
         migrations_dir: "../../packages/db/migrations",
       },
@@ -154,7 +155,7 @@ function apiConfig({
   };
 }
 
-function requestsConfig({ domainD1Id }) {
+function requestsConfig({ domainD1Id, domainDatabaseName }) {
   return {
     name: "savia-request",
     main: "src/server/index.ts",
@@ -165,7 +166,7 @@ function requestsConfig({ domainD1Id }) {
     d1_databases: [
       {
         binding: "DB",
-        database_name: "savia-agencies",
+        database_name: domainDatabaseName,
         database_id: domainD1Id,
         migrations_dir: "../../packages/db/migrations",
       },
@@ -193,7 +194,7 @@ function hookExecutorConfig() {
   };
 }
 
-function connectorsConfig({ domainD1Id }) {
+function connectorsConfig({ domainD1Id, domainDatabaseName }) {
   return {
     name: "savia-connectors",
     main: "src/index.ts",
@@ -203,12 +204,24 @@ function connectorsConfig({ domainD1Id }) {
     d1_databases: [
       {
         binding: "DB",
-        database_name: "savia-agencies",
+        database_name: domainDatabaseName,
         database_id: domainD1Id,
       },
     ],
     services: [{ binding: "SAVIA_REQUEST", service: "savia-request" }],
     secrets: { required: ["EXTENSION_CONNECTIONS_ENCRYPTION_KEY"] },
+  };
+}
+
+function backupCoordinatorConfig() {
+  return {
+    $schema: "../../node_modules/wrangler/config-schema.json",
+    name: "savia-backup-coordinator",
+    compatibility_date: "2026-08-31",
+    main: "src/index.ts",
+    workers_dev: false,
+    durable_objects: { bindings: [] },
+    migrations: [{ tag: "v1", new_sqlite_classes: ["BackupCoordinator"] }],
   };
 }
 
@@ -283,7 +296,9 @@ export async function renderProductionConfigs({
   flowsResources,
   flowsExecutionEnabled = false,
   authD1Id,
+  authDatabaseName,
   domainD1Id,
+  domainDatabaseName,
   documentsBucket = defaultDocumentsBucket,
   jiraIntegrationId,
   githubIntegrationId,
@@ -306,6 +321,25 @@ export async function renderProductionConfigs({
     );
   }
   const flows = validateFlowsResources(flowsResources, deploymentEnvironment);
+  const resolvedNames = resolveInfraNames({
+    environment: deploymentEnvironment,
+    documentsBucket,
+    publicOrigin,
+    ...(deploymentEnvironment === "production"
+      ? { authDatabaseName, domainDatabaseName }
+      : {}),
+  });
+  if (
+    deploymentEnvironment === "preview" &&
+    ((authDatabaseName !== undefined &&
+      authDatabaseName !== resolvedNames.databases.auth) ||
+      (domainDatabaseName !== undefined &&
+        domainDatabaseName !== resolvedNames.databases.domain))
+  ) {
+    throw new Error(
+      "Preview D1 names do not match isolated infrastructure outputs",
+    );
+  }
   if (
     typeof flowsExecutionEnabled !== "boolean" ||
     (flowsExecutionEnabled && !flows)
@@ -314,8 +348,10 @@ export async function renderProductionConfigs({
   }
   const rendered = {
     authD1Id: requiredValue(authD1Id, "SAVIA_AUTH_D1_ID"),
+    authDatabaseName: resolvedNames.databases.auth,
     documentsBucket: requiredValue(documentsBucket, "SAVIA_DOCUMENTS_BUCKET"),
     domainD1Id: requiredValue(domainD1Id, "SAVIA_DOMAIN_D1_ID"),
+    domainDatabaseName: resolvedNames.databases.domain,
     outputRoot: requiredValue(outputRoot, "SAVIA_DEPLOY_CONFIG_ROOT"),
     publicOrigin: originValue(publicOrigin),
     ...(zoomIntegrationId?.trim()
@@ -357,8 +393,23 @@ export async function renderProductionConfigs({
     "hook-executor": hookExecutorConfig(),
     mcp: mcpConfig(rendered),
     "connector-gateway": connectorsConfig(rendered),
+    "backup-coordinator": backupCoordinatorConfig(),
     admin: gatewayConfig(rendered),
   };
+  // One namespace per deployment environment, shared by every D1/R2 writer.
+  // Cross-script names are resolved after preview worker names are rewritten.
+  for (const app of ["api", "auth", "savia-request", "connector-gateway"]) {
+    const config = configs[app];
+    config.vars = { ...config.vars, SAVIA_BACKUP_GATE_REQUIRED: "true" };
+    config.durable_objects ??= { bindings: [] };
+    config.durable_objects.bindings.push({
+      name: "BACKUP_GATE",
+      class_name: "BackupCoordinator",
+      script_name: configs["backup-coordinator"].name,
+    });
+  }
+  if (deploymentEnvironment === "production")
+    configs.api.secrets.required.push("SAVIA_BACKUP_CONTROL_SECRET");
   if (openrouterModel) configs.api.vars.OPENROUTER_MODEL = openrouterModel;
   const searchIndex =
     pagesSearchIndex?.trim() ||
@@ -391,8 +442,6 @@ export async function renderProductionConfigs({
       config.name += "-preview";
       for (const binding of config.services ?? [])
         binding.service += "-preview";
-      for (const binding of config.d1_databases ?? [])
-        binding.database_name += "-preview";
       config.workers_dev = false;
       config.preview_urls = false;
     }
@@ -414,6 +463,10 @@ export async function renderProductionConfigs({
       { custom_domain: true, pattern: new URL(rendered.publicOrigin).hostname },
     ];
   }
+  for (const app of ["api", "auth", "savia-request", "connector-gateway"])
+    configs[app].durable_objects.bindings.find(
+      (binding) => binding.name === "BACKUP_GATE",
+    ).script_name = configs["backup-coordinator"].name;
   if (deploymentEnvironment === "preview") {
     configs["plugin-editor-runtime"] = pluginEditorWorkerConfig({
       outputRoot: rendered.outputRoot,
@@ -463,8 +516,10 @@ export async function renderCloudflareConfigFromEnv(env = process.env) {
     deploymentEnvironment: env.SAVIA_DEPLOY_ENVIRONMENT,
     openrouterModel: env.OPENROUTER_MODEL,
     authD1Id: env.SAVIA_AUTH_D1_ID,
+    authDatabaseName: env.SAVIA_AUTH_D1_NAME,
     documentsBucket: env.SAVIA_DOCUMENTS_BUCKET,
     domainD1Id: env.SAVIA_DOMAIN_D1_ID,
+    domainDatabaseName: env.SAVIA_DOMAIN_D1_NAME,
     pagesSearchIndex: env.SAVIA_PAGES_SEARCH_INDEX,
     flowsExecutionEnabled: env.SAVIA_FLOWS_EXECUTION_ENABLED === "true",
     flowsResources: env.SAVIA_FLOWS_RESOURCES

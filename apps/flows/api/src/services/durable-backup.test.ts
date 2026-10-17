@@ -3,8 +3,12 @@ import { describe, expect, it } from "vitest";
 import type { Bindings } from "../context";
 import {
   assertPausedMaintenance,
+  exportWorkflowBackupPage,
   exportSqlPage,
+  restoreWorkflowBackupPage,
   restoreSqlPage,
+  type WorkflowBackupCursor,
+  type WorkflowBackupPage,
   type SqlBackupPage,
 } from "./durable-backup";
 const bindings = env as Bindings;
@@ -93,6 +97,213 @@ describe("Durable Object backup", () => {
       expect(() =>
         restoreSqlPage(state.storage, pages[0], true, false),
       ).toThrow("empty");
+    });
+  });
+
+  it("round trips WorkflowAgent SQLite and typed KV pages in a real DO", async () => {
+    const workflowAgent = bindings.WORKFLOW_AGENT.get(
+      bindings.WORKFLOW_AGENT.idFromName(
+        `backup-workflow-${crypto.randomUUID()}`,
+      ),
+    );
+    const pages = await runInDurableObject(
+      workflowAgent,
+      async (_instance, state) => {
+        state.storage.sql.exec(
+          "CREATE TABLE gen_runs (id TEXT PRIMARY KEY, payload TEXT)",
+        );
+        state.storage.sql.exec(
+          "INSERT INTO gen_runs VALUES (?, ?)",
+          "run-1",
+          "persisted generation state",
+        );
+        await state.storage.put("execbuf:run-1", {
+          startedAt: 123,
+          result: new Uint8Array([0, 7, 255]),
+        });
+        await state.storage.put("form:token-1:schema", { fields: ["name"] });
+        await state.storage.put(
+          "fform:token-1:config",
+          new Map([["enabled", true]]),
+        );
+        for (let index = 0; index < 135; index++)
+          await state.storage.put(
+            `form:bulk:${index.toString().padStart(3, "0")}`,
+            {
+              index,
+            },
+          );
+        // The prior WorkflowAgent SQL-only exporter omitted these durable keys.
+        expect(JSON.stringify(exportSqlPage(state.storage.sql))).not.toContain(
+          "execbuf:run-1",
+        );
+        const result: WorkflowBackupPage[] = [];
+        let cursor: WorkflowBackupCursor | undefined;
+        for (;;) {
+          const page = await exportWorkflowBackupPage(state.storage, cursor);
+          result.push(page);
+          if (!page.next) break;
+          cursor = page.next;
+        }
+        return result;
+      },
+    );
+    const sqlPages = pages.filter((page) => page.storage === "sql");
+    const kvPages = pages.filter((page) => page.storage === "kv");
+    expect(sqlPages.length).toBeGreaterThan(1);
+    expect(kvPages.length).toBeGreaterThan(1);
+    expect(
+      kvPages.every(
+        (page) => page.storage === "kv" && page.data.entries.length <= 128,
+      ),
+    ).toBe(true);
+    expect(pages.at(-1)?.storage).toBe("kv");
+    expect(
+      pages.slice(0, sqlPages.length).every((page) => page.storage === "sql"),
+    ).toBe(true);
+    const finalSql = sqlPages.at(-1)!;
+    expect(finalSql.segmentLast).toBe(true);
+    expect(finalSql.next).toEqual({ storage: "kv", page: 0 });
+    expect(kvPages[0].segmentFirst).toBe(true);
+    expect(pages.at(-1)?.segmentLast).toBe(true);
+    expect(kvPages.map((page) => page.segmentPage)).toEqual([0, 1]);
+
+    const target = bindings.WORKFLOW_AGENT.get(
+      bindings.WORKFLOW_AGENT.idFromName(
+        `restore-workflow-${crypto.randomUUID()}`,
+      ),
+    );
+    await runInDurableObject(target, async (_instance, state) => {
+      for (let index = 0; index < pages.length; index++) {
+        const page = pages[index];
+        if (page.storage === "sql" && page.segmentLast) {
+          const firstSqlPage = pages.find(
+            (candidate) => candidate.storage === "sql",
+          )!;
+          page.data.schema = firstSqlPage.data.schema;
+          page.data.sqliteSequence = firstSqlPage.data.sqliteSequence;
+        }
+        restoreWorkflowBackupPage(state.storage, page, {
+          snapshotId: "workflow-snapshot",
+          page: index,
+          sha256: (index ? "b" : "a").repeat(64),
+        });
+      }
+      expect(
+        state.storage.sql
+          .exec("SELECT payload FROM gen_runs WHERE id=?", "run-1")
+          .one().payload,
+      ).toBe("persisted generation state");
+      expect(await state.storage.get("execbuf:run-1")).toEqual({
+        startedAt: 123,
+        result: new Uint8Array([0, 7, 255]),
+      });
+      expect(await state.storage.get("form:token-1:schema")).toEqual({
+        fields: ["name"],
+      });
+      expect(await state.storage.get("fform:token-1:config")).toEqual(
+        new Map([["enabled", true]]),
+      );
+      expect(() =>
+        restoreWorkflowBackupPage(state.storage, pages[0], {
+          snapshotId: "workflow-snapshot",
+          page: 0,
+          sha256: "a".repeat(64),
+        }),
+      ).not.toThrow();
+    });
+  });
+
+  it("keeps mixed restore ordered and idempotent across the SQLite to KV transition", async () => {
+    const source = await runInDurableObject(
+      fresh(),
+      async (_instance, state) => {
+        state.storage.sql.exec("CREATE TABLE records (id INTEGER PRIMARY KEY)");
+        state.storage.sql.exec("INSERT INTO records VALUES (1)");
+        await state.storage.put("form:one", { ok: true });
+        const sql = await exportWorkflowBackupPage(state.storage);
+        const kv = await exportWorkflowBackupPage(state.storage, sql.next!);
+        return [sql, kv] as const;
+      },
+    );
+    const target = fresh();
+    const checkpoint = (page: number, hash: string) => ({
+      snapshotId: "ordered-workflow-snapshot",
+      page,
+      sha256: hash.repeat(64),
+    });
+    await runInDurableObject(target, (_instance, state) => {
+      expect(() =>
+        restoreWorkflowBackupPage(state.storage, source[1], checkpoint(1, "b")),
+      ).toThrow("order");
+      restoreWorkflowBackupPage(state.storage, source[0], checkpoint(0, "a"));
+      expect(() =>
+        restoreWorkflowBackupPage(state.storage, source[0], checkpoint(0, "a")),
+      ).not.toThrow();
+      restoreWorkflowBackupPage(state.storage, source[1], checkpoint(1, "b"));
+      expect(() =>
+        restoreWorkflowBackupPage(state.storage, source[0], checkpoint(2, "c")),
+      ).toThrow("KV");
+    });
+  });
+
+  it("does not change foreign-key mode when replaying completed first SQL pages", () => {
+    const checkpoint = {
+      snapshotId: "completed-snapshot",
+      page: 0,
+      sha256: "c".repeat(64),
+    };
+    const statements: string[] = [];
+    const sql = {
+      exec(statement: string) {
+        statements.push(statement);
+        return {
+          toArray: () =>
+            statement.includes("sqlite_master")
+              ? [{ present: 1 }]
+              : [{ sha256: checkpoint.sha256 }],
+        };
+      },
+    };
+    const storage = {
+      sql,
+      transactionSync: (operation: () => unknown) => operation(),
+      kv: { list: () => [] },
+    } as unknown as Parameters<typeof restoreSqlPage>[0];
+    const sqlPage: SqlBackupPage = {
+      version: 1,
+      rows: [],
+      next: { table: 0, offset: 1 },
+    };
+    restoreSqlPage(storage, sqlPage, true, false, checkpoint);
+    expect(statements).not.toContain("PRAGMA foreign_keys = OFF");
+
+    statements.length = 0;
+    const workflowPage: WorkflowBackupPage = {
+      version: 1,
+      storage: "sql",
+      segmentPage: 0,
+      segmentFirst: true,
+      segmentLast: false,
+      data: sqlPage,
+      next: {
+        storage: "sql",
+        page: 1,
+        cursor: sqlPage.next!,
+      },
+    };
+    restoreWorkflowBackupPage(storage, workflowPage, checkpoint);
+    expect(statements).not.toContain("PRAGMA foreign_keys = OFF");
+  });
+
+  it("includes application names that only resemble SQLite or Cloudflare tables", async () => {
+    await runInDurableObject(fresh(), (_instance, state) => {
+      state.storage.sql.exec("CREATE TABLE sqlitexdata (id INTEGER)");
+      state.storage.sql.exec("CREATE TABLE XcfYapp (id INTEGER)");
+      const page = exportSqlPage(state.storage.sql);
+      expect(page.schema?.map(({ name }) => name)).toEqual(
+        expect.arrayContaining(["sqlitexdata", "XcfYapp"]),
+      );
     });
   });
 

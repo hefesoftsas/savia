@@ -64,6 +64,45 @@ describe("pulumi naming", () => {
     });
   });
 
+  it("allows explicit adopted D1 names in production without changing preview", () => {
+    const adopted = resolveInfraNames({
+      environment: "production",
+      documentsBucket: "savia-documents",
+      publicOrigin: "https://savia.app.hefesoft.com",
+      authDatabaseName: "savia-auth-local-canonical-20260913-v2",
+      domainDatabaseName: "savia-agencies-local-canonical-20260913-v2",
+    });
+    assert.deepEqual(adopted.databases, {
+      auth: "savia-auth-local-canonical-20260913-v2",
+      domain: "savia-agencies-local-canonical-20260913-v2",
+    });
+    assert.throws(
+      () =>
+        resolveInfraNames({
+          environment: "preview",
+          documentsBucket: "savia-documents-preview",
+          publicOrigin: PREVIEW_PUBLIC_ORIGIN,
+          authDatabaseName: "savia-auth-local-canonical-20260913-v2",
+        }),
+      /production only/i,
+    );
+    for (const override of [
+      { authDatabaseName: "savia-auth-preview" },
+      { authDatabaseName: "savia-auth-preview-pr-42" },
+      { authDatabaseName: "bad/name" },
+      { authDatabaseName: "same", domainDatabaseName: "same" },
+    ]) {
+      assert.throws(() =>
+        resolveInfraNames({
+          environment: "production",
+          documentsBucket: "savia-documents",
+          publicOrigin: "https://savia.app.hefesoft.com",
+          ...override,
+        }),
+      );
+    }
+  });
+
   it("rejects preview sharing the production bucket or origin", () => {
     assert.throws(() =>
       resolveInfraNames({
@@ -124,7 +163,9 @@ describe("pulumi naming", () => {
       names,
     });
     assert.equal(env.SAVIA_AUTH_D1_ID, "auth-uuid");
+    assert.equal(env.SAVIA_AUTH_D1_NAME, "savia-auth");
     assert.equal(env.SAVIA_DOMAIN_D1_ID, "domain-uuid");
+    assert.equal(env.SAVIA_DOMAIN_D1_NAME, "savia-agencies");
     assert.equal(env.SAVIA_DOCUMENTS_BUCKET, "savia-documents");
   });
   it("protects production stacks and keeps preview cheap to destroy", () => {

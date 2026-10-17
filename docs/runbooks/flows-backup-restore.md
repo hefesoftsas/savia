@@ -64,17 +64,36 @@ someone replacing both payloads and their hashes.
 
 The stack must remain paused until the exports finish. A coherent backup needs
 the D1 export, R2 inventory, and runtime page inventory to describe the same
-quiescent state. Table-dump fallback also requires the explicit confirmation
-and is disabled for production.
+quiescent state. Preview table-dump fallback requires explicit quiescence confirmation.
+Production schema-bearing dumps additionally require unchanged live Time Travel bookmarks
+and the complete backup boundary described in
+[pulumi-infrastructure.md](pulumi-infrastructure.md#backups-data-not-just-infra).
+Concurrent writes invalidate the capture even if an operator supplied
+`--confirm-quiescent production`; that flag alone cannot establish consistency.
+Production release and daily archives use `SAVIA_BACKUP_KEY`; the legacy preview
+encryption command also accepts `SAVIA_FLOWS_BACKUP_KEY`. Preserve both stable
+keys independently of the archives. Daily CI does not publish code to pause a
+running Flows service: arrange a maintenance window first. Production deploys
+perform the explicit pause/snapshot sequence before their backup.
 
-Runtime snapshot version 2 declares coverage for all five Durable Object kinds:
-DatabaseDO and MailboxDO SQL, WorkflowAgent generation/editor SQL, AgentRunner
-run/state SQL, and EmailAgentRunner typed KV. The logical-name registry preserves
-agent targets after a workflow definition is deleted. Version-1 runtime
-snapshots are rejected because they cannot establish this coverage. This is
-separate from the outer D1/R2 archive manifest, which retains its version-1
-compatibility. The preview inventory is capped at 1,000 entries and every encoded
-page at 512 KiB; exceeding either cap fails backup before migrations.
+Runtime snapshot version 3 declares the storage coverage of all five Durable
+Object kinds: DatabaseDO and MailboxDO SQLite, WorkflowAgent SQLite **and typed
+KV**, AgentRunner SQLite, and EmailAgentRunner typed KV. WorkflowAgent pages
+export SQL first, then bounded KV pages (128 keys maximum); restore enforces
+segment order and commits each page with its replay checkpoint atomically.
+Schema inventory uses exact internal-name prefixes so similarly named user tables
+are retained. Replaying an applied page checks its checkpoint before attempting
+any storage changes. The maintenance-route integration test verifies SQL and KV
+segments, index/trigger restoration, AUTOINCREMENT sequence, and page replay.
+This includes execution buffers, form state, and submission/deduplication keys
+that SQL-only snapshots omitted. The logical-name registry preserves agent targets
+after a workflow definition is deleted. Runtime versions 1 and 2 are rejected
+because they cannot establish complete coverage. The producer and maintenance
+client must be promoted together before taking new Flows snapshots. This is
+separate from the outer D1/R2 archive manifest, which stays version 2 and retains
+its documented version-1 compatibility. The preview inventory is capped at 1,000
+entries and every encoded page at 512 KiB; exceeding either cap fails backup
+before migrations.
 
 Each generated Worker manifest carries a policy generation. Re-render before
 each deployment: a newer generation may deliberately resume execution, while

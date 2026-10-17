@@ -1,6 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import * as stackOutputs from "./outputs.mjs";
+import { resolveInfraNames } from "./naming.mjs";
 const { parseStackOutputs, renderEnvFromOutputs } = stackOutputs;
 
 const OUTPUTS = {
@@ -93,6 +94,48 @@ describe("pulumi stack outputs", () => {
   it("parses and validates required outputs", () => {
     const parsed = parseStackOutputs(JSON.stringify(OUTPUTS));
     assert.equal(parsed.documentsBucketName, "savia-documents-preview");
+  });
+
+  it("accepts validated adopted production D1 names and exports them to rendering", () => {
+    const adoptedNames = resolveInfraNames({
+      environment: "production",
+      documentsBucket: "savia-documents",
+      publicOrigin: "https://savia.app.hefesoft.com",
+      authDatabaseName: "savia-auth-local-canonical-20260913-v2",
+      domainDatabaseName: "savia-agencies-local-canonical-20260913-v2",
+    });
+    const production = {
+      ...OUTPUTS,
+      documentsBucketName: adoptedNames.bucket,
+      resolvedEnvironment: "production",
+      resolvedPublicOrigin: adoptedNames.publicOrigin,
+      workerNames: adoptedNames.workers,
+      databaseNames: adoptedNames.databases,
+      plannedFlowsResourceNames: adoptedNames.flows,
+    };
+    const parsed = parseStackOutputs(JSON.stringify(production));
+    const env = renderEnvFromOutputs(parsed, "/repo");
+    assert.equal(
+      env.SAVIA_AUTH_D1_NAME,
+      "savia-auth-local-canonical-20260913-v2",
+    );
+    assert.equal(
+      env.SAVIA_DOMAIN_D1_NAME,
+      "savia-agencies-local-canonical-20260913-v2",
+    );
+    assert.throws(
+      () =>
+        parseStackOutputs(
+          JSON.stringify({
+            ...production,
+            databaseNames: {
+              auth: "savia-auth-preview",
+              domain: "savia-agencies-local-canonical-20260913-v2",
+            },
+          }),
+        ),
+      /preview database/i,
+    );
   });
 
   it("rejects invalid JSON and missing keys", () => {

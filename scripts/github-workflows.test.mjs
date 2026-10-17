@@ -84,7 +84,7 @@ test("production deployment is limited to main and has ordered Worker stages", a
   );
   assert.match(
     deploy,
-    /Apply Savia domain migrations[\s\S]*?Deploy private QuickJS hook executor[\s\S]*?Deploy private Savia request[\s\S]*?Deploy savia-agencies/,
+    /Apply Savia domain migrations[\s\S]*?Deploy private QuickJS hook executor[\s\S]*?Deploy savia-agencies[\s\S]*?Deploy savia-auth[\s\S]*?Deploy private Savia request/,
   );
   assert.match(deploy, /upload-cloudflare-secrets\.mjs/);
   assert.doesNotMatch(deploy, /\n\s+secrets:/);

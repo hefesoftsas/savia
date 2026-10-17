@@ -312,7 +312,7 @@ describe("pulumi backup", () => {
     assert.match(hashes["d1/flows.sql"], /^[a-f0-9]{64}$/);
   });
 
-  it("requires explicit quiescence for fallback and disables it for production", () => {
+  it("requires explicit preview quiescence and verified production consistency", () => {
     assert.throws(
       () => assertSafeTableDumpFallback("preview", null),
       /confirm-quiescent/,
@@ -322,7 +322,10 @@ describe("pulumi backup", () => {
     );
     assert.throws(
       () => assertSafeTableDumpFallback("production", "production"),
-      /production.*disabled/i,
+      /verified recovery boundary/i,
+    );
+    assert.doesNotThrow(() =>
+      assertSafeTableDumpFallback("production", null, true),
     );
   });
 

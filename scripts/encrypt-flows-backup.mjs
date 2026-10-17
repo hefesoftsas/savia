@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 const MAGIC = Buffer.from("SAVIAFB1");
 export async function encryptBackup(input, output, keyHex, decrypt = false) {
   if (!/^[a-f0-9]{64}$/i.test(keyHex ?? ""))
-    throw new Error("SAVIA_FLOWS_BACKUP_KEY must be a 256-bit hex key");
+    throw new Error("Backup key must be a 256-bit hex key");
   if (input === output) throw new Error("Backup input and output must differ");
   const key = Buffer.from(keyHex, "hex");
   const destination = await open(output, "wx", 0o600);
@@ -77,7 +77,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   encryptBackup(
     value("--input"),
     value("--output"),
-    process.env.SAVIA_FLOWS_BACKUP_KEY,
+    process.env.SAVIA_BACKUP_KEY ?? process.env.SAVIA_FLOWS_BACKUP_KEY,
     action === "decrypt",
   ).catch(() => {
     console.error("Backup encryption or integrity verification failed");

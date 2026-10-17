@@ -12,9 +12,9 @@ import {
 const content = "flows-do-page";
 const sha256 = createHash("sha256").update(content).digest("hex");
 const snapshot = {
-  version: 2,
+  version: 3,
   coverage: {
-    version: 2,
+    version: 3,
     kinds: [
       "database",
       "mailbox",
@@ -22,6 +22,13 @@ const snapshot = {
       "agent-runner",
       "email-agent-runner",
     ],
+    storage: {
+      database: ["sqlite"],
+      mailbox: ["sqlite"],
+      "workflow-agent": ["sqlite", "kv"],
+      "agent-runner": ["sqlite"],
+      "email-agent-runner": ["kv"],
+    },
   },
   id: "snap-preview-001",
   createdAt: "2026-10-12T12:00:00.000Z",
@@ -42,6 +49,27 @@ const snapshot = {
 };
 
 describe("Flows runtime snapshot manifest", () => {
+  it("rejects SQL-only v2 snapshots and v3 snapshots missing WorkflowAgent KV coverage", () => {
+    assert.throws(
+      () => validateFlowsSnapshotManifest({ ...snapshot, version: 2 }),
+      /version/,
+    );
+    assert.throws(
+      () =>
+        validateFlowsSnapshotManifest({
+          ...snapshot,
+          coverage: {
+            ...snapshot.coverage,
+            storage: {
+              ...snapshot.coverage.storage,
+              "workflow-agent": ["sqlite"],
+            },
+          },
+        }),
+      /complete persistence coverage/,
+    );
+  });
+
   it("accepts complete paused snapshots and rejects incomplete or unsafe inventories", () => {
     assert.deepEqual(validateFlowsSnapshotManifest(snapshot), snapshot);
     assert.throws(

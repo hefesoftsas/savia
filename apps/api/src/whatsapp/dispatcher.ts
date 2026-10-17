@@ -1,5 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
 import { processWhatsappEventBatch, type RuntimeEnvironment } from "../runtime";
+import { guardStorageEnvironment } from "../../../../packages/backup-gate/index.mjs";
 import {
   nextWhatsappWake,
   usesWhatsappEvents,
@@ -8,6 +9,10 @@ import {
 
 /** One coordinator per conversation. D1 remains the job and result store. */
 export class WhatsappDispatcher extends DurableObject<RuntimeEnvironment> {
+  constructor(ctx: DurableObjectState, env: RuntimeEnvironment) {
+    super(ctx, guardStorageEnvironment(env));
+  }
+
   protected processBatch(scope: WhatsappQueueScope): Promise<boolean> {
     return processWhatsappEventBatch(this.env, scope);
   }

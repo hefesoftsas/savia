@@ -37,15 +37,36 @@ export function workerConfig(
 
 const execFileAsync = promisify(execFile);
 const workspaceRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const APPS = ["auth", "hookExecutor", "request", "mcp", "api", "gateway"];
+const APPS = [
+  "auth",
+  "hookExecutor",
+  "request",
+  "connectorGateway",
+  "mcp",
+  "api",
+  "gateway",
+];
 const WORKER_APP = {
   auth: "auth",
   request: "savia-request",
   hookExecutor: "hook-executor",
+  connectorGateway: "connector-gateway",
   mcp: "mcp",
   api: "api",
   gateway: "admin",
 };
+
+export function workerDeploymentOrder(kinds) {
+  return [
+    "auth",
+    "hookExecutor",
+    "request",
+    "connectorGateway",
+    "mcp",
+    "api",
+    "gateway",
+  ].filter((kind) => kinds.includes(kind));
+}
 
 export function execFileWithInput(
   executable,
@@ -96,10 +117,12 @@ export function execFileWithInput(
 const WORKER_SECRETS = {
   auth: ["BETTER_AUTH_SECRET", "SAVIA_INTERNAL_BRIDGE_KEY"],
   hookExecutor: [],
+  connectorGateway: ["EXTENSION_CONNECTIONS_ENCRYPTION_KEY"],
   request: ["ENCRYPTION_KEY"],
   mcp: ["SAVIA_MCP_SHARED_SECRET"],
   api: [
     "ASSISTANT_SETTINGS_ENCRYPTION_KEY",
+    "EXTENSION_CONNECTIONS_ENCRYPTION_KEY",
     "STUDIO_INTEGRATION_KEY",
     "SAVIA_MCP_SHARED_SECRET",
     "SAVIA_INTERNAL_BRIDGE_KEY",
@@ -203,6 +226,7 @@ async function main() {
     ASSISTANT_SETTINGS_ENCRYPTION_KEY: ephemeralSecret(),
     STUDIO_INTEGRATION_KEY: ephemeralSecret(),
     SAVIA_MCP_SHARED_SECRET: ephemeralSecret(),
+    EXTENSION_CONNECTIONS_ENCRYPTION_KEY: ephemeralSecret(),
   };
   secrets.SAVIA_INTERNAL_BRIDGE_KEY = createHmac(
     "sha256",
@@ -255,8 +279,8 @@ async function main() {
     }
   };
 
-  for (const kind of ["auth", "hookExecutor", "request", "mcp", "api"]) {
-    if (kinds.includes(kind)) results.push(await deploy(kind));
+  for (const kind of workerDeploymentOrder(kinds)) {
+    if (kind !== "gateway") results.push(await deploy(kind));
   }
   const apiDeployment = results.find((result) => result.kind === "api");
   if (apiDeployment?.ok) {
