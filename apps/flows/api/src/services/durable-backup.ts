@@ -200,7 +200,7 @@ export async function exportKvPage(
   const entries: KvBackupPage["entries"] = [];
   let bytes = 0;
   for (const [key, value] of rows) {
-    if (key === "__savia_backup_restore") continue;
+    if (key === "__savia_backup_restore" || key === "__ps_name") continue;
     if (entries.length >= PAGE_ROWS) break;
     const entry = { key, value: encodeKvValue(value) };
     const size = new TextEncoder().encode(JSON.stringify(entry)).byteLength;
@@ -214,7 +214,10 @@ export async function exportKvPage(
   const hasMore =
     lastKey !== undefined &&
     [...rows.keys()].some(
-      (key) => key !== "__savia_backup_restore" && key > lastKey,
+      (key) =>
+        key !== "__savia_backup_restore" &&
+        key !== "__ps_name" &&
+        key > lastKey,
     );
   return boundedPage<KvBackupPage>({
     version: 1,
@@ -485,6 +488,19 @@ function assertEmptySqlTarget(
     throw new Error("Restore target must be empty");
 }
 
+function assertEmptyWorkflowKvTarget(storage: DurableObjectStorage): void {
+  const entries = [...storage.kv.list({ limit: 2 })];
+  // PartyServer initializes every named object with this fallback identity
+  // record. It is platform metadata, not application state to restore over.
+  const hasOnlyPartyServerName =
+    entries.length === 1 &&
+    entries[0][0] === "__ps_name" &&
+    typeof entries[0][1] === "string" &&
+    entries[0][1].length > 0;
+  if (entries.length > 0 && !hasOnlyPartyServerName)
+    throw new Error("Restore target must be empty");
+}
+
 function restoreSqlData(
   sql: SqlStorage,
   page: SqlBackupPage,
@@ -704,8 +720,7 @@ export function restoreWorkflowBackupPage(
         if (page.storage !== "sql" || page.segmentPage !== 0)
           throw new Error("Workflow restore must begin with SQLite page zero");
         assertEmptySqlTarget(sql, page.data.schema);
-        if ([...storage.kv.list({ limit: 1 })].length > 0)
-          throw new Error("Restore target must be empty");
+        assertEmptyWorkflowKvTarget(storage);
       } else if (page.storage === "sql") {
         if (
           previous.storage !== "sql" ||
@@ -732,7 +747,7 @@ export function restoreWorkflowBackupPage(
             !entry ||
             typeof entry.key !== "string" ||
             !entry.key.length ||
-            entry.key === "__savia_backup_restore"
+            ["__savia_backup_restore", "__ps_name"].includes(entry.key)
           )
             throw new Error("Invalid KV backup entry");
           if (

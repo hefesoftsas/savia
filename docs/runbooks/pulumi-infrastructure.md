@@ -282,7 +282,8 @@ missing adoption/credentials, or unavailable Time Travel bookmarks fail the job.
 Investigate failures and retry in a controlled maintenance window. A configured
 schedule is not a verified RPO: monitor successful artifacts and rehearse recovery.
 
-Production's FTS5 fallback now preserves source schema with method `schema-dump`.
+Production captures both Auth and domain through read-only D1 queries using method
+`schema-dump`; it does not call the native export endpoint, which requires D1 Write.
 This includes the nine retired tables and the historical `d1_migrations` ledger.
 Current migration seeds can conflict with historical production role IDs, so a
 schema dump restores into a verified empty target without running current
@@ -293,8 +294,8 @@ readiness report for the evidence and activation prerequisites.
 Manual commands (each capture must use a new output directory):
 
 ```sh
-node backup.mjs --stack production --apply            # D1 exports + verified R2 copies
-node backup.mjs --stack production --apply --skip-r2  # D1-only
+node ../../scripts/production-backup-gate.mjs --stack production --apply # Full gated copy
+node ../../scripts/production-backup-gate.mjs --stack production --apply --skip-r2 # D1-only
 # Preview FTS fallback requires explicitly stopping writes:
 node backup.mjs --stack preview --apply --confirm-quiescent preview
 ```
@@ -304,8 +305,8 @@ Databases with FTS5 virtual tables cannot use `wrangler d1 export`
 Preview can use the table dump after `--confirm-quiescent preview`.
 Production captures exact database identities and current
 [Time Travel bookmarks](https://developers.cloudflare.com/api/resources/d1/subresources/database/subresources/time_travel/methods/get_bookmark/)
-before copying, then checks them again after all D1 and R2 capture. A production
-FTS5 fallback additionally checks its own before/after bookmark. Complete R2
+before copying, then checks them again after all D1 and R2 capture. Each production
+schema dump additionally checks its own before/after bookmark. Complete R2
 inventories, including metadata and ETags, must also remain unchanged across the
 capture. The API download pins each object to its listed ETag and verifies its
 byte size. Concurrent changes or unverifiable targets invalidate the backup;
@@ -331,7 +332,8 @@ applying newer migrations or reconnecting traffic.
 
 Legacy/preview `table-dump` files still require migrations before replay; their
 retired/ledger CREATE statements preserve historical tables absent those migrations.
-Auth fallback remains refused; native auth exports retain their full schema.
+Legacy Auth table-dump fallback remains refused. Production Auth schema dumps
+retain the original tables, indexes and triggers and restore into an empty target.
 Dumps contain no BEGIN/COMMIT statements because D1 provides the import transaction.
 
 Manifests land in `infra/pulumi/backups/<stack>/<timestamp>/` (gitignored).

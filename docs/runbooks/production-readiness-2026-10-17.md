@@ -2,15 +2,15 @@
 
 Owner: infrastructure. Review date: 2026-10-17.
 
-This is a dated observation, not a deployment approval. A later follow-up on the
-same date resolved local archival restore compatibility and prepared unattended
-capture/freshness workflows; see **Follow-up recovery validation** below. The
-initial observations remain recorded to distinguish failed attempts from later
-validated results. No infrastructure apply,
-Worker publication, migration, production restore, or workflow dispatch occurred.
-Cloudflare OAuth was renewed with the existing scope set. A stable recovery key
-was generated and uploaded as the GitHub `production` environment secret
-`SAVIA_BACKUP_KEY`; its independent recovery copy remains outside the repository.
+This report records successive observations and follow-ups on the same date.
+The user subsequently authorized activation; see **Activation authorized and
+started** for the current rollout evidence. Earlier sections describe their
+original observation time, including failed attempts and then-pending actions.
+The activation created the protected state bucket, moved the adopted checkpoint
+to the remote backend, configured the dedicated backup environment and deployed
+a narrow storage guard around the existing production bundles. No production D1
+migration or SQL restoration was applied. Independent recovery keys remain
+outside the repository.
 
 ## Verified live identities
 
@@ -334,3 +334,10 @@ compiles on Cloudflare before activation. The new standalone coordinator owns it
 own migration lineage, avoiding unrelated API/WhatsApp DO migrations. No D1
 migration or data restoration runs as part of this cutover. The operational
 journal and rollback version IDs are kept in the ignored private evidence folder.
+
+Production capture now uses full `schema-dump` queries for **both** Auth and domain.
+The native D1 export endpoint requires D1 Write, so it is deliberately excluded
+from unattended production backups. The daily token retains D1 Read only;
+source-schema preservation, inner/outer Time Travel boundaries, full R2 inventory
+verification and the renewable writer barrier remain mandatory. Preview native
+exports and the refusal of legacy Auth table dumps are unchanged.

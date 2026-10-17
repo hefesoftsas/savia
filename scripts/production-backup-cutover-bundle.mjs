@@ -16,6 +16,59 @@ function boundaryFrom(contentType) {
   return match[1] ?? match[2];
 }
 
+function dispositionName(headerLines) {
+  const line = headerLines.find((value) =>
+    value.toLowerCase().startsWith("content-disposition:"),
+  );
+  if (!line) return undefined;
+  const value = line.slice(line.indexOf(":") + 1);
+  let cursor = 0;
+  while (cursor < value.length) {
+    while (cursor < value.length && /[\s;]/.test(value[cursor])) cursor += 1;
+    const keyStart = cursor;
+    while (
+      cursor < value.length &&
+      value[cursor] !== "=" &&
+      value[cursor] !== ";"
+    )
+      cursor += 1;
+    if (cursor >= value.length || value[cursor] !== "=") {
+      while (cursor < value.length && value[cursor] !== ";") cursor += 1;
+      continue;
+    }
+    const key = value.slice(keyStart, cursor).trim().toLowerCase();
+    cursor += 1;
+    while (cursor < value.length && /\s/.test(value[cursor])) cursor += 1;
+    let parameter = "";
+    if (value[cursor] === '"') {
+      cursor += 1;
+      let closed = false;
+      while (cursor < value.length) {
+        const char = value[cursor];
+        if (char === '"') {
+          cursor += 1;
+          closed = true;
+          break;
+        }
+        if (char === "\\") {
+          cursor += 1;
+          if (cursor >= value.length) return undefined;
+        }
+        parameter += value[cursor];
+        cursor += 1;
+      }
+      if (!closed) return undefined;
+    } else {
+      const start = cursor;
+      while (cursor < value.length && value[cursor] !== ";") cursor += 1;
+      parameter = value.slice(start, cursor).trim();
+    }
+    if (key === "name") return parameter;
+    while (cursor < value.length && value[cursor] !== ";") cursor += 1;
+  }
+  return undefined;
+}
+
 function readRawParts(buffer, boundary) {
   const marker = Buffer.from(`--${boundary}`);
   const delimiter = Buffer.from(`\r\n--${boundary}`);
@@ -33,20 +86,22 @@ function readRawParts(buffer, boundary) {
     if (headerEnd < 0)
       throw new Error("Worker bundle has incomplete part headers");
     const headerText = buffer.subarray(cursor, headerEnd).toString("latin1");
-    const name =
-      /(?:^|\r\n)Content-Disposition:[^\r\n]*\bname="((?:\\.|[^"])*)"/i.exec(
-        headerText,
-      )?.[1];
+    const headerLines = headerText.split("\r\n");
+    const name = dispositionName(headerLines);
     if (!name) throw new Error("Worker bundle part is missing its field name");
-    const type = /(?:^|\r\n)Content-Type:\s*([^\r\n;]+)/i
-      .exec(headerText)?.[1]
-      ?.trim();
+    const contentTypeLine = headerLines.find((line) =>
+      line.toLowerCase().startsWith("content-type:"),
+    );
+    const type = contentTypeLine
+      ?.slice(contentTypeLine.indexOf(":") + 1)
+      .trim()
+      .split(";", 1)[0];
     const payloadStart = headerEnd + 4;
     const payloadEnd = buffer.indexOf(delimiter, payloadStart);
     if (payloadEnd < 0)
       throw new Error("Worker bundle has an unterminated part");
     parts.push({
-      name: name.replace(/\\(.)/g, "$1"),
+      name,
       type: type || null,
       bytes: buffer.subarray(payloadStart, payloadEnd),
     });
@@ -66,10 +121,10 @@ function inferType(name) {
 export async function parseWorkerBundle(buffer, contentType) {
   const bytes = Buffer.from(buffer);
   const boundary = boundaryFrom(contentType);
+  const rawParts = readRawParts(bytes, boundary);
   const form = await new Response(bytes, {
     headers: { "Content-Type": contentType },
   }).formData();
-  const rawParts = readRawParts(bytes, boundary);
   const parsed = [];
   for (const [name, value] of form.entries()) {
     const rawIndex = rawParts.findIndex(

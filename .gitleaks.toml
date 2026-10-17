@@ -72,3 +72,10 @@ condition = "AND"
 paths = ['''^apps/flows/packages/runtime/src/form-token\.test\.ts$''']
 regexTarget = "secret"
 regexes = ['''^test-signing-key-0123456789$''']
+
+[[allowlists]]
+description = "Literal invalid D1 UUID placeholder in production preflight tests"
+condition = "AND"
+paths = ['''^infra/pulumi/production-preflight\.test\.mjs$''']
+regexTarget = "secret"
+regexes = ['''^REPLACE_WITH_D1_ID$''']

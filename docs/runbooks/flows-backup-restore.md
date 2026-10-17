@@ -238,3 +238,8 @@ service activation is required.
 Each raw download has a five-minute inactivity timeout that resets as bytes
 arrive. The preview deployment job retains its 40-minute overall deadline;
 slow but progressing objects are not aborted by a per-object wall-clock timer.
+
+Workflow-agent restores accept an otherwise empty target containing only
+PartyServer's nonempty `__ps_name` bootstrap identity. That platform key is
+excluded from KV exports and rejected in restore pages; the target keeps its own
+identity. Any other pre-existing KV data still causes refusal before replay.

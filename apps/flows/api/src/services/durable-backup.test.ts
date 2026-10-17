@@ -157,6 +157,13 @@ describe("Durable Object backup", () => {
         (page) => page.storage === "kv" && page.data.entries.length <= 128,
       ),
     ).toBe(true);
+    expect(
+      kvPages.some(
+        (page) =>
+          page.storage === "kv" &&
+          page.data.entries.some((entry) => entry.key === "__ps_name"),
+      ),
+    ).toBe(false);
     expect(pages.at(-1)?.storage).toBe("kv");
     expect(
       pages.slice(0, sqlPages.length).every((page) => page.storage === "sql"),

@@ -76,6 +76,18 @@ test("parseWorkerBundle fails closed when the JS entry module is ambiguous", asy
   );
 });
 
+test("parseWorkerBundle rejects a long unterminated quoted header in linear time", async () => {
+  const malformed = Buffer.concat([
+    Buffer.from(
+      `--cutover-test-boundary\r\nContent-Disposition: form-data; name="${"\\".repeat(20_000)}\r\n\r\nsource\r\n--cutover-test-boundary--\r\n`,
+    ),
+  ]);
+  await assert.rejects(
+    parseWorkerBundle(malformed, contentType),
+    /missing its field name/i,
+  );
+});
+
 test("buildCutoverUpload rejects application Durable Object bindings", async () => {
   await assert.rejects(
     buildCutoverUpload({

@@ -46,7 +46,7 @@ async function createValidCapture(
       join(plan.outDir, "d1", `${name}.sql`),
       name === outputs.databaseNames.domain
         ? "CREATE TABLE retired_data (value TEXT);\nINSERT INTO retired_data VALUES ('source');\n"
-        : "SELECT 1;\n",
+        : "CREATE TABLE auth_data (value TEXT);\nINSERT INTO auth_data VALUES ('source');\n",
     );
   }
   if (!missingDocumentsR2) {
@@ -62,7 +62,10 @@ async function createValidCapture(
       "savia-auth": "d1/savia-auth.sql",
       "savia-agencies": "d1/savia-agencies.sql",
     },
-    methods: { "savia-auth": "export", "savia-agencies": "schema-dump" },
+    methods: {
+      "savia-auth": "schema-dump",
+      "savia-agencies": "schema-dump",
+    },
     ...(missingAuth
       ? {
           files: { "savia-agencies": "d1/savia-agencies.sql" },
@@ -147,20 +150,23 @@ test("retries only consistency drift in a fresh directory and retains only a ver
     await mkdir(extracted);
     await execFileAsync("tar", ["-xzf", decrypted, "-C", extracted]);
     assert.deepEqual(await readdir(extracted), ["production-backup"]);
-    assert.ok(
-      JSON.parse(
-        await readFile(
-          join(extracted, "production-backup", "manifest.json"),
-          "utf8",
-        ),
-      ).recoveryConsistency,
+    const retainedManifest = JSON.parse(
+      await readFile(
+        join(extracted, "production-backup", "manifest.json"),
+        "utf8",
+      ),
     );
+    assert.ok(retainedManifest.recoveryConsistency);
+    assert.deepEqual(retainedManifest.d1Methods, {
+      "savia-auth": "schema-dump",
+      "savia-agencies": "schema-dump",
+    });
     assert.equal(
       await readFile(
         join(extracted, "production-backup", "d1", "savia-auth.sql"),
         "utf8",
       ),
-      "SELECT 1;\n",
+      "CREATE TABLE auth_data (value TEXT);\nINSERT INTO auth_data VALUES ('source');\n",
     );
     assert.match(
       await readFile(

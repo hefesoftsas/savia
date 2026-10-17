@@ -2,7 +2,8 @@
 // Pulumi recreates empty containers on disaster; this script captures the
 // data. Backups default under infra/pulumi/backups/ (gitignored) together
 // with a manifest.json consumed by restore.mjs.
-// R2 sync uses the S3-compatible API via AWS CLI; D1 uses wrangler export.
+// R2 sync uses the S3-compatible API via AWS CLI; preview D1 uses Wrangler
+// export while production uses a bookmark-verified, restore-ready schema dump.
 import { downloadR2Object } from "./r2-object-download.mjs";
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -599,23 +600,8 @@ export async function createBackup(
       : null;
   for (const dbName of Object.keys(uuidByName)) {
     const outputFile = join(outDir, "d1", `${dbName}.sql`);
-    try {
-      const [command, args] = buildD1ExportCommand(dbName, outputFile);
-      await run(command, args, { cwd: repoRoot });
-      methods[dbName] = "export";
-      console.log(`Exported D1 ${dbName}`);
-    } catch (error) {
-      if (!isVirtualTableExportError(error)) throw error;
-      assertSafeTableDumpFallback(
-        plan.stack,
-        plan.confirmQuiescent,
-        Boolean(boundary),
-      );
-      if (dbName === outputs.databaseNames.auth)
-        throw new Error(
-          "Auth table-dump fallback is unsupported; its schema cannot be reconstructed safely",
-        );
-      const token = env.CLOUDFLARE_API_TOKEN;
+    if (plan.stack === "production") {
+      assertSafeTableDumpFallback(plan.stack, null, Boolean(boundary));
       if (!token || !accountId)
         throw new Error(
           "CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID are required for table dumps",
@@ -627,14 +613,49 @@ export async function createBackup(
         outputFile,
         stack: plan.stack,
         fetchImpl,
-        quiescent:
-          plan.stack !== "production" && plan.confirmQuiescent === plan.stack,
       });
       methods[dbName] = summary.method;
       skipped.push(...summary.skipped);
       console.log(
         `Dumped D1 ${dbName} table-by-table (${summary.tables} tables, ${summary.rows} rows; ${summary.method === "schema-dump" ? "source schema and FTS5 rebuild preserved" : "FTS5 rebuilt from triggers on restore"})`,
       );
+    } else {
+      try {
+        const [command, args] = buildD1ExportCommand(dbName, outputFile);
+        await run(command, args, { cwd: repoRoot });
+        methods[dbName] = "export";
+        console.log(`Exported D1 ${dbName}`);
+      } catch (error) {
+        if (!isVirtualTableExportError(error)) throw error;
+        assertSafeTableDumpFallback(
+          plan.stack,
+          plan.confirmQuiescent,
+          Boolean(boundary),
+        );
+        if (dbName === outputs.databaseNames.auth)
+          throw new Error(
+            "Auth table-dump fallback is unsupported; its schema cannot be reconstructed safely",
+          );
+        const token = env.CLOUDFLARE_API_TOKEN;
+        if (!token || !accountId)
+          throw new Error(
+            "CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID are required for table dumps",
+          );
+        const summary = await dumpDatabase({
+          accountId,
+          uuid: uuidByName[dbName],
+          token,
+          outputFile,
+          stack: plan.stack,
+          fetchImpl,
+          quiescent: plan.confirmQuiescent === plan.stack,
+        });
+        methods[dbName] = summary.method;
+        skipped.push(...summary.skipped);
+        console.log(
+          `Dumped D1 ${dbName} table-by-table (${summary.tables} tables, ${summary.rows} rows; ${summary.method === "schema-dump" ? "source schema and FTS5 rebuild preserved" : "FTS5 rebuilt from triggers on restore"})`,
+        );
+      }
     }
     files[dbName] = backupRelativePath(outDir, outputFile);
   }
