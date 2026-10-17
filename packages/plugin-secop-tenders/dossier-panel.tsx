@@ -8,6 +8,7 @@ import {
   MessageSquare,
   RefreshCw,
   FolderOpen,
+  FolderSync,
   ExternalLink,
   Upload,
   Check,
@@ -95,8 +96,11 @@ const copy = {
     dossierDocuments: "Documentos del expediente",
     showing: "Mostrando ",
     of: " de ",
+    emptyDocuments: "Sin documentos en el expediente",
+    emptyDocumentsHelp:
+      "Todavía no hay archivos registrados. Actualiza el expediente para consultar los documentos disponibles o revisa el catálogo público.",
     captchaHint:
-      ". Un CAPTCHA requiere tu ayuda; no se omiten archivos en silencio. Confirma una extracción solo después de compararla con el original.",
+      "Algunos archivos necesitan tu ayuda para completar la extracción. Revisa el estado de cada documento.",
     moreDocuments: "Cargar más documentos y requisitos",
     legacyDocuments: "Documentos públicos y análisis anteriores por PDF",
     sourcedRequirements: "Requisitos con fuente",
@@ -241,8 +245,11 @@ const copy = {
     dossierDocuments: "Dossier documents",
     showing: "Showing ",
     of: " of ",
+    emptyDocuments: "No documents in this dossier",
+    emptyDocumentsHelp:
+      "No files have been registered yet. Update the dossier to check available documents or browse the public catalog.",
     captchaHint:
-      ". A CAPTCHA needs your help; files are never silently skipped. Confirm an extraction only after comparing it with the original.",
+      "Some files need your help to complete extraction. Check each document’s status.",
     moreDocuments: "Load more documents and requirements",
     legacyDocuments: "Public documents and earlier PDF analyses",
     sourcedRequirements: "Requirements with sources",
@@ -386,8 +393,11 @@ const copy = {
     dossierDocuments: "Documentos do dossiê",
     showing: "Exibindo ",
     of: " de ",
+    emptyDocuments: "Nenhum documento no dossiê",
+    emptyDocumentsHelp:
+      "Ainda não há arquivos registrados. Atualize o dossiê para consultar os documentos disponíveis ou veja o catálogo público.",
     captchaHint:
-      ". Um CAPTCHA precisa da sua ajuda; nenhum arquivo é ignorado sem aviso. Confirme uma extração somente depois de compará-la com o original.",
+      "Alguns arquivos precisam da sua ajuda para concluir a extração. Confira o estado de cada documento.",
     moreDocuments: "Carregar mais documentos e requisitos",
     legacyDocuments: "Documentos públicos e análises anteriores de PDF",
     sourcedRequirements: "Requisitos com fonte",
@@ -947,7 +957,7 @@ export function DossierPanel({
   return (
     <main className="secop-app secop-dossier" lang={locale}>
       <header className="secop-dossier-top">
-        <div>
+        <div className="secop-dossier-toolbar">
           <button
             type="button"
             className="secop-icon-action"
@@ -960,31 +970,35 @@ export function DossierPanel({
           <p className="secop-eyebrow">
             {t.eyebrow} · {processId}
           </p>
-          <h1>{String(row.name ?? t.headingFallback)}</h1>
-          <p className="secop-dossier-help">{t.help}</p>
+          {client && (
+            <div className="secop-dossier-actions">
+              <button
+                type="button"
+                disabled={busy || Boolean(activeJobs)}
+                className="secop-primary secop-icon-action"
+                aria-label={
+                  snapshot?.dossier ? t.updateDossier : t.prepareDossier
+                }
+                title={snapshot?.dossier ? t.updateDossier : t.prepareDossier}
+                onClick={() => void prepare()}
+              >
+                <FolderSync size={18} aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                className="secop-icon-action"
+                aria-label={t.update}
+                title={t.update}
+                disabled={busy}
+                onClick={() => void run(() => refresh())}
+              >
+                <RefreshCw size={16} aria-hidden="true" />
+              </button>
+            </div>
+          )}
         </div>
-        {client && (
-          <div className="secop-dossier-actions">
-            <button
-              type="button"
-              disabled={busy || Boolean(activeJobs)}
-              className="secop-primary"
-              onClick={() => void prepare()}
-            >
-              {snapshot?.dossier ? t.updateDossier : t.prepareDossier}
-            </button>
-            <button
-              type="button"
-              className="secop-icon-action"
-              aria-label={t.update}
-              title={t.update}
-              disabled={busy}
-              onClick={() => void run(() => refresh())}
-            >
-              <RefreshCw size={16} aria-hidden="true" />
-            </button>
-          </div>
-        )}
+        <h1>{String(row.name ?? t.headingFallback)}</h1>
+        <p className="secop-dossier-help">{t.help}</p>
       </header>
       {initializing && <p role="status">{t.checking}</p>}
       {error && (
@@ -1275,15 +1289,38 @@ export function DossierPanel({
             )}
             {tab === "documents" && (
               <>
-                <h2>{t.dossierDocuments}</h2>
-                <p className="secop-dossier-help">
-                  {t.showing}
-                  {snapshot?.documents.length ?? 0}
-                  {t.of}
-                  {snapshot?.documentTotal ?? 0}
-                  {t.captchaHint}
-                </p>
-                {documents(snapshot?.documents ?? [])}
+                <div className="secop-dossier-section-heading secop-dossier-documents-heading">
+                  <h2>{t.dossierDocuments}</h2>
+                  <button
+                    type="button"
+                    className="secop-icon-action"
+                    aria-label={t.legacyDocuments}
+                    title={t.legacyDocuments}
+                    onClick={() => setLegacy(true)}
+                  >
+                    <FolderOpen size={18} aria-hidden="true" />
+                  </button>
+                </div>
+                {snapshot && snapshot.documents.length > 0 ? (
+                  <>
+                    <p className="secop-dossier-help">
+                      {t.showing}
+                      {snapshot.documents.length}
+                      {t.of}
+                      {snapshot.documentTotal}
+                    </p>
+                    {snapshot.documents.some(
+                      (doc) => doc.value.state === "blocked",
+                    ) && <p className="secop-dossier-help">{t.captchaHint}</p>}
+                    {documents(snapshot.documents)}
+                  </>
+                ) : !initializing && !error ? (
+                  <div className="secop-dossier-empty" role="status">
+                    <FileText size={24} aria-hidden="true" />
+                    <h3>{t.emptyDocuments}</h3>
+                    <p>{t.emptyDocumentsHelp}</p>
+                  </div>
+                ) : null}
                 {snapshot?.nextOffset !== null &&
                   snapshot?.nextOffset !== undefined && (
                     <button
@@ -1294,11 +1331,6 @@ export function DossierPanel({
                       {t.moreDocuments}
                     </button>
                   )}
-                <div className="secop-dossier-actions">
-                  <button type="button" onClick={() => setLegacy(true)}>
-                    {t.legacyDocuments}
-                  </button>
-                </div>
               </>
             )}
             {tab === "requirements" && (
