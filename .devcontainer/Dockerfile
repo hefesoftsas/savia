@@ -14,6 +14,7 @@ RUN mkdir -p \
     /workspace/apps/admin/node_modules \
     /workspace/apps/api/node_modules \
     /workspace/apps/auth/node_modules \
+    /workspace/apps/backup-coordinator/node_modules \
     /workspace/apps/companion/node_modules \
     /workspace/apps/connector-gateway/node_modules \
     /workspace/apps/db-bridge/node_modules \
