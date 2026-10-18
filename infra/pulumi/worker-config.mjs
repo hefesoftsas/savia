@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { resolveInfraNames, validateFlowsResources } from "./naming.mjs";
 import { flowsWorkerConfig } from "./flows-worker-config.mjs";
 import { pluginEditorWorkerConfig } from "./auxiliary-worker-config.mjs";
+import { normalizeTenantSlug } from "../../packages/tenant-host/src/tenant-slug.mjs";
 
 const defaultDocumentsBucket = "savia-documents";
 const defaultPublicOrigin = "https://savia.app.hefesoft.com";
@@ -22,6 +23,26 @@ function originValue(value) {
   if (origin.protocol !== "https:")
     throw new Error("SAVIA_PUBLIC_ORIGIN must use HTTPS");
   return origin.origin;
+}
+
+export function validateTenantSubdomains(value, deploymentEnvironment) {
+  if (!Array.isArray(value))
+    throw new Error(
+      "SAVIA_TENANT_SUBDOMAINS must be an array of tenant subdomains",
+    );
+  const labels = [];
+  const seen = new Set();
+  for (const candidate of value) {
+    const label = normalizeTenantSlug(candidate);
+    if (!label) throw new Error("Invalid tenant subdomain label");
+    if (seen.has(label))
+      throw new Error(`Duplicate tenant subdomain: ${label}`);
+    seen.add(label);
+    labels.push(label);
+  }
+  if (deploymentEnvironment === "preview" && labels.length > 0)
+    throw new Error("Preview cannot configure production tenant subdomains");
+  return labels;
 }
 
 function authConfig({ authD1Id, authDatabaseName, publicOrigin }) {
@@ -241,14 +262,18 @@ function mcpConfig({ publicOrigin }) {
   };
 }
 
-function gatewayConfig({ publicOrigin, documentsBucket }) {
+function gatewayConfig({ publicOrigin, documentsBucket, tenantSubdomains }) {
   const hostname = new URL(publicOrigin).hostname;
+  const routes = [
+    hostname,
+    ...tenantSubdomains.map((label) => `${label}.${hostname}`),
+  ].map((pattern) => ({ custom_domain: true, pattern }));
   return {
     $schema: "../../node_modules/wrangler/config-schema.json",
     name: "savia",
     compatibility_date: "2026-08-31",
     main: "src/edge-gateway.ts",
-    routes: [{ custom_domain: true, pattern: hostname }],
+    routes,
     services: [{ binding: "API", service: "savia-agencies" }],
     r2_buckets: [{ binding: "OFFICE_RUNTIME", bucket_name: documentsBucket }],
     assets: {
@@ -297,6 +322,7 @@ export async function renderProductionConfigs({
   pagesSearchIndex,
   flowsResources,
   flowsExecutionEnabled = false,
+  tenantSubdomains = [],
   authD1Id,
   authDatabaseName,
   domainD1Id,
@@ -313,6 +339,10 @@ export async function renderProductionConfigs({
   if (!["production", "preview"].includes(deploymentEnvironment)) {
     throw new Error("Unsupported deployment environment");
   }
+  const normalizedTenantSubdomains = validateTenantSubdomains(
+    tenantSubdomains,
+    deploymentEnvironment,
+  );
   if (
     deploymentEnvironment === "preview" &&
     (documentsBucket === defaultDocumentsBucket ||
@@ -356,6 +386,7 @@ export async function renderProductionConfigs({
     domainDatabaseName: resolvedNames.databases.domain,
     outputRoot: requiredValue(outputRoot, "SAVIA_DEPLOY_CONFIG_ROOT"),
     publicOrigin: originValue(publicOrigin),
+    tenantSubdomains: normalizedTenantSubdomains,
     ...(zoomIntegrationId?.trim()
       ? {
           zoomIntegrationId: requiredValue(
@@ -524,6 +555,9 @@ export async function renderCloudflareConfigFromEnv(env = process.env) {
     domainDatabaseName: env.SAVIA_DOMAIN_D1_NAME,
     pagesSearchIndex: env.SAVIA_PAGES_SEARCH_INDEX,
     flowsExecutionEnabled: env.SAVIA_FLOWS_EXECUTION_ENABLED === "true",
+    tenantSubdomains: env.SAVIA_TENANT_SUBDOMAINS
+      ? JSON.parse(env.SAVIA_TENANT_SUBDOMAINS)
+      : [],
     flowsResources: env.SAVIA_FLOWS_RESOURCES
       ? JSON.parse(env.SAVIA_FLOWS_RESOURCES)
       : null,
