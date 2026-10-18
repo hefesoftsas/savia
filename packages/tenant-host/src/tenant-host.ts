@@ -9,6 +9,20 @@
  * runtimes in sync by changing the rules here, never by copying them.
  */
 
+import {
+  isReservedTenantSlug,
+  normalizeTenantSlug,
+  RESERVED_TENANT_SLUGS,
+  TENANT_SLUG_PATTERN,
+} from "./tenant-slug.mjs";
+
+export {
+  isReservedTenantSlug,
+  normalizeTenantSlug,
+  RESERVED_TENANT_SLUGS,
+  TENANT_SLUG_PATTERN,
+};
+
 export const DEFAULT_CANONICAL_HOST = "savia.app.hefesoft.com";
 export const PREVIEW_CANONICAL_HOST = "savia-preview.hefesoft.com";
 export const KNOWN_CANONICAL_HOSTS: ReadonlyArray<string> = [
@@ -16,66 +30,10 @@ export const KNOWN_CANONICAL_HOSTS: ReadonlyArray<string> = [
   PREVIEW_CANONICAL_HOST,
 ];
 
-/** DNS label: lowercase alphanumerics and hyphens, 1-63 chars, no leading/trailing hyphen. */
-export const TENANT_SLUG_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
-
-/**
- * Slugs that must never resolve as a tenant hostname. They collide with
- * infrastructure, product routes or well-known endpoints.
- * Keep in sync with tenant creation validation in `apps/api`.
- */
-export const RESERVED_TENANT_SLUGS: ReadonlySet<string> = new Set([
-  "admin",
-  "api",
-  "app",
-  "assets",
-  "auth",
-  "billing",
-  "cdn",
-  "console",
-  "consent",
-  "dashboard",
-  "dev",
-  "docs",
-  "ftp",
-  "health",
-  "help",
-  "internal",
-  "local",
-  "login",
-  "mail",
-  "mcp",
-  "next",
-  "oauth",
-  "openapi",
-  "platform",
-  "savia",
-  "staging",
-  "static",
-  "status",
-  "support",
-  "well-known",
-  "www",
-]);
-
 export function normalizeCanonicalHost(value: unknown): string {
   if (typeof value !== "string") return DEFAULT_CANONICAL_HOST;
   const host = value.trim().toLowerCase().replace(/\.$/, "");
   return host || DEFAULT_CANONICAL_HOST;
-}
-
-/** Lowercases, trims and validates a tenant slug. Returns null when unusable as a hostname label. */
-export function normalizeTenantSlug(value: unknown): string | null {
-  if (typeof value !== "string") return null;
-  const slug = value.trim().toLowerCase();
-  if (!TENANT_SLUG_PATTERN.test(slug)) return null;
-  if (RESERVED_TENANT_SLUGS.has(slug)) return null;
-  return slug;
-}
-
-export function isReservedTenantSlug(value: unknown): boolean {
-  if (typeof value !== "string") return false;
-  return RESERVED_TENANT_SLUGS.has(value.trim().toLowerCase());
 }
 
 /** Derives a stable DNS label from a tenant name. Allocation handles collisions separately. */

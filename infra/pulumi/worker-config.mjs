@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { resolveInfraNames, validateFlowsResources } from "./naming.mjs";
 import { flowsWorkerConfig } from "./flows-worker-config.mjs";
 import { pluginEditorWorkerConfig } from "./auxiliary-worker-config.mjs";
-import { normalizeTenantSlug } from "../../packages/tenant-host/src/tenant-host.ts";
+import { normalizeTenantSlug } from "../../packages/tenant-host/src/tenant-slug.mjs";
 
 const defaultDocumentsBucket = "savia-documents";
 const defaultPublicOrigin = "https://savia.app.hefesoft.com";
