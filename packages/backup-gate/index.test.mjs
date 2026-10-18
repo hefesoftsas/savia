@@ -72,6 +72,38 @@ test("lease closes gate, rejects foreign owner, and permits renew/release by own
   assert.equal(Object.hasOwn(status.body, "lease"), false);
 });
 
+test("status optionally inspects outstanding permits without removing or expiring them", async () => {
+  const { coordinator, storage } = makeCoordinator();
+  const permit = crypto.randomUUID();
+  await send(coordinator, "/enter", { permit });
+  const before = await storage.get("backup-gate:v1");
+  const plain = await send(coordinator, "/status", { owner: "inspection" });
+  assert.equal(Object.hasOwn(plain.body, "permits"), false);
+  const inspected = await send(coordinator, "/status", {
+    owner: "inspection",
+    includePermits: true,
+  });
+  assert.deepEqual(inspected.body.permits, [
+    {
+      permit,
+      createdAt: before.permits[permit].createdAt,
+    },
+  ]);
+  assert.equal(inspected.body.active, 1);
+  assert.equal(inspected.body.drained, false);
+  assert.deepEqual(await storage.get("backup-gate:v1"), before);
+  await send(coordinator, "/acquire", { owner: "backup", ttlMs: 30_000 });
+  assert.equal(
+    (
+      await send(coordinator, "/status", {
+        owner: "inspection",
+        includePermits: true,
+      })
+    ).status,
+    409,
+  );
+});
+
 test("acquire drains existing writers and blocks new writers until release", async () => {
   const { coordinator } = makeCoordinator();
   const entered = await send(coordinator, "/enter");

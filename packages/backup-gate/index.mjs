@@ -127,6 +127,16 @@ export class BackupCoordinator {
         expiresAt: current.lease?.expiresAt ?? null,
         active,
         drained: active === 0,
+        ...(body.includePermits === true
+          ? {
+              permits: Object.entries(current.permits).map(
+                ([permit, entry]) => ({
+                  permit,
+                  createdAt: entry.createdAt,
+                }),
+              ),
+            }
+          : {}),
       });
     }
 

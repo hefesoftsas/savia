@@ -314,6 +314,10 @@ concurrent requests can throw Cloudflare's "Cannot perform I/O on behalf of a
 different request" error, including during login, which performs guarded D1 work.
 Each admission, release and retry obtains its own stub without disabling the
 barrier or changing its idempotent permit.
+The authenticated controller's `status` action accepts `includePermits: true`
+for operator inspection of outstanding permit IDs and creation times. Inspection
+does not remove or age out permits. Treat an unresolved permit as a blocked
+drain until its storage operation is proven finished; age alone is insufficient.
 Flows is currently absent from production; unattended capture fails closed if its
 independent persistence is provisioned until its pause lifecycle is integrated.
 
