@@ -1,5 +1,6 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as cloudflare from "@pulumi/cloudflare";
+import { validateTenantSubdomains } from "./worker-config.mjs";
 import {
   resolveInfraNames,
   stackProtection,
@@ -23,6 +24,8 @@ const config = new pulumi.Config();
 const accountId = assertAccountId(config.require("accountId"));
 const environment = config.require("environment");
 const publicOrigin = config.require("publicOrigin");
+const configuredTenantSubdomains =
+  config.getObject<string[]>("tenantSubdomains") ?? [];
 const documentsBucket = config.require("documentsBucket");
 const authDatabaseName = config.get("authDatabaseName");
 const domainDatabaseName = config.get("domainDatabaseName");
@@ -203,6 +206,10 @@ export const backupRetentionDays = productionBackupsLifecycle
   ? PRODUCTION_BACKUP_RETENTION_DAYS
   : null;
 export const resolvedPublicOrigin = names.publicOrigin;
+export const tenantSubdomains = validateTenantSubdomains(
+  configuredTenantSubdomains,
+  names.environment,
+);
 export const resolvedEnvironment = names.environment;
 export const workerNames = names.workers;
 export const databaseNames = names.databases;

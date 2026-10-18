@@ -57,6 +57,30 @@ a code-only change as a completed live migration: provider callback registration
 and valid wildcard TLS are release prerequisites. Rollback requires the previous
 release and origin config, followed by renewed authentication.
 
+## Tenant login domains
+
+The standard production hostname uses a wildcard Worker Route for dynamically
+created tenant hosts. Its proxied DNS and valid wildcard TLS are prerequisites;
+a canonical Custom Domain alone does not route tenant traffic.
+
+Optional exact tenant Custom Domains can still be declared in Pulumi:
+
+```yaml
+savia-cloudflare:tenantSubdomains:
+  - workspace-slug
+```
+
+The stack exports this list and the renderer preserves each explicit Custom
+Domain in addition to production wildcard routing. During migration, matching
+legacy exact tenant attachments are retained too. Wrangler owns these exact
+attachments and their DNS/certificate provisioning. Do not create an overlapping
+Pulumi Worker-domain resource. Preview rejects nonempty explicit tenant lists
+and retains its own canonical hostname.
+
+After deployment, verify tenant DNS, valid HTTPS, `/health`, `/api/auth/login`,
+and OAuth CSS/JavaScript. Verify that email discovery leads to the reachable
+new tenant hostname and that a fresh authentication transaction completes.
+
 ## Backend setup (once per machine/CI)
 
 ```sh
