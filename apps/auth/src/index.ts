@@ -131,6 +131,49 @@ const bootstrapInitializations = new WeakMap<
   object,
   Map<string, Promise<AuthBootstrap>>
 >();
+type DefaultAuthHandlerEntry = {
+  environment: Array<[string, unknown]>;
+  handler: ReturnType<typeof createAuthHandler>;
+};
+const defaultAuthHandlers = new WeakMap<object, DefaultAuthHandlerEntry>();
+
+function defaultAuthHandler(environment: AuthWorkerEnvironment) {
+  const binding = environment.AUTH_DB;
+  const snapshot = Object.entries(environment).sort(([left], [right]) =>
+    left.localeCompare(right),
+  );
+  const cached = defaultAuthHandlers.get(binding);
+  if (
+    cached &&
+    cached.environment.length === snapshot.length &&
+    cached.environment.every(
+      ([key, value], index) =>
+        key === snapshot[index]?.[0] && Object.is(value, snapshot[index]?.[1]),
+    )
+  ) {
+    return cached.handler;
+  }
+
+  const handler = createAuthHandler(guardStorageEnvironment(environment));
+  defaultAuthHandlers.set(binding, { environment: snapshot, handler });
+  return handler;
+}
+
+async function fetchWithDefaultAuthHandler(
+  request: Request,
+  environment: AuthWorkerEnvironment,
+  executionContext: ExecutionContext,
+) {
+  const handler = defaultAuthHandler(environment);
+  try {
+    return await handler.fetch(request, executionContext);
+  } catch (error) {
+    const binding = environment.AUTH_DB;
+    if (defaultAuthHandlers.get(binding)?.handler === handler)
+      defaultAuthHandlers.delete(binding);
+    throw error;
+  }
+}
 
 function requiredValue(value: string | undefined, name: string): string {
   if (value) return value;
@@ -903,6 +946,11 @@ export function createAuthHandler(
     async fetch(request: Request, executionContext?: ExecutionContext) {
       // Native startup verifies the database under its deployment lock first.
       const auth = (instance ??= createBetterAuth(environment, dependencies));
+      // Better Auth begins plugin initialization immediately, before this
+      // request reaches the first $context await. Observe an early rejection
+      // so it cannot become unhandled while schema/bootstrap work completes;
+      // the later await still propagates the original error to the caller.
+      void auth.$context.catch(() => undefined);
       await ensureSchema(auth, environment.AUTH_DB);
       const bootstrap = await ensureAuthBootstrap(auth, environment);
       const pathname = new URL(request.url).pathname;
@@ -1140,9 +1188,6 @@ export default {
     if (control) return control;
     const capability = backupCapability(request, environment);
     if (capability) return capability;
-    return createAuthHandler(guardStorageEnvironment(environment)).fetch(
-      request,
-      executionContext,
-    );
+    return fetchWithDefaultAuthHandler(request, environment, executionContext);
   },
 } satisfies ExportedHandler<AuthWorkerEnvironment>;
