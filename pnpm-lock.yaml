@@ -567,6 +567,12 @@ importers:
         specifier: ^4.127.1
         version: 4.127.1(@cloudflare/workers-types@5.20260901.1)
 
+  apps/backup-coordinator:
+    devDependencies:
+      wrangler:
+        specifier: ^4.127.1
+        version: 4.127.1(@cloudflare/workers-types@5.20260901.1)
+
   apps/companion:
     dependencies:
       '@tauri-apps/api':
