@@ -231,7 +231,6 @@ function makeGateClient(namespace) {
   const cached = GATE_CLIENTS.get(namespace);
   if (cached) return cached;
   const id = namespace.idFromName(OBJECT_NAME);
-  let stub = namespace.get(id);
   const client = {
     identity: null,
     async enter(permit) {
@@ -255,6 +254,9 @@ function makeGateClient(namespace) {
     for (let attempt = 0; attempt < MAX_GATE_ATTEMPTS; attempt += 1) {
       let response;
       try {
+        // Durable Object stubs are request-bound in Workers. Resolve one per
+        // attempt so concurrent requests never share a stub across ownership.
+        const stub = namespace.get(id);
         response = await stub.fetch(
           new Request(`https://backup-gate.internal/${action}`, {
             method: "POST",
@@ -265,14 +267,6 @@ function makeGateClient(namespace) {
         );
       } catch (error) {
         lastError = error;
-        try {
-          stub = namespace.get(id);
-        } catch (refreshError) {
-          lastError = new AggregateError(
-            [error, refreshError],
-            "backup gate stub refresh failed",
-          );
-        }
       }
       if (response?.ok) return response;
       if (response) {

@@ -308,8 +308,50 @@ the next drain rather than being silently discarded. Storage operations,
 including Auth session reads which can write, are temporarily unavailable during
 the maintenance window. Preview load/latency validation is required before
 activation because each D1 execution and R2 mutation uses central durable permits.
+Gate-client and storage-wrapper identities may be cached, but Durable Object
+stubs must be obtained inside each RPC attempt. Sharing a mutable stub across
+concurrent requests can throw Cloudflare's "Cannot perform I/O on behalf of a
+different request" error, including during login, which performs guarded D1 work.
+Each admission, release and retry obtains its own stub without disabling the
+barrier or changing its idempotent permit.
 Flows is currently absent from production; unattended capture fails closed if its
 independent persistence is provisioned until its pause lifecycle is integrated.
+
+After publishing storage writers, verify the authentication entry points with
+concurrent requests in addition to `/health` and frontend assets. A healthy
+database read does not exercise write-permit acquisition. Run the following from
+a machine that can reach the public origin; a bot challenge is a failed check,
+not proof that login works. This creates only short-lived authorization
+transactions, does not sign in a user, and does not print redirect query strings
+or cookies. Do not add retries that hide intermittent errors.
+
+```sh
+SAVIA_PUBLIC_ORIGIN=https://savia.app.hefesoft.com node --input-type=module <<'JS'
+const origin = new URL(process.env.SAVIA_PUBLIC_ORIGIN).origin;
+const paths = Array.from({ length: 4 }, () => [
+  "/api/auth/login", "/api/auth/admin/authorize",
+]).flat();
+const results = await Promise.allSettled(paths.map(async (path) => {
+  const response = await fetch(origin + path, {
+    redirect: "manual", signal: AbortSignal.timeout(30_000),
+  });
+  const body = await response.text();
+  if (path.endsWith("/login")) {
+    if (response.status !== 200 ||
+        !response.headers.get("content-type")?.startsWith("text/html") ||
+        !/<!doctype html>/i.test(body)) throw new Error("Login page failed");
+  } else {
+    const target = new URL(response.headers.get("location") ?? "", origin);
+    if (response.status !== 302 || target.origin !== origin ||
+        target.pathname !== "/api/auth/login") throw new Error("Authorization entry failed");
+  }
+}));
+if (results.some((result) => result.status === "rejected")) {
+  throw new Error("Concurrent authentication-entry verification failed");
+}
+console.log("All eight concurrent authentication-entry requests passed");
+JS
+```
 
 `node scripts/production-backup.mjs --artifact <absolute-output.enc>` captures,
 validates all database/document targets and their hashes, compresses under a

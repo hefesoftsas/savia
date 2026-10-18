@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { AsyncLocalStorage } from "node:async_hooks";
 import { BackupCoordinator, guardStorageEnvironment } from "./index.mjs";
 
 class MemoryStorage {
@@ -317,7 +318,7 @@ test("guardStorageEnvironment wraps D1 and R2 writes while preserving methods an
     FILES: bucket,
   });
   assert.equal(guardedAgain.DB, guarded.DB);
-  assert.equal(namespaceCalls, 1);
+  assert.equal(namespaceCalls, 0);
   assert.deepEqual(await guarded.DB.prepare("UPDATE t").bind(1).run(), {
     success: true,
   });
@@ -330,6 +331,7 @@ test("guardStorageEnvironment wraps D1 and R2 writes while preserving methods an
   await multipart.uploadPart(1, "part");
   await multipart.complete([]);
   await multipart.abort();
+  assert.equal(namespaceCalls, 20);
   assert.equal(calls.filter((call) => call === "enter").length, 10);
   assert.equal(calls.filter((call) => call.startsWith("leave:")).length, 10);
   assert.equal(calls.includes("get:x"), false);
@@ -413,7 +415,7 @@ test("lost enter and leave acknowledgements retry the same permit without orphan
   assert.deepEqual((await storage.get("backup-gate:v1")).permits, {});
 });
 
-test("transport exceptions refresh the Durable Object stub without replacing cached wrappers", async () => {
+test("transport exceptions retry with fresh stubs without replacing cached wrappers", async () => {
   const coordinator = makeCoordinator().coordinator;
   let stubRequests = 0;
   let writes = 0;
@@ -452,8 +454,82 @@ test("transport exceptions refresh the Durable Object stub without replacing cac
   assert.deepEqual(await guarded.DB.prepare("UPDATE t").run(), {
     success: true,
   });
-  assert.equal(stubRequests, 2);
+  assert.equal(stubRequests, 3);
   assert.equal(writes, 1);
+});
+
+test("concurrent requests use request-local stubs for writes and retries on a held D1 proxy", async () => {
+  const requestContext = new AsyncLocalStorage();
+  const observed = [];
+  let namespaceCalls = 0;
+  let recovered = false;
+  const namespace = {
+    idFromName: (name) => name,
+    get: () => {
+      namespaceCalls += 1;
+      const stubOwner = requestContext.getStore();
+      assert.ok(stubOwner, "stub acquisition must run within a request");
+      return {
+        async fetch(request) {
+          const requestOwner = requestContext.getStore();
+          const path = new URL(request.url).pathname;
+          observed.push({ stubOwner, requestOwner, path });
+          if (stubOwner !== requestOwner) {
+            throw new Error("I/O on behalf of a different request");
+          }
+          const body = await request.json();
+          if (stubOwner === "request-a" && path === "/enter" && !recovered) {
+            recovered = true;
+            throw new Error("simulated lost enter acknowledgement");
+          }
+          return path === "/enter"
+            ? Response.json({ permit: body.permit })
+            : Response.json({ ok: true });
+        },
+      };
+    },
+  };
+  const statement = {
+    async run() {
+      return { success: true };
+    },
+  };
+  const database = {
+    prepare() {
+      return statement;
+    },
+    async batch() {},
+    async exec() {},
+  };
+  const guarded = requestContext.run("request-a", () =>
+    guardStorageEnvironment({ BACKUP_GATE: namespace, DB: database }),
+  );
+  const heldProxy = guarded.DB;
+
+  const first = requestContext.run("request-a", () =>
+    heldProxy.prepare("UPDATE records").run(),
+  );
+  const second = requestContext.run("request-b", () =>
+    heldProxy.prepare("UPDATE records").run(),
+  );
+  const [firstResult, secondResult] = await Promise.all([first, second]);
+
+  assert.deepEqual(firstResult, { success: true });
+  assert.deepEqual(secondResult, { success: true });
+  assert.equal(recovered, true);
+  assert.ok(namespaceCalls >= 5);
+  assert.ok(observed.length >= 5);
+  assert.ok(
+    observed.every(({ stubOwner, requestOwner }) => stubOwner === requestOwner),
+  );
+  assert.deepEqual(
+    observed.map(({ path }) => path).filter((path) => path === "/enter").length,
+    3,
+  );
+  assert.deepEqual(
+    observed.map(({ path }) => path).filter((path) => path === "/leave").length,
+    2,
+  );
 });
 
 test("gate leave failures propagate after the storage operation settles", async () => {
