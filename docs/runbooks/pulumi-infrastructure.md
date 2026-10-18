@@ -314,6 +314,11 @@ concurrent requests can throw Cloudflare's "Cannot perform I/O on behalf of a
 different request" error, including during login, which performs guarded D1 work.
 Each admission, release and retry obtains its own stub without disabling the
 barrier or changing its idempotent permit.
+Auth cold starts must replace the SQLite notification triggers atomically in one
+D1 batch transaction. Separate drop/create requests race across Worker isolates
+and can fail with "trigger already exists", even when each isolate caches its
+own initialization promise. Exercise concurrent login requests on a newly
+published Auth version to cover this startup path.
 The authenticated controller's `status` action accepts `includePermits: true`
 for operator inspection of outstanding permit IDs and creation times. Inspection
 does not remove or age out permits. Treat an unresolved permit as a blocked
@@ -321,8 +326,9 @@ drain until its storage operation is proven finished; age alone is insufficient.
 Flows is currently absent from production; unattended capture fails closed if its
 independent persistence is provisioned until its pause lifecycle is integrated.
 
-After publishing storage writers, verify the authentication entry points with
-concurrent requests in addition to `/health` and frontend assets. A healthy
+After publishing storage writers, verify the authentication entry points and
+their CSS/JavaScript with concurrent requests in addition to `/health` and
+frontend assets. A healthy
 database read does not exercise write-permit acquisition. Run the following from
 a machine that can reach the public origin; a bot challenge is a failed check,
 not proof that login works. This creates only short-lived authorization
@@ -334,7 +340,7 @@ SAVIA_PUBLIC_ORIGIN=https://savia.app.hefesoft.com node --input-type=module <<'J
 const origin = new URL(process.env.SAVIA_PUBLIC_ORIGIN).origin;
 const paths = Array.from({ length: 4 }, () => [
   "/api/auth/login", "/api/auth/admin/authorize",
-]).flat();
+]).flat().concat(["/api/auth/oauth-ui.css", "/api/auth/oauth-ui.js"]);
 const results = await Promise.allSettled(paths.map(async (path) => {
   const response = await fetch(origin + path, {
     redirect: "manual", signal: AbortSignal.timeout(30_000),
@@ -344,16 +350,21 @@ const results = await Promise.allSettled(paths.map(async (path) => {
     if (response.status !== 200 ||
         !response.headers.get("content-type")?.startsWith("text/html") ||
         !/<!doctype html>/i.test(body)) throw new Error("Login page failed");
-  } else {
+  } else if (path.endsWith("/authorize")) {
     const target = new URL(response.headers.get("location") ?? "", origin);
     if (response.status !== 302 || target.origin !== origin ||
         target.pathname !== "/api/auth/login") throw new Error("Authorization entry failed");
+  } else {
+    const mime = path.endsWith(".css") ? "text/css" : "application/javascript";
+    if (response.status !== 200 ||
+        !response.headers.get("content-type")?.startsWith(mime) ||
+        body.length < 1000) throw new Error("Authentication asset failed");
   }
 }));
 if (results.some((result) => result.status === "rejected")) {
   throw new Error("Concurrent authentication-entry verification failed");
 }
-console.log("All eight concurrent authentication-entry requests passed");
+console.log("All ten concurrent authentication-entry and asset requests passed");
 JS
 ```
 
