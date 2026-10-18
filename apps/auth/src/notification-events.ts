@@ -14,15 +14,15 @@ async function run(db: D1Database, sql: string): Promise<void> {
 }
 
 export async function ensureAuthNoticeSchema(db: D1Database): Promise<void> {
-  await run(
-    db,
-    "CREATE TABLE IF NOT EXISTS auth_notice_events(id TEXT PRIMARY KEY, subject TEXT NOT NULL, kind TEXT NOT NULL, created_at BIGINT NOT NULL, expires_at BIGINT, request_id TEXT, acked_at BIGINT NOT NULL DEFAULT 0)",
-  );
-  await run(
-    db,
-    "CREATE INDEX IF NOT EXISTS auth_notice_events_pending ON auth_notice_events(acked_at, id)",
-  );
   if (dialectFor(db).name === "postgres") {
+    await run(
+      db,
+      "CREATE TABLE IF NOT EXISTS auth_notice_events(id TEXT PRIMARY KEY, subject TEXT NOT NULL, kind TEXT NOT NULL, created_at BIGINT NOT NULL, expires_at BIGINT, request_id TEXT, acked_at BIGINT NOT NULL DEFAULT 0)",
+    );
+    await run(
+      db,
+      "CREATE INDEX IF NOT EXISTS auth_notice_events_pending ON auth_notice_events(acked_at, id)",
+    );
     for (const [name, field, kind, suffix] of [
       [
         "auth_notice_email_verified",
@@ -57,16 +57,22 @@ export async function ensureAuthNoticeSchema(db: D1Database): Promise<void> {
     }
     return;
   }
-  await run(db, "DROP TRIGGER IF EXISTS auth_notice_email_verified");
-  await run(
-    db,
-    `CREATE TRIGGER auth_notice_email_verified AFTER UPDATE ON "user" WHEN OLD.emailVerified=0 AND NEW.emailVerified=1 BEGIN INSERT INTO auth_notice_events(id,subject,kind,created_at,request_id) VALUES ('auth_'||NEW.id||'_email_'||NEW.updatedAt,NEW.id,'email-verified',CAST(strftime('%s','now') AS INTEGER)*1000,NULL); END`,
-  );
-  await run(db, "DROP TRIGGER IF EXISTS auth_notice_two_factor");
-  await run(
-    db,
-    `CREATE TRIGGER auth_notice_two_factor AFTER UPDATE ON "user" WHEN OLD.twoFactorEnabled=0 AND NEW.twoFactorEnabled=1 BEGIN INSERT INTO auth_notice_events(id,subject,kind,created_at,request_id) VALUES ('auth_'||NEW.id||'_totp_'||NEW.updatedAt,NEW.id,'two-factor-enabled',CAST(strftime('%s','now') AS INTEGER)*1000,NULL); END`,
-  );
+  await db.batch([
+    db.prepare(
+      "CREATE TABLE IF NOT EXISTS auth_notice_events(id TEXT PRIMARY KEY, subject TEXT NOT NULL, kind TEXT NOT NULL, created_at BIGINT NOT NULL, expires_at BIGINT, request_id TEXT, acked_at BIGINT NOT NULL DEFAULT 0)",
+    ),
+    db.prepare(
+      "CREATE INDEX IF NOT EXISTS auth_notice_events_pending ON auth_notice_events(acked_at, id)",
+    ),
+    db.prepare("DROP TRIGGER IF EXISTS auth_notice_email_verified"),
+    db.prepare(
+      `CREATE TRIGGER auth_notice_email_verified AFTER UPDATE ON "user" WHEN OLD.emailVerified=0 AND NEW.emailVerified=1 BEGIN INSERT INTO auth_notice_events(id,subject,kind,created_at,request_id) VALUES ('auth_'||NEW.id||'_email_'||NEW.updatedAt,NEW.id,'email-verified',CAST(strftime('%s','now') AS INTEGER)*1000,NULL); END`,
+    ),
+    db.prepare("DROP TRIGGER IF EXISTS auth_notice_two_factor"),
+    db.prepare(
+      `CREATE TRIGGER auth_notice_two_factor AFTER UPDATE ON "user" WHEN OLD.twoFactorEnabled=0 AND NEW.twoFactorEnabled=1 BEGIN INSERT INTO auth_notice_events(id,subject,kind,created_at,request_id) VALUES ('auth_'||NEW.id||'_totp_'||NEW.updatedAt,NEW.id,'two-factor-enabled',CAST(strftime('%s','now') AS INTEGER)*1000,NULL); END`,
+    ),
+  ]);
 }
 
 export async function readAuthNoticeEvents(
