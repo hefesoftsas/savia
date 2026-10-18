@@ -20,6 +20,25 @@ protected, even for preview, and is excluded from application teardown.
 Secrets in checkpoint/configuration are encrypted with the stack passphrase.
 Do not pass `--show-secrets`, commit checkpoints, or expose the state bucket.
 
+## Preview tenant hostname routing
+
+The standard Preview gateway manifest declares both the canonical Custom Domain
+`savia-preview.hefesoft.com` and the Worker Route
+`*.savia-preview.hefesoft.com/*` in the `hefesoft.com` zone. Wrangler publishes
+both to `savia-preview`. The wildcard is a Worker Route, not a wildcard Custom
+Domain. Tenant hostname parsing and workspace authorization remain enforced by
+the application; a matching DNS name alone does not grant access to a workspace.
+
+The existing proxied wildcard DNS and TLS coverage are prerequisites, not
+resources owned by this manifest. Preserve them when deploying; do not recreate
+or delete them while adopting the route. After deployment, verify public DNS,
+valid HTTPS, and `/health` on the canonical host and a tenant host. Also check an
+unregistered test hostname to detect missing wildcard DNS/TLS coverage; a health
+response does not establish that a tenant exists. If DNS or certificate inventory
+cannot be read with the deployment credential, report that limitation rather
+than claiming those resources are managed by IaC. Production tenant routing is
+configured separately and is not enabled by this Preview declaration.
+
 ## Backend setup (once per machine/CI)
 
 ```sh
