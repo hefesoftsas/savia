@@ -20,6 +20,29 @@ protected, even for preview, and is excluded from application teardown.
 Secrets in checkpoint/configuration are encrypted with the stack passphrase.
 Do not pass `--show-secrets`, commit checkpoints, or expose the state bucket.
 
+## Tenant login domains
+
+The canonical gateway hostname does not provision its tenant subdomains. An account
+with a dedicated tenant home can redirect to `<slug>.<canonical-host>` during login;
+that hostname must have its own deployed Worker Custom Domain before promoting
+that account or workspace.
+
+Declare tenant labels in the environment's Pulumi configuration:
+
+```yaml
+savia-cloudflare:tenantSubdomains:
+  - workspace-slug
+```
+
+The stack exports this list and the authoritative renderer includes each explicit
+hostname in the gateway's Wrangler `routes` with `custom_domain: true`. Wrangler
+owns the domain attachment, DNS and certificate provisioning; do not create an
+overlapping Pulumi Worker-domain resource or rely on an undeclared wildcard.
+Preview rejects nonempty tenant lists and keeps its own canonical hostname.
+After deployment, verify DNS, valid HTTPS, `/health`, `/api/auth/login`, and the
+OAuth CSS/JavaScript on the tenant hostname. Also verify that email discovery
+leads to that reachable hostname and preserves the existing callback transaction.
+
 ## Backend setup (once per machine/CI)
 
 ```sh
