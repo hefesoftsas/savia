@@ -377,10 +377,24 @@ R2 inventories, stopping also performs a fresh D1 bookmark poll even when no
 interval read was pending, closing the final inventory-to-manifest gap. Each production
 schema dump additionally checks its own before/after bookmark. Complete R2
 inventories, including metadata and ETags, must also remain unchanged across the
-capture. The API download pins each object to its listed ETag and verifies its
-byte size. Concurrent changes or unverifiable targets invalidate the backup;
+capture. Per-object downloads use S3 `GetObject` with the listed ETag in
+`If-Match`, then verify the returned ETag, content length and actual file size.
+Opaque and multipart ETags remain exact identifiers; they are not reinterpreted
+as full-body hashes. This avoids the REST object's weak or rewritten HTTP
+ETags and its ignored conditional header. A precondition failure invalidates
+the capture and participates in production's bounded consistency retries.
+Concurrent changes or unverifiable targets invalidate the backup;
 there is no successful manifest, forced success, or consistency bypass.
-Production always uses verified API downloads, not state-backend S3 credentials.
+The source reader self-verifies the existing Cloudflare token once per capture
+and derives its equivalent S3 authentication in memory: token ID as access key
+and SHA-256 of the token value as secret, as described in
+[Cloudflare's R2 token authentication](https://developers.cloudflare.com/r2/api/tokens/).
+This creates no token, grants no additional permissions and requires no new
+secret configuration. Source-reader child processes receive only this
+authentication, never Pulumi state or archive-bucket credentials. Downloads use
+private temporary directories, publish files with mode `0600` without replacing
+existing files, and clean partial downloads on failure.
+Production always uses verified conditional downloads, not state-backend S3 credentials.
 This is a fail-closed copy with write detection, not a write lock or a promise
 that a busy application can be copied without maintenance.
 
@@ -408,9 +422,11 @@ Dumps contain no BEGIN/COMMIT statements because D1 provides the import transact
 Manifests land in `infra/pulumi/backups/<stack>/<timestamp>/` (gitignored).
 Production manifests record the verified bookmark/inventory boundary; production
 table-dump and schema-dump restores reject missing or mismatched consistency evidence.
-With S3-compatible R2 credentials + AWS CLI, R2 uses `aws s3 sync`;
-preview without them uses bounded per-object authenticated API downloads.
-Production uses the API path regardless of S3 credentials, with listed-ETag
+With explicit source S3 credentials + AWS CLI, preview can use `aws s3 sync`;
+otherwise it uses bounded conditional per-object downloads authenticated with
+the existing Cloudflare token. `SAVIA_BACKUP_R2_FORCE_API=true` retains this
+verified token-authenticated path even when Pulumi backend credentials exist.
+Production always uses conditional per-object downloads, with listed-ETag
 checks and unchanged final inventories. Stale object metadata fails rather than
 silently accepting an inconsistent archive. Suggested targets remain RPO 24h,
 RTO 4h; they require monitored successful backups and quarterly recovery drills.

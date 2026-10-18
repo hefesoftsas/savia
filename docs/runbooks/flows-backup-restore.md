@@ -218,25 +218,22 @@ Worker or public route. The session and temporary files are removed after
 success or failure. Dry runs remain offline; production is not reachable
 through this preview helper.
 
-The API-token R2 fallback downloads stored bytes through raw HTTPS streaming,
-without automatically decompressing `Content-Encoding: br` or `gzip`. It
-requests the object's stored encoding, or `identity` for unencoded objects,
-to prevent Cloudflare from applying a different compression during transfer. It
-accepts valid HTTP coding tokens and coding lists, including their original case.
-It checks every size and removes partial files on failure. Downloads and Wrangler
-restores URL-encode each object-key segment while keeping the original key in
-the manifest and filesystem.
-This preserves literal percent escapes, spaces, Unicode, and URL delimiters
-(e.g. a key containing `tenant%3A12` is sent as `tenant%253A12`). The S3
-transport receives the original key because its SDK handles URL encoding.
+The token-authenticated R2 reader downloads stored bytes through conditional S3
+`GetObject`, without decompressing `Content-Encoding: br` or `gzip`. It derives
+equivalent S3 authentication in memory from the existing Cloudflare token after
+verifying its identity; no token or permission is created. Each read pins the
+listed ETag with `If-Match`, validates the returned ETag and byte size, and removes
+partial files on failure. The SDK receives the original object key and handles
+URL encoding, preserving literal percent escapes, spaces, Unicode and URL
+delimiters. Wrangler restores encode each object-key segment separately.
 
-Preview selects the raw API fallback with `SAVIA_BACKUP_R2_FORCE_API=true`;
+Preview selects the verified token-authenticated path with `SAVIA_BACKUP_R2_FORCE_API=true`;
 the former `SAVIA_BACKUP_R2_FORCE_WRANGLER` selector remains a compatibility
 alias for bypassing S3 credentials. No additional bucket credentials or
 service activation is required.
 
-Each raw download has a five-minute inactivity timeout that resets as bytes
-arrive. The preview deployment job retains its 40-minute overall deadline;
+Each S3 download uses a 30-second connection timeout and five-minute socket read
+inactivity timeout. The preview deployment job retains its 40-minute overall deadline;
 slow but progressing objects are not aborted by a per-object wall-clock timer.
 
 Workflow-agent restores accept an otherwise empty target containing only
