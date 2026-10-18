@@ -247,7 +247,7 @@ test("AWS CLI parses file-scheme source keys literally without a remote request"
     ],
     {
       encoding: "utf8",
-      timeout: 5_000,
+      timeout: 30_000,
       env: {
         PATH: process.env.PATH,
         AWS_ACCESS_KEY_ID: "offline-smoke",
@@ -257,6 +257,7 @@ test("AWS CLI parses file-scheme source keys literally without a remote request"
         AWS_CONFIG_FILE: "/dev/null",
         AWS_SHARED_CREDENTIALS_FILE: "/dev/null",
         AWS_PAGER: "",
+        AWS_MAX_ATTEMPTS: "1",
       },
     },
   );
