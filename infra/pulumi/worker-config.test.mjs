@@ -237,6 +237,7 @@ test("production gateway preserves configured tenant domains alongside migration
       { custom_domain: true, pattern: "savia.hefesoft.com" },
       { custom_domain: true, pattern: "tenant-home.savia.hefesoft.com" },
       { custom_domain: true, pattern: "acme-team.savia.hefesoft.com" },
+      { pattern: "savia.hefesoft.com/*", zone_name: "hefesoft.com" },
       { pattern: "*.savia.hefesoft.com/*", zone_name: "hefesoft.com" },
       { custom_domain: true, pattern: "savia.app.hefesoft.com" },
       { custom_domain: true, pattern: "savia-team.savia.app.hefesoft.com" },

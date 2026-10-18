@@ -6,6 +6,7 @@
   "vars": { "CANONICAL_HOST": "savia.hefesoft.com" },
   "routes": [
     { "pattern": "savia.hefesoft.com", "custom_domain": true },
+    { "pattern": "savia.hefesoft.com/*", "zone_name": "hefesoft.com" },
     { "pattern": "*.savia.hefesoft.com/*", "zone_name": "hefesoft.com" },
     { "pattern": "savia.app.hefesoft.com", "custom_domain": true },
     { "pattern": "savia-team.savia.app.hefesoft.com", "custom_domain": true },

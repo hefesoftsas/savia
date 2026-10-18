@@ -382,6 +382,11 @@ jobs:
         env:
           NODE_OPTIONS: "--max-old-space-size=1536"
 
+      - name: Release temporary canonical domain bridge
+        run: node scripts/finalize-domain-transition.mjs
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
       - name: Deploy savia gateway
         uses: cloudflare/wrangler-action@v4
         with:
@@ -419,3 +424,9 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           SAVIA_AGENCIES_PAUSE_ATTEMPTED: ${{ steps.pause_agencies.outcome == 'success' || steps.pause_agencies.outcome == 'failure' || steps.pause_agencies.outcome == 'cancelled' }}
           SAVIA_FLOWS_PAUSE_ATTEMPTED: ${{ steps.pause_flows.outcome == 'success' || steps.pause_flows.outcome == 'failure' || steps.pause_flows.outcome == 'cancelled' }}
+
+      - name: Restore temporary domain bridge after failed rollout
+        if: ${{ (failure() || cancelled()) && env.SAVIA_DOMAIN_TRANSITION_RELEASED == 'true' }}
+        run: node scripts/finalize-domain-transition.mjs --restore
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

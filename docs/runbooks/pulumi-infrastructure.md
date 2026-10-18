@@ -57,6 +57,23 @@ a code-only change as a completed live migration: provider callback registration
 and valid wildcard TLS are release prerequisites. Rollback requires the previous
 release and origin config, followed by renewed authentication.
 
+## Temporary hostname bridge
+
+Until the production canonical cutover is ready, `savia-domain-transition`
+redirects the new canonical and tenant hosts to the currently active old hosts.
+Its source and Wrangler manifest are in `infra/pulumi/domain-transition.mjs` and
+`infra/pulumi/wrangler.domain-transition.jsonc`. It has no data bindings or
+secrets and uses temporary, noncached redirects. Authentication links restart at
+the active root and write requests are rejected rather than replayed.
+
+The production workflow transfers only the two known new-host routes from this
+bridge to `savia` immediately before gateway deployment. The generated gateway
+manifest declares both routes, including the canonical path route, so the bridge
+cannot intercept the final release and create an old/new redirect loop. A failed
+rollout restores the bridge routes. Unknown route owners fail closed before any
+changes. The bridge can remain deployed without routes after a successful
+cutover; do not reattach it after production has changed its canonical origin.
+
 ## Tenant login domains
 
 The standard production hostname uses a wildcard Worker Route for dynamically

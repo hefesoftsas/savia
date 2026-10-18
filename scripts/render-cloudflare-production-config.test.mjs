@@ -286,6 +286,7 @@ test("writes only the supported production workers and retains their runtime set
     assert.equal(admin.vars.CANONICAL_HOST, "savia.hefesoft.com");
     assert.deepEqual(admin.routes, [
       { custom_domain: true, pattern: "savia.hefesoft.com" },
+      { pattern: "savia.hefesoft.com/*", zone_name: "hefesoft.com" },
       { pattern: "*.savia.hefesoft.com/*", zone_name: "hefesoft.com" },
       { custom_domain: true, pattern: "savia.app.hefesoft.com" },
       { custom_domain: true, pattern: "savia-team.savia.app.hefesoft.com" },
