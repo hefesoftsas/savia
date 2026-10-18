@@ -319,6 +319,15 @@ D1 batch transaction. Separate drop/create requests race across Worker isolates
 and can fail with "trigger already exists", even when each isolate caches its
 own initialization promise. Exercise concurrent login requests on a newly
 published Auth version to cover this startup path.
+The Auth Worker must also reuse its initialized handler while all environment
+bindings and configuration values remain unchanged. Constructing Better Auth on
+every request repeats its OAuth resource merge initialization, including guarded
+D1 reads and updates for CSS requests. Invalidate the handler when any binding,
+secret, configuration value, or environment key changes; never cache request
+headers, cookies, responses, or Durable Object stubs. Evict a failed handler so a
+transient initialization error cannot persist for the lifetime of an isolate.
+Validate both cold and warm
+concurrent requests, and record elapsed times and canceled invocations as failures.
 The authenticated controller's `status` action accepts `includePermits: true`
 for operator inspection of outstanding permit IDs and creation times. Inspection
 does not remove or age out permits. Treat an unresolved permit as a blocked
