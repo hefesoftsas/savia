@@ -2,7 +2,7 @@
 
 Savia exposes a Streamable HTTP MCP endpoint at `<SAVIA_API_RESOURCE>/mcp`.
 For the production origin configured in this repository, the connection URL is
-`https://savia.app.hefesoft.com/mcp` after deploying this change.
+`https://savia.hefesoft.com/mcp` after deploying this change.
 
 ## Connect from another machine
 
@@ -14,7 +14,7 @@ address on another machine.
 Use one of these deployed resources:
 
 - Preview: `https://savia-preview.hefesoft.com/mcp`
-- Production: `https://savia.app.hefesoft.com/mcp` after the production gateway
+- Production: `https://savia.hefesoft.com/mcp` after the production gateway
   is deployed and serving the MCP route
 
 Before connecting a new machine, verify the selected origin from that machine:
