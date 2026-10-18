@@ -4,7 +4,7 @@
 // No Pulumi imports here: this file is unit-tested with `node --test`.
 
 export const DEFAULT_DOCUMENTS_BUCKET = "savia-documents";
-export const DEFAULT_PUBLIC_ORIGIN = "https://savia.app.hefesoft.com";
+export const DEFAULT_PUBLIC_ORIGIN = "https://savia.hefesoft.com";
 export const PREVIEW_PUBLIC_ORIGIN = "https://savia-preview.hefesoft.com";
 export const PREVIEW_VECTORIZE_INDEX = "savia-pages-search-preview";
 export const BASE_STATE_BUCKET = "savia-pulumi-state";

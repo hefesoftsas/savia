@@ -208,7 +208,7 @@ export function UserMenu({ children }: UserMenuProps) {
               asChild
               className="cursor-pointer gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium"
             >
-              <a href="https://savia.app.hefesoft.com">
+              <a href="https://savia.hefesoft.com">
                 <ExternalLink className="size-4 text-muted-foreground" />
                 <span>
                   {translate("savia.userMenu.platformConsole", {

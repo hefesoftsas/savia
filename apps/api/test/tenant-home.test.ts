@@ -60,7 +60,7 @@ describe("internal tenant home", () => {
   it("resolves the tenant serving the current hostname", async () => {
     await createTenant(992002, "current-home");
     const canonical = await app().request(
-      "/_internal/tenants/992002/home?host=savia.app.hefesoft.com",
+      "/_internal/tenants/992002/home?host=savia.hefesoft.com",
       { headers: { "x-savia-bridge-key": "test-bridge-key" } },
     );
     expect(await canonical.json()).toEqual({
@@ -71,7 +71,7 @@ describe("internal tenant home", () => {
     });
 
     const dedicated = await app().request(
-      "/_internal/tenants/992002/home?host=current-home.savia.app.hefesoft.com",
+      "/_internal/tenants/992002/home?host=current-home.savia.hefesoft.com",
       { headers: { "x-savia-bridge-key": "test-bridge-key" } },
     );
     expect(await dedicated.json()).toEqual({
@@ -82,7 +82,7 @@ describe("internal tenant home", () => {
     });
 
     const unknown = await app().request(
-      "/_internal/tenants/992002/home?host=unknown.savia.app.hefesoft.com",
+      "/_internal/tenants/992002/home?host=unknown.savia.hefesoft.com",
       { headers: { "x-savia-bridge-key": "test-bridge-key" } },
     );
     expect(await unknown.json()).toEqual({

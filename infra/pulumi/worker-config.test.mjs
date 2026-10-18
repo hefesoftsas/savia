@@ -17,7 +17,7 @@ const production = {
   deploymentEnvironment: "production",
   authD1Id: "auth-id",
   domainD1Id: "domain-id",
-  publicOrigin: "https://savia.app.hefesoft.com",
+  publicOrigin: "https://savia.hefesoft.com",
   documentsBucket: "savia-documents",
 };
 const flows = {

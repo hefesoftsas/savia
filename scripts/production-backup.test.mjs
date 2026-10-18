@@ -38,7 +38,7 @@ async function createValidCapture(
     domainD1Id: "22222222-2222-4222-8222-222222222222",
     documentsBucketName: "savia-documents",
     resolvedEnvironment: "production",
-    resolvedPublicOrigin: "https://savia.app.hefesoft.com",
+    resolvedPublicOrigin: "https://savia.hefesoft.com",
     databaseNames: { auth: "savia-auth", domain: "savia-agencies" },
     flowsEnabled: false,
     flowsResources: null,

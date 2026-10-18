@@ -7,7 +7,7 @@ import { flowsWorkerConfig } from "./flows-worker-config.mjs";
 import { pluginEditorWorkerConfig } from "./auxiliary-worker-config.mjs";
 
 const defaultDocumentsBucket = "savia-documents";
-const defaultPublicOrigin = "https://savia.app.hefesoft.com";
+const defaultPublicOrigin = "https://savia.hefesoft.com";
 const defaultBootstrapEmail = "savia.admin@example.test";
 const privateMcpUrl = "https://savia-mcp.internal/mcp";
 
@@ -241,41 +241,61 @@ function mcpConfig({ publicOrigin }) {
   };
 }
 
-function gatewayConfig({ publicOrigin, documentsBucket }) {
+function gatewayConfig({ publicOrigin, documentsBucket, runWorkerFirst }) {
   const hostname = new URL(publicOrigin).hostname;
   return {
     $schema: "../../node_modules/wrangler/config-schema.json",
     name: "savia",
     compatibility_date: "2026-08-31",
     main: "src/edge-gateway.ts",
-    routes: [{ custom_domain: true, pattern: hostname }],
+    vars: { CANONICAL_HOST: hostname },
+    routes:
+      hostname === "savia.hefesoft.com"
+        ? [
+            { custom_domain: true, pattern: hostname },
+            { pattern: `*.${hostname}/*`, zone_name: "hefesoft.com" },
+            { custom_domain: true, pattern: "savia.app.hefesoft.com" },
+            // Preserve the existing tenant attachment during the migration.
+            {
+              custom_domain: true,
+              pattern: "savia-team.savia.app.hefesoft.com",
+            },
+            {
+              pattern: "*.savia.app.hefesoft.com/*",
+              zone_name: "hefesoft.com",
+            },
+          ]
+        : [{ custom_domain: true, pattern: hostname }],
     services: [{ binding: "API", service: "savia-agencies" }],
     r2_buckets: [{ binding: "OFFICE_RUNTIME", bucket_name: documentsBucket }],
     assets: {
       directory: "./dist",
       binding: "ASSETS",
       not_found_handling: "single-page-application",
-      run_worker_first: [
-        "/companion-downloads.json",
-        "/register",
-        "/public/forms",
-        "/public/forms/*",
-        "/public/bookings",
-        "/public/bookings/*",
-        "/public/quotes",
-        "/public/quotes/*",
-        "/office",
-        "/office/*",
-        "/api/*",
-        "/v1/*",
-        "/webhooks/whatsapp",
-        "/s/*",
-        "/.well-known/*",
-        "/mcp",
-        "/health",
-        "/docs",
-        "/openapi.json",
-      ],
+      run_worker_first:
+        runWorkerFirst && hostname === "savia.hefesoft.com"
+          ? true
+          : [
+              "/companion-downloads.json",
+              "/register",
+              "/public/forms",
+              "/public/forms/*",
+              "/public/bookings",
+              "/public/bookings/*",
+              "/public/quotes",
+              "/public/quotes/*",
+              "/office",
+              "/office/*",
+              "/api/*",
+              "/v1/*",
+              "/webhooks/whatsapp",
+              "/s/*",
+              "/.well-known/*",
+              "/mcp",
+              "/health",
+              "/docs",
+              "/openapi.json",
+            ],
     },
   };
 }
@@ -396,7 +416,10 @@ export async function renderProductionConfigs({
     mcp: mcpConfig(rendered),
     "connector-gateway": connectorsConfig(rendered),
     "backup-coordinator": backupCoordinatorConfig(),
-    admin: gatewayConfig(rendered),
+    admin: gatewayConfig({
+      ...rendered,
+      runWorkerFirst: deploymentEnvironment === "production",
+    }),
   };
   // One namespace per deployment environment, shared by every D1/R2 writer.
   // Cross-script names are resolved after preview worker names are rewritten.

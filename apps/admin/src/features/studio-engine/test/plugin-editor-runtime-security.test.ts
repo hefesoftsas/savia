@@ -44,6 +44,18 @@ describe("isolated editor session", () => {
         parent,
       )?.origin,
     ).toBe("https://savia-editor.example.workers.dev");
+    expect(
+      resolvePluginEditorRuntimeUrl(
+        "https://editor.savia.hefesoft.com/plugin-editor",
+        "https://savia.hefesoft.com",
+      ),
+    ).toBeNull();
+    expect(
+      resolvePluginEditorRuntimeUrl(
+        "https://editor.savia.hefesoft.com/plugin-editor",
+        "https://merkaseguros.savia.hefesoft.com",
+      ),
+    ).toBeNull();
     expect(resolvePluginEditorRuntimeUrl(undefined, parent)).toBeNull();
   });
   it("requires origin, source, project and nonce for every envelope", () => {

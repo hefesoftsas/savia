@@ -101,7 +101,7 @@ test("writes only the supported production workers and retains their runtime set
     assert.deepEqual(auth.services, [
       { binding: "SAVIA_IDENTITY", service: "savia-agencies" },
     ]);
-    assert.equal(auth.vars.BETTER_AUTH_URL, "https://savia.app.hefesoft.com");
+    assert.equal(auth.vars.BETTER_AUTH_URL, "https://savia.hefesoft.com");
     assert.equal(
       auth.vars.BETTER_AUTH_BOOTSTRAP_EMAIL,
       "savia.admin@example.test",
@@ -226,7 +226,7 @@ test("writes only the supported production workers and retains their runtime set
     assert.deepEqual(mcp.services, [
       { binding: "API", service: "savia-agencies" },
     ]);
-    assert.equal(mcp.vars.SAVIA_API_URL, "https://savia.app.hefesoft.com");
+    assert.equal(mcp.vars.SAVIA_API_URL, "https://savia.hefesoft.com");
     assert.equal("SAVIA_MCP_SHARED_SECRET" in mcp.vars, false);
     assert.deepEqual(mcp.secrets, {
       required: ["SAVIA_MCP_SHARED_SECRET"],
@@ -281,21 +281,16 @@ test("writes only the supported production workers and retains their runtime set
     assert.deepEqual(admin.r2_buckets, [
       { binding: "OFFICE_RUNTIME", bucket_name: "savia-documents" },
     ]);
-    assert.ok(admin.assets.run_worker_first.includes("/office/*"));
+    assert.equal(admin.assets.run_worker_first, true);
     assert.equal(admin.name, "savia");
+    assert.equal(admin.vars.CANONICAL_HOST, "savia.hefesoft.com");
     assert.deepEqual(admin.routes, [
+      { custom_domain: true, pattern: "savia.hefesoft.com" },
+      { pattern: "*.savia.hefesoft.com/*", zone_name: "hefesoft.com" },
       { custom_domain: true, pattern: "savia.app.hefesoft.com" },
+      { custom_domain: true, pattern: "savia-team.savia.app.hefesoft.com" },
+      { pattern: "*.savia.app.hefesoft.com/*", zone_name: "hefesoft.com" },
     ]);
-    assert.ok(admin.assets.run_worker_first.includes("/health"));
-    assert.ok(admin.assets.run_worker_first.includes("/webhooks/whatsapp"));
-    assert.ok(
-      admin.assets.run_worker_first.includes("/companion-downloads.json"),
-    );
-    assert.ok(admin.assets.run_worker_first.includes("/mcp"));
-    assert.ok(admin.assets.run_worker_first.includes("/public/forms/*"));
-    assert.ok(admin.assets.run_worker_first.includes("/public/bookings/*"));
-    assert.ok(admin.assets.run_worker_first.includes("/s/*"));
-    assert.ok(admin.assets.run_worker_first.includes("/register"));
     assert.equal(admin.assets.not_found_handling, "single-page-application");
   } finally {
     await rm(outputRoot, { force: true, recursive: true });
@@ -329,16 +324,20 @@ test("routes public quote pages through the admin worker for security headers", 
           "utf8",
         ),
       );
-      assert.ok(admin.assets.run_worker_first.includes("/public/quotes"));
-      assert.ok(admin.assets.run_worker_first.includes("/public/quotes/*"));
+      if (deploymentEnvironment === "production") {
+        assert.equal(admin.assets.run_worker_first, true);
+      } else {
+        assert.ok(Array.isArray(admin.assets.run_worker_first));
+        assert.ok(admin.assets.run_worker_first.includes("/public/quotes"));
+        assert.ok(admin.assets.run_worker_first.includes("/public/quotes/*"));
+      }
     }
 
     const local = await readFile(
       new URL("../apps/admin/wrangler.jsonc", import.meta.url),
       "utf8",
     );
-    assert.match(local, /"\/public\/quotes"/);
-    assert.match(local, /"\/public\/quotes\/\*"/);
+    assert.match(local, /"run_worker_first": true/);
   } finally {
     await rm(outputRoot, { recursive: true, force: true });
   }
@@ -442,6 +441,7 @@ test("preview isolates worker names, bindings, origins, storage and schedules", 
         ]);
       if (app === "admin") {
         assert.equal(conf.vars.CANONICAL_HOST, "savia-preview.hefesoft.com");
+        assert.ok(Array.isArray(conf.assets.run_worker_first));
         assert.ok(conf.assets.run_worker_first.includes("/webhooks/whatsapp"));
         assert.deepEqual(conf.routes, [
           { custom_domain: true, pattern: "savia-preview.hefesoft.com" },
@@ -500,9 +500,9 @@ test("preview auth binds registration finalization to its matching API worker", 
 
 test("preview rejects every normalized production origin and unknown preview host", async () => {
   for (const publicOrigin of [
-    "https://savia.app.hefesoft.com/",
+    "https://savia.hefesoft.com/",
     "https://SAVIA.APP.HEFESOFT.COM",
-    "https://savia.app.hefesoft.com:443/path",
+    "https://savia.hefesoft.com:443/path",
     "https://savia-preview.hefesoft.com:8443",
     "https://other.example.test",
   ]) {

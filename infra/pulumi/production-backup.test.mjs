@@ -19,7 +19,7 @@ async function fixture(databaseNames = {}, domainDatabase = null) {
     environment: "production",
     ...databaseNames,
     documentsBucket: "savia-documents",
-    publicOrigin: "https://savia.app.hefesoft.com",
+    publicOrigin: "https://savia.hefesoft.com",
   });
   const outputs = {
     cloudflareAccountId: accountId,

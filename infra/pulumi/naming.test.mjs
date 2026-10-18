@@ -48,7 +48,7 @@ describe("pulumi naming", () => {
     const names = resolveInfraNames({
       environment: "production",
       documentsBucket: "savia-documents",
-      publicOrigin: "https://savia.app.hefesoft.com",
+      publicOrigin: "https://savia.hefesoft.com",
     });
     assert.equal(names.workers.api, "savia-agencies");
     assert.equal(names.databases.domain, "savia-agencies");
@@ -71,7 +71,7 @@ describe("pulumi naming", () => {
     const production = resolveInfraNames({
       environment: "production",
       documentsBucket: "savia-documents",
-      publicOrigin: "https://savia.app.hefesoft.com",
+      publicOrigin: "https://savia.hefesoft.com",
       backupBucket: PRODUCTION_BACKUP_BUCKET,
     });
     assert.equal(production.backupBucket, PRODUCTION_BACKUP_BUCKET);
@@ -79,7 +79,7 @@ describe("pulumi naming", () => {
       resolveInfraNames({
         environment: "production",
         documentsBucket: "savia-documents",
-        publicOrigin: "https://savia.app.hefesoft.com",
+        publicOrigin: "https://savia.hefesoft.com",
       }).backupBucket,
       undefined,
     );
@@ -94,7 +94,7 @@ describe("pulumi naming", () => {
         resolveInfraNames({
           environment: "production",
           documentsBucket: "savia-documents",
-          publicOrigin: "https://savia.app.hefesoft.com",
+          publicOrigin: "https://savia.hefesoft.com",
           backupBucket,
         }),
       );
@@ -122,7 +122,7 @@ describe("pulumi naming", () => {
     const adopted = resolveInfraNames({
       environment: "production",
       documentsBucket: "savia-documents",
-      publicOrigin: "https://savia.app.hefesoft.com",
+      publicOrigin: "https://savia.hefesoft.com",
       authDatabaseName: "savia-auth-local-canonical-20260913-v2",
       domainDatabaseName: "savia-agencies-local-canonical-20260913-v2",
     });
@@ -150,7 +150,7 @@ describe("pulumi naming", () => {
         resolveInfraNames({
           environment: "production",
           documentsBucket: "savia-documents",
-          publicOrigin: "https://savia.app.hefesoft.com",
+          publicOrigin: "https://savia.hefesoft.com",
           ...override,
         }),
       );
@@ -169,7 +169,7 @@ describe("pulumi naming", () => {
       resolveInfraNames({
         environment: "preview",
         documentsBucket: "savia-documents-preview",
-        publicOrigin: "https://savia.app.hefesoft.com",
+        publicOrigin: "https://savia.hefesoft.com",
       }),
     );
   });
@@ -187,7 +187,7 @@ describe("pulumi naming", () => {
       resolveInfraNames({
         environment: "production",
         documentsBucket: "savia-documents",
-        publicOrigin: "https://savia.app.hefesoft.com",
+        publicOrigin: "https://savia.hefesoft.com",
         pagesSearchIndex: "savia-pages-search-preview",
       }),
     );
@@ -200,7 +200,7 @@ describe("pulumi naming", () => {
       resolveInfraNames({
         environment: "production",
         documentsBucket: "  ",
-        publicOrigin: "https://savia.app.hefesoft.com",
+        publicOrigin: "https://savia.hefesoft.com",
       }),
     );
   });
@@ -209,7 +209,7 @@ describe("pulumi naming", () => {
     const names = resolveInfraNames({
       environment: "production",
       documentsBucket: "savia-documents",
-      publicOrigin: "https://savia.app.hefesoft.com",
+      publicOrigin: "https://savia.hefesoft.com",
     });
     const env = exportsForRender({
       authD1Id: "auth-uuid",

@@ -70,7 +70,7 @@ test("verifies production Flows policy and production executor bindings", async 
   const productionEnv = { ...env, SAVIA_DEPLOY_ENVIRONMENT: "production" };
   const productionConfig = flowsWorkerConfig(
     { workerName: "savia-flows", buckets: {} },
-    "https://savia.app.hefesoft.com",
+    "https://savia.hefesoft.com",
     "production",
   );
   const productionSettings = {

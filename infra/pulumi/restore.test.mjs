@@ -607,7 +607,7 @@ describe("pulumi restore", () => {
       pulumiOutputs: {
         ...MANIFEST.pulumiOutputs,
         resolvedEnvironment: "production",
-        resolvedPublicOrigin: "https://savia.app.hefesoft.com",
+        resolvedPublicOrigin: "https://savia.hefesoft.com",
         documentsBucketName: "savia-documents",
         databaseNames: {
           auth: "savia-auth-local-canonical-20260913-v2",
@@ -723,7 +723,7 @@ describe("pulumi restore", () => {
     const outputs = {
       ...MANIFEST.pulumiOutputs,
       resolvedEnvironment: "production",
-      resolvedPublicOrigin: "https://savia.app.hefesoft.com",
+      resolvedPublicOrigin: "https://savia.hefesoft.com",
       documentsBucketName: "savia-documents",
       databaseNames: {
         auth: "savia-auth-local-canonical-20260913-v2",

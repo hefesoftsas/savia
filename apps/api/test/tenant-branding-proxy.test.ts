@@ -8,7 +8,7 @@ it("removes caller supplied branding before proxying authentication", async () =
   );
   const app = createTestApp({ authService: { fetch } });
   const response = await app.request(
-    "https://savia.app.hefesoft.com/api/auth/login",
+    "https://savia.hefesoft.com/api/auth/login",
     { headers: { "x-savia-tenant-branding": "spoofed" } },
   );
   expect(response.status).toBe(200);
@@ -44,12 +44,12 @@ it.each([
         : {}),
     };
     const canonical = await app.request(
-      `https://savia.app.hefesoft.com/api/auth/${path}`,
+      `https://savia.hefesoft.com/api/auth/${path}`,
       init,
     );
     expect(await canonical.json()).toEqual({ tenantId: null, key: null });
     const tenant = await app.request(
-      `https://branding-preview.savia.app.hefesoft.com/api/auth/${path}`,
+      `https://branding-preview.savia.hefesoft.com/api/auth/${path}`,
       init,
     );
     expect(await tenant.json()).toEqual({
@@ -71,7 +71,7 @@ it("adds tenant email context only to tenant recovery HTML and strips caller bri
     identityBridgeKey: "trusted-bridge-key",
   });
   const recovery = await app.request(
-    "https://branding-preview.savia.app.hefesoft.com/api/auth/forgot-password",
+    "https://branding-preview.savia.hefesoft.com/api/auth/forgot-password",
     {
       headers: {
         "x-savia-bridge-key": "caller-key",
@@ -85,7 +85,7 @@ it("adds tenant email context only to tenant recovery HTML and strips caller bri
   });
 
   const apiCall = await app.request(
-    "https://branding-preview.savia.app.hefesoft.com/api/auth/sign-in/email",
+    "https://branding-preview.savia.hefesoft.com/api/auth/sign-in/email",
     {
       method: "POST",
       headers: {
@@ -138,21 +138,21 @@ it("renders server-owned branding on dedicated and canonical OAuth pages", async
   const app = createTestApp({ authService: { fetch } });
   for (const [url, headers] of [
     [
-      "https://branding-preview.savia.app.hefesoft.com/api/auth/login",
+      "https://branding-preview.savia.hefesoft.com/api/auth/login",
       { "x-savia-tenant-branding": "spoofed" },
     ],
     [
-      "https://savia.app.hefesoft.com/api/auth/login",
+      "https://savia.hefesoft.com/api/auth/login",
       {
         cookie:
-          "savia.return_origin=https%3A%2F%2Fbranding-preview.savia.app.hefesoft.com",
+          "savia.return_origin=https%3A%2F%2Fbranding-preview.savia.hefesoft.com",
       },
     ],
     [
-      "https://savia.app.hefesoft.com/api/auth/oauth-ui.css",
+      "https://savia.hefesoft.com/api/auth/oauth-ui.css",
       {
         cookie:
-          "savia.return_origin=https%3A%2F%2Fbranding-preview.savia.app.hefesoft.com",
+          "savia.return_origin=https%3A%2F%2Fbranding-preview.savia.hefesoft.com",
       },
     ],
   ] as const) {
@@ -182,15 +182,15 @@ it.each([
   );
   const app = createTestApp({ authService: { fetch } });
   for (const hostname of [
-    "branding-preview.savia.app.hefesoft.com",
-    "savia.app.hefesoft.com",
+    "branding-preview.savia.hefesoft.com",
+    "savia.hefesoft.com",
   ]) {
     const response = await app.request(`https://${hostname}/api/auth/${path}`, {
       method,
       headers: {
         "x-savia-tenant-branding": "spoofed",
         cookie:
-          "savia.return_origin=https%3A%2F%2Fbranding-preview.savia.app.hefesoft.com",
+          "savia.return_origin=https%3A%2F%2Fbranding-preview.savia.hefesoft.com",
       },
     });
     expect(response.status).toBe(200);
@@ -206,7 +206,7 @@ it("ignores an external OAuth return origin for branding", async () => {
   );
   const app = createTestApp({ authService: { fetch } });
   const response = await app.request(
-    "https://savia.app.hefesoft.com/api/auth/login",
+    "https://savia.hefesoft.com/api/auth/login",
     {
       headers: { cookie: "savia.return_origin=https%3A%2F%2Fattacker.example" },
     },

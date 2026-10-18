@@ -192,10 +192,10 @@ describe("My Day calendar views", () => {
       tenantBookingsLink(
         "centro-medico",
         "2026-10-03T14:00:00.000Z",
-        "savia.app.hefesoft.com",
+        "savia.hefesoft.com",
       ),
     ).toBe(
-      "https://centro-medico.savia.app.hefesoft.com/#/bookings?tab=reservations&date=2026-10-03",
+      "https://centro-medico.savia.hefesoft.com/#/bookings?tab=reservations&date=2026-10-03",
     );
     expect(
       tenantBookingsLink(

@@ -20,6 +20,43 @@ protected, even for preview, and is excluded from application teardown.
 Secrets in checkpoint/configuration are encrypted with the stack passphrase.
 Do not pass `--show-secrets`, commit checkpoints, or expose the state bucket.
 
+## Production canonical hostname migration
+
+Production declares `https://savia.hefesoft.com` as its public origin and
+`<slug>.savia.hefesoft.com` as its tenant hostname pattern. Preview stays on
+`savia-preview.hefesoft.com`. Database IDs, buckets, deletion protection,
+Worker names, and secrets are unchanged.
+
+The gateway retains the former canonical Custom Domain, the existing
+`savia-team.savia.app.hefesoft.com` attachment, and a legacy wildcard Worker
+Route. Old GET/HEAD links redirect to the corresponding new host. Login and
+callback links restart authentication rather than replaying an old PKCE
+transaction. Legacy writes receive a migration error; API clients must switch
+origin and authorize again. Cookies stay scoped to `.savia.hefesoft.com`, never
+to `.hefesoft.com`.
+
+Before promotion, verify proxied DNS and valid TLS on both `savia.hefesoft.com`
+and `*.savia.hefesoft.com`. Worker Routes do not provision DNS or certificates.
+Preserve old-host DNS and certificates during the transition. Register the new
+`https://savia.hefesoft.com/api/auth/callback/google` and
+`https://savia.hefesoft.com/api/auth/callback/microsoft` URLs in their existing
+identity-provider applications before switching the auth origin. Retain their
+old callbacks until pending transactions expire. Check other configured identity
+providers and external MCP/OAuth clients as well.
+
+The production readiness preflight permits only the known old origin in stack
+outputs while config selects the new origin. All existing resource identity and
+protection checks remain required. After the protected backup, apply the adopted
+stack and render manifests from its updated outputs. Admin and Scalar OAuth
+clients reconcile callbacks/resources from the new auth variables while keeping
+their client IDs. Expect users to authenticate again.
+
+Verify canonical and tenant DNS, TLS, health, login, static assets, authenticated
+access, old-host deep links, and Preview isolation after rollout. Do not describe
+a code-only change as a completed live migration: provider callback registration
+and valid wildcard TLS are release prerequisites. Rollback requires the previous
+release and origin config, followed by renewed authentication.
+
 ## Backend setup (once per machine/CI)
 
 ```sh
@@ -345,7 +382,7 @@ transactions, does not sign in a user, and does not print redirect query strings
 or cookies. Do not add retries that hide intermittent errors.
 
 ```sh
-SAVIA_PUBLIC_ORIGIN=https://savia.app.hefesoft.com node --input-type=module <<'JS'
+SAVIA_PUBLIC_ORIGIN=https://savia.hefesoft.com node --input-type=module <<'JS'
 const origin = new URL(process.env.SAVIA_PUBLIC_ORIGIN).origin;
 const paths = Array.from({ length: 4 }, () => [
   "/api/auth/login", "/api/auth/admin/authorize",
