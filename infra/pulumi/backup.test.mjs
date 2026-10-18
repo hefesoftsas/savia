@@ -166,6 +166,32 @@ describe("pulumi backup", () => {
     }
   });
 
+  it("defaults verified per-object downloads to the isolated S3 downloader", async () => {
+    const destDir = await mkdtemp(join(tmpdir(), "backup-r2-default-s3-"));
+    let factoryCalls = 0;
+    const calls = [];
+    await downloadR2Objects({
+      objects: [{ key: "one.bin", size: 3, etag: "tag" }],
+      destDir,
+      bucket: "savia-documents",
+      accountId: "08a0d36f8b0357684f83e4bfeb6628b6",
+      token: "existing-token",
+      createDownloader({ accountId, token }) {
+        factoryCalls++;
+        assert.equal(accountId, "08a0d36f8b0357684f83e4bfeb6628b6");
+        assert.equal(token, "existing-token");
+        return async (request) => {
+          calls.push(request);
+          await writeFile(request.destFile, "one");
+        };
+      },
+    });
+    assert.equal(factoryCalls, 1);
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].expectedEtag, "tag");
+    assert.equal(await readFile(join(destDir, "one.bin"), "utf8"), "one");
+  });
+
   it("stops scheduling after an API object download fails and awaits active downloads", async () => {
     const destDir = await mkdtemp(join(tmpdir(), "backup-r2-failure-"));
     const objects = Array.from({ length: 8 }, (_, index) => ({

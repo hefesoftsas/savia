@@ -4,7 +4,7 @@
 // with a manifest.json consumed by restore.mjs.
 // R2 sync uses the S3-compatible API via AWS CLI; preview D1 uses Wrangler
 // export while production uses a bookmark-verified, restore-ready schema dump.
-import { downloadR2Object } from "./r2-object-download.mjs";
+import { createR2S3Downloader } from "./r2-s3-object-download.mjs";
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
@@ -194,9 +194,8 @@ export function hasS3Credentials(env = process.env) {
   );
 }
 
-// Fallback when no S3 credentials exist: download object by object with
-// wrangler (needs only CLOUDFLARE_API_TOKEN). Slower than `aws s3 sync`
-// but requires nothing else.
+// Legacy Wrangler object-get command retained for existing callers. Automated
+// verified captures use the conditional, token-authenticated S3 downloader.
 export function buildR2ObjectGetCommand({ bucket, key, destFile }) {
   if (!bucket || !destFile) throw new Error("bucket and destFile required");
   assertSafeR2Key(key);
@@ -380,13 +379,19 @@ export async function downloadR2Objects({
   accountId,
   token,
   concurrency = 4,
-  downloadImpl = downloadR2Object,
+  downloadImpl,
+  createDownloader = createR2S3Downloader,
 }) {
   if (!Array.isArray(objects)) throw new Error("objects must be an array");
   if (!Number.isInteger(concurrency) || concurrency < 1 || concurrency > 8) {
     throw new Error("R2 concurrency must be an integer from 1 through 8");
   }
-  if (typeof downloadImpl !== "function") {
+  const downloader =
+    downloadImpl ??
+    (objects.length > 0
+      ? createDownloader({ accountId, token })
+      : async () => {});
+  if (typeof downloader !== "function") {
     throw new Error("downloadImpl must be a function");
   }
   let nextIndex = 0;
@@ -401,7 +406,7 @@ export async function downloadR2Objects({
         assertSafeR2Key(object.key);
         const destFile = join(destDir, object.key);
         await mkdir(dirname(destFile), { recursive: true });
-        await downloadImpl({
+        await downloader({
           bucket,
           key: object.key,
           destFile,
@@ -515,7 +520,8 @@ export async function createBackup(
     run = execFileAsync,
     env = process.env,
     fetchImpl = fetch,
-    downloadImpl = downloadR2Object,
+    downloadImpl,
+    createDownloader = createR2S3Downloader,
     startMonitor = startD1RecoveryMonitor,
   } = {},
 ) {
@@ -582,6 +588,12 @@ export async function createBackup(
   const skipped = [];
   const uuidByName = d1BackupTargets(outputs);
   const token = env.CLOUDFLARE_API_TOKEN;
+  let captureDownloader;
+  const getCaptureDownloader = () => {
+    if (downloadImpl) return downloadImpl;
+    captureDownloader ??= createDownloader({ accountId, token, fetchImpl });
+    return captureDownloader;
+  };
   const consistencyOptions = {
     accountId,
     token,
@@ -715,7 +727,8 @@ export async function createBackup(
             accountId,
             token,
             concurrency: plan.r2Concurrency,
-            downloadImpl,
+            downloadImpl:
+              objects.length > 0 ? getCaptureDownloader() : undefined,
           });
           method = "object-get";
         }

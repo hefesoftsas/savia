@@ -168,6 +168,53 @@ test("production capture writes a restore-ready verified archive with exact adop
   }
 });
 
+test("production capture lazily constructs its default S3 downloader once for nonempty R2", async () => {
+  const f = await fixture();
+  try {
+    delete f.options.downloadImpl;
+    let factoryCalls = 0;
+    let objectCalls = 0;
+    f.options.createDownloader = ({ accountId, token }) => {
+      factoryCalls++;
+      assert.equal(accountId, f.outputs.cloudflareAccountId);
+      assert.equal(token, "redacted");
+      return async ({ destFile }) => {
+        objectCalls++;
+        await writeFile(destFile, "data");
+        f.state.captured = true;
+      };
+    };
+    await createBackup(f.plan, f.options);
+    assert.equal(factoryCalls, 1);
+    assert.equal(objectCalls, 1);
+  } finally {
+    await rm(f.root, { recursive: true, force: true });
+  }
+});
+
+test("production capture does not resolve S3 credentials for empty R2 inventories", async () => {
+  const f = await fixture();
+  try {
+    delete f.options.downloadImpl;
+    let factoryCalls = 0;
+    const fetchImpl = f.options.fetchImpl;
+    f.options.fetchImpl = async (url, init) => {
+      if (String(url).includes("/objects?")) {
+        return { ok: true, json: async () => ({ success: true, result: [] }) };
+      }
+      return fetchImpl(url, init);
+    };
+    f.options.createDownloader = () => {
+      factoryCalls++;
+      throw new Error("empty inventories must not resolve S3 credentials");
+    };
+    await createBackup(f.plan, f.options);
+    assert.equal(factoryCalls, 0);
+  } finally {
+    await rm(f.root, { recursive: true, force: true });
+  }
+});
+
 test("adopted production database names survive capture and restore validation", async () => {
   const f = await fixture({
     authDatabaseName: "savia-auth-local-canonical-20260913-v2",
