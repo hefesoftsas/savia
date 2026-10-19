@@ -19,6 +19,8 @@ import {
   verifyManifestIntegrity,
   assertFlowsRestoreMaintenance,
   buildFlowsD1MigrationsCommand,
+  resolveD1DatabaseId,
+  preflightSchemaDumpTargets,
 } from "./restore.mjs";
 import { resolveInfraNames } from "./naming.mjs";
 
@@ -598,6 +600,28 @@ describe("pulumi restore", () => {
     );
   });
 
+  it("accepts adopted production D1 names as restore targets", () => {
+    const productionManifest = {
+      ...MANIFEST,
+      stack: "production",
+      pulumiOutputs: {
+        ...MANIFEST.pulumiOutputs,
+        resolvedEnvironment: "production",
+        resolvedPublicOrigin: "https://savia.hefesoft.com",
+        documentsBucketName: "savia-documents",
+        databaseNames: {
+          auth: "savia-auth-local-canonical-20260913-v2",
+          domain: "savia-agencies-local-canonical-20260913-v2",
+        },
+      },
+      d1: {
+        "savia-auth-local-canonical-20260913-v2": "/out/auth.sql",
+        "savia-agencies-local-canonical-20260913-v2": "/out/domain.sql",
+      },
+    };
+    assert.equal(validateManifest(productionManifest).stack, "production");
+  });
+
   it("refuses D1 manifest entries that target another environment's database", () => {
     assert.throws(
       () =>
@@ -695,6 +719,45 @@ describe("pulumi restore", () => {
     assert.equal(validateManifest(manifest, "preview"), manifest);
   });
 
+  it("accepts production schema dumps only with matching recovery evidence", () => {
+    const outputs = {
+      ...MANIFEST.pulumiOutputs,
+      resolvedEnvironment: "production",
+      resolvedPublicOrigin: "https://savia.hefesoft.com",
+      documentsBucketName: "savia-documents",
+      databaseNames: {
+        auth: "savia-auth-local-canonical-20260913-v2",
+        domain: "savia-agencies-local-canonical-20260913-v2",
+      },
+    };
+    const name = outputs.databaseNames.domain;
+    const manifest = {
+      ...MANIFEST,
+      stack: "production",
+      pulumiOutputs: outputs,
+      d1: { [name]: "d1/domain.sql" },
+      d1Methods: { [name]: "schema-dump" },
+      recoveryConsistency: {
+        version: 1,
+        accountId: outputs.cloudflareAccountId,
+        d1: { [name]: { id: outputs.domainD1Id, bookmark: "bookmark-1" } },
+        r2: {},
+      },
+    };
+    assert.equal(
+      validateManifest(manifest, "production").d1Methods[name],
+      "schema-dump",
+    );
+    assert.throws(
+      () =>
+        validateManifest(
+          { ...manifest, recoveryConsistency: undefined },
+          "production",
+        ),
+      /production table\/schema-dump restore requires a matching consistency proof/i,
+    );
+  });
+
   it("resolves relative manifest paths from the manifest directory and supports old absolute paths", () => {
     assert.equal(
       resolveManifestPath("/backup/relocated/manifest.json", "d1/auth.sql"),
@@ -726,6 +789,113 @@ describe("pulumi restore", () => {
     assert.ok(syncArgs.includes("s3://savia-documents"));
   });
 
+  it("resolves schema-dump IDs from live outputs and preflights those exact UUIDs", async () => {
+    const outputs = {
+      ...MANIFEST.pulumiOutputs,
+      authD1Id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      domainD1Id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      databaseNames: {
+        auth: "auth-db",
+        domain: "domain-db",
+      },
+      flowsResources: { databaseId: "cccccccc-cccc-4ccc-8ccc-cccccccccccc" },
+    };
+    assert.equal(
+      resolveD1DatabaseId("domain-db", outputs),
+      "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+    );
+    assert.equal(
+      resolveD1DatabaseId("flows-db", outputs, "flows-db"),
+      "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+    );
+    const [, d1LoadArgs] = buildD1ExecuteCommand(
+      resolveD1DatabaseId("domain-db", outputs),
+      "/backup/domain.sql",
+    );
+    assert.equal(d1LoadArgs[6], "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb");
+    const requests = [];
+    const fetchImpl = async (url, options) => {
+      requests.push({ url, options });
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          success: true,
+          result: [{ success: true, results: [] }],
+        }),
+      };
+    };
+    assert.equal(
+      await preflightSchemaDumpTargets({
+        accountId: "08a0d36f8b0357684f83e4bfeb6628b6",
+        token: "redacted",
+        targets: {
+          "domain-db": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        },
+        fetchImpl,
+      }),
+      true,
+    );
+    assert.match(
+      requests[0].url,
+      /bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb\/query$/,
+    );
+    assert.match(requests[0].options.headers.authorization, /^Bearer /);
+    const sql = JSON.parse(requests[0].options.body).sql;
+    assert.equal(sql.includes("sqlite_master"), true);
+    assert.equal(sql.includes("name != '_cf_KV'"), true);
+    await assert.rejects(
+      preflightSchemaDumpTargets({
+        accountId: "08a0d36f8b0357684f83e4bfeb6628b6",
+        token: "redacted",
+        targets: {
+          "domain-db": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        },
+        fetchImpl: async () => ({
+          ok: true,
+          status: 200,
+          json: async () => ({
+            success: true,
+            result: [
+              { success: true, results: [{ type: "table", name: "old_data" }] },
+            ],
+          }),
+        }),
+      }),
+      /target D1 domain-db is not empty/i,
+    );
+    await assert.rejects(
+      preflightSchemaDumpTargets({
+        accountId: "08a0d36f8b0357684f83e4bfeb6628b6",
+        token: "redacted",
+        targets: { "domain-db": "not-a-uuid" },
+        fetchImpl,
+      }),
+      /valid authoritative D1 UUID/i,
+    );
+    assert.equal(
+      requests.length,
+      1,
+      "invalid IDs are rejected before API reads",
+    );
+    await assert.rejects(
+      preflightSchemaDumpTargets({
+        accountId: "08a0d36f8b0357684f83e4bfeb6628b6",
+        token: "redacted",
+        targets: { "domain-db": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" },
+        fetchImpl: async () => ({
+          ok: true,
+          status: 200,
+          json: async () => ({
+            success: true,
+            result: [{ success: true }],
+          }),
+        }),
+      }),
+      /no schema inventory/i,
+    );
+  });
+
   it("lists local backup files as object keys", async () => {
     const base = await mkdtemp(join(tmpdir(), "r2-restore-"));
     await mkdir(join(base, "a", "b"), { recursive: true });
@@ -740,6 +910,7 @@ describe("pulumi restore", () => {
       true,
     );
     assert.equal(needsMigrations({ d1Methods: { a: "export" } }), false);
+    assert.equal(needsMigrations({ d1Methods: { a: "schema-dump" } }), false);
     assert.equal(needsMigrations({}), false);
     assert.equal(needsMigrations(null), false);
   });

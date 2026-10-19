@@ -8,15 +8,57 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: savia-preview
   cancel-in-progress: false
 
 jobs:
-  deploy:
+  plan:
+    name: Plan Preview release
     if: >-
       ${{ github.event_name == 'workflow_run' &&
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.event == 'push' &&
+        github.event.workflow_run.head_branch == 'main' &&
+        github.event.workflow_run.head_repository.full_name == github.repository }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    outputs:
+      kind: ${{ steps.plan.outputs.kind }}
+      plugins: ${{ steps.plan.outputs.plugins }}
+      base: ${{ steps.plan.outputs.base }}
+    steps:
+      - name: Check out tested source and history
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+
+      - name: Reject superseded release plans
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$(git ls-remote --exit-code origin refs/heads/main | cut -f1)"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Compare with the last successfully published ancestor
+        id: plan
+        run: node scripts/preview-release-plan.mjs
+        env:
+          APPROVED_SHA: ${{ github.event.workflow_run.head_sha }}
+          GITHUB_TOKEN: ${{ github.token }}
+
+  deploy:
+    needs: plan
+    if: >-
+      ${{ needs.plan.outputs.kind == 'platform' &&
+        github.event_name == 'workflow_run' &&
         github.event.workflow_run.conclusion == 'success' &&
         github.event.workflow_run.event == 'push' &&
         github.event.workflow_run.head_branch == 'main' &&
@@ -113,6 +155,15 @@ jobs:
 
       # Existing deployments are paused before copying data. First provisioning
       # has no existing Flows state and skips these stages entirely.
+      - name: Deploy savia backup coordinator
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy --config wrangler.preview.jsonc
+          workingDirectory: apps/backup-coordinator
+          wranglerVersion: 4.127.1
+
       - name: Pause Savia writes for persistence backup
         id: pause_agencies
         if: env.SAVIA_FLOWS_PROVISIONED == 'true'
@@ -240,15 +291,6 @@ jobs:
           SAVIA_MICROSOFT_CLIENT_ID: ${{ secrets.SAVIA_MICROSOFT_CLIENT_ID }}
           SAVIA_MICROSOFT_CLIENT_SECRET: ${{ secrets.SAVIA_MICROSOFT_CLIENT_SECRET }}
 
-      - name: Deploy savia-auth
-        uses: cloudflare/wrangler-action@v4
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: deploy --config wrangler.preview.jsonc
-          workingDirectory: apps/auth
-          wranglerVersion: 4.127.1
-
       - name: Deploy private Savia FastMCP
         uses: cloudflare/wrangler-action@v4
         with:
@@ -294,6 +336,24 @@ jobs:
           workingDirectory: apps/flows/api
           wranglerVersion: 4.127.1
 
+      - name: Deploy savia-agencies
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy --config wrangler.preview.jsonc
+          workingDirectory: apps/api
+          wranglerVersion: 4.127.1
+
+      - name: Deploy savia-auth
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy --config wrangler.preview.jsonc
+          workingDirectory: apps/auth
+          wranglerVersion: 4.127.1
+
       - name: Deploy private Savia request
         uses: cloudflare/wrangler-action@v4
         with:
@@ -310,15 +370,6 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: deploy --config wrangler.preview.jsonc
           workingDirectory: apps/connector-gateway
-          wranglerVersion: 4.127.1
-
-      - name: Deploy savia-agencies
-        uses: cloudflare/wrangler-action@v4
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: deploy --config wrangler.preview.jsonc
-          workingDirectory: apps/api
           wranglerVersion: 4.127.1
 
       - name: Build isolated plugin editor assets
@@ -430,3 +481,102 @@ jobs:
           SAVIA_FLOWS_PAUSE_ATTEMPTED: ${{ steps.pause_flows.outcome == 'success' || steps.pause_flows.outcome == 'failure' || steps.pause_flows.outcome == 'cancelled' }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+  plugins:
+    name: Publish changed Preview plugins
+    needs: plan
+    if: needs.plan.outputs.kind == 'plugin'
+    timeout-minutes: 10
+    runs-on: ubuntu-24.04
+    environment:
+      name: preview
+      url: https://savia-preview.hefesoft.com
+    env:
+      PNPM_CONFIG_STRICT_DEP_BUILDS: "false"
+    steps:
+      - name: Check out tested source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.24.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Load existing infrastructure outputs without applying changes
+        uses: ./.github/actions/pulumi-infrastructure
+        with:
+          stack: preview
+        env:
+          PULUMI_BACKEND_URL: ${{ secrets.PULUMI_BACKEND_URL }}
+          PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_STATE_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_STATE_SECRET_ACCESS_KEY }}
+
+      - name: Verify isolated preview resources before plugin mutation
+        run: node scripts/verify-preview-resources.mjs
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+      - name: Reject superseded plugin publication
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$(git ls-remote --exit-code origin refs/heads/main | cut -f1)"
+
+      - name: Write the exact approved plugin plan
+        env:
+          APPROVED_SHA: ${{ github.event.workflow_run.head_sha }}
+          DEPLOYED_BASE: ${{ needs.plan.outputs.base }}
+          CHANGED_PLUGINS: ${{ needs.plan.outputs.plugins }}
+        run: |
+          node --input-type=module <<'NODE'
+          import { writeFileSync } from 'node:fs';
+          writeFileSync(process.env.RUNNER_TEMP + '/preview-plugin-plan.json', JSON.stringify({ kind: 'plugin', head: process.env.APPROVED_SHA, base: process.env.DEPLOYED_BASE, plugins: JSON.parse(process.env.CHANGED_PLUGINS) }));
+          NODE
+
+      - name: Publish exact plugin versions with a recovery checkpoint
+        run: node scripts/publish-preview-plugins.mjs --plan "$RUNNER_TEMP/preview-plugin-plan.json" --recovery "$RUNNER_TEMP/preview-plugin-recovery.json"
+        env:
+          SAVIA_DEPLOY_ENVIRONMENT: preview
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_DATABASE_ID: ${{ env.SAVIA_DOMAIN_D1_ID }}
+
+      - name: Preserve the plugin recovery checkpoint
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: preview-plugin-recovery
+          path: ${{ runner.temp }}/preview-plugin-recovery.json
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Record verified plugin publication
+        env:
+          APPROVED_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          node --input-type=module <<'NODE'
+          import { writeFileSync } from 'node:fs';
+          writeFileSync(process.env.RUNNER_TEMP + '/preview-release.json', JSON.stringify({ sha: process.env.APPROVED_SHA, repository: process.env.GITHUB_REPOSITORY, environment: 'preview', kind: 'plugin' }));
+          NODE
+
+      - name: Publish plugin promotion evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: preview-release
+          path: ${{ runner.temp }}/preview-release.json
+          retention-days: 30

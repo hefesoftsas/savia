@@ -4,10 +4,12 @@
 // No Pulumi imports here: this file is unit-tested with `node --test`.
 
 export const DEFAULT_DOCUMENTS_BUCKET = "savia-documents";
-export const DEFAULT_PUBLIC_ORIGIN = "https://savia.app.hefesoft.com";
+export const DEFAULT_PUBLIC_ORIGIN = "https://savia.hefesoft.com";
 export const PREVIEW_PUBLIC_ORIGIN = "https://savia-preview.hefesoft.com";
 export const PREVIEW_VECTORIZE_INDEX = "savia-pages-search-preview";
 export const BASE_STATE_BUCKET = "savia-pulumi-state";
+export const PRODUCTION_BACKUP_BUCKET = "savia-production-backups";
+export const PRODUCTION_BACKUP_RETENTION_DAYS = 30;
 
 export const BASE_WORKERS = Object.freeze({
   auth: "savia-auth",
@@ -50,6 +52,18 @@ function requiredValue(value, name) {
     throw new Error(`${name} is required`);
   }
   return value.trim();
+}
+
+function productionDatabaseName(value, fallback, label) {
+  if (value === undefined || value === null) return fallback;
+  const name = requiredValue(value, label);
+  if (!/^[a-zA-Z0-9_-]{1,63}$/.test(name)) {
+    throw new Error(`${label} is not a valid Cloudflare D1 database name`);
+  }
+  if (/-preview(?:-|$)/.test(name)) {
+    throw new Error(`${label} must not collide with a preview database`);
+  }
+  return name;
 }
 
 function originValue(value) {
@@ -96,6 +110,20 @@ export function stateBackendUrl(accountId, bucketName) {
   return `s3://${bucketName.trim()}?endpoint=${account}.r2.cloudflarestorage.com&region=auto&s3ForcePathStyle=true`;
 }
 
+export function productionBackupLifecycleRule() {
+  return {
+    id: "expire-production-backups-after-30-days",
+    enabled: true,
+    conditions: { prefix: "production/" },
+    deleteObjectsTransition: {
+      condition: {
+        type: "Age",
+        maxAge: PRODUCTION_BACKUP_RETENTION_DAYS * 24 * 60 * 60,
+      },
+    },
+  };
+}
+
 // Resolves deterministic infra names + validates preview/production isolation.
 // Same guardrails as render-cloudflare-production-config.mjs:
 // preview requires its own bucket, origin, and search index.
@@ -104,11 +132,50 @@ export function resolveInfraNames({
   documentsBucket = DEFAULT_DOCUMENTS_BUCKET,
   pagesSearchIndex,
   publicOrigin = DEFAULT_PUBLIC_ORIGIN,
+  authDatabaseName,
+  domainDatabaseName,
+  backupBucket,
 }) {
   const env = normalizeEnvironment(environment);
+  if (backupBucket !== undefined && backupBucket !== PRODUCTION_BACKUP_BUCKET) {
+    throw new Error(
+      `backupBucket must be ${PRODUCTION_BACKUP_BUCKET} when configured`,
+    );
+  }
+  if (env === "preview" && backupBucket !== undefined) {
+    throw new Error("backupBucket is production only");
+  }
   const bucket = requiredValue(documentsBucket, "documentsBucket");
   const origin = originValue(publicOrigin);
   const searchIndex = pagesSearchIndex?.trim() || undefined;
+
+  if (
+    env === "preview" &&
+    (authDatabaseName !== undefined || domainDatabaseName !== undefined)
+  ) {
+    throw new Error("Explicit D1 database names are production only");
+  }
+  const databases =
+    env === "production"
+      ? {
+          auth: productionDatabaseName(
+            authDatabaseName,
+            BASE_DATABASES.auth,
+            "authDatabaseName",
+          ),
+          domain: productionDatabaseName(
+            domainDatabaseName,
+            BASE_DATABASES.domain,
+            "domainDatabaseName",
+          ),
+        }
+      : {
+          auth: databaseName(BASE_DATABASES.auth, env),
+          domain: databaseName(BASE_DATABASES.domain, env),
+        };
+  if (databases.auth === databases.domain) {
+    throw new Error("authDatabaseName and domainDatabaseName must be distinct");
+  }
 
   if (env === "preview") {
     if (
@@ -133,6 +200,7 @@ export function resolveInfraNames({
     environment: env,
     publicOrigin: origin,
     bucket,
+    backupBucket,
     vectorizeIndex: searchIndex,
     workers: Object.freeze(
       Object.fromEntries(
@@ -142,10 +210,7 @@ export function resolveInfraNames({
         ]),
       ),
     ),
-    databases: Object.freeze({
-      auth: databaseName(BASE_DATABASES.auth, env),
-      domain: databaseName(BASE_DATABASES.domain, env),
-    }),
+    databases: Object.freeze(databases),
     flows: Object.freeze({
       worker: workerName(BASE_FLOWS.worker, env),
       database: databaseName(BASE_FLOWS.database, env),
@@ -228,7 +293,15 @@ export function validateFlowsResources(resources, environment) {
 export function exportsForRender({ authD1Id, domainD1Id, names }) {
   return Object.freeze({
     SAVIA_AUTH_D1_ID: requiredValue(authD1Id, "authD1Id"),
+    SAVIA_AUTH_D1_NAME: requiredValue(
+      names.databases.auth,
+      "auth database name",
+    ),
     SAVIA_DOMAIN_D1_ID: requiredValue(domainD1Id, "domainD1Id"),
+    SAVIA_DOMAIN_D1_NAME: requiredValue(
+      names.databases.domain,
+      "domain database name",
+    ),
     SAVIA_DOCUMENTS_BUCKET: names.bucket,
     SAVIA_PUBLIC_ORIGIN: names.publicOrigin,
     SAVIA_DEPLOY_ENVIRONMENT: names.environment,

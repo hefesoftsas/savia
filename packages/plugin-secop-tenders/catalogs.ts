@@ -6,6 +6,7 @@ export type CatalogState = {
   options: string[];
   loading: boolean;
   error: boolean;
+  connectionRequired?: boolean;
 };
 
 /** Catalog requests never inherit tender search terms, filters or pagination. */
@@ -38,5 +39,18 @@ export async function loadSecopCatalog(
   }
   return Array.from(new Set<string>(catalog.values)).sort((a, b) =>
     a.localeCompare(b, "es"),
+  );
+}
+
+/** Missing sources belong to the signed-in account, not to the plugin installation. */
+export function needsSecopConnection(error: unknown): boolean {
+  return Boolean(
+    error &&
+    typeof error === "object" &&
+    "status" in error &&
+    error.status === 404 &&
+    "message" in error &&
+    error.message ===
+      "Authorize the configured MCP source in Sources and collections first.",
   );
 }

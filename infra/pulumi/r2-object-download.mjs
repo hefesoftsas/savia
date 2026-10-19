@@ -24,6 +24,7 @@ export async function downloadR2Object({
   token,
   destFile,
   expectedSize,
+  expectedEtag,
   contentEncoding,
   requestImpl = https.request,
   timeoutMs = DEFAULT_TIMEOUT_MS,
@@ -51,6 +52,15 @@ export async function downloadR2Object({
   if (!Number.isSafeInteger(expectedSize) || expectedSize < 0) {
     throw new Error("expectedSize must be a non-negative safe integer");
   }
+  const etag =
+    typeof expectedEtag === "string"
+      ? expectedEtag.replace(/^"|"$/g, "")
+      : undefined;
+  if (
+    expectedEtag !== undefined &&
+    (typeof etag !== "string" || !/^[^"\r\n]+$/.test(etag))
+  )
+    throw new Error("expectedEtag must be a valid R2 ETag");
   if (contentEncoding !== undefined && typeof contentEncoding !== "string") {
     throw new Error("contentEncoding must be a valid HTTP content-coding list");
   }
@@ -99,6 +109,7 @@ export async function downloadR2Object({
       // Match the object's stored metadata. Asking for multiple encodings can
       // make the edge transcode plaintext objects, invalidating byte checks.
       "accept-encoding": acceptEncoding,
+      ...(etag ? { "if-match": `"${etag}"` } : {}),
     },
   };
 
@@ -145,6 +156,13 @@ export async function downloadR2Object({
               new Error(
                 `R2 object download returned HTTP ${response.statusCode ?? "unknown"}`,
               ),
+            );
+            return;
+          }
+          if (etag && response.headers.etag !== `"${etag}"`) {
+            response.destroy();
+            reject(
+              new Error("R2 object ETag does not match its recovery inventory"),
             );
             return;
           }

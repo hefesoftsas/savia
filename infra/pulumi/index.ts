@@ -1,11 +1,14 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as cloudflare from "@pulumi/cloudflare";
+import { validateTenantSubdomains } from "./worker-config.mjs";
 import {
   resolveInfraNames,
   stackProtection,
   stateBackendName,
   stateBackendUrl as buildStateBackendUrl,
   assertAccountId,
+  productionBackupLifecycleRule,
+  PRODUCTION_BACKUP_RETENTION_DAYS,
 } from "./naming.mjs";
 
 // Hybrid model (recommended by Cloudflare for Pulumi + Wrangler):
@@ -14,15 +17,18 @@ import {
 // This avoids Pulumi/Wrangler fighting over Worker scripts while giving
 // `pulumi preview` drift detection for data-plane resources.
 //
-// Vectorize search index stays Wrangler-managed: the Cloudflare Pulumi
-// provider has no first-class Vectorize resource (use a dynamic provider
-// only if you need it in state).
+// Vectorize bootstrap stays in vectorize.mjs and runs only when explicitly
+// requested. Standard deployments bind the existing index from stack outputs.
 
 const config = new pulumi.Config();
 const accountId = assertAccountId(config.require("accountId"));
 const environment = config.require("environment");
 const publicOrigin = config.require("publicOrigin");
+const configuredTenantSubdomains =
+  config.getObject<string[]>("tenantSubdomains") ?? [];
 const documentsBucket = config.require("documentsBucket");
+const authDatabaseName = config.get("authDatabaseName");
+const domainDatabaseName = config.get("domainDatabaseName");
 const pagesSearchIndex = config.get("pagesSearchIndex");
 const shouldProvisionFlows = config.getBoolean("flowsEnabled") ?? false;
 const shouldExecuteFlows = config.getBoolean("flowsExecutionEnabled") ?? false;
@@ -30,6 +36,7 @@ if (shouldExecuteFlows && !shouldProvisionFlows) {
   throw new Error("flowsExecutionEnabled requires flowsEnabled");
 }
 const configuredStateBucket = config.get("stateBucket");
+const configuredBackupBucket = config.get("backupBucket");
 const stateBucketName = stateBackendName(environment, configuredStateBucket);
 
 const names = resolveInfraNames({
@@ -37,6 +44,9 @@ const names = resolveInfraNames({
   documentsBucket,
   pagesSearchIndex,
   publicOrigin,
+  authDatabaseName,
+  domainDatabaseName,
+  backupBucket: configuredBackupBucket,
 });
 
 // Production stateful resources cannot be deleted by accident: `protect`
@@ -83,6 +93,39 @@ const documents = new cloudflare.R2Bucket(
   },
   stateOpts,
 );
+
+// Production backups are opt-in until the private R2 target is provisioned.
+// Keep them isolated from documents and Pulumi state, and expire only objects
+// under the production/ prefix after the documented retention window.
+const productionBackups = names.backupBucket
+  ? new cloudflare.R2Bucket(
+      "production-backups",
+      { accountId, name: names.backupBucket, storageClass: "Standard" },
+      stateOpts,
+    )
+  : null;
+const productionBackupsLifecycle = productionBackups
+  ? new cloudflare.R2BucketLifecycle(
+      "production-backups-lifecycle",
+      {
+        accountId,
+        bucketName: productionBackups.name,
+        rules: [productionBackupLifecycleRule()],
+      },
+      stateOpts,
+    )
+  : null;
+if (productionBackups) {
+  new cloudflare.R2ManagedDomain(
+    "production-backups-public-access",
+    {
+      accountId,
+      bucketName: productionBackups.name,
+      enabled: false,
+    },
+    stateOpts,
+  );
+}
 
 // The self-managed Pulumi backend is optional during bootstrap. When enabled,
 // protect its bucket even in preview because it contains the state itself.
@@ -158,7 +201,15 @@ export const authD1Id = authDb.id;
 export const cloudflareAccountId = accountId;
 export const domainD1Id = domainDb.id;
 export const documentsBucketName = documents.name;
+export const backupBucketName = productionBackups?.name ?? null;
+export const backupRetentionDays = productionBackupsLifecycle
+  ? PRODUCTION_BACKUP_RETENTION_DAYS
+  : null;
 export const resolvedPublicOrigin = names.publicOrigin;
+export const tenantSubdomains = validateTenantSubdomains(
+  configuredTenantSubdomains,
+  names.environment,
+);
 export const resolvedEnvironment = names.environment;
 export const workerNames = names.workers;
 export const databaseNames = names.databases;

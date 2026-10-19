@@ -42,6 +42,11 @@ export {
 } from "@savia/studio-shared/plugin-localization";
 export type { PluginLookup } from "@savia/studio-shared/plugin-field-lookups";
 export type {
+  PluginAssistantOpenRequest,
+  PluginAssistantRequest,
+  PluginAssistantResponse,
+} from "@savia/studio-shared/plugin-assistant";
+export type {
   StudioObject,
   CollectionCapabilities,
   CollectionBindingMetadata,

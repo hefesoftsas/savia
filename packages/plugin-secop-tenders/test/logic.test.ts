@@ -140,11 +140,50 @@ describe("SECOP normalization", () => {
       perPage: 20,
     });
     expect(captured).toEqual({
+      vigentes: true,
       q: "roads",
       departamento: "Cundinamarca",
       page: 3,
       perPage: 20,
     });
+  });
+  it("explicitly allows historical searches without losing the scope on later pages", async () => {
+    const inputs: unknown[] = [];
+    const api = {
+      actions: {
+        execute: async (_id: string, request: { input: unknown }) => {
+          inputs.push(request.input);
+          return { output: { data: [] } };
+        },
+      },
+    } as unknown as PluginApi;
+    await searchSecop(api, { vigentes: false, page: 2 });
+    expect(inputs).toEqual([{ vigentes: false, page: 2, perPage: 20 }]);
+  });
+  it("passes multiple filter alternatives as arrays instead of comma-joined strings", async () => {
+    const inputs: unknown[] = [];
+    const api = {
+      actions: {
+        execute: async (_id: string, request: { input: unknown }) => {
+          inputs.push(request.input);
+          return { output: { data: [] } };
+        },
+      },
+    } as unknown as PluginApi;
+    await searchSecop(api, {
+      departamento: [" Bogotá ", "Boyacá", "Bogotá", ""],
+      estado: ["Publicado", "Aprobado"],
+      page: 2,
+    });
+    expect(inputs).toEqual([
+      {
+        vigentes: true,
+        departamento: ["Bogotá", "Boyacá"],
+        estado: ["Publicado", "Aprobado"],
+        page: 2,
+        perPage: 20,
+      },
+    ]);
   });
 });
 

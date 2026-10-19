@@ -666,7 +666,9 @@ A plugin may declare an MCP action that reuses an OAuth-enabled source from
 ```
 
 The source and tool are fixed by the installed declaration. Runtime input accepts
-only the declared scalar arguments plus bounded `page` and `perPage`. The host
+only the declared scalar arguments or flat arrays of up to 20 scalar values,
+plus bounded `page` and `perPage`. Each string is limited to 1,000 characters;
+objects, nested arrays and undeclared arguments are rejected. The host
 resolves the source for the authenticated principal in the current tenant and
 uses the source's encrypted OAuth grant and read-tool policy. Another user's
 source cannot be borrowed, even within the same tenant. A missing or expired

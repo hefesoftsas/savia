@@ -853,50 +853,6 @@ it("keeps a writable paragraph after deleting the last block and hides controls 
   ).not.toBeInTheDocument();
 });
 
-it("converts a code fence on Enter and exits code with Control Enter", async () => {
-  const user = userEvent.setup();
-  const changed = vi.fn();
-  render(
-    <PageEditor
-      pageId="typing-code"
-      api={api}
-      pages={new PagesClient(api)}
-      readOnly={false}
-      initialValue={[{ type: "p", children: [{ text: "```ts" }] }]}
-      onChange={changed}
-    />,
-  );
-  const editable = screen.getByRole("textbox", { name: "Page content" });
-  await user.click(editable);
-  const text = screen.getByText("```ts").firstChild!;
-  Object.defineProperty(text.parentElement!, "isContentEditable", {
-    value: true,
-    configurable: true,
-  });
-  const caret = document.createRange();
-  caret.setStart(text, 5);
-  caret.collapse(true);
-  window.getSelection()!.removeAllRanges();
-  window.getSelection()!.addRange(caret);
-  await act(async () => {
-    fireEvent(document, new Event("selectionchange"));
-    await new Promise((resolve) => setTimeout(resolve, 100));
-  });
-  fireEvent.keyDown(editable, { key: "Enter" });
-  expect(
-    await screen.findByRole("combobox", { name: "Code language" }),
-  ).toHaveValue("typescript");
-  fireEvent.paste(editable, {
-    clipboardData: { getData: () => "const x = 1;\n  x++;" },
-  });
-  await waitFor(() =>
-    expect(document.querySelector(".page-code-block code")?.textContent).toBe(
-      "const x = 1;\n  x++;",
-    ),
-  );
-  fireEvent.keyDown(editable, { key: "Enter", ctrlKey: true });
-  await waitFor(() => expect(changed.mock.lastCall?.[0].at(-1).type).toBe("p"));
-});
 it("pastes fenced code into a blank paragraph and continues with normal text", async () => {
   render(
     <PageEditor

@@ -37,6 +37,67 @@ for (const [file, stack] of [
       );
       assert.ok(verify > load && verify < apply);
     }
+    if (stack === "production") {
+      const preflight = source.indexOf(
+        "- name: Run the production readiness preflight before any mutation",
+      );
+      const backup = source.indexOf(
+        "- name: Capture production backup before apply",
+      );
+      const encrypted = source.indexOf(
+        "- name: Retain and verify encrypted production recovery archive in private R2",
+      );
+      const applyIndex = source.indexOf(
+        "- name: Apply infrastructure before Worker deployment",
+      );
+      const executor = source.indexOf(
+        "- name: Deploy private QuickJS hook executor",
+      );
+      const flows = source.indexOf("- name: Deploy private Savia Flows");
+      const api = source.indexOf("- name: Deploy savia-agencies");
+      const gatewayVerification = source.indexOf(
+        "- name: Verify deployed gateway",
+      );
+      const recovery = source.indexOf(
+        "- name: Restore production Worker deployments after a failed rollout",
+      );
+      assert.ok(
+        preflight > load &&
+          backup > preflight &&
+          encrypted > backup &&
+          applyIndex > encrypted,
+      );
+      assert.ok(executor > applyIndex && flows > executor && api > flows);
+      assert.ok(recovery > gatewayVerification);
+      assert.match(source, /node infra\/pulumi\/production-preflight\.mjs/);
+      assert.match(
+        source,
+        /node scripts\/flows-preview-recovery\.mjs --action capture --environment production/,
+      );
+      assert.match(source, /node scripts\/production-backup\.mjs --artifact/);
+      assert.equal(
+        (
+          source.match(
+            /SAVIA_BACKUP_CONTROL_SECRET: \$\{\{ secrets\.SAVIA_BACKUP_CONTROL_SECRET \}\}/g,
+          ) ?? []
+        ).length >= 3,
+        true,
+        "production API upload and both release backup modes need the control secret",
+      );
+      assert.doesNotMatch(
+        source,
+        /node infra\/pulumi\/backup\.mjs --stack production --apply/,
+      );
+      assert.match(source, /node scripts\/verify-flows-preview\.mjs/);
+      assert.match(
+        source,
+        /node scripts\/production-backup-r2\.mjs --artifact[^\n]*--kind release/,
+      );
+      assert.match(
+        source,
+        /- name: Remove plaintext production backup material[\s\S]*?if: always\(\)/,
+      );
+    }
     assert.match(
       source,
       /CLOUDFLARE_DATABASE_ID: \$\{\{ env\.SAVIA_DOMAIN_D1_ID \}\}/,

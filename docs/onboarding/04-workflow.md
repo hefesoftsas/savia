@@ -25,6 +25,11 @@
 
 ## CI (`.github/workflows/ci.yml`, push + PR)
 
+Trusted base-revision classification selects compatible plugin checks or the
+platform checks. Existing required check names remain present, and Contract tests
+also require successful plugin validation when selected. Flows validation runs
+for affected or uncertain changes. See [Preview release lanes](../guides/preview-release-lanes.md).
+
 Five parallel lanes with cancellation run on ephemeral GitHub-hosted Ubuntu
 runners: `admin`, `api`, `workspace`, `contracts`, `typecheck`. CI has read-only
 permissions and no production credentials. Fork pull requests never use private

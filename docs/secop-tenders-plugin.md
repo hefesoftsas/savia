@@ -45,7 +45,109 @@ Savia's host-mediated external-link bridge. Search cards and saved interests use
 the same behavior; the plugin iframe retains its sandbox. An unavailable or
 refused link shows recovery guidance rather than silently doing nothing.
 
+## Private tender dossier and company assistant
+
+The plugin opens a dossier with Summary, Documents, Requirements, Company and
+Assistant views from the existing Documents action. It preserves the previous
+per-PDF document workflow behind **Documents and previous PDF analyses**.
+
+Each tender and dossier tab has a shareable URL. Opening Documents records the
+process ID and tab through the host's generic `savia.route` bridge. Refreshing,
+opening a copied link, and browser Back/Forward restore that tender directly
+through the fixed read-only detail action, even when no search results are loaded.
+Only public view identifiers enter the URL; documents, company evidence and chat
+history remain in the backend. A failed lookup offers Retry without discarding the
+link, and a missing tender shows a return action. Links still require normal
+workspace access and the workspace's SECOP connection.
+
+All new processing runs in the private secop-live-worker service. No
+SECOP-specific server/API/schema change is added to Savia. The plugin uses a
+fixed, secret-backed HTTP connector (secop-dossier) and one declared dispatch
+action, staying within the 20-action package limit. Public search continues to use
+the existing read-only MCP source. A private credential belongs to one workspace;
+never copy it to another workspace. Configure it through the dossier connection
+form or existing plugin connection management; it is not persisted in browser
+storage or packaged into the ZIP.
+
+**Save and prepare dossier** saves the interest and starts durable background
+processing. The service enumerates every available document page, records partial
+coverage, downloads permitted official files and keeps failed/CAPTCHA/unsupported
+items visible. Scanned PDFs require the configured OCR provider or a replacement PDF with selectable text; the basic Cloudflare converter does not supply complete OCR. The report and requirements cite immutable source versions and
+parser pages or sections. Source changes mark reports stale. Protected one-use
+upload links provide recovery for blocked originals and private company evidence.
+
+Select/create a company, upload its evidence and review any extracted numeric
+facts against their cited originals. Choose lot identifiers when relevant, then
+**Evaluate compliance**. Findings distinguish meets, does not meet, insufficient
+evidence and not applicable; missing evidence becomes preparation tasks. Expired
+or changed evidence invalidates old evaluations. User review notes stay separate
+from model findings. Readiness means ready for the team's review, not a submitted
+or officially approved bid.
+
+The **Assistant** tab opens Savia's native chat panel through the generic plugin
+assistant bridge. The title and selected company remain visible, and the existing
+conversation stays in the private SECOP service. There is no second chat composer
+inside the dossier. **Prepare complete checklist** prefills a question; it does not
+send it until the user presses Send. The same private workspace connection is used.
+Ordinary workspace members use that configured connection without listing or
+managing credentials; an administrator provisions or repairs it. Dossier controls
+follow the selected Spanish, English or Portuguese locale. Active durable jobs can
+be canceled after returning to the dossier, including after a reload.
+
+Explicit questions asking for all requirements use every saved requirement record
+in the current report. Items preserve original wording and link to exact source
+quotes, with OCR/source-review and missing company-evidence notices shown first.
+This covers the saved extraction, not a certification that every obligation in the
+original documents was recognized. Focused questions retain bounded hybrid search.
+Source classification and automatic analysis do not certify company compliance.
+A finished joint analysis can still have source extractions awaiting human review.
+
+The native panel uses Savia's shared Markdown renderer, source disclosures and
+keyboard-accessible composer. Users can copy one answer or the full conversation,
+including history pages from the same tender, company and principal scope. The
+provider reports an error when the history exceeds export limits instead of
+silently truncating it. Changing tender, company or principal changes the context;
+it never reuses a conversation from another scope. Jobs and conversations survive
+navigation and reload. See [plugin assistant integration](guides/plugin-assistant.md).
+
+When the assistant identifies a missing requirement, **Create task** opens a
+review step for its title, responsible person and due date. Confirming creates a
+record in the plugin-owned `secop_application_tasks` collection through Savia's
+tenant-authenticated records API. The record keeps the tender and requirement
+references so the team can review the source later. Users can edit a task or set
+its status to **Done** in the native **SECOP preparation tasks** records screen.
+The responsible person is stored as the name selected by the user. A task tracks
+preparation work and does not decide or imply company compliance. The collection
+and its behavior belong to this optional SECOP plugin; Savia core gains no
+SECOP-specific task logic.
+
+Service setup, contracts, storage migrations and release checks are documented in
+`chibchombiano26/secop-live-worker/docs/operations.md`. Install this plugin only
+after the compatible service is deployed and the workspace credential provisioned.
+
 ## Tender documents and PDF analysis
+
+Version 1.7.9 uses compact icon-only controls for contextual document, source,
+tracking and dossier actions. Each control keeps a localized accessible name and
+tooltip; the search/interests navigation and document tabs retain visible text.
+The plugin's `store.json` declares one contributed screen for
+`procurement_opportunities`. Studio also exposes native collection records as
+sidebar screens, which is why the plugin previously surfaced three entries:
+opportunities, saved PDF analyses and preparation tasks. PDF analyses are
+backend records used by the dossier's saved-analysis history, so their collection
+is retained but its `studio.screen.hidden` metadata hides only that sidebar
+entry. `secop_application_tasks` stays visible as a native records screen for
+editing and completing tasks created from the dossier assistant. Neither backing
+collection is removed, and tasks do not get an extension screen renderer.
+
+Version 1.5.3 adds decorative Lucide icons to the result actions while retaining
+visible labels and keyboard-accessible controls. Followed tenders use a checked
+bookmark to reinforce their saved state.
+
+Version 1.5.2 groups each search result's Documents, SECOP link and Follow actions
+with matching control heights and spacing. On narrow screens, Documents and the
+SECOP link share the first row and Follow spans the second row. Keyboard order
+continues to match the visual order.
 
 Choose **Documents** on a search result or saved interest. The tender detail has
 **Overview** and **Documents** tabs; returning preserves the current search.
@@ -95,6 +197,12 @@ the stored file ID for an in-place retry without another attachment. If saving a
 completed analysis fails, its text remains visible with **Save result**; returning
 is disabled until the result is saved. The saved history shows up to 50 analyses
 for the process. No document or report is persisted in browser storage.
+
+Plugin 1.5.1 declares a 100,000-character analysis field limit, so detailed
+reports can be saved without truncation. Existing collections preserve their
+workspace field settings during upgrades. For an existing installation, also set
+the **AI analysis** field's maximum length to 100,000 in **Fields and form**;
+new installations receive that limit from the plugin declaration.
 
 The 1.4.0 feature requires both the shared host document-analysis deployment and
 the updated tenant ZIP. Later UI-only document changes can be delivered by ZIP
@@ -158,7 +266,15 @@ under `/data`, with `id`, `values`, `count`, `complete` and `updated_at` fields.
 The three plugin actions fix the requested field in metadata, so user input
 cannot inject a query or select another endpoint.
 
-`provider/catalogs.mjs` contains the optional provider extension and its tests.
+Catalogs use the owner's OAuth source. If all filters report a catalog error,
+test **SECOP Live** in **Sources and collections → External sources**. When the
+test asks for authorization, choose **Authorize again**, complete the existing
+read-only connection and reopen SECOP. The host coordinates concurrent token
+renewal across Workers; deploy its OAuth refresh lease migration with that fix.
+
+The active provider source is maintained in the private
+`chibchombiano26/secop-live-worker` repository, including its public catalog and
+document adapters. The local `provider/` files are historical migration references.
 Bind a dedicated `CATALOG_KV` namespace for public snapshots, separate from OAuth
 storage, and seed each verified complete catalog before installing the UI.
 Snapshots have no storage expiration: fresh catalogs are served immediately for
@@ -168,18 +284,16 @@ Cold aggregate reads can exceed Savia's MCP time budget, so deployment verificat
 must include warm KV reads. Edge-cache freshness never extends the snapshot's
 remaining six-hour interval; concurrent reads are coalesced. Reaching the 50,000-value safety limit or the response-size bound fails
 closed rather than claiming a partial catalog is complete. No catalog is
-persisted in browser storage. `provider/patch-worker.mjs` is a guarded additive
-adapter for the inspected deployed provider bundle: it refuses ambiguous source
-or repeat installation. For future updates, integrate the helper in the provider's
-original source, or rebuild from a verified original bundle. Back up provider code
-and settings, preserve bindings and secrets using Cloudflare's
-[upload metadata](https://developers.cloudflare.com/api/resources/workers/subresources/scripts/methods/update/),
-and verify tool discovery and all catalogs before publishing the tenant ZIP.
+persisted in browser storage. The former `provider/patch-worker.mjs` bundle-patch
+workflow is obsolete for this provider. Deploy from the maintained service source,
+preserve existing OAuth/catalog namespaces and secrets, and verify public tool
+compatibility before updating the tenant ZIP.
 
 The plugin provisions `procurement_opportunities` with a unique `source_id` and
 native record-version support. It declares fixed tender search/detail actions and three catalog read actions and does not
-contain a source URL, API key, OAuth token or secret. The action's source ID and
-mapping are metadata; user input cannot select a different endpoint or tool.
+contain an API key, OAuth token or secret. Public actions reference their configured
+MCP source; private actions use a fixed service URL and declared connector. User
+input cannot select a different endpoint or tool.
 
 ## Shared preview delivery
 
@@ -199,3 +313,54 @@ unreleased host changes. A branch preview has isolated databases, credentials an
 its own Platform workspace. Do not directly replace the shared preview gateway
 from an unrelated checkout. Preview installation and live verification must be
 reported separately from unit tests and ZIP packaging.
+
+## Personal MCP authorization
+
+Installing the SECOP plugin in a workspace does not authorize its MCP source for
+all accounts. Each signed-in user must create and authorize their own MCP source
+named `secop_live` in **Data sources**, within the same workspace. A platform
+administrator viewing another workspace does not inherit another user's OAuth
+tokens. Switching accounts can therefore leave the plugin installed while its
+search and catalogs have no authorized source.
+
+When that source is missing, the plugin displays one account-specific connection
+notice instead of three catalog failures. Connect the current account or sign in
+with the account that already authorized SECOP, then select **Check the connection
+again**. Genuine provider/catalog failures keep their normal retry controls.
+Existing interests and their original monitoring credentials remain unchanged.
+
+After saving, **View tasks** opens the SECOP task collection in a separate tab,
+keeping the tender's connected chat and its conversation open in the original tab.
+**Open source** opens the service's PDF viewer at the cited page, with page
+navigation and a download of the original PDF. Source links expire after ten
+minutes; return to the citation and open it again to issue a new link.
+
+The task collection deliberately has no custom plugin screen contribution. Savia
+therefore uses its standard records table and editor for tasks instead of
+mounting the tender search interface for that collection.
+
+## Active search and readable closing dates
+
+Version 1.8.0 defaults to **Open with a future deadline**. The SECOP service
+filters closing dates and terminal procedure states before pagination, ordering
+active results by the nearest closing date. Records without a usable deadline
+are excluded from this scope; a future date alone does not prove eligibility.
+Choose **All, including closed** to inspect historical, cancelled or undated
+records. Saved interests remain accessible regardless of their deadline.
+
+Closing dates use the interface language and Colombia time (America/Bogota),
+including Socrata floating timestamps. Historical deadlines display a closed
+label. Missing or invalid dates never appear as usable deadlines.
+
+## Multiple filter values and resilient catalogs
+
+Version 1.8.1 supports multiple values for status, entity, modality and
+department. Values within one field are alternatives (OR); different fields
+are combined (AND). Select options without closing the list, remove individual
+chips, or add a typed value with Enter. Pagination keeps the full selection.
+Availability remains a single scope choice.
+
+Complete catalogs are cached independently from searches. Renewal runs in the
+SECOP service background; a compact retry icon appears beside an unavailable
+catalog. Existing selections and previously loaded options survive refresh
+failures. No catalog is silently replaced with the currently loaded results.

@@ -14,6 +14,11 @@ import { AppLocaleProvider } from "@/i18n/app-locale-provider";
 import { AppServicesProvider } from "./assistant-context";
 import { AssistantBar } from "./assistant-bar";
 import {
+  closePluginAssistantProvider,
+  openPluginAssistantProvider,
+  type PluginAssistantProvider,
+} from "@savia/studio-shared/plugin-assistant";
+import {
   saveActiveThreadId,
   type AssistantThreadRecord,
 } from "./assistant-thread-storage";
@@ -30,6 +35,7 @@ const serverThreads = new Map<
   string,
   AssistantThreadRecord & { revision: number }
 >();
+let activeExternalProvider: PluginAssistantProvider | null = null;
 function saveStoredThread(thread: AssistantThreadRecord, _userId?: string) {
   serverThreads.set(thread.id, { ...thread, revision: 1 });
 }
@@ -176,8 +182,56 @@ describe("AssistantBar History & Thread Switching", () => {
   });
 
   afterEach(() => {
+    if (activeExternalProvider) {
+      closePluginAssistantProvider(activeExternalProvider.sessionId);
+      activeExternalProvider = null;
+    }
     cleanup();
     vi.restoreAllMocks();
+  });
+
+  it("preserves the general assistant draft while a plugin provider is open", async () => {
+    const user = userEvent.setup();
+    render(
+      <AppServicesProvider services={createMockServices()}>
+        <AssistantBar />
+      </AppServicesProvider>,
+    );
+    await user.click(screen.getByRole("button", { name: "Abrir asistente" }));
+    const generalComposer = await screen.findByLabelText(
+      "Mensaje para el asistente",
+    );
+    await user.type(generalComposer, "Keep my unsent question");
+
+    const provider: PluginAssistantProvider = {
+      sessionId: "draft-preservation-provider",
+      title: "External assistant",
+      actionId: "assistant-chat",
+      context: { dossierId: "CO1.REQ.1" },
+      invoke: vi.fn(async () => ({ revision: 0, messages: [] })),
+      close: () => closePluginAssistantProvider("draft-preservation-provider"),
+    };
+    activeExternalProvider = provider;
+    openPluginAssistantProvider(provider);
+
+    await screen.findByLabelText("Mensaje");
+    expect(generalComposer).not.toBeVisible();
+    await user.click(screen.getByRole("button", { name: "Ampliar chat" }));
+    expect(
+      screen.getByRole("button", { name: "Restaurar tamaño del chat" }),
+    ).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByLabelText("Mensaje")).toBeVisible();
+    await user.click(
+      screen.getByRole("button", { name: "Restaurar tamaño del chat" }),
+    );
+    expect(
+      screen.getByRole("button", { name: "Ampliar chat" }),
+    ).toHaveAttribute("aria-pressed", "false");
+    expect(provider.invoke).toHaveBeenCalledTimes(1);
+    await user.click(screen.getByRole("button", { name: "Asistente general" }));
+    expect(
+      await screen.findByLabelText("Mensaje para el asistente"),
+    ).toHaveValue("Keep my unsent question");
   });
 
   it("saves the question before contacting the provider and retains it on provider failure", async () => {

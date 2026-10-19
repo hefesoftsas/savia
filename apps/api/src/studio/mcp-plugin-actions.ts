@@ -30,13 +30,19 @@ export function createMcpPluginActionExecutor(options: {
         403,
         "MCP action context does not match the authenticated caller.",
       );
-    const scalar = z
-      .union([z.string().max(1000), z.number().finite(), z.boolean(), z.null()])
+    const primitive = z.union([
+      z.string().max(1000),
+      z.number().finite(),
+      z.boolean(),
+      z.null(),
+    ]);
+    const inputValue = z
+      .union([primitive, z.array(primitive).max(20)])
       .optional();
     const schema = z
       .object({
         ...Object.fromEntries(
-          request.action.inputArguments.map((name) => [name, scalar]),
+          request.action.inputArguments.map((name) => [name, inputValue]),
         ),
         page: z.number().int().min(1).max(100000).default(1),
         perPage: z.number().int().min(1).max(100).default(20),

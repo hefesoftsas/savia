@@ -14,9 +14,11 @@ export function resolvePluginEditorRuntimeUrl(
     const parent = new URL(parentOrigin);
     const cookieDomain = parent.hostname.endsWith(".savia-preview.hefesoft.com")
       ? "savia-preview.hefesoft.com"
-      : parent.hostname.endsWith(".savia.app.hefesoft.com")
-        ? "savia.app.hefesoft.com"
-        : parent.hostname;
+      : parent.hostname.endsWith(".savia.hefesoft.com")
+        ? "savia.hefesoft.com"
+        : parent.hostname.endsWith(".savia.app.hefesoft.com")
+          ? "savia.app.hefesoft.com"
+          : parent.hostname;
     const local =
       ["localhost", "127.0.0.1"].includes(parent.hostname) &&
       ["localhost", "127.0.0.1"].includes(url.hostname);

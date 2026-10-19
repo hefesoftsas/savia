@@ -2,12 +2,13 @@ import { mkdir, writeFile, rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { validateFlowsResources } from "./naming.mjs";
+import { resolveInfraNames, validateFlowsResources } from "./naming.mjs";
 import { flowsWorkerConfig } from "./flows-worker-config.mjs";
 import { pluginEditorWorkerConfig } from "./auxiliary-worker-config.mjs";
+import { normalizeTenantSlug } from "../../packages/tenant-host/src/tenant-slug.mjs";
 
 const defaultDocumentsBucket = "savia-documents";
-const defaultPublicOrigin = "https://savia.app.hefesoft.com";
+const defaultPublicOrigin = "https://savia.hefesoft.com";
 const defaultBootstrapEmail = "savia.admin@example.test";
 const privateMcpUrl = "https://savia-mcp.internal/mcp";
 
@@ -24,7 +25,27 @@ function originValue(value) {
   return origin.origin;
 }
 
-function authConfig({ authD1Id, publicOrigin }) {
+export function validateTenantSubdomains(value, deploymentEnvironment) {
+  if (!Array.isArray(value))
+    throw new Error(
+      "SAVIA_TENANT_SUBDOMAINS must be an array of tenant subdomains",
+    );
+  const labels = [];
+  const seen = new Set();
+  for (const candidate of value) {
+    const label = normalizeTenantSlug(candidate);
+    if (!label) throw new Error("Invalid tenant subdomain label");
+    if (seen.has(label))
+      throw new Error(`Duplicate tenant subdomain: ${label}`);
+    seen.add(label);
+    labels.push(label);
+  }
+  if (deploymentEnvironment === "preview" && labels.length > 0)
+    throw new Error("Preview cannot configure production tenant subdomains");
+  return labels;
+}
+
+function authConfig({ authD1Id, authDatabaseName, publicOrigin }) {
   return {
     $schema: "../../node_modules/wrangler/config-schema.json",
     name: "savia-auth",
@@ -36,7 +57,7 @@ function authConfig({ authD1Id, publicOrigin }) {
     d1_databases: [
       {
         binding: "AUTH_DB",
-        database_name: "savia-auth",
+        database_name: authDatabaseName,
         database_id: authD1Id,
       },
     ],
@@ -54,6 +75,7 @@ function authConfig({ authD1Id, publicOrigin }) {
 function apiConfig({
   documentsBucket,
   domainD1Id,
+  domainDatabaseName,
   jiraIntegrationId,
   githubIntegrationId,
   zoomIntegrationId,
@@ -102,7 +124,7 @@ function apiConfig({
     d1_databases: [
       {
         binding: "DB",
-        database_name: "savia-agencies",
+        database_name: domainDatabaseName,
         database_id: domainD1Id,
         migrations_dir: "../../packages/db/migrations",
       },
@@ -154,7 +176,7 @@ function apiConfig({
   };
 }
 
-function requestsConfig({ domainD1Id }) {
+function requestsConfig({ domainD1Id, domainDatabaseName }) {
   return {
     name: "savia-request",
     main: "src/server/index.ts",
@@ -165,7 +187,7 @@ function requestsConfig({ domainD1Id }) {
     d1_databases: [
       {
         binding: "DB",
-        database_name: "savia-agencies",
+        database_name: domainDatabaseName,
         database_id: domainD1Id,
         migrations_dir: "../../packages/db/migrations",
       },
@@ -193,7 +215,7 @@ function hookExecutorConfig() {
   };
 }
 
-function connectorsConfig({ domainD1Id }) {
+function connectorsConfig({ domainD1Id, domainDatabaseName }) {
   return {
     name: "savia-connectors",
     main: "src/index.ts",
@@ -203,12 +225,26 @@ function connectorsConfig({ domainD1Id }) {
     d1_databases: [
       {
         binding: "DB",
-        database_name: "savia-agencies",
+        database_name: domainDatabaseName,
         database_id: domainD1Id,
       },
     ],
     services: [{ binding: "SAVIA_REQUEST", service: "savia-request" }],
     secrets: { required: ["EXTENSION_CONNECTIONS_ENCRYPTION_KEY"] },
+  };
+}
+
+function backupCoordinatorConfig() {
+  return {
+    $schema: "../../node_modules/wrangler/config-schema.json",
+    name: "savia-backup-coordinator",
+    compatibility_date: "2026-08-31",
+    main: "src/index.ts",
+    workers_dev: true,
+    preview_urls: false,
+    services: [{ binding: "AGENCIES", service: "savia-agencies" }],
+    durable_objects: { bindings: [] },
+    migrations: [{ tag: "v1", new_sqlite_classes: ["BackupCoordinator"] }],
   };
 }
 
@@ -226,41 +262,73 @@ function mcpConfig({ publicOrigin }) {
   };
 }
 
-function gatewayConfig({ publicOrigin, documentsBucket }) {
+function gatewayConfig({
+  publicOrigin,
+  documentsBucket,
+  tenantSubdomains,
+  runWorkerFirst,
+}) {
   const hostname = new URL(publicOrigin).hostname;
+  const routes = [
+    hostname,
+    ...tenantSubdomains.map((label) => `${label}.${hostname}`),
+  ].map((pattern) => ({ custom_domain: true, pattern }));
   return {
     $schema: "../../node_modules/wrangler/config-schema.json",
     name: "savia",
     compatibility_date: "2026-08-31",
     main: "src/edge-gateway.ts",
-    routes: [{ custom_domain: true, pattern: hostname }],
+    vars: { CANONICAL_HOST: hostname },
+    routes:
+      hostname === "savia.hefesoft.com"
+        ? [
+            ...routes,
+            { pattern: `${hostname}/*`, zone_name: "hefesoft.com" },
+            { pattern: `*.${hostname}/*`, zone_name: "hefesoft.com" },
+            { custom_domain: true, pattern: "savia.app.hefesoft.com" },
+            ...[...new Set(["savia-team", ...tenantSubdomains])].map(
+              (label) => ({
+                custom_domain: true,
+                pattern: `${label}.savia.app.hefesoft.com`,
+              }),
+            ),
+            {
+              pattern: "*.savia.app.hefesoft.com/*",
+              zone_name: "hefesoft.com",
+            },
+          ]
+        : routes,
+
     services: [{ binding: "API", service: "savia-agencies" }],
     r2_buckets: [{ binding: "OFFICE_RUNTIME", bucket_name: documentsBucket }],
     assets: {
       directory: "./dist",
       binding: "ASSETS",
       not_found_handling: "single-page-application",
-      run_worker_first: [
-        "/companion-downloads.json",
-        "/register",
-        "/public/forms",
-        "/public/forms/*",
-        "/public/bookings",
-        "/public/bookings/*",
-        "/public/quotes",
-        "/public/quotes/*",
-        "/office",
-        "/office/*",
-        "/api/*",
-        "/v1/*",
-        "/webhooks/whatsapp",
-        "/s/*",
-        "/.well-known/*",
-        "/mcp",
-        "/health",
-        "/docs",
-        "/openapi.json",
-      ],
+      run_worker_first:
+        runWorkerFirst && hostname === "savia.hefesoft.com"
+          ? true
+          : [
+              "/companion-downloads.json",
+              "/register",
+              "/public/forms",
+              "/public/forms/*",
+              "/public/bookings",
+              "/public/bookings/*",
+              "/public/quotes",
+              "/public/quotes/*",
+              "/office",
+              "/office/*",
+              "/api/*",
+              "/v1/*",
+              "/webhooks/whatsapp",
+              "/s/*",
+              "/.well-known/*",
+              "/mcp",
+              "/health",
+              "/docs",
+              "/openapi.json",
+            ],
     },
   };
 }
@@ -282,8 +350,11 @@ export async function renderProductionConfigs({
   pagesSearchIndex,
   flowsResources,
   flowsExecutionEnabled = false,
+  tenantSubdomains = [],
   authD1Id,
+  authDatabaseName,
   domainD1Id,
+  domainDatabaseName,
   documentsBucket = defaultDocumentsBucket,
   jiraIntegrationId,
   githubIntegrationId,
@@ -296,6 +367,10 @@ export async function renderProductionConfigs({
   if (!["production", "preview"].includes(deploymentEnvironment)) {
     throw new Error("Unsupported deployment environment");
   }
+  const normalizedTenantSubdomains = validateTenantSubdomains(
+    tenantSubdomains,
+    deploymentEnvironment,
+  );
   if (
     deploymentEnvironment === "preview" &&
     (documentsBucket === defaultDocumentsBucket ||
@@ -306,6 +381,25 @@ export async function renderProductionConfigs({
     );
   }
   const flows = validateFlowsResources(flowsResources, deploymentEnvironment);
+  const resolvedNames = resolveInfraNames({
+    environment: deploymentEnvironment,
+    documentsBucket,
+    publicOrigin,
+    ...(deploymentEnvironment === "production"
+      ? { authDatabaseName, domainDatabaseName }
+      : {}),
+  });
+  if (
+    deploymentEnvironment === "preview" &&
+    ((authDatabaseName !== undefined &&
+      authDatabaseName !== resolvedNames.databases.auth) ||
+      (domainDatabaseName !== undefined &&
+        domainDatabaseName !== resolvedNames.databases.domain))
+  ) {
+    throw new Error(
+      "Preview D1 names do not match isolated infrastructure outputs",
+    );
+  }
   if (
     typeof flowsExecutionEnabled !== "boolean" ||
     (flowsExecutionEnabled && !flows)
@@ -314,10 +408,13 @@ export async function renderProductionConfigs({
   }
   const rendered = {
     authD1Id: requiredValue(authD1Id, "SAVIA_AUTH_D1_ID"),
+    authDatabaseName: resolvedNames.databases.auth,
     documentsBucket: requiredValue(documentsBucket, "SAVIA_DOCUMENTS_BUCKET"),
     domainD1Id: requiredValue(domainD1Id, "SAVIA_DOMAIN_D1_ID"),
+    domainDatabaseName: resolvedNames.databases.domain,
     outputRoot: requiredValue(outputRoot, "SAVIA_DEPLOY_CONFIG_ROOT"),
     publicOrigin: originValue(publicOrigin),
+    tenantSubdomains: normalizedTenantSubdomains,
     ...(zoomIntegrationId?.trim()
       ? {
           zoomIntegrationId: requiredValue(
@@ -357,8 +454,26 @@ export async function renderProductionConfigs({
     "hook-executor": hookExecutorConfig(),
     mcp: mcpConfig(rendered),
     "connector-gateway": connectorsConfig(rendered),
-    admin: gatewayConfig(rendered),
+    "backup-coordinator": backupCoordinatorConfig(),
+    admin: gatewayConfig({
+      ...rendered,
+      runWorkerFirst: deploymentEnvironment === "production",
+    }),
   };
+  // One namespace per deployment environment, shared by every D1/R2 writer.
+  // Cross-script names are resolved after preview worker names are rewritten.
+  for (const app of ["api", "auth", "savia-request", "connector-gateway"]) {
+    const config = configs[app];
+    config.vars = { ...config.vars, SAVIA_BACKUP_GATE_REQUIRED: "true" };
+    config.durable_objects ??= { bindings: [] };
+    config.durable_objects.bindings.push({
+      name: "BACKUP_GATE",
+      class_name: "BackupCoordinator",
+      script_name: configs["backup-coordinator"].name,
+    });
+  }
+  if (deploymentEnvironment === "production")
+    configs.api.secrets.required.push("SAVIA_BACKUP_CONTROL_SECRET");
   if (openrouterModel) configs.api.vars.OPENROUTER_MODEL = openrouterModel;
   const searchIndex =
     pagesSearchIndex?.trim() ||
@@ -391,8 +506,6 @@ export async function renderProductionConfigs({
       config.name += "-preview";
       for (const binding of config.services ?? [])
         binding.service += "-preview";
-      for (const binding of config.d1_databases ?? [])
-        binding.database_name += "-preview";
       config.workers_dev = false;
       config.preview_urls = false;
     }
@@ -412,8 +525,17 @@ export async function renderProductionConfigs({
     };
     configs.admin.routes = [
       { custom_domain: true, pattern: new URL(rendered.publicOrigin).hostname },
+      // Preserve the existing tenant route; Custom Domains cannot use wildcards.
+      {
+        pattern: `*.${new URL(rendered.publicOrigin).hostname}/*`,
+        zone_name: "hefesoft.com",
+      },
     ];
   }
+  for (const app of ["api", "auth", "savia-request", "connector-gateway"])
+    configs[app].durable_objects.bindings.find(
+      (binding) => binding.name === "BACKUP_GATE",
+    ).script_name = configs["backup-coordinator"].name;
   if (deploymentEnvironment === "preview") {
     configs["plugin-editor-runtime"] = pluginEditorWorkerConfig({
       outputRoot: rendered.outputRoot,
@@ -463,10 +585,15 @@ export async function renderCloudflareConfigFromEnv(env = process.env) {
     deploymentEnvironment: env.SAVIA_DEPLOY_ENVIRONMENT,
     openrouterModel: env.OPENROUTER_MODEL,
     authD1Id: env.SAVIA_AUTH_D1_ID,
+    authDatabaseName: env.SAVIA_AUTH_D1_NAME,
     documentsBucket: env.SAVIA_DOCUMENTS_BUCKET,
     domainD1Id: env.SAVIA_DOMAIN_D1_ID,
+    domainDatabaseName: env.SAVIA_DOMAIN_D1_NAME,
     pagesSearchIndex: env.SAVIA_PAGES_SEARCH_INDEX,
     flowsExecutionEnabled: env.SAVIA_FLOWS_EXECUTION_ENABLED === "true",
+    tenantSubdomains: env.SAVIA_TENANT_SUBDOMAINS
+      ? JSON.parse(env.SAVIA_TENANT_SUBDOMAINS)
+      : [],
     flowsResources: env.SAVIA_FLOWS_RESOURCES
       ? JSON.parse(env.SAVIA_FLOWS_RESOURCES)
       : null,

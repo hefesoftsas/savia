@@ -346,17 +346,17 @@ describe("edge gateway", () => {
   it("resolves the tenant slug only for direct tenant subdomains", () => {
     expect(
       tenantSlugFromRequest(
-        new Request("https://merkaseguros.savia.app.hefesoft.com/v1/tenants"),
+        new Request("https://merkaseguros.savia.hefesoft.com/v1/tenants"),
       ),
     ).toBe("merkaseguros");
     expect(
       tenantSlugFromRequest(
-        new Request("https://savia.app.hefesoft.com/v1/tenants"),
+        new Request("https://savia.hefesoft.com/v1/tenants"),
       ),
     ).toBeNull();
     expect(
       tenantSlugFromRequest(
-        new Request("https://api.savia.app.hefesoft.com/v1/tenants"),
+        new Request("https://api.savia.hefesoft.com/v1/tenants"),
       ),
     ).toBeNull();
   });
@@ -368,7 +368,7 @@ describe("edge gateway", () => {
     const assets = { fetch: vi.fn(async () => new Response("admin")) };
 
     await gatewayFetch(
-      new Request("https://merkaseguros.savia.app.hefesoft.com/v1/tenants"),
+      new Request("https://merkaseguros.savia.hefesoft.com/v1/tenants"),
       { API: api, ASSETS: assets },
     );
 
@@ -381,11 +381,131 @@ describe("edge gateway", () => {
   it("does not add the tenant header on the canonical host", async () => {
     const api = { fetch: vi.fn(async () => Response.json({ via: "api" })) };
     const assets = { fetch: vi.fn(async () => new Response("admin")) };
-    const request = new Request("https://savia.app.hefesoft.com/v1/tenants");
+    const request = new Request("https://savia.hefesoft.com/v1/tenants");
 
     await gatewayFetch(request, { API: api, ASSETS: assets });
 
     expect(api.fetch).toHaveBeenCalledWith(request);
+  });
+
+  it("redirects legacy apex and tenant hosts to their fixed new hosts", async () => {
+    const api = { fetch: vi.fn(async () => Response.json({ via: "api" })) };
+    const assets = { fetch: vi.fn(async () => new Response("admin")) };
+
+    const apex = await gatewayFetch(
+      new Request("https://savia.app.hefesoft.com/help/article?q=one"),
+      { API: api, ASSETS: assets },
+    );
+    const tenant = await gatewayFetch(
+      new Request(
+        "https://merkaseguros.savia.app.hefesoft.com/bookings?date=2026-10-18",
+      ),
+      { API: api, ASSETS: assets },
+    );
+
+    expect(apex.status).toBe(308);
+    expect(apex.headers.get("location")).toBe(
+      "https://savia.hefesoft.com/help/article?q=one",
+    );
+    expect(apex.headers.get("cache-control")).toBe("no-store");
+    expect(tenant.status).toBe(308);
+    expect(tenant.headers.get("location")).toBe(
+      "https://merkaseguros.savia.hefesoft.com/bookings?date=2026-10-18",
+    );
+    expect(api.fetch).not.toHaveBeenCalled();
+    expect(assets.fetch).not.toHaveBeenCalled();
+  });
+
+  it("drops legacy OAuth callback query strings and restarts login at the new origin", async () => {
+    const api = { fetch: vi.fn(async () => Response.json({ via: "api" })) };
+    const assets = { fetch: vi.fn(async () => new Response("admin")) };
+
+    const apiCallback = await gatewayFetch(
+      new Request(
+        "https://savia.app.hefesoft.com/api/auth/callback/google?code=secret&state=old-state",
+      ),
+      { API: api, ASSETS: assets },
+    );
+    const adminCallback = await gatewayFetch(
+      new Request(
+        "https://merkaseguros.savia.app.hefesoft.com/auth/callback?code=secret&state=old-state",
+      ),
+      { API: api, ASSETS: assets },
+    );
+
+    expect(apiCallback.headers.get("location")).toBe(
+      "https://savia.hefesoft.com/",
+    );
+    expect(adminCallback.headers.get("location")).toBe(
+      "https://merkaseguros.savia.hefesoft.com/",
+    );
+    expect(apiCallback.headers.get("referrer-policy")).toBe("no-referrer");
+    expect(api.fetch).not.toHaveBeenCalled();
+    expect(assets.fetch).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    "https://api.savia.app.hefesoft.com/",
+    "https://admin.savia.app.hefesoft.com/",
+    "https://a.b.savia.app.hefesoft.com/",
+  ])("rejects invalid legacy host %s", async (url) => {
+    const api = { fetch: vi.fn(async () => Response.json({ via: "api" })) };
+    const assets = { fetch: vi.fn(async () => new Response("admin")) };
+
+    const response = await gatewayFetch(new Request(url), {
+      API: api,
+      ASSETS: assets,
+    });
+
+    expect(response.status).toBe(404);
+    expect(response.headers.get("location")).toBeNull();
+    expect(api.fetch).not.toHaveBeenCalled();
+    expect(assets.fetch).not.toHaveBeenCalled();
+  });
+
+  it("rejects non-read legacy requests without forwarding their body", async () => {
+    const api = { fetch: vi.fn(async () => Response.json({ via: "api" })) };
+    const assets = { fetch: vi.fn(async () => new Response("admin")) };
+    const response = await gatewayFetch(
+      new Request("https://savia.app.hefesoft.com/api/auth/admin/callback", {
+        method: "POST",
+        body: JSON.stringify({ code: "secret", state: "old-state" }),
+        headers: { "content-type": "application/json" },
+      }),
+      { API: api, ASSETS: assets },
+    );
+
+    expect(response.status).toBe(409);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(await response.json()).toMatchObject({
+      error: { code: "LEGACY_HOST_MIGRATED" },
+    });
+    expect(api.fetch).not.toHaveBeenCalled();
+    expect(assets.fetch).not.toHaveBeenCalled();
+  });
+
+  it("does not redirect legacy-looking hosts for Preview or custom deployments", async () => {
+    const api = { fetch: vi.fn(async () => Response.json({ via: "api" })) };
+    const assets = { fetch: vi.fn(async () => new Response("admin")) };
+    const legacy = new Request(
+      "https://savia.app.hefesoft.com/api/auth/sign-in/email",
+    );
+
+    const preview = await gatewayFetch(legacy, {
+      API: api,
+      ASSETS: assets,
+      CANONICAL_HOST: "savia-preview.hefesoft.com",
+    });
+    const custom = await gatewayFetch(legacy, {
+      API: api,
+      ASSETS: assets,
+      CANONICAL_HOST: "savia.example.com",
+    });
+
+    expect(preview.status).toBe(200);
+    expect(custom.status).toBe(200);
+    expect(api.fetch).toHaveBeenCalledWith(legacy);
+    expect(api.fetch).toHaveBeenCalledTimes(2);
   });
 });
 

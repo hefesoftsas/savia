@@ -10,13 +10,462 @@ import {
 import { afterEach, expect, it, vi } from "vitest";
 import { CustomPluginFrame } from "../custom-plugin-frame";
 import { setStudioRuntime } from "../runtime";
+import { getPluginAssistantProvider } from "@savia/studio-shared/plugin-assistant";
+import { HashRouter, useSearchParams } from "react-router-dom";
 
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
   vi.useRealTimers();
   setStudioRuntime({ embedded: false });
+  getPluginAssistantProvider()?.close();
   delete (navigator as Navigator & { userActivation?: unknown }).userActivation;
+});
+
+it("keeps plugin URL state scoped to the current screen and broadcasts back navigation", async () => {
+  window.history.replaceState(
+    null,
+    "",
+    "/#/studio?tenantId=12&object=tenders&plugin.demo.tab=documents",
+  );
+  const navigate = vi.fn((query: string) =>
+    window.history.pushState(null, "", "/#/studio?" + query),
+  );
+  const transport = vi.fn(async () => Response.json({ data: null }));
+  setStudioRuntime({ embedded: true, navigate, transport });
+  render(
+    <CustomPluginFrame
+      pluginId="demo"
+      title="Route demo"
+      screen={{ object: "tenders", view: "records" }}
+    />,
+  );
+  const frame = screen.getByTitle("Route demo") as HTMLIFrameElement;
+  const send = vi.spyOn(frame.contentWindow!, "postMessage");
+  const request = (method: string, body?: unknown) =>
+    fireEvent(
+      window,
+      new MessageEvent("message", {
+        source: frame.contentWindow,
+        data: {
+          ns: "savia-plugin",
+          type: "request",
+          id: method,
+          path: "/extensions/demo/route",
+          method,
+          body,
+        },
+      }),
+    );
+  request("GET");
+  await waitFor(() =>
+    expect(send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "GET",
+        ok: true,
+        data: { tab: "documents" },
+      }),
+      "*",
+    ),
+  );
+  request("PUT", {
+    state: { tender: "CO1.REQ.1", tab: "chat" },
+    replace: false,
+  });
+  await waitFor(() =>
+    expect(navigate).toHaveBeenCalledWith(
+      expect.stringContaining("tenantId=12&object=tenders"),
+      false,
+    ),
+  );
+  expect(window.location.hash).toContain("plugin.demo.tender=CO1.REQ.1");
+  window.history.replaceState(
+    null,
+    "",
+    "/#/studio?tenantId=12&object=tenders&plugin.demo.tab=summary",
+  );
+  fireEvent(window, new PopStateEvent("popstate"));
+  expect(send).toHaveBeenCalledWith(
+    expect.objectContaining({
+      type: "route-changed",
+      state: { tab: "summary" },
+    }),
+    "*",
+  );
+  const notifications = send.mock.calls.filter(
+    ([data]) => data.type === "route-changed",
+  ).length;
+  fireEvent(window, new HashChangeEvent("hashchange"));
+  expect(
+    send.mock.calls.filter(([data]) => data.type === "route-changed"),
+  ).toHaveLength(notifications);
+  expect(transport).not.toHaveBeenCalledWith(
+    expect.stringContaining("/route"),
+    expect.anything(),
+  );
+  window.history.replaceState(null, "", "/");
+});
+
+it("round trips actual HashRouter history, preserving scope and replace semantics", async () => {
+  window.history.replaceState(
+    null,
+    "",
+    "/#/studio?tenantId=12&object=tenders&plugin.other.tab=keep",
+  );
+  function Host() {
+    const [, setParams] = useSearchParams();
+    setStudioRuntime({
+      embedded: true,
+      navigate: (query, replace) =>
+        setParams(new URLSearchParams(query), { replace }),
+    });
+    return (
+      <CustomPluginFrame
+        pluginId="demo"
+        title="History demo"
+        screen={{ object: "tenders", view: "records" }}
+      />
+    );
+  }
+  render(
+    <HashRouter>
+      <Host />
+    </HashRouter>,
+  );
+  const frame = screen.getByTitle("History demo") as HTMLIFrameElement;
+  const send = vi.spyOn(frame.contentWindow!, "postMessage");
+  const setRoute = (tab: string, replace = false) =>
+    fireEvent(
+      window,
+      new MessageEvent("message", {
+        source: frame.contentWindow,
+        data: {
+          ns: "savia-plugin",
+          type: "request",
+          id: tab,
+          path: "/extensions/demo/route",
+          method: "PUT",
+          body: { state: { tender: "CO1.REQ.1", tab }, replace },
+        },
+      }),
+    );
+  const initialLength = window.history.length;
+  setRoute("documents");
+  await waitFor(() =>
+    expect(window.location.hash).toContain("plugin.demo.tab=documents"),
+  );
+  expect(window.history.length).toBe(initialLength + 1);
+  setRoute("chat", true);
+  await waitFor(() =>
+    expect(window.location.hash).toContain("plugin.demo.tab=chat"),
+  );
+  expect(window.history.length).toBe(initialLength + 1);
+  expect(window.location.hash).toContain(
+    "tenantId=12&object=tenders&plugin.other.tab=keep",
+  );
+  const beforeBack = send.mock.calls.filter(
+    ([data]) => data.type === "route-changed",
+  ).length;
+  await act(async () => {
+    window.history.back();
+  });
+  await waitFor(() =>
+    expect(window.location.hash).not.toContain("plugin.demo.tab"),
+  );
+  await waitFor(() =>
+    expect(
+      send.mock.calls.filter(([data]) => data.type === "route-changed"),
+    ).toHaveLength(beforeBack + 1),
+  );
+  await act(async () => {
+    window.history.forward();
+  });
+  await waitFor(() =>
+    expect(window.location.hash).toContain("plugin.demo.tab=chat"),
+  );
+  await waitFor(() =>
+    expect(
+      send.mock.calls.filter(([data]) => data.type === "route-changed"),
+    ).toHaveLength(beforeBack + 2),
+  );
+  window.history.replaceState(null, "", "/");
+});
+
+it("opens only its own extension assistant and invokes its declared action through the host API", async () => {
+  const transport = vi.fn(async (_path: string, _init?: RequestInit) =>
+    Response.json({
+      data: {
+        run: { runId: "run-1", status: "succeeded" },
+        output: {
+          data: {
+            data: {
+              conversationId: "conversation-1",
+              revision: 1,
+              messages: [],
+            },
+          },
+        },
+      },
+    }),
+  );
+  setStudioRuntime({ embedded: false, transport });
+  render(<CustomPluginFrame pluginId="procurement.secop" title="SECOP" />);
+  const frame = screen.getByTitle("SECOP") as HTMLIFrameElement;
+  const send = vi.spyOn(frame.contentWindow!, "postMessage");
+  const request = (path: string, id: string) =>
+    fireEvent(
+      window,
+      new MessageEvent("message", {
+        source: frame.contentWindow,
+        data: {
+          ns: "savia-plugin",
+          type: "request",
+          id,
+          path,
+          method: "POST",
+          body: {
+            title: "Tender dossier",
+            actionId: "assistant-chat",
+            context: { dossierId: "dossier-1" },
+          },
+        },
+      }),
+    );
+
+  request("/extensions/other.plugin/assistant/open", "foreign");
+  expect(getPluginAssistantProvider()).toBeNull();
+  request("/extensions/procurement.secop/assistant/open", "own");
+  expect(getPluginAssistantProvider()?.title).toBe("Tender dossier");
+  await act(async () => {
+    await getPluginAssistantProvider()!.invoke({ method: "load" });
+  });
+  expect(transport).toHaveBeenCalledWith(
+    "/api/extensions/procurement.secop/actions/assistant-chat",
+    expect.objectContaining({
+      method: "POST",
+      body: JSON.stringify({
+        input: {
+          context: { dossierId: "dossier-1" },
+          request: { method: "load" },
+        },
+      }),
+    }),
+  );
+  expect(send).toHaveBeenCalledWith(
+    expect.objectContaining({ id: "own", ok: true, data: null }),
+    "*",
+  );
+});
+
+it("revokes an external assistant callback when the authenticated session clears", async () => {
+  const transport = vi.fn();
+  setStudioRuntime({ embedded: false, transport });
+  render(<CustomPluginFrame pluginId="example.provider" title="Provider" />);
+  const frame = screen.getByTitle("Provider") as HTMLIFrameElement;
+  fireEvent(
+    window,
+    new MessageEvent("message", {
+      source: frame.contentWindow,
+      data: {
+        ns: "savia-plugin",
+        type: "request",
+        id: "open",
+        path: "/extensions/example.provider/assistant/open",
+        method: "POST",
+        body: {
+          title: "External assistant",
+          actionId: "chat",
+          context: { itemId: "item-1" },
+        },
+      },
+    }),
+  );
+  const provider = getPluginAssistantProvider()!;
+  fireEvent(window, new Event("savia:session-cleared"));
+  await expect(provider.invoke({ method: "load" })).rejects.toThrow(
+    "session has ended",
+  );
+  expect(transport).not.toHaveBeenCalled();
+});
+
+it("requires the active reusable panel owner before opening its assistant", async () => {
+  render(<CustomPluginFrame pluginId="custom.editor" title="List" />);
+  const list = screen.getByTitle("List") as HTMLIFrameElement;
+  const main = handshake(list);
+  uiMessage(list, { type: "prepare", session: main.session });
+  const editor = document.querySelector(
+    'iframe[src*="standby=1"]',
+  ) as HTMLIFrameElement;
+  const child = handshake(editor);
+  const request = { view: "record-editor", title: "Editor", params: {} };
+  uiMessage(list, {
+    type: "open",
+    id: "open-editor",
+    request,
+    session: main.session,
+  });
+  const activation = child.send.mock.calls.find(
+    ([message]) => message.type === "activate",
+  )![0];
+  const panelId = activation.panel.panelId as string;
+  const assistantRequest = (requestedPanelId: string) =>
+    fireEvent(
+      window,
+      new MessageEvent("message", {
+        source: editor.contentWindow,
+        data: {
+          ns: "savia-plugin",
+          type: "request",
+          id: "assistant-open",
+          path: "/extensions/custom.editor/assistant/open",
+          method: "POST",
+          panelId: requestedPanelId,
+          body: {
+            title: "Editor assistant",
+            actionId: "chat",
+            context: { itemId: "item-1" },
+          },
+        },
+      }),
+    );
+
+  assistantRequest("another-panel");
+  expect(getPluginAssistantProvider()).toBeNull();
+  fireEvent(
+    window,
+    new MessageEvent("message", {
+      source: editor.contentWindow,
+      data: {
+        ns: "savia-plugin",
+        type: "ready",
+        id: "wrong-type",
+        path: "/extensions/custom.editor/assistant/open",
+        method: "POST",
+        panelId,
+        body: {
+          title: "Editor assistant",
+          actionId: "chat",
+          context: { itemId: "item-1" },
+        },
+      },
+    }),
+  );
+  expect(getPluginAssistantProvider()).toBeNull();
+  assistantRequest(panelId);
+  const provider = getPluginAssistantProvider()!;
+  expect(provider.title).toBe("Editor assistant");
+
+  uiMessage(editor, {
+    type: "state",
+    session: child.session,
+    panelId,
+    state: { dirty: false, busy: false },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Close" }));
+  expect(getPluginAssistantProvider()).toBeNull();
+  await expect(provider.invoke({ method: "load" })).rejects.toThrow(
+    "session has ended",
+  );
+  assistantRequest(panelId);
+  expect(getPluginAssistantProvider()).toBeNull();
+});
+
+it("accepts assistant requests from a directly bound panel with the SDK null panel ID", () => {
+  render(<CustomPluginFrame pluginId="custom.editor" title="List" />);
+  const list = screen.getByTitle("List") as HTMLIFrameElement;
+  const main = handshake(list);
+  uiMessage(list, {
+    type: "open",
+    id: "open-editor",
+    request: { view: "record-editor", title: "Editor", params: {} },
+    session: main.session,
+  });
+  const editor = screen.getByTitle("Editor") as HTMLIFrameElement;
+  const child = handshake(editor);
+  expect(child.panelId).toBeTruthy();
+  fireEvent(
+    window,
+    new MessageEvent("message", {
+      source: editor.contentWindow,
+      data: {
+        ns: "savia-plugin",
+        type: "request",
+        id: "assistant-open",
+        path: "/extensions/custom.editor/assistant/open",
+        method: "POST",
+        panelId: null,
+        body: {
+          title: "Editor assistant",
+          actionId: "chat",
+          context: { itemId: "item-1" },
+        },
+      },
+    }),
+  );
+  expect(getPluginAssistantProvider()?.title).toBe("Editor assistant");
+  uiMessage(editor, {
+    type: "state",
+    session: child.session,
+    panelId: child.panelId,
+    state: { dirty: false, busy: false },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Close" }));
+  expect(getPluginAssistantProvider()).toBeNull();
+});
+
+it("closes the assistant provider when its iframe is replaced", () => {
+  const { rerender } = render(
+    <CustomPluginFrame
+      pluginId="custom.editor"
+      title="List"
+      installationVersion="v1"
+    />,
+  );
+  const list = screen.getByTitle("List") as HTMLIFrameElement;
+  const main = handshake(list);
+  uiMessage(list, { type: "prepare", session: main.session });
+  const editor = document.querySelector(
+    'iframe[src*="standby=1"]',
+  ) as HTMLIFrameElement;
+  const child = handshake(editor);
+  uiMessage(list, {
+    type: "open",
+    id: "open-editor",
+    request: { view: "record-editor", title: "Editor", params: {} },
+    session: main.session,
+  });
+  const panelId = child.send.mock.calls.find(
+    ([message]) => message.type === "activate",
+  )![0].panel.panelId as string;
+  fireEvent(
+    window,
+    new MessageEvent("message", {
+      source: editor.contentWindow,
+      data: {
+        ns: "savia-plugin",
+        type: "request",
+        id: "assistant-open",
+        path: "/extensions/custom.editor/assistant/open",
+        method: "POST",
+        panelId,
+        body: {
+          title: "Editor assistant",
+          actionId: "chat",
+          context: { itemId: "item-1" },
+        },
+      },
+    }),
+  );
+  expect(getPluginAssistantProvider()).not.toBeNull();
+
+  rerender(
+    <CustomPluginFrame
+      pluginId="custom.editor"
+      title="List"
+      installationVersion="v2"
+    />,
+  );
+  expect(getPluginAssistantProvider()).toBeNull();
 });
 
 it("sizes plugin screens to their content and resets on navigation", () => {
@@ -1278,4 +1727,119 @@ it("forwards outbox-only conflicts even when no record revision changes", async 
     expect.objectContaining({ type: "records-changed", status }),
     "*",
   );
+});
+
+it("binds task writes, documents and source resolution to the current assistant session", async () => {
+  const transport = vi.fn(async (path: string, init?: RequestInit) => {
+    if (path.startsWith("/api/records/assistant_tasks?"))
+      return Response.json({ data: [], total: 0, page: 1, perPage: 2 });
+    if (path === "/api/records/assistant_tasks" && init?.method === "POST")
+      return Response.json({ data: { id: "task-1" } });
+    return Response.json({
+      data: {
+        run: { status: "succeeded" },
+        output: {
+          data: {
+            data: {
+              revision: 1,
+              messages: [],
+              source: {
+                url: "https://secop.example/private/source/ticket#page=4",
+                page: 4,
+              },
+              document: {
+                url: "https://secop.example/private/proposal/ticket",
+                fileName: "proposal.docx",
+                format: "docx",
+              },
+            },
+          },
+        },
+      },
+    });
+  });
+  setStudioRuntime({ embedded: false, transport });
+  render(<CustomPluginFrame pluginId="example.provider" title="Provider" />);
+  const frame = screen.getByTitle("Provider") as HTMLIFrameElement;
+  fireEvent(
+    window,
+    new MessageEvent("message", {
+      source: frame.contentWindow,
+      data: {
+        ns: "savia-plugin",
+        type: "request",
+        id: "open",
+        path: "/extensions/example.provider/assistant/open",
+        method: "POST",
+        body: {
+          title: "Tender",
+          actionId: "chat",
+          context: { dossierId: "tender-1" },
+          taskCollection: "assistant_tasks",
+        },
+      },
+    }),
+  );
+  const provider = getPluginAssistantProvider()!;
+  expect(
+    (
+      await provider.invoke({
+        method: "open-source",
+        messageId: "answer-1",
+        citationId: "S001",
+      })
+    ).source?.page,
+  ).toBe(4);
+  expect(
+    (
+      await provider.invoke({
+        method: "generate-document",
+        actionId: "proposal-docx",
+      })
+    ).document?.fileName,
+  ).toBe("proposal.docx");
+  const generationPost = transport.mock.calls.at(-1);
+  expect(JSON.parse(String(generationPost?.[1]?.body))).toMatchObject({
+    input: {
+      context: { dossierId: "tender-1" },
+      request: { method: "generate-document", actionId: "proposal-docx" },
+    },
+  });
+  await expect(
+    provider.invoke({ method: "generate-document", actionId: "../other" }),
+  ).rejects.toThrow("Invalid assistant operation");
+  const draft = {
+    suggestion: {
+      id: "R1",
+      title: "Verify",
+      description: "Two certificates",
+      citationIds: [],
+    },
+    title: "Collect certificates",
+    assignee: "José",
+    dueDate: "2026-10-20",
+    sourceReference: "Terms page 4",
+  };
+  expect(await provider.createTask!(draft)).toEqual({
+    id: "task-1",
+    created: true,
+  });
+  const post = transport.mock.calls.find(
+    ([path, init]) =>
+      path === "/api/records/assistant_tasks" && init?.method === "POST",
+  );
+  expect(JSON.parse(String(post?.[1]?.body))).toMatchObject({
+    name: "Collect certificates",
+    assignee: "José",
+    status: "open",
+  });
+  fireEvent(window, new Event("savia:session-cleared"));
+  const count = transport.mock.calls.length;
+  await expect(provider.createTask!(draft)).rejects.toThrow(
+    "session has ended",
+  );
+  await expect(
+    provider.invoke({ method: "generate-document", actionId: "proposal-docx" }),
+  ).rejects.toThrow("session has ended");
+  expect(transport.mock.calls.length).toBe(count);
 });

@@ -66,6 +66,35 @@ function fakeRequest({
   return { requestImpl, seen };
 }
 
+test("pins each downloaded object to the listed ETag even when its byte size is unchanged", async () => {
+  await withTempDir(async (dir) => {
+    for (const etag of ['"original"', '"overwritten"', undefined]) {
+      const destFile = join(dir, etag ? etag.replaceAll('"', "") : "missing");
+      const { requestImpl, seen } = fakeRequest({
+        headers: { etag },
+        chunks: [Buffer.from("data")],
+      });
+      const operation = downloadR2Object({
+        accountId: ACCOUNT_ID,
+        bucket: BUCKET,
+        key: "document",
+        token: TOKEN,
+        destFile,
+        expectedSize: 4,
+        expectedEtag: "original",
+        requestImpl,
+      });
+      if (etag === '"original"') {
+        await operation;
+        assert.equal(seen.options.headers["if-match"], '"original"');
+      } else {
+        await assert.rejects(operation, /ETag/);
+        await assert.rejects(stat(destFile));
+      }
+    }
+  });
+});
+
 test("downloads compressed R2 bytes without HTTP content decoding", async () => {
   await withTempDir(async (dir) => {
     const original = Buffer.from("stored wasm-like payload ".repeat(50));

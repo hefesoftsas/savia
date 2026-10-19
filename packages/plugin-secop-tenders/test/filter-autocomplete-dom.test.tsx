@@ -202,3 +202,68 @@ it("exposes the next option batch when scrolling the dropdown", () => {
   expect(options()).toHaveLength(100);
   expect(options()[99].textContent).toBe("Entity 99");
 });
+
+describe("multiple selections", () => {
+  function mountMultiple() {
+    host = document.createElement("div");
+    document.body.append(host);
+    root = createRoot(host);
+    function Harness() {
+      const [value, setValue] = useState<string[]>([]);
+      return (
+        <FilterAutocomplete
+          multiple
+          id="departments"
+          label="Departments"
+          value={value}
+          onChange={setValue}
+          options={["Bogotá", "Boyacá", "Caldas"]}
+          removeLabel="Remove"
+        />
+      );
+    }
+    act(() => root.render(<Harness />));
+    act(() => getInput().focus());
+  }
+  it("keeps the list open, marks each selection and removes a chip independently", () => {
+    mountMultiple();
+    act(() => options()[0]!.click());
+    act(() => options()[1]!.click());
+    expect(
+      host
+        .querySelector('[role="listbox"]')
+        ?.getAttribute("aria-multiselectable"),
+    ).toBe("true");
+    expect(
+      options()
+        .filter((option) => option.getAttribute("aria-selected") === "true")
+        .map((option) => option.textContent),
+    ).toEqual(["Bogotá", "Boyacá"]);
+    expect(host.querySelectorAll(".secop-filter-chip")).toHaveLength(2);
+    act(() =>
+      host
+        .querySelector<HTMLButtonElement>('[aria-label="Remove: Bogotá"]')!
+        .click(),
+    );
+    expect(host.querySelectorAll(".secop-filter-chip")).toHaveLength(1);
+    expect(host.querySelector(".secop-filter-chip")?.textContent).toBe(
+      "Boyacá",
+    );
+  });
+  it("adds a typed value with Enter and preserves prior selections", () => {
+    mountMultiple();
+    act(() => options()[0]!.click());
+    act(() => changeInput(getInput(), "Antioquia"));
+    let event: KeyboardEvent | undefined;
+    act(() => {
+      event = key(getInput(), "Enter");
+    });
+    expect(event?.defaultPrevented).toBe(true);
+    expect(
+      Array.from(host.querySelectorAll(".secop-filter-chip")).map(
+        (chip) => chip.textContent,
+      ),
+    ).toEqual(["Bogotá", "Antioquia"]);
+    expect(getInput().value).toBe("");
+  });
+});

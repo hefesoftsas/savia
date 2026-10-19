@@ -4,7 +4,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
-import { captureRecovery, restoreRecovery } from "./flows-preview-recovery.mjs";
+import {
+  assertRecoveryCliEnvironment,
+  captureRecovery,
+  parseArgs,
+  restoreRecovery,
+} from "./flows-preview-recovery.mjs";
 
 const ACCOUNT = "a".repeat(32);
 const AUTHORITY = "https://api.cloudflare.com/client/v4";
@@ -64,7 +69,12 @@ async function fixture() {
   };
 }
 
-function flowsBindings({ generation = "3000", maintenance = "false" } = {}) {
+function flowsBindings({
+  generation = "3000",
+  maintenance = "false",
+  environment = "preview",
+} = {}) {
+  const suffix = environment === "preview" ? "-preview" : "";
   return [
     ["SAVIA_FLOWS_EXTERNAL_SERVICES_ENABLED", "false"],
     ["SAVIA_FLOWS_EXECUTION_ENABLED", "true"],
@@ -82,13 +92,13 @@ function flowsBindings({ generation = "3000", maintenance = "false" } = {}) {
       {
         type: "service",
         name: "CODE_EXECUTOR",
-        service: "savia-hook-executor-preview",
+        service: `savia-hook-executor${suffix}`,
         entrypoint: "FlowsExecutor",
       },
       {
         type: "service",
         name: "SAVIA_HOST",
-        service: "savia-agencies-preview",
+        service: `savia-agencies${suffix}`,
       },
     ]);
 }
@@ -101,6 +111,7 @@ function cloudflareFetcher({
   deployments = DEPLOYMENTS,
   versionBindings = {},
   latestSettingsMaintenance = "false",
+  environment = "preview",
 } = {}) {
   const calls = [];
   const fetcher = async (url, options = {}) => {
@@ -109,13 +120,15 @@ function cloudflareFetcher({
     const body = options.body ? JSON.parse(options.body) : undefined;
     calls.push({ path, method: options.method ?? "GET", body });
 
+    const flowsName =
+      environment === "preview" ? "savia-flows-preview" : "savia-flows";
     if (
       path.endsWith(`/d1/database/${FLOWS_D1}`) &&
       options.method !== "POST"
     ) {
       return response({
         success: true,
-        result: { name: "savia-flows-preview" },
+        result: { name: flowsName },
       });
     }
     if (options.method === "POST" && path.endsWith("/deployments")) {
@@ -162,17 +175,30 @@ function cloudflareFetcher({
       const name = path.split("/").at(-2);
       return response({
         success: true,
-        result: { deployments: [{ versions: deployments[name] }] },
+        result: {
+          deployments: [
+            {
+              versions: deployments[name] ??
+                deployments[`${name}-preview`] ?? [
+                  {
+                    version_id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+                    percentage: 100,
+                  },
+                ],
+            },
+          ],
+        },
       });
     }
-    if (path.includes("/workers/scripts/savia-flows-preview/versions/")) {
+    if (path.includes(`/workers/scripts/${flowsName}/versions/`)) {
       const versionId = path.split("/").at(-1);
       return response({
         success: true,
         result: {
           id: versionId,
           resources: {
-            bindings: versionBindings[versionId] ?? flowsBindings(),
+            bindings:
+              versionBindings[versionId] ?? flowsBindings({ environment }),
           },
         },
       });
@@ -199,6 +225,7 @@ function cloudflareFetcher({
             ? {
                 bindings: flowsBindings({
                   maintenance: latestSettingsMaintenance,
+                  environment,
                 }),
               }
             : {}),
@@ -211,6 +238,38 @@ function cloudflareFetcher({
   };
   return { calls, fetcher };
 }
+
+test("recovery CLI requires its explicit environment to match the deployment environment", () => {
+  const args = parseArgs([
+    "--action",
+    "capture",
+    "--environment",
+    "production",
+    "--metadata",
+    "recovery.json",
+    "--apply",
+  ]);
+  assert.equal(args.environment, "production");
+  assert.throws(
+    () =>
+      assertRecoveryCliEnvironment(args, {
+        SAVIA_DEPLOY_ENVIRONMENT: "preview",
+      }),
+    /does not match/,
+  );
+  assert.throws(
+    () =>
+      assertRecoveryCliEnvironment(args, {
+        SAVIA_DEPLOY_ENVIRONMENT: undefined,
+      }),
+    /does not match/,
+  );
+  assert.doesNotThrow(() =>
+    assertRecoveryCliEnvironment(args, {
+      SAVIA_DEPLOY_ENVIRONMENT: "production",
+    }),
+  );
+});
 
 test("capture stores exact active versions and configs in a private metadata file", async (t) => {
   const files = await fixture();
@@ -254,6 +313,40 @@ test("capture stores exact active versions and configs in a private metadata fil
     ),
   );
   assert.ok(!calls.some((call) => call.path.endsWith("/settings")));
+});
+
+test("production recovery captures only canonical production Worker versions", async (t) => {
+  const files = await fixture();
+  t.after(() => rm(files.root, { recursive: true, force: true }));
+  const productionEnv = env({
+    SAVIA_DEPLOY_ENVIRONMENT: "production",
+    SAVIA_FLOWS_RESOURCES: JSON.stringify({
+      workerName: "savia-flows",
+      databaseId: FLOWS_D1,
+    }),
+  });
+  const { calls, fetcher } = cloudflareFetcher({ environment: "production" });
+  const result = await captureRecovery({
+    env: productionEnv,
+    fetcher,
+    root: files.root,
+    configPaths: files.configPaths,
+    metadataPath: files.metadataPath,
+  });
+  const metadata = JSON.parse(await readFile(files.metadataPath, "utf8"));
+  assert.equal(result.skipped, false);
+  assert.equal(metadata.environment, "production");
+  assert.equal(metadata.workers.flows.name, "savia-flows");
+  assert.ok(
+    calls.some(({ path }) =>
+      path.includes("/workers/scripts/savia-flows/deployments"),
+    ),
+  );
+  assert.ok(
+    calls.some(({ path }) =>
+      path.includes("/workers/scripts/savia-agencies/deployments"),
+    ),
+  );
 });
 
 test("capture refuses foreign preview resources before contacting Cloudflare", async (t) => {

@@ -597,6 +597,17 @@ it("includes MCP OAuth and record-monitor additions in the native core inventory
         indexes: ["studio_mcp_oauth_flows_expiry"],
       },
       {
+        name: "studio_mcp_oauth_refresh_leases",
+        columns: [
+          "tenant_id",
+          "owner_principal_id",
+          "source_id",
+          "lease_owner",
+          "lease_expires_at",
+        ],
+        indexes: ["studio_mcp_oauth_refresh_leases_expiry"],
+      },
+      {
         name: "studio_plugin_monitor_checks",
         columns: [
           "tenant_id",
@@ -665,6 +676,10 @@ it("includes MCP OAuth and record-monitor additions in the native core inventory
       join(coreDirectory, "0049_plugin_record_monitors.sql"),
       "utf8",
     );
+    const nativeRefreshLeases = readFileSync(
+      join(coreDirectory, "0059_mcp_oauth_refresh_leases.sql"),
+      "utf8",
+    );
     expect(nativeMcp).toContain(
       "CREATE TABLE savia_core.studio_mcp_oauth_flows",
     );
@@ -675,6 +690,9 @@ it("includes MCP OAuth and record-monitor additions in the native core inventory
     );
     expect(nativeMonitors).toContain(
       "CREATE TABLE savia_core.studio_plugin_monitor_cursor",
+    );
+    expect(nativeRefreshLeases).toContain(
+      "CREATE TABLE savia_core.studio_mcp_oauth_refresh_leases",
     );
   } finally {
     sqlite.close();

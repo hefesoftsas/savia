@@ -2,17 +2,20 @@ import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
 import test from "node:test";
 import { buildSecretUploads } from "./upload-cloudflare-secrets.mjs";
-const values = Object.fromEntries(
-  [
-    "BETTER_AUTH_SECRET",
-    "SAVIA_MCP_SHARED_SECRET",
-    "SAVIA_REQUEST_ENCRYPTION_KEY",
-    "EXTENSION_CONNECTIONS_ENCRYPTION_KEY",
-    "ASSISTANT_SETTINGS_ENCRYPTION_KEY",
-    "CRM_INTEGRATION_KEY",
-    "NANGO_API_KEY",
-  ].map((key) => [key, "test-only-value"]),
-);
+const values = {
+  SAVIA_BACKUP_CONTROL_SECRET: "c".repeat(64),
+  ...Object.fromEntries(
+    [
+      "BETTER_AUTH_SECRET",
+      "SAVIA_MCP_SHARED_SECRET",
+      "SAVIA_REQUEST_ENCRYPTION_KEY",
+      "EXTENSION_CONNECTIONS_ENCRYPTION_KEY",
+      "ASSISTANT_SETTINGS_ENCRYPTION_KEY",
+      "CRM_INTEGRATION_KEY",
+      "NANGO_API_KEY",
+    ].map((key) => [key, "test-only-value"]),
+  ),
+};
 test("preview secrets always use explicit preview configuration and names", () => {
   const plans = buildSecretUploads("preview", values);
   assert.equal(plans.length, 5);
@@ -262,4 +265,30 @@ test("WhatsApp webhook secrets are an optional API-only pair", () => {
       /WHATSAPP_META_APP_SECRET and WHATSAPP_WEBHOOK_VERIFY_TOKEN must be configured together/,
     );
   }
+});
+
+test("backup controller credential is uploaded only to the API when explicitly supplied", () => {
+  const secret = "c".repeat(64);
+  const plans = buildSecretUploads("production", {
+    ...values,
+    SAVIA_BACKUP_CONTROL_SECRET: secret,
+  });
+  assert.equal(
+    plans.find((plan) => plan.app === "api").secrets
+      .SAVIA_BACKUP_CONTROL_SECRET,
+    secret,
+  );
+  for (const plan of plans.filter((plan) => plan.app !== "api"))
+    assert.equal(plan.secrets.SAVIA_BACKUP_CONTROL_SECRET, undefined);
+});
+
+test("production refuses a missing backup control credential before uploading any secret", () => {
+  assert.throws(
+    () =>
+      buildSecretUploads("production", {
+        ...values,
+        SAVIA_BACKUP_CONTROL_SECRET: undefined,
+      }),
+    /SAVIA_BACKUP_CONTROL_SECRET/,
+  );
 });

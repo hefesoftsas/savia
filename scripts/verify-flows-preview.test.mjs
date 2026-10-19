@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { verifyFlowsPreview } from "./verify-flows-preview.mjs";
+import { verifyFlows, verifyFlowsPreview } from "./verify-flows-preview.mjs";
 import { flowsWorkerConfig } from "../infra/pulumi/flows-worker-config.mjs";
 const env = {
   SAVIA_FLOWS_PROVISIONED: "true",
@@ -64,4 +64,37 @@ test("does not expose API bodies or credentials on verification failure", async 
     (error) =>
       error.message.includes("403") && !error.message.includes("secret-token"),
   );
+});
+
+test("verifies production Flows policy and production executor bindings", async () => {
+  const productionEnv = { ...env, SAVIA_DEPLOY_ENVIRONMENT: "production" };
+  const productionConfig = flowsWorkerConfig(
+    { workerName: "savia-flows", buckets: {} },
+    "https://savia.hefesoft.com",
+    "production",
+  );
+  const productionSettings = {
+    bindings: [
+      ...productionConfig.services.map((binding) => ({
+        name: binding.binding,
+        type: "service",
+        service: binding.service,
+        entrypoint: binding.entrypoint,
+      })),
+      ...Object.entries(productionConfig.vars).map(([name, text]) => ({
+        name,
+        text,
+        type: "plain_text",
+      })),
+    ],
+  };
+  const urls = [];
+  await verifyFlows(productionEnv, async (url) => {
+    urls.push(url);
+    return url.endsWith("/settings")
+      ? Response.json({ success: true, result: productionSettings })
+      : new Response("export { FlowsExecutor }");
+  });
+  assert.ok(urls.some((url) => url.includes("/savia-flows/settings")));
+  assert.ok(urls.some((url) => url.includes("/savia-hook-executor")));
 });

@@ -4,7 +4,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { flowsWorkerConfig } from "./flows-worker-config.mjs";
-import { renderProductionConfigs } from "./worker-config.mjs";
+import {
+  renderProductionConfigs,
+  validateTenantSubdomains,
+} from "./worker-config.mjs";
 
 const preview = {
   deploymentEnvironment: "preview",
@@ -17,7 +20,7 @@ const production = {
   deploymentEnvironment: "production",
   authD1Id: "auth-id",
   domainD1Id: "domain-id",
-  publicOrigin: "https://savia.app.hefesoft.com",
+  publicOrigin: "https://savia.hefesoft.com",
   documentsBucket: "savia-documents",
 };
 const flows = {
@@ -46,10 +49,47 @@ const productionFlows = {
     inboxes: "savia-flows-inboxes",
   },
 };
-const readConfig = async (root, app) =>
+const readConfig = async (root, app, environment = "preview") =>
   JSON.parse(
-    await readFile(join(root, "apps", app, "wrangler.preview.jsonc"), "utf8"),
+    await readFile(
+      join(root, "apps", app, `wrangler.${environment}.jsonc`),
+      "utf8",
+    ),
   );
+
+test("preview preserves canonical and wildcard tenant gateway routes", async () => {
+  const root = await mkdtemp(join(tmpdir(), "savia-iac-tenant-routes-"));
+  try {
+    await renderProductionConfigs({ ...preview, outputRoot: root });
+    const gateway = await readConfig(root, "admin");
+    assert.equal(gateway.name, "savia-preview");
+    assert.equal(gateway.vars.CANONICAL_HOST, "savia-preview.hefesoft.com");
+    assert.deepEqual(gateway.routes, [
+      { custom_domain: true, pattern: "savia-preview.hefesoft.com" },
+      {
+        pattern: "*.savia-preview.hefesoft.com/*",
+        zone_name: "hefesoft.com",
+      },
+    ]);
+    await renderProductionConfigs({ ...production, outputRoot: root });
+    const productionGateway = JSON.parse(
+      await readFile(
+        join(root, "apps/admin/wrangler.production.jsonc"),
+        "utf8",
+      ),
+    );
+    assert.equal(productionGateway.name, "savia");
+    assert.equal(productionGateway.vars.CANONICAL_HOST, "savia.hefesoft.com");
+    assert.equal(
+      productionGateway.routes.some((route) =>
+        route.pattern.includes("savia-preview"),
+      ),
+      false,
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
 
 test("preview generates the isolated plugin editor manifest from the infrastructure project", async () => {
   const root = await mkdtemp(join(tmpdir(), "savia-iac-editor-"));
@@ -176,6 +216,123 @@ test("production Flows uses the named private QuickJS executor service binding",
   }
 });
 
+test("production manifests bind the adopted D1 names from stack outputs", async () => {
+  const root = await mkdtemp(join(tmpdir(), "savia-iac-adopted-d1-"));
+  try {
+    await renderProductionConfigs({
+      ...production,
+      authDatabaseName: "savia-auth-local-canonical-20260913-v2",
+      domainDatabaseName: "savia-agencies-local-canonical-20260913-v2",
+      outputRoot: root,
+    });
+    const auth = JSON.parse(
+      await readFile(join(root, "apps/auth/wrangler.production.jsonc"), "utf8"),
+    );
+    const api = JSON.parse(
+      await readFile(join(root, "apps/api/wrangler.production.jsonc"), "utf8"),
+    );
+    const request = JSON.parse(
+      await readFile(
+        join(root, "apps/savia-request/wrangler.production.jsonc"),
+        "utf8",
+      ),
+    );
+    const connectors = JSON.parse(
+      await readFile(
+        join(root, "apps/connector-gateway/wrangler.production.jsonc"),
+        "utf8",
+      ),
+    );
+    assert.equal(
+      auth.d1_databases[0].database_name,
+      "savia-auth-local-canonical-20260913-v2",
+    );
+    for (const config of [api, request, connectors]) {
+      assert.equal(
+        config.d1_databases[0].database_name,
+        "savia-agencies-local-canonical-20260913-v2",
+      );
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("production gateway preserves configured tenant domains alongside migration wildcard routes", async () => {
+  const root = await mkdtemp(join(tmpdir(), "savia-iac-tenant-domains-"));
+  try {
+    await renderProductionConfigs({
+      ...production,
+      tenantSubdomains: ["tenant-home", "acme-team"],
+      outputRoot: root,
+    });
+    const gateway = await readConfig(root, "admin", "production");
+    assert.deepEqual(gateway.routes, [
+      { custom_domain: true, pattern: "savia.hefesoft.com" },
+      { custom_domain: true, pattern: "tenant-home.savia.hefesoft.com" },
+      { custom_domain: true, pattern: "acme-team.savia.hefesoft.com" },
+      { pattern: "savia.hefesoft.com/*", zone_name: "hefesoft.com" },
+      { pattern: "*.savia.hefesoft.com/*", zone_name: "hefesoft.com" },
+      { custom_domain: true, pattern: "savia.app.hefesoft.com" },
+      { custom_domain: true, pattern: "savia-team.savia.app.hefesoft.com" },
+      { custom_domain: true, pattern: "tenant-home.savia.app.hefesoft.com" },
+      { custom_domain: true, pattern: "acme-team.savia.app.hefesoft.com" },
+      { pattern: "*.savia.app.hefesoft.com/*", zone_name: "hefesoft.com" },
+    ]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("tenant subdomains reject reserved labels, wildcards, duplicates, and preview use", async () => {
+  const root = await mkdtemp(join(tmpdir(), "savia-iac-tenant-domains-"));
+  try {
+    for (const tenantSubdomains of [
+      ["api"],
+      ["*.savia.app.hefesoft.com"],
+      ["acme", "acme"],
+      ["acme", "ACME"],
+      "acme",
+    ]) {
+      await assert.rejects(
+        renderProductionConfigs({
+          ...production,
+          tenantSubdomains,
+          outputRoot: root,
+        }),
+        /tenant subdomain/i,
+      );
+    }
+    await assert.rejects(
+      renderProductionConfigs({
+        ...preview,
+        tenantSubdomains: ["tenant-home"],
+        outputRoot: root,
+      }),
+      /preview.*tenant subdomain/i,
+    );
+    await renderProductionConfigs({ ...preview, outputRoot: root });
+    const gateway = await readConfig(root, "admin");
+    assert.deepEqual(gateway.routes, [
+      { custom_domain: true, pattern: "savia-preview.hefesoft.com" },
+      { pattern: "*.savia-preview.hefesoft.com/*", zone_name: "hefesoft.com" },
+    ]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("exports tenant-subdomain validation for Pulumi stack outputs", () => {
+  assert.deepEqual(validateTenantSubdomains(["Tenant-Home"], "production"), [
+    "tenant-home",
+  ]);
+  assert.throws(() => validateTenantSubdomains(["api"], "production"));
+  assert.throws(() =>
+    validateTenantSubdomains(["*.example.test"], "production"),
+  );
+  assert.throws(() => validateTenantSubdomains(["tenant-home"], "preview"));
+});
+
 test("preview rejects production Flows resources before generating manifests", async () => {
   const root = await mkdtemp(join(tmpdir(), "savia-iac-workers-"));
   try {
@@ -219,4 +376,92 @@ test("execution cannot be enabled from legacy outputs without a dead-letter queu
   assert.doesNotThrow(() =>
     flowsWorkerConfig(legacy, preview.publicOrigin, "preview", false),
   );
+});
+
+test("all production and preview storage writers share their environment backup barrier", async () => {
+  for (const settings of [production, preview]) {
+    const root = await mkdtemp(join(tmpdir(), "savia-backup-gate-config-"));
+    try {
+      await renderProductionConfigs({ ...settings, outputRoot: root });
+      const configs = {};
+      for (const app of ["api", "auth", "savia-request", "connector-gateway"])
+        configs[app] = JSON.parse(
+          await readFile(
+            join(
+              root,
+              "apps",
+              app,
+              `wrangler.${settings.deploymentEnvironment}.jsonc`,
+            ),
+            "utf8",
+          ),
+        );
+      for (const [app, config] of Object.entries(configs)) {
+        assert.equal(config.vars.SAVIA_BACKUP_GATE_REQUIRED, "true");
+        const binding = config.durable_objects.bindings.find(
+          (value) => value.name === "BACKUP_GATE",
+        );
+        assert.equal(binding.class_name, "BackupCoordinator");
+      }
+      const coordinator = JSON.parse(
+        await readFile(
+          join(
+            root,
+            "apps",
+            "backup-coordinator",
+            `wrangler.${settings.deploymentEnvironment}.jsonc`,
+          ),
+          "utf8",
+        ),
+      );
+      assert.equal(
+        coordinator.name,
+        settings.deploymentEnvironment === "preview"
+          ? "savia-backup-coordinator-preview"
+          : "savia-backup-coordinator",
+      );
+      assert.equal(coordinator.main, "src/index.ts");
+      assert.equal(
+        coordinator.workers_dev,
+        settings.deploymentEnvironment === "production",
+      );
+      assert.equal(coordinator.preview_urls, false);
+      assert.deepEqual(coordinator.services, [
+        {
+          binding: "AGENCIES",
+          service:
+            settings.deploymentEnvironment === "preview"
+              ? "savia-agencies-preview"
+              : "savia-agencies",
+        },
+      ]);
+      assert.deepEqual(coordinator.durable_objects.bindings, []);
+      assert.deepEqual(coordinator.migrations, [
+        { tag: "v1", new_sqlite_classes: ["BackupCoordinator"] },
+      ]);
+      assert.equal("d1_databases" in coordinator, false);
+      assert.equal("r2_buckets" in coordinator, false);
+      assert.equal("vars" in coordinator, false);
+      assert.equal("secrets" in coordinator, false);
+      for (const config of Object.values(configs))
+        assert.equal(
+          config.durable_objects.bindings.find(
+            (value) => value.name === "BACKUP_GATE",
+          ).script_name,
+          coordinator.name,
+        );
+      assert.equal(
+        configs.api.migrations.some((value) =>
+          value.new_sqlite_classes?.includes("BackupCoordinator"),
+        ),
+        false,
+      );
+      assert.equal(
+        configs.api.secrets.required.includes("SAVIA_BACKUP_CONTROL_SECRET"),
+        settings.deploymentEnvironment === "production",
+      );
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  }
 });

@@ -21,6 +21,37 @@ const policyObject = {
 };
 
 describe("plugin collection API", () => {
+  it("opens the native assistant through the owning extension host route", async () => {
+    const calls: unknown[][] = [];
+    const savia = createPluginApi({
+      extensionId: "procurement.secop",
+      request: async (...args) => {
+        calls.push(args);
+        return { data: null };
+      },
+    });
+
+    await savia.assistant?.open({
+      title: "Tender dossier",
+      actionId: "dossier-call",
+      connectionId: "private-service",
+      context: { dossierId: "dossier-1", companyProfileId: "company-2" },
+    });
+
+    expect(calls).toEqual([
+      [
+        "/extensions/procurement.secop/assistant/open",
+        "POST",
+        {
+          title: "Tender dossier",
+          actionId: "dossier-call",
+          connectionId: "private-service",
+          context: { dossierId: "dossier-1", companyProfileId: "company-2" },
+        },
+      ],
+    ]);
+  });
+
   it("lists action runs only through the owning extension", async () => {
     const requests: Array<{ path: string; method?: string }> = [];
     const savia = createPluginApi({

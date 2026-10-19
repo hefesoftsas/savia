@@ -1,4 +1,5 @@
 import { PwaSplash } from "@/pwa/pwa-splash";
+import { readPluginRoute, writePluginRoute } from "./plugin-route";
 import type {
   PluginPanelContext,
   PluginPanelResult,
@@ -9,12 +10,20 @@ import {
 } from "./plugin-panel-controller";
 import { PluginHostPanel } from "./plugin-host-panel";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createAssistantTaskRecord } from "../assistant/assistant-task-record";
 import { pluginRecordFetch } from "./plugin-record-transport";
 import { pluginApiFetch } from "./api";
 import { getStudioRuntime } from "./runtime";
 import { Button } from "@/components/ui/button";
 import { useMessages } from "@/i18n/core";
 import { automationMessages } from "@/i18n/locales/automation";
+import {
+  closePluginAssistantProvider,
+  openPluginAssistantProvider,
+  parsePluginAssistantOpenRequest,
+  parsePluginAssistantResponse,
+  type PluginAssistantRequest,
+} from "@savia/studio-shared/plugin-assistant";
 
 type PluginFrameRequest = {
   ns: "savia-plugin";
@@ -124,6 +133,60 @@ function normalizeExternalNavigationUrl(value: unknown): string | null {
   }
 }
 
+function validAssistantRequest(
+  value: unknown,
+): value is PluginAssistantRequest {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const request = value as Record<string, unknown>;
+  if (request.method === "load") return Object.keys(request).length === 1;
+  if (request.method === "generate-document")
+    return (
+      Object.keys(request).length === 2 &&
+      typeof request.actionId === "string" &&
+      /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/.test(request.actionId)
+    );
+  if (request.method === "open-source")
+    return (
+      Object.keys(request).length === 3 &&
+      typeof request.messageId === "string" &&
+      request.messageId.length > 0 &&
+      request.messageId.length <= 256 &&
+      typeof request.citationId === "string" &&
+      request.citationId.length > 0 &&
+      request.citationId.length <= 256
+    );
+  if (request.method === "send")
+    return (
+      Object.keys(request).every((key) =>
+        [
+          "method",
+          "message",
+          "idempotencyKey",
+          "conversationId",
+          "expectedRevision",
+        ].includes(key),
+      ) &&
+      typeof request.message === "string" &&
+      request.message.trim().length > 0 &&
+      request.message.length <= 8_000 &&
+      typeof request.idempotencyKey === "string" &&
+      /^[A-Za-z0-9_-]{1,128}$/.test(request.idempotencyKey) &&
+      (request.conversationId === undefined ||
+        (typeof request.conversationId === "string" &&
+          request.conversationId.length <= 256)) &&
+      (request.expectedRevision === undefined ||
+        (Number.isSafeInteger(request.expectedRevision) &&
+          (request.expectedRevision as number) >= 0))
+    );
+  return (
+    request.method === "poll" &&
+    Object.keys(request).length === 2 &&
+    typeof request.jobId === "string" &&
+    request.jobId.length > 0 &&
+    request.jobId.length <= 256
+  );
+}
+
 /**
  * Ejecuta un plugin del store dentro de un iframe aislado
  * (`sandbox="allow-scripts"`, origen opaco). El plugin nunca toca la
@@ -168,6 +231,17 @@ export function CustomPluginFrame({
   const closeRef = useRef<HTMLButtonElement>(null);
   const retryAction = useRef<(() => void) | null>(null);
   const child = useRef<{ frame: Window; session: string } | null>(null);
+  const assistantSession = useRef<string | null>(null);
+  const assistantPanelId = useRef<string | null>(null);
+  const closeAssistantSession = () => {
+    if (!assistantSession.current) {
+      assistantPanelId.current = null;
+      return;
+    }
+    closePluginAssistantProvider(assistantSession.current);
+    assistantSession.current = null;
+    assistantPanelId.current = null;
+  };
   function finishPanel(result: PluginPanelResult) {
     const active = controller.current.current;
     if (!active) return;
@@ -265,6 +339,7 @@ export function CustomPluginFrame({
     };
     const onSessionCleared = () => {
       revoked.current = true;
+      closeAssistantSession();
       setAccessEnded(true);
       invalidatePrefetch(false);
       controller.current.dispose();
@@ -286,12 +361,14 @@ export function CustomPluginFrame({
     };
     const onPrincipalChanged = () => {
       revoked.current = false;
+      closeAssistantSession();
       setAccessEnded(false);
       invalidatePrefetch(true);
     };
     window.addEventListener("savia:session-cleared", onSessionCleared);
     window.addEventListener("savia:principal-changed", onPrincipalChanged);
     return () => {
+      closeAssistantSession();
       window.removeEventListener("savia:session-cleared", onSessionCleared);
       window.removeEventListener("savia:principal-changed", onPrincipalChanged);
     };
@@ -334,6 +411,22 @@ export function CustomPluginFrame({
 
   useEffect(() => {
     let handshakeNonce = "";
+    let lastRouteState: string | undefined;
+    function sendRoute() {
+      if (revoked.current || !screen || panelBindingRef.current) return;
+      const state = readPluginRoute(window.location.href, pluginId);
+      const serialized = JSON.stringify(state);
+      if (serialized === lastRouteState) return;
+      lastRouteState = serialized;
+      frameRef.current?.contentWindow?.postMessage(
+        {
+          ns: "savia-plugin",
+          type: "route-changed",
+          state,
+        },
+        "*",
+      );
+    }
     function sendTheme() {
       const host = getComputedStyle(document.documentElement);
       frameRef.current?.contentWindow?.postMessage(
@@ -433,6 +526,228 @@ export function CustomPluginFrame({
             height: Math.min(100_000, Math.ceil(message.height)),
           });
         }
+        return;
+      }
+      const assistantPath = `/extensions/${encodeURIComponent(pluginId)}/assistant/open`;
+      if (
+        message.path === `/extensions/${encodeURIComponent(pluginId)}/route`
+      ) {
+        if (message.type !== "request" || typeof message.id !== "string")
+          return;
+        const frame = frameRef.current?.contentWindow;
+        const reply = (ok: boolean, data?: unknown, error?: string) =>
+          frame?.postMessage(
+            {
+              ns: "savia-plugin",
+              type: "response",
+              id: message.id,
+              panelId: message.panelId,
+              ok,
+              ...(ok ? { data } : { error }),
+            },
+            "*",
+          );
+        if (!screen || panelBindingRef.current) {
+          reply(
+            false,
+            undefined,
+            "URL state is only available to the active plugin screen.",
+          );
+          return;
+        }
+        try {
+          if (message.method === "GET") {
+            reply(true, readPluginRoute(window.location.href, pluginId));
+          } else if (message.method === "PUT") {
+            const body = message.body as {
+              state?: unknown;
+              replace?: unknown;
+            } | null;
+            const next = writePluginRoute(
+              window.location.href,
+              pluginId,
+              body?.state,
+            );
+            if (next.href !== window.location.href) {
+              const navigate = getStudioRuntime().navigate;
+              if (navigate) {
+                const route = next.hash.startsWith("#/")
+                  ? new URL(next.hash.slice(1), next.origin)
+                  : next;
+                navigate(route.search.slice(1), body?.replace === true);
+              } else {
+                window.history[
+                  body?.replace === true ? "replaceState" : "pushState"
+                ](window.history.state, "", next.href);
+                window.dispatchEvent(new PopStateEvent("popstate"));
+              }
+            }
+            sendRoute();
+            reply(true, null);
+          } else reply(false, undefined, "URL state requires GET or PUT.");
+        } catch {
+          reply(false, undefined, "Invalid plugin URL state.");
+        }
+        return;
+      }
+      if (message.path === assistantPath) {
+        if (message.type !== "request" || typeof message.id !== "string")
+          return;
+        const binding = panelBindingRef.current;
+        if (
+          binding?.reusable &&
+          (!binding.context || message.panelId !== binding.context.panelId)
+        )
+          return;
+        const frame = frameRef.current?.contentWindow;
+        const reply = (ok: boolean, data?: unknown, error?: string) => {
+          if (frame !== frameRef.current?.contentWindow) return;
+          frame?.postMessage(
+            {
+              ns: "savia-plugin",
+              type: "response",
+              id: message.id,
+              panelId: message.panelId,
+              ok,
+              ...(ok ? { data } : { error }),
+            },
+            "*",
+          );
+        };
+        if (message.method !== "POST") {
+          reply(false, undefined, "Opening the assistant requires POST.");
+          return;
+        }
+        const launch = parsePluginAssistantOpenRequest(message.body);
+        if (!launch) {
+          reply(false, undefined, "Invalid assistant request.");
+          return;
+        }
+        const sessionId = crypto.randomUUID();
+        const boundFrame = frame;
+        const boundSession = uiSession.current;
+        const boundGeneration = sessionGeneration.current;
+        const boundPanelId = binding?.context?.panelId ?? null;
+        closeAssistantSession();
+        assistantSession.current = sessionId;
+        assistantPanelId.current = boundPanelId;
+        const assertActive = () => {
+          if (
+            revoked.current ||
+            !boundFrame ||
+            boundFrame !== frameRef.current?.contentWindow ||
+            boundSession !== uiSession.current ||
+            boundGeneration !== sessionGeneration.current ||
+            (panelBindingRef.current?.context?.panelId ?? null) !==
+              boundPanelId ||
+            assistantSession.current !== sessionId
+          )
+            throw new Error("The plugin assistant session has ended.");
+        };
+        openPluginAssistantProvider({
+          ...launch,
+          sessionId,
+          ...(launch.taskCollection
+            ? {
+                createTask: async (
+                  draft: import("@savia/studio-shared/plugin-assistant").PluginAssistantTaskDraft,
+                ) => {
+                  assertActive();
+                  return createAssistantTaskRecord(
+                    {
+                      collection: launch.taskCollection!,
+                      pluginId,
+                      context: launch.context,
+                      sourceUrl: window.location.href,
+                      request: async <T,>(
+                        path: string,
+                        method = "GET",
+                        data?: unknown,
+                      ) => {
+                        assertActive();
+                        const result = await pluginRecordFetch<T>(
+                          "/api" + path,
+                          {
+                            method,
+                            ...(data === undefined
+                              ? {}
+                              : { body: JSON.stringify(data) }),
+                          },
+                        );
+                        assertActive();
+                        return result;
+                      },
+                    },
+                    draft,
+                  );
+                },
+              }
+            : {}),
+          close: () => {
+            if (assistantSession.current === sessionId) {
+              assistantSession.current = null;
+              assistantPanelId.current = null;
+            }
+            closePluginAssistantProvider(sessionId);
+          },
+          invoke: async (request: PluginAssistantRequest) => {
+            if (
+              revoked.current ||
+              !boundFrame ||
+              boundFrame !== frameRef.current?.contentWindow ||
+              boundSession !== uiSession.current ||
+              boundGeneration !== sessionGeneration.current ||
+              (panelBindingRef.current?.context?.panelId ?? null) !==
+                boundPanelId ||
+              assistantSession.current !== sessionId
+            )
+              throw new Error("The plugin assistant session has ended.");
+            if (!validAssistantRequest(request))
+              throw new Error("Invalid assistant operation.");
+            const response = await pluginRecordFetch<unknown>(
+              `/api/extensions/${encodeURIComponent(pluginId)}/actions/${encodeURIComponent(launch.actionId)}`,
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  ...(launch.connectionId
+                    ? { connectionId: launch.connectionId }
+                    : {}),
+                  input: { context: launch.context, request },
+                }),
+              },
+            );
+            if (
+              revoked.current ||
+              boundFrame !== frameRef.current?.contentWindow ||
+              boundSession !== uiSession.current ||
+              boundGeneration !== sessionGeneration.current ||
+              (panelBindingRef.current?.context?.panelId ?? null) !==
+                boundPanelId ||
+              assistantSession.current !== sessionId
+            )
+              throw new Error("The plugin assistant session has ended.");
+            const action =
+              typeof response === "object" &&
+              response !== null &&
+              "data" in response
+                ? (response as { data?: { output?: unknown } }).data
+                : response;
+            const output =
+              typeof action === "object" &&
+              action !== null &&
+              "output" in action
+                ? (action as { output: unknown }).output
+                : action;
+            const parsed = parsePluginAssistantResponse(output);
+            if (!parsed)
+              throw new Error(
+                "The assistant provider returned an invalid response.",
+              );
+            return parsed;
+          },
+        });
+        reply(true, null);
         return;
       }
       if (
@@ -600,12 +915,15 @@ export function CustomPluginFrame({
       }
     }
     window.addEventListener("message", onMessage);
+    window.addEventListener("popstate", sendRoute);
+    window.addEventListener("hashchange", sendRoute);
     const observer = new MutationObserver(sendTheme);
     observer.observe(document.documentElement, {
       attributes: true,
       attributeFilter: ["class", "style", "data-color-theme"],
     });
     return () => {
+      closeAssistantSession();
       frameRef.current?.contentWindow?.postMessage(
         {
           ns: "savia-plugin-ui",
@@ -623,6 +941,8 @@ export function CustomPluginFrame({
       setPanel(null);
       setPrepared(false);
       window.removeEventListener("message", onMessage);
+      window.removeEventListener("popstate", sendRoute);
+      window.removeEventListener("hashchange", sendRoute);
       observer.disconnect();
     };
   }, [frameKey, fitContent]);
@@ -642,6 +962,17 @@ export function CustomPluginFrame({
         "*",
       );
   }, [panelBinding?.context?.panelId, frameKey]);
+
+  useEffect(() => {
+    const panelId = panelBinding?.context?.panelId ?? null;
+    return () => {
+      if (
+        assistantPanelId.current !== null &&
+        assistantPanelId.current === panelId
+      )
+        closeAssistantSession();
+    };
+  }, [panelBinding?.context?.panelId]);
 
   useEffect(() => {
     if (panelBinding) return;

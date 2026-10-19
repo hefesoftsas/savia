@@ -1273,6 +1273,18 @@ async function assertCanManage(
 const SHELL_CSP =
   "default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; connect-src 'none';";
 
+let bootstrapRevision: string | undefined;
+function shellBootstrapRevision(): string {
+  if (bootstrapRevision === undefined) {
+    // Cache identity only; integrity and authorization use separate controls.
+    let hash = 2166136261;
+    for (const character of shellBootstrapJs())
+      hash = Math.imul(hash ^ character.charCodeAt(0), 16777619);
+    bootstrapRevision = (hash >>> 0).toString(36);
+  }
+  return bootstrapRevision;
+}
+
 export function shellBootstrapPath(
   pluginId: string,
   entryUrl: string,
@@ -1282,6 +1294,7 @@ export function shellBootstrapPath(
   const params = new URLSearchParams({ plugin: pluginId, entry: entryUrl });
   for (const [key, value] of Object.entries(extra ?? {}))
     params.set(key, value);
+  params.set("runtime", shellBootstrapRevision());
   return `${storeBasePath}/shell-bootstrap.js?${params}`;
 }
 
@@ -1297,6 +1310,7 @@ if (entryUrl.origin !== bootstrapUrl.origin ||
 const ENTRY_URL = entryUrl.href;
 const pending = new Map();
 const recordListeners = new Set();
+const routeListeners = new Set();
 let seq = 0;
 // Report the natural content height, not the viewport-sized document height.
 // The host can then scroll screens without a second scrollbar in the iframe.
@@ -1341,6 +1355,10 @@ function requestHost(path, method, body, panelId, consistency) {
 addEventListener("message", (event) => {
   if (event.source !== parent) return;
   const message = event.data;
+  if (message?.ns === "savia-plugin" && message.type === "route-changed" && !standby) {
+    for (const listener of routeListeners) listener(message.state);
+    return;
+  }
   if (message?.ns === "savia-plugin" && message.type === "theme") {
     const allowed = ["--background", "--foreground", "--card", "--border", "--input", "--muted", "--muted-foreground", "--primary", "--primary-foreground", "--accent", "--destructive", "--ring"];
     for (const name of allowed) {
@@ -1423,6 +1441,16 @@ function collection(name, local = false) {
 const extensionPath = "/extensions/" + encodeURIComponent(PLUGIN_ID);
 const savia = {
   pluginId: PLUGIN_ID,
+  assistant: {
+    async open(value) {
+      await callHost(extensionPath + "/assistant/open", "POST", value);
+    },
+  },
+  route: {
+    get() { return callHost(extensionPath + "/route", "GET"); },
+    async set(state, options) { await callHost(extensionPath + "/route", "PUT", { state, replace: options?.replace === true }); },
+    subscribe(listener) { routeListeners.add(listener); return () => routeListeners.delete(listener); },
+  },
   localRecords: {
     collection: (name) => collection(name, true),
     subscribe(listener) { recordListeners.add(listener); return () => recordListeners.delete(listener); }

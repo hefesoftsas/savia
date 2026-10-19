@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   buildFlowsSecretUploads,
   validateFlowsPreviewSettings,
+  validateFlowsWorkerSettings,
 } from "./flows-preview-policy.mjs";
 
 test("disabled provisioning requires no Flows keys", () => {
@@ -10,6 +11,20 @@ test("disabled provisioning requires no Flows keys", () => {
     buildFlowsSecretUploads("preview", { SAVIA_FLOWS_PROVISIONED: "false" }),
     [],
   );
+});
+
+test("production secret uploads target canonical production Workers", () => {
+  const values = {
+    SAVIA_FLOWS_PROVISIONED: "true",
+    SAVIA_FLOWS_BRIDGE_SECRET: "b".repeat(32),
+    SAVIA_FLOWS_JWT_SECRET: "j".repeat(32),
+    SAVIA_FLOWS_SECRET_MASTER_KEY: "0".repeat(64),
+    SAVIA_FLOWS_FORM_SIGNING_KEY: "f".repeat(32),
+  };
+  const plans = buildFlowsSecretUploads("production", values);
+  assert.equal(plans[0].worker, "savia-flows");
+  assert.equal(plans[0].config, "wrangler.production.jsonc");
+  assert.equal(plans[1].worker, "savia-agencies");
 });
 test("enabled provisioning validates all stable keys and both secret targets", () => {
   const values = {
@@ -101,5 +116,40 @@ test("deployed Worker policy must retain isolated bindings and quotas", () => {
   assert.throws(
     () => validateFlowsPreviewSettings({ bindings }, true),
     /execution/,
+  );
+});
+
+test("production policy keeps private executor and API bindings with external services disabled", () => {
+  const bindings = [
+    { name: "SAVIA_HOST", type: "service", service: "savia-agencies" },
+    {
+      name: "CODE_EXECUTOR",
+      type: "service",
+      service: "savia-hook-executor",
+      entrypoint: "FlowsExecutor",
+    },
+    ...Object.entries({
+      SAVIA_FLOWS_EXTERNAL_SERVICES_ENABLED: "false",
+      SAVIA_FLOWS_EXECUTION_ENABLED: "false",
+      SAVIA_FLOWS_QUOTAS_ENABLED: "true",
+      SAVIA_FLOWS_POLICY_GENERATION: "10",
+      SAVIA_FLOWS_MAX_DAILY_RUNS: "100",
+      SAVIA_FLOWS_MAX_MONTHLY_RUNS: "1000",
+      SAVIA_FLOWS_MAX_CONCURRENT_RUNS: "2",
+      SAVIA_FLOWS_MAX_NODES_PER_RUN: "50",
+      SAVIA_FLOWS_MAX_STEPS_PER_RUN: "200",
+    }).map(([name, text]) => ({ name, text, type: "plain_text" })),
+  ];
+  assert.doesNotThrow(() =>
+    validateFlowsWorkerSettings({ bindings }, false, "production"),
+  );
+  assert.throws(
+    () =>
+      validateFlowsWorkerSettings(
+        { bindings: [...bindings, { name: "AI", type: "ai" }] },
+        false,
+        "production",
+      ),
+    /External/,
   );
 });

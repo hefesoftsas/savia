@@ -16,7 +16,14 @@
           "offsetArgument": "offset"
         }
       },
-      "inputArguments": ["q", "estado", "entidad", "modalidad", "departamento"]
+      "inputArguments": [
+        "q",
+        "estado",
+        "entidad",
+        "modalidad",
+        "departamento",
+        "vigentes"
+      ]
     },
     {
       "id": "detail",
@@ -87,6 +94,40 @@
         }
       },
       "inputArguments": ["id_del_proceso"]
+    },
+    {
+      "id": "dossier-call",
+      "kind": "http",
+      "connector": "secop-dossier",
+      "request": {
+        "method": "POST",
+        "url": "https://secop-live-worker.jose-douglas-dev.workers.dev/private/v1/dispatch",
+        "headers": {
+          "Authorization": "Bearer {{connection.apiKey}}",
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "operation": "{{input.operation}}",
+          "arguments": "{{input.arguments}}"
+        }
+      }
+    },
+    {
+      "id": "assistant-chat",
+      "kind": "http",
+      "connector": "secop-dossier",
+      "request": {
+        "method": "POST",
+        "url": "https://secop-live-worker.jose-douglas-dev.workers.dev/private/v1/assistant",
+        "headers": {
+          "Authorization": "Bearer {{connection.apiKey}}",
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "context": "{{input.context}}",
+          "request": "{{input.request}}"
+        }
+      }
     }
   ],
   "monitors": [
@@ -472,6 +513,11 @@
         "description": "PDF analyses intentionally requested by workspace users.",
         "config": {
           "version": 2,
+          "studio": {
+            "screen": {
+              "hidden": true
+            }
+          },
           "fields": {
             "name": {
               "type": "Textbox",
@@ -503,7 +549,10 @@
             },
             "analysis": {
               "type": "Textarea",
-              "label": "AI analysis"
+              "label": "AI analysis",
+              "config": {
+                "maxLength": 100000
+              }
             },
             "model": {
               "type": "Textbox",
@@ -529,6 +578,190 @@
           ]
         }
       }
+    },
+    {
+      "object": {
+        "name": "secop_application_tasks",
+        "label": "SECOP preparation tasks",
+        "description": "Workspace tasks created from missing tender requirements.",
+        "config": {
+          "version": 2,
+          "fields": {
+            "name": {
+              "type": "Textbox",
+              "label": "Task",
+              "labels": {
+                "es": "Pendiente",
+                "en": "Task",
+                "pt": "Tarefa"
+              },
+              "required": true,
+              "config": {
+                "maxLength": 500
+              }
+            },
+            "description": {
+              "type": "Textarea",
+              "label": "Description",
+              "labels": {
+                "es": "Descripción",
+                "en": "Description",
+                "pt": "Descrição"
+              },
+              "config": {
+                "maxLength": 20000
+              }
+            },
+            "assignee": {
+              "type": "Textbox",
+              "label": "Responsible person",
+              "labels": {
+                "es": "Responsable",
+                "en": "Responsible person",
+                "pt": "Responsável"
+              },
+              "required": true,
+              "config": {
+                "maxLength": 200
+              }
+            },
+            "due_date": {
+              "type": "DateControl",
+              "label": "Due date",
+              "labels": {
+                "es": "Fecha límite",
+                "en": "Due date",
+                "pt": "Data limite"
+              },
+              "required": true
+            },
+            "status": {
+              "type": "Dropdown",
+              "label": "Status",
+              "labels": {
+                "es": "Estado",
+                "en": "Status",
+                "pt": "Estado"
+              },
+              "required": true,
+              "options": [
+                {
+                  "value": "open",
+                  "label": "Open",
+                  "labels": {
+                    "es": "Abierto",
+                    "en": "Open",
+                    "pt": "Aberta"
+                  }
+                },
+                {
+                  "value": "done",
+                  "label": "Done",
+                  "labels": {
+                    "es": "Completado",
+                    "en": "Done",
+                    "pt": "Concluída"
+                  }
+                }
+              ]
+            },
+            "source_key": {
+              "type": "Textbox",
+              "label": "Source key",
+              "labels": {
+                "es": "Clave de origen",
+                "en": "Source key",
+                "pt": "Chave de origem"
+              },
+              "required": true,
+              "config": {
+                "unique": true,
+                "maxLength": 200
+              }
+            },
+            "source_context": {
+              "type": "Textarea",
+              "label": "Source context",
+              "labels": {
+                "es": "Contexto de origen",
+                "en": "Source context",
+                "pt": "Contexto de origem"
+              },
+              "config": {
+                "maxLength": 20000
+              }
+            },
+            "source_reference": {
+              "type": "Textarea",
+              "label": "Requirement reference",
+              "labels": {
+                "es": "Referencia del requisito",
+                "en": "Requirement reference",
+                "pt": "Referência do requisito"
+              },
+              "config": {
+                "maxLength": 20000
+              }
+            },
+            "source_url": {
+              "type": "Textbox",
+              "label": "Source URL",
+              "labels": {
+                "es": "URL de origen",
+                "en": "Source URL",
+                "pt": "URL de origem"
+              },
+              "config": {
+                "maxLength": 2000
+              }
+            }
+          },
+          "fieldOrder": [
+            "name",
+            "description",
+            "assignee",
+            "due_date",
+            "status",
+            "source_key",
+            "source_context",
+            "source_reference",
+            "source_url"
+          ],
+          "lookupFields": ["name", "assignee", "source_reference"]
+        },
+        "labels": {
+          "es": "Pendientes SECOP",
+          "en": "SECOP preparation tasks",
+          "pt": "Tarefas de preparação SECOP"
+        },
+        "descriptions": {
+          "es": "Pendientes del equipo creados a partir de requisitos faltantes.",
+          "en": "Team tasks created from missing tender requirements.",
+          "pt": "Tarefas da equipe criadas a partir de requisitos pendentes."
+        }
+      },
+      "requiredFields": {
+        "name": {
+          "types": ["Textbox"],
+          "required": true
+        },
+        "assignee": {
+          "types": ["Textbox"],
+          "required": true
+        },
+        "due_date": {
+          "types": ["DateControl"],
+          "required": true
+        },
+        "status": {
+          "types": ["Dropdown"],
+          "required": true
+        },
+        "source_key": {
+          "types": ["Textbox"],
+          "required": true
+        }
+      }
     }
   ],
   "screens": [
@@ -546,5 +779,22 @@
   ],
   "documentDownloads": {
     "allowedHosts": ["community.secop.gov.co"]
-  }
+  },
+  "connectors": [
+    {
+      "id": "secop-dossier",
+      "label": "SECOP dossier assistant",
+      "secretFields": ["apiKey"],
+      "configSchema": {
+        "type": "object",
+        "required": ["apiKey"],
+        "properties": {
+          "apiKey": {
+            "type": "string"
+          }
+        }
+      },
+      "allowedHosts": ["secop-live-worker.jose-douglas-dev.workers.dev"]
+    }
+  ]
 }

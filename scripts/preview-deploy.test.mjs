@@ -6,6 +6,7 @@ import {
   execFileWithInput,
   parseWorkersDevUrl,
   requireGatewayOrigin,
+  workerDeploymentOrder,
   workerConfig,
 } from "./preview-deploy.mjs";
 import { previewNames } from "./preview-environment.mjs";
@@ -22,6 +23,29 @@ test("branch preview schedules are opt-in", () => {
 
   assert.equal(defaultConfig.triggers, undefined);
   assert.deepEqual(scheduledConfig.triggers, { crons: ["* * * * *"] });
+});
+
+test("deploys the isolated connector gateway before the API service binding", () => {
+  assert.deepEqual(
+    workerDeploymentOrder([
+      "auth",
+      "hookExecutor",
+      "request",
+      "mcp",
+      "api",
+      "connectorGateway",
+      "gateway",
+    ]),
+    [
+      "auth",
+      "hookExecutor",
+      "request",
+      "connectorGateway",
+      "mcp",
+      "api",
+      "gateway",
+    ],
+  );
 });
 
 test("routes public quote reports through the preview gateway", () => {

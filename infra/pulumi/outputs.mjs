@@ -8,6 +8,7 @@ import {
   validateFlowsResources,
   assertAccountId,
 } from "./naming.mjs";
+import { validateTenantSubdomains } from "./worker-config.mjs";
 
 const REQUIRED_OUTPUTS = [
   "cloudflareAccountId",
@@ -53,12 +54,44 @@ function validateStackOutputs(parsed) {
   }
   assertAccountId(parsed.cloudflareAccountId);
   const resolvedEnvironment = parsed.resolvedEnvironment;
+  parsed = {
+    ...parsed,
+    tenantSubdomains: validateTenantSubdomains(
+      parsed.tenantSubdomains === undefined ? [] : parsed.tenantSubdomains,
+      resolvedEnvironment,
+    ),
+  };
+  const hasBackupBucket =
+    parsed.backupBucketName !== undefined && parsed.backupBucketName !== null;
+  const hasBackupRetention =
+    parsed.backupRetentionDays !== undefined &&
+    parsed.backupRetentionDays !== null;
+  if (hasBackupBucket !== hasBackupRetention) {
+    throw new Error(
+      "Backup bucket and retention outputs must be configured together",
+    );
+  }
+  if (hasBackupRetention && parsed.backupRetentionDays !== 30) {
+    throw new Error("Backup retention output must be 30 days");
+  }
   const names = resolveInfraNames({
     environment: resolvedEnvironment,
     documentsBucket: parsed.documentsBucketName,
     publicOrigin: parsed.resolvedPublicOrigin,
     pagesSearchIndex: parsed.vectorizeIndex,
+    ...(hasBackupBucket ? { backupBucket: parsed.backupBucketName } : {}),
+    ...(resolvedEnvironment === "production"
+      ? {
+          authDatabaseName: parsed.databaseNames?.auth,
+          domainDatabaseName: parsed.databaseNames?.domain,
+        }
+      : {}),
   });
+  parsed = {
+    ...parsed,
+    backupBucketName: hasBackupBucket ? parsed.backupBucketName : null,
+    backupRetentionDays: hasBackupRetention ? parsed.backupRetentionDays : null,
+  };
   requireNonEmptyString(parsed.authD1Id, "authD1Id");
   requireNonEmptyString(parsed.domainD1Id, "domainD1Id");
   assertNamedValues(parsed.workerNames, names.workers, "workerNames");
@@ -137,6 +170,7 @@ export function renderEnvFromOutputs(outputs, outputRoot) {
     bucket: validated.documentsBucketName,
     publicOrigin: validated.resolvedPublicOrigin,
     environment: validated.resolvedEnvironment,
+    databases: validated.databaseNames,
   };
   const searchIndex =
     typeof validated.vectorizeIndex === "string" &&
@@ -157,6 +191,12 @@ export function renderEnvFromOutputs(outputs, outputRoot) {
       : "",
     SAVIA_FLOWS_PROVISIONED: String(validated.flowsEnabled),
     SAVIA_FLOWS_EXECUTION_ENABLED: String(validated.flowsExecutionEnabled),
+    SAVIA_TENANT_SUBDOMAINS: JSON.stringify(validated.tenantSubdomains),
+    SAVIA_BACKUP_BUCKET: validated.backupBucketName ?? "",
+    SAVIA_BACKUP_RETENTION_DAYS:
+      validated.backupRetentionDays === null
+        ? ""
+        : String(validated.backupRetentionDays),
     SAVIA_DEPLOY_CONFIG_ROOT: outputRoot,
   });
 }

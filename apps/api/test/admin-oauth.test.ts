@@ -303,17 +303,17 @@ describe("admin OAuth bridge", () => {
 
     // OPTIONS preflight from tenant subdomain
     const preflight = await app.request(
-      "https://merkaseguros.savia.app.hefesoft.com/api/auth/admin/refresh",
+      "https://merkaseguros.savia.hefesoft.com/api/auth/admin/refresh",
       {
         method: "OPTIONS",
         headers: {
-          origin: "https://merkaseguros.savia.app.hefesoft.com",
+          origin: "https://merkaseguros.savia.hefesoft.com",
         },
       },
     );
     expect(preflight.status).toBe(204);
     expect(preflight.headers.get("access-control-allow-origin")).toBe(
-      "https://merkaseguros.savia.app.hefesoft.com",
+      "https://merkaseguros.savia.hefesoft.com",
     );
     expect(preflight.headers.get("access-control-allow-credentials")).toBe(
       "true",
@@ -321,7 +321,7 @@ describe("admin OAuth bridge", () => {
 
     // OPTIONS preflight from untrusted origin
     const rejected = await app.request(
-      "https://merkaseguros.savia.app.hefesoft.com/api/auth/admin/refresh",
+      "https://merkaseguros.savia.hefesoft.com/api/auth/admin/refresh",
       {
         method: "OPTIONS",
         headers: {
@@ -332,19 +332,19 @@ describe("admin OAuth bridge", () => {
     expect(rejected.status).toBe(204);
     expect(rejected.headers.get("access-control-allow-origin")).toBeNull();
 
-    // Refresh without token clears cookies with Domain=.savia.app.hefesoft.com
+    // Refresh without token clears cookies with Domain=.savia.hefesoft.com
     const refresh = await app.request(
-      "https://merkaseguros.savia.app.hefesoft.com/api/auth/admin/refresh",
+      "https://merkaseguros.savia.hefesoft.com/api/auth/admin/refresh",
       {
         method: "POST",
         headers: {
-          origin: "https://merkaseguros.savia.app.hefesoft.com",
+          origin: "https://merkaseguros.savia.hefesoft.com",
         },
       },
     );
     expect(refresh.status).toBe(401);
     const setCookie = refresh.headers.get("set-cookie") ?? "";
-    expect(setCookie).toContain("Domain=.savia.app.hefesoft.com");
+    expect(setCookie).toContain("Domain=.savia.hefesoft.com");
   });
 
   it("preserves and returns initiated tenant origin via savia.return_origin cookie", async () => {
@@ -382,10 +382,10 @@ describe("admin OAuth bridge", () => {
 
     // 1. Authorize from tenant subdomain sets return_origin cookie with shared domain
     const authorize = await app.request(
-      "https://merkaseguros.savia.app.hefesoft.com/api/auth/admin/authorize",
+      "https://merkaseguros.savia.hefesoft.com/api/auth/admin/authorize",
       {
         headers: {
-          host: "merkaseguros.savia.app.hefesoft.com",
+          host: "merkaseguros.savia.hefesoft.com",
         },
       },
     );
@@ -393,22 +393,22 @@ describe("admin OAuth bridge", () => {
     const authSetCookie = authorize.headers.get("set-cookie") ?? "";
     expect(authSetCookie).toContain("savia.return_origin=");
     expect(authSetCookie).toContain(
-      encodeURIComponent("https://merkaseguros.savia.app.hefesoft.com"),
+      encodeURIComponent("https://merkaseguros.savia.hefesoft.com"),
     );
-    expect(authSetCookie).toContain("Domain=.savia.app.hefesoft.com");
+    expect(authSetCookie).toContain("Domain=.savia.hefesoft.com");
 
     const location = new URL(authorize.headers.get("location")!);
     const state = location.searchParams.get("state")!;
 
     // 2. Callback returns returnOrigin and clears the cookie
     const callback = await app.request(
-      "https://savia.app.hefesoft.com/api/auth/admin/callback",
+      "https://savia.hefesoft.com/api/auth/admin/callback",
       {
         method: "POST",
         headers: {
           "content-type": "application/json",
-          origin: "https://savia.app.hefesoft.com",
-          cookie: `savia.return_origin=${encodeURIComponent("https://merkaseguros.savia.app.hefesoft.com")}`,
+          origin: "https://savia.hefesoft.com",
+          cookie: `savia.return_origin=${encodeURIComponent("https://merkaseguros.savia.hefesoft.com")}`,
         },
         body: JSON.stringify({ code: "authorization-code", state }),
       },
@@ -416,7 +416,7 @@ describe("admin OAuth bridge", () => {
     expect(callback.status).toBe(200);
     const payload = (await callback.json()) as { returnOrigin?: string };
     expect(payload.returnOrigin).toBe(
-      "https://merkaseguros.savia.app.hefesoft.com",
+      "https://merkaseguros.savia.hefesoft.com",
     );
     const callbackSetCookie = callback.headers.get("set-cookie") ?? "";
     expect(callbackSetCookie).toContain("savia.return_origin=");
@@ -503,7 +503,7 @@ describe("admin OAuth bridge", () => {
       [tenantOrigin, canonicalOrigin],
       [canonicalOrigin, tenantOrigin],
       [tenantOrigin, "https://other.savia-preview.hefesoft.com"],
-      [tenantOrigin, "https://savia.app.hefesoft.com"],
+      [tenantOrigin, "https://savia.hefesoft.com"],
     ])(
       "requires a new login when moving from %s to %s",
       async (source, destination) => {

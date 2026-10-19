@@ -8,7 +8,7 @@ const policy = [
   "img-src 'self' data: blob:",
   "connect-src 'self' blob:",
   "frame-src 'self' blob:",
-  "frame-ancestors 'self' https://*.savia-preview.hefesoft.com https://savia-preview.hefesoft.com https://*.savia.app.hefesoft.com https://savia.app.hefesoft.com http://localhost:* http://127.0.0.1:*",
+  "frame-ancestors 'self' https://*.savia-preview.hefesoft.com https://savia-preview.hefesoft.com https://*.savia.hefesoft.com https://savia.hefesoft.com https://*.savia.app.hefesoft.com https://savia.app.hefesoft.com http://localhost:* http://127.0.0.1:*",
   "form-action 'none'",
   "base-uri 'none'",
 ].join("; ");

@@ -2,7 +2,12 @@
 
 An optional Savia tenant plugin for searching live SECOP procurement records and saving selected opportunities to a workspace collection for follow-up. Search history is not persisted. The plugin has Spanish, English, and Portuguese interface copy.
 
-The search action expects the tenant's configured `secop_live` MCP source and its `buscar_licitaciones` tool. The backend action contract owns request pagination and normalizes the returned records. The plugin accepts common SECOP field aliases and retains source values; absent values remain blank. A source link is shown only when its value parses as an HTTP or HTTPS URL.
+Version 1.8.1 keeps compact contextual actions icon-only with localized
+accessible names and tooltips. PDF analysis records remain persisted in the
+`procurement_documents` collection but are hidden from the Studio sidebar;
+preparation tasks remain available in their native records screen.
+
+The search action expects the signed-in user's configured `secop_live` MCP source in the current tenant and its `buscar_licitaciones` tool. The backend action contract owns request pagination and normalizes the returned records. The plugin accepts common SECOP field aliases and retains source values; absent values remain blank. A source link is shown only when its value parses as an HTTP or HTTPS URL.
 
 Saved interests are monitored hourly through the creator's own `secop_live`
 connection. The plugin package declares the fixed read-only detail action and
@@ -41,3 +46,31 @@ saves an interest and persists the PDF and report in backend storage. See
 `docs/secop-tenders-plugin.md` for CAPTCHA handoff, limits, deployment and retries.
 
 The Documents tab downloads and analyzes official PDFs automatically. CAPTCHA/access challenges show an official link, automatic retry, and a manual upload fallback. Files and reports remain in Savia backend storage; browser sessions and credentials are never forwarded. See the [SECOP guide](../../docs/secop-tenders-plugin.md).
+
+Version 1.7.6 adds a plugin-owned **SECOP preparation tasks** collection. From
+the native dossier assistant, users can turn a missing requirement into a task
+after reviewing its title, responsible person and due date. Tasks can be edited
+and completed from the plugin's native records screen. This tracks preparation
+work; it does not infer company compliance or add SECOP logic to Savia core.
+
+### Proposal drafts in native chat
+
+The native assistant offers **Generar propuesta DOCX** when the private SECOP
+provider advertises document generation. Select the company in the tender's
+assistant tab before opening chat; generation uses that authorized profile and
+the current tender dossier, without mixing another tender or company. Missing
+profile data, prices and unverified statements are left for completion. Review
+the source citations, extraction warnings, process deadline and official forms
+before signing or presenting the editable draft. The SECOP service creates and
+serves the private short-lived download; the plugin does not submit an offer.
+
+Search defaults to `vigentes: true`; the backend applies the future-deadline
+and open-state scope before pagination. Select all tenders for historical
+research. Closing dates are localized in Colombia time, with expired dates
+labelled. Saved interests are not filtered out.
+
+Status, entity, modality and department support multiple selected values (up to
+20 per field), with removable chips. Alternatives within a field use OR and
+fields combine with AND. Complete catalog failures use a small labelled retry
+icon and retain prior options. The SECOP service refreshes stale snapshots in
+the background instead of blocking the UI on slow Socrata queries.

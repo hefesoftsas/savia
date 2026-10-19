@@ -1,48 +1,57 @@
 import { chmod, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { validateFlowsPreviewSettings } from "./flows-preview-policy.mjs";
+import { validateFlowsWorkerSettings } from "./flows-preview-policy.mjs";
 
 const API = "https://api.cloudflare.com/client/v4";
-const WORKERS = Object.freeze({
-  agencies: "savia-agencies-preview",
-  flows: "savia-flows-preview",
-});
+const workersFor = (environment) => {
+  const suffix = environment === "preview" ? "-preview" : "";
+  return { agencies: `savia-agencies${suffix}`, flows: `savia-flows${suffix}` };
+};
 const CONTROL_TABLE = "savia_flows_execution_control";
 const TIMEOUT_MS = 30_000;
 const METADATA_VERSION = 1;
 const UUID =
   /^[a-f\d]{8}-[a-f\d]{4}-[1-8][a-f\d]{3}-[89ab][a-f\d]{3}-[a-f\d]{12}$/i;
 
-function requirePreviewEnvironment(env) {
-  if (env.SAVIA_DEPLOY_ENVIRONMENT !== "preview") {
-    throw new Error("Recovery only supports the preview environment");
+function requireRecoveryEnvironment(env) {
+  const environment = env.SAVIA_DEPLOY_ENVIRONMENT;
+  if (!["preview", "production"].includes(environment)) {
+    throw new Error("Recovery environment must be preview or production");
   }
   if (env.SAVIA_FLOWS_PROVISIONED !== "true") return null;
   const accountId = env.CLOUDFLARE_ACCOUNT_ID ?? "";
   const token = env.CLOUDFLARE_API_TOKEN;
   if (!/^[a-f\d]{32}$/i.test(accountId) || !token) {
-    throw new Error("Cloudflare preview credentials are missing or invalid");
+    throw new Error(
+      `Cloudflare ${environment} credentials are missing or invalid`,
+    );
   }
 
   let resources;
   try {
     resources = JSON.parse(env.SAVIA_FLOWS_RESOURCES ?? "");
   } catch {
-    throw new Error("Authoritative preview Flows resources are invalid");
+    throw new Error("Authoritative Flows resources are invalid");
   }
   if (
     !resources ||
-    resources.workerName !== WORKERS.flows ||
+    resources.workerName !== workersFor(environment).flows ||
     typeof resources.databaseId !== "string" ||
     !UUID.test(resources.databaseId)
   ) {
     throw new Error(
-      "Authoritative preview Flows resources do not match preview",
+      `Authoritative ${environment} Flows resources do not match ${environment}`,
     );
   }
 
-  return { accountId, token, flowsDatabaseId: resources.databaseId };
+  return {
+    accountId,
+    token,
+    environment,
+    workers: workersFor(environment),
+    flowsDatabaseId: resources.databaseId,
+  };
 }
 
 function parseRenderedConfig(config, worker) {
@@ -119,14 +128,16 @@ function createCloudflareClient({ accountId, token, fetcher }) {
   };
 }
 
-async function verifyFlowsDatabase(api, databaseId) {
+async function verifyFlowsDatabase(api, databaseId, environment) {
   const database = await api(`/d1/database/${databaseId}`);
-  if (database?.name !== WORKERS.flows) {
-    throw new Error("Flows preview D1 database name does not match preview");
+  if (database?.name !== workersFor(environment).flows) {
+    throw new Error(
+      `Flows ${environment} D1 database name does not match ${environment}`,
+    );
   }
 }
 
-async function readWorkerState(api, name, plannedConfig) {
+async function readWorkerState(api, name, plannedConfig, environment) {
   const path = `/workers/scripts/${name}`;
   const [deploymentResult, service] = await Promise.all([
     api(`${path}/deployments`),
@@ -143,7 +154,7 @@ async function readWorkerState(api, name, plannedConfig) {
     migrationTag,
     versions: parseVersions(deploymentResult?.deployments, name),
   };
-  if (name === WORKERS.flows) {
+  if (name === workersFor(environment).flows) {
     const activeVersions = await Promise.all(
       state.versions.map(({ version_id }) =>
         api(`${path}/versions/${version_id}`),
@@ -159,17 +170,18 @@ async function readWorkerState(api, name, plannedConfig) {
       if (!["true", "false"].includes(vars.SAVIA_FLOWS_EXECUTION_ENABLED)) {
         throw new Error("Flows execution settings are missing or invalid");
       }
-      validateFlowsPreviewSettings(
+      validateFlowsWorkerSettings(
         settings,
         vars.SAVIA_FLOWS_EXECUTION_ENABLED === "true",
+        environment,
       );
       if (vars.SAVIA_FLOWS_MAINTENANCE !== "false") {
-        throw new Error("Flows preview is already in maintenance mode");
+        throw new Error(`Flows ${environment} is already in maintenance mode`);
       }
       const generation = Number(vars.SAVIA_FLOWS_POLICY_GENERATION);
       if (!Number.isSafeInteger(generation) || generation <= 0) {
         throw new Error(
-          "Flows preview policy generation is missing or invalid",
+          `Flows ${environment} policy generation is missing or invalid`,
         );
       }
       return generation;
@@ -184,21 +196,27 @@ export async function captureRecovery({
   fetcher = fetch,
   root = process.cwd(),
   configPaths = {
-    agencies: resolve(root, "apps/api/wrangler.preview.jsonc"),
-    flows: resolve(root, "apps/flows/api/wrangler.preview.jsonc"),
+    agencies: resolve(
+      root,
+      `apps/api/wrangler.${env.SAVIA_DEPLOY_ENVIRONMENT ?? "preview"}.jsonc`,
+    ),
+    flows: resolve(
+      root,
+      `apps/flows/api/wrangler.${env.SAVIA_DEPLOY_ENVIRONMENT ?? "preview"}.jsonc`,
+    ),
   },
   metadataPath = resolve(env.RUNNER_TEMP ?? ".", "flows-preview-recovery.json"),
   now = Date.now,
 } = {}) {
   if (env.SAVIA_FLOWS_PROVISIONED !== "true") return { skipped: true };
-  const target = requirePreviewEnvironment(env);
+  const target = requireRecoveryEnvironment(env);
   const [agenciesConfig, flowsConfig] = await Promise.all([
     readFile(configPaths.agencies, "utf8"),
     readFile(configPaths.flows, "utf8"),
   ]);
   const plannedTags = {
-    agencies: parseRenderedConfig(agenciesConfig, "savia-agencies-preview"),
-    flows: parseRenderedConfig(flowsConfig, "savia-flows-preview"),
+    agencies: parseRenderedConfig(agenciesConfig, target.workers.agencies),
+    flows: parseRenderedConfig(flowsConfig, target.workers.flows),
   };
   const renderedFlowsPolicyGeneration = Number(
     JSON.parse(flowsConfig).vars?.SAVIA_FLOWS_POLICY_GENERATION,
@@ -210,12 +228,17 @@ export async function captureRecovery({
     throw new Error("Rendered Flows policy generation is missing or invalid");
   }
   const api = createCloudflareClient({ ...target, fetcher });
-  await verifyFlowsDatabase(api, target.flowsDatabaseId);
+  await verifyFlowsDatabase(api, target.flowsDatabaseId, target.environment);
   const workers = {};
   for (const key of ["agencies", "flows"]) {
-    workers[key] = await readWorkerState(api, WORKERS[key], {
-      migrationTag: plannedTags[key].migrations.at(-1).tag,
-    });
+    workers[key] = await readWorkerState(
+      api,
+      target.workers[key],
+      {
+        migrationTag: plannedTags[key].migrations.at(-1).tag,
+      },
+      target.environment,
+    );
   }
   if (renderedFlowsPolicyGeneration <= workers.flows.policyGeneration) {
     throw new Error(
@@ -225,7 +248,7 @@ export async function captureRecovery({
 
   const metadata = {
     version: METADATA_VERSION,
-    environment: "preview",
+    environment: target.environment,
     capturedAt: now(),
     accountId: target.accountId,
     flowsDatabaseId: target.flowsDatabaseId,
@@ -242,12 +265,12 @@ export async function captureRecovery({
 function validateMetadata(metadata, target) {
   if (
     metadata?.version !== METADATA_VERSION ||
-    metadata.environment !== "preview" ||
+    metadata.environment !== target.environment ||
     metadata.accountId !== target.accountId ||
     metadata.flowsDatabaseId !== target.flowsDatabaseId
   ) {
     throw new Error(
-      "Recovery metadata does not match this preview account and Flows database",
+      `Recovery metadata does not match this ${target.environment} account and Flows database`,
     );
   }
   if (
@@ -262,12 +285,12 @@ function validateMetadata(metadata, target) {
   }
   for (const key of ["agencies", "flows"]) {
     const worker = metadata.workers?.[key];
-    if (worker?.name !== WORKERS[key]) {
+    if (worker?.name !== target.workers[key]) {
       throw new Error(`Recovery metadata contains an unexpected ${key} Worker`);
     }
     worker.versions = parseVersions(
       [{ versions: worker.versions }],
-      WORKERS[key],
+      target.workers[key],
     );
   }
 }
@@ -316,7 +339,7 @@ export async function restoreRecovery({
   now = Date.now,
 } = {}) {
   if (env.SAVIA_FLOWS_PROVISIONED !== "true") return { skipped: true };
-  const target = requirePreviewEnvironment(env);
+  const target = requireRecoveryEnvironment(env);
   const attempted = {
     agencies: attemptedWorkers.agencies === true,
     flows: attemptedWorkers.flows === true,
@@ -327,11 +350,11 @@ export async function restoreRecovery({
   try {
     metadata = JSON.parse(await readFile(metadataPath, "utf8"));
   } catch {
-    throw new Error("Preview recovery metadata is missing or invalid");
+    throw new Error("Recovery metadata is missing or invalid");
   }
   validateMetadata(metadata, target);
   const api = createCloudflareClient({ ...target, fetcher });
-  await verifyFlowsDatabase(api, target.flowsDatabaseId);
+  await verifyFlowsDatabase(api, target.flowsDatabaseId, target.environment);
   const result = {
     skipped: false,
     restored: { agencies: false, flows: false },
@@ -379,7 +402,7 @@ export async function restoreRecovery({
 
   if (attempted.agencies) {
     try {
-      await api(`/workers/scripts/${WORKERS.agencies}/deployments`, {
+      await api(`/workers/scripts/${target.workers.agencies}/deployments`, {
         method: "POST",
         body: {
           strategy: "percentage",
@@ -396,7 +419,7 @@ export async function restoreRecovery({
 
   if (attempted.flows && flowLatchReady) {
     try {
-      await api(`/workers/scripts/${WORKERS.flows}/deployments`, {
+      await api(`/workers/scripts/${target.workers.flows}/deployments`, {
         method: "POST",
         body: {
           strategy: "percentage",
@@ -414,7 +437,7 @@ export async function restoreRecovery({
   return result;
 }
 
-function parseArgs(argv) {
+export function parseArgs(argv) {
   const flags = new Map();
   for (let index = 0; index < argv.length; index += 1) {
     const flag = argv[index];
@@ -446,16 +469,17 @@ function parseArgs(argv) {
   }
   if (
     !["capture", "restore"].includes(flags.get("--action")) ||
-    flags.get("--environment") !== "preview" ||
+    !["preview", "production"].includes(flags.get("--environment")) ||
     flags.get("--apply") !== true ||
     !flags.get("--metadata")
   ) {
     throw new Error(
-      "Use --action capture|restore --environment preview --metadata <path> --apply",
+      "Use --action capture|restore --environment preview|production --metadata <path> --apply",
     );
   }
   return {
     action: flags.get("--action"),
+    environment: flags.get("--environment"),
     metadataPath: flags.get("--metadata"),
     attemptedWorkers: {
       agencies: flags.get("--attempted-agencies") === "true",
@@ -464,21 +488,34 @@ function parseArgs(argv) {
   };
 }
 
+export function assertRecoveryCliEnvironment(args, env = process.env) {
+  if (args.environment !== env.SAVIA_DEPLOY_ENVIRONMENT) {
+    throw new Error(
+      `Recovery --environment ${args.environment} does not match SAVIA_DEPLOY_ENVIRONMENT ${env.SAVIA_DEPLOY_ENVIRONMENT ?? "(unset)"}`,
+    );
+  }
+}
+
 async function main() {
+  let environment;
   try {
     const args = parseArgs(process.argv.slice(2));
+    environment = args.environment;
+    assertRecoveryCliEnvironment(args);
     const result =
       args.action === "capture"
         ? await captureRecovery(args)
         : await restoreRecovery(args);
     if (result.skipped) {
       console.log(
-        "Flows preview recovery skipped because Flows is not provisioned or no pause was attempted.",
+        `Flows ${environment} recovery skipped because Flows is not provisioned or no pause was attempted.`,
       );
       return;
     }
     if (args.action === "capture") {
-      console.log("Captured preview Worker deployment recovery metadata.");
+      console.log(
+        `Captured ${environment} Worker deployment recovery metadata.`,
+      );
       return;
     }
     for (const failure of result.failures) {
@@ -487,13 +524,13 @@ async function main() {
     if (result.failures.length) {
       throw new AggregateError(
         result.failures.map((failure) => new Error(failure)),
-        "Preview recovery reported failures",
+        `${environment} recovery reported failures`,
       );
     }
-    console.log("Preview Worker recovery actions completed.");
+    console.log(`${environment} Worker recovery actions completed.`);
   } catch (error) {
     console.error(
-      `::error::${error instanceof Error ? error.message : "Preview recovery failed"}`,
+      `::error::${error instanceof Error ? error.message : `${environment ?? "Flows"} recovery failed`}`,
     );
     process.exitCode = 1;
   }

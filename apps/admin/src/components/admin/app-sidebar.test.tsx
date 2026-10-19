@@ -628,8 +628,8 @@ describe("AppSidebar navigation preferences", () => {
     Object.defineProperty(window, "location", {
       value: {
         ...originalLocation,
-        hostname: "merkaseguros.savia.app.hefesoft.com",
-        origin: "https://merkaseguros.savia.app.hefesoft.com",
+        hostname: "merkaseguros.savia.hefesoft.com",
+        origin: "https://merkaseguros.savia.hefesoft.com",
         pathname: "/",
         search: "",
         hash: "#/",

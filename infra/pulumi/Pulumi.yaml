@@ -18,5 +18,8 @@ template:
     savia-cloudflare:pagesSearchIndex:
       description: Optional Vectorize index name (preview must use the preview index)
     savia-cloudflare:flowsEnabled:
-      description: Provision isolated Savia Flows D1, KV, R2, and Queue resources
+      description: Provision isolated Savia Flows D1, KV, R2, and execution/dead-letter Queues
+      default: false
+    savia-cloudflare:flowsExecutionEnabled:
+      description: Allow execution only after provisioning, secrets, recovery, and deployment checks pass
       default: false

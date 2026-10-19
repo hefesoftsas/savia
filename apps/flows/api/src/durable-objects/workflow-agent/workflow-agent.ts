@@ -59,11 +59,11 @@ import { RUN_RETENTION_MS } from "../../agents/workflow-generator";
 import type { Bindings } from "../../context";
 import {
   assertPausedMaintenance,
-  exportSqlPage,
-  restoreSqlPage,
+  exportWorkflowBackupPage,
+  restoreWorkflowBackupPage,
   type BackupCheckpoint,
-  type BackupCursor,
-  type SqlBackupPage,
+  type WorkflowBackupCursor,
+  type WorkflowBackupPage,
 } from "../../services/durable-backup";
 import { createExecutionPolicy } from "../../services/execution-policy";
 import { ExecutionManager } from "../../services/execution-manager";
@@ -152,16 +152,19 @@ export class WorkflowAgent extends Agent<Bindings, WorkflowAgentState> {
   private organizationId: string | null = null;
   private generationSession: GenerationSession | null = null;
 
-  async backupPage(cursor?: BackupCursor): Promise<SqlBackupPage> {
+  async backupPage(cursor?: WorkflowBackupCursor): Promise<WorkflowBackupPage> {
     assertPausedMaintenance(this.env);
     await this.flushForBackup();
     this.generation.prepareForBackup();
-    return exportSqlPage(this.storage.sql, cursor);
+    return exportWorkflowBackupPage(this.storage, cursor);
   }
 
-  async restoreBackupPage(page: SqlBackupPage, first: boolean, last: boolean, checkpoint?: BackupCheckpoint): Promise<void> {
+  async restoreBackupPage(
+    page: WorkflowBackupPage,
+    checkpoint: BackupCheckpoint,
+  ): Promise<void> {
     assertPausedMaintenance(this.env);
-    restoreSqlPage(this.storage, page, first, last, checkpoint);
+    restoreWorkflowBackupPage(this.storage, page, checkpoint);
   }
 
   // ── Agent SDK method wrappers ─────────────────────────────────────────

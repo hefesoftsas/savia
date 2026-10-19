@@ -1,8 +1,21 @@
+import { createHash } from "node:crypto";
 import { resolve } from "node:path";
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const workspaceRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
+
+function rateLimitNamespaceId(slug, binding) {
+  return String(
+    Number.parseInt(
+      createHash("sha256")
+        .update(`${slug}:${binding}`)
+        .digest("hex")
+        .slice(0, 8),
+      16,
+    ) || 1,
+  );
+}
 
 export function workerConfig(
   kind,
@@ -88,6 +101,22 @@ export function workerConfig(
       services: [{ binding: "API", service: names.workers.api }],
       vars: { SAVIA_API_URL: origin },
     };
+  if (kind === "connectorGateway")
+    return {
+      ...base,
+      name: names.workers.connectorGateway,
+      main: resolve(workspaceRoot, "apps/connector-gateway/src/index.ts"),
+      workers_dev: false,
+      preview_urls: false,
+      d1_databases: [
+        {
+          binding: "DB",
+          database_name: names.databases.domain,
+          database_id: ids.domain,
+        },
+      ],
+      services: [{ binding: "SAVIA_REQUEST", service: names.workers.request }],
+    };
   if (kind === "api")
     return {
       ...base,
@@ -97,6 +126,32 @@ export function workerConfig(
         { binding: "AUTH", service: names.workers.auth },
         { binding: "MCP", service: names.workers.mcp },
         { binding: "SAVIA_REQUEST", service: names.workers.request },
+        {
+          binding: "CONNECTOR_GATEWAY",
+          service: names.workers.connectorGateway,
+        },
+      ],
+      ratelimits: [
+        {
+          name: "PUBLIC_FORMS_RATE_LIMITER",
+          namespace_id: rateLimitNamespaceId(names.slug, "public-forms"),
+          simple: { limit: 30, period: 60 },
+        },
+        {
+          name: "REALTIME_RATE_LIMITER",
+          namespace_id: rateLimitNamespaceId(names.slug, "realtime"),
+          simple: { limit: 30, period: 60 },
+        },
+      ],
+      durable_objects: {
+        bindings: [
+          { name: "REALTIME_HUB", class_name: "RealtimeHub" },
+          { name: "WHATSAPP_DISPATCHER", class_name: "WhatsappDispatcher" },
+        ],
+      },
+      migrations: [
+        { tag: "v1", new_sqlite_classes: ["RealtimeHub"] },
+        { tag: "v2", new_sqlite_classes: ["WhatsappDispatcher"] },
       ],
       d1_databases: [
         {
@@ -118,12 +173,16 @@ export function workerConfig(
     name: names.workers.gateway,
     main: resolve(workspaceRoot, "apps/admin/src/edge-gateway.ts"),
     services: [{ binding: "API", service: names.workers.api }],
+    r2_buckets: [{ binding: "OFFICE_RUNTIME", bucket_name: names.bucket }],
     assets: {
       directory: assetsDir ?? resolve(workspaceRoot, "apps/admin/dist"),
       binding: "ASSETS",
       not_found_handling: "single-page-application",
       run_worker_first: [
         "/companion-downloads.json",
+        "/register",
+        "/public/forms",
+        "/public/forms/*",
         "/public/bookings",
         "/public/bookings/*",
         "/public/quotes",
@@ -131,8 +190,11 @@ export function workerConfig(
         "/api/*",
         "/v1/*",
         "/webhooks/whatsapp",
+        "/office",
+        "/office/*",
         "/s/*",
         "/.well-known/*",
+        "/mcp",
         "/health",
         "/docs",
         "/openapi.json",

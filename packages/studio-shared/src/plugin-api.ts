@@ -10,6 +10,7 @@ import {
 } from "./plugin-localization";
 import type { AccessPolicy } from "./access-control";
 import type { StudioObject } from "./metadata";
+import type { PluginAssistantOpenRequest } from "./plugin-assistant";
 
 export type PluginHostRequest = <T>(
   path: string,
@@ -113,11 +114,25 @@ export type PluginCollection<TRecord, TInput = Partial<TRecord>> = {
   describe(): Promise<PluginCollectionDefinition | undefined>;
 };
 
-export type PluginRecordReceipt<T> = { data: T; persistence: "local" | "server"; mutationId?: string };
-export type PluginLocalCollection<T, I = Partial<T>> = Pick<PluginCollection<T, I>, "list" | "get" | "describe"> & {
+export type PluginRecordReceipt<T> = {
+  data: T;
+  persistence: "local" | "server";
+  mutationId?: string;
+};
+export type PluginLocalCollection<T, I = Partial<T>> = Pick<
+  PluginCollection<T, I>,
+  "list" | "get" | "describe"
+> & {
   create(input: I): Promise<PluginRecordReceipt<T>>;
-  update(id: string, input: I, options?: PluginRecordVersion): Promise<PluginRecordReceipt<T>>;
-  remove(id: string, options?: PluginRecordVersion): Promise<PluginRecordReceipt<T>>;
+  update(
+    id: string,
+    input: I,
+    options?: PluginRecordVersion,
+  ): Promise<PluginRecordReceipt<T>>;
+  remove(
+    id: string,
+    options?: PluginRecordVersion,
+  ): Promise<PluginRecordReceipt<T>>;
 };
 
 export type PluginFile = {
@@ -135,11 +150,30 @@ export type PluginFiles = {
   remove(id: string, version: number): Promise<void>;
 };
 export type PluginApi = {
+  /** Public view identifiers only; never put credentials or private content in URLs. */
+  route?: {
+    get(): Promise<Record<string, string>>;
+    set(
+      state: Record<string, string>,
+      options?: { replace?: boolean },
+    ): Promise<void>;
+    subscribe?(listener: (state: Record<string, string>) => void): () => void;
+  };
   localRecords?: {
     collection<T, I = Partial<T>>(name: string): PluginLocalCollection<T, I>;
-    subscribe?(listener: (status?: { pending: number; conflicts: number; errors: number }) => void): () => void;
+    subscribe?(
+      listener: (status?: {
+        pending: number;
+        conflicts: number;
+        errors: number;
+      }) => void,
+    ): () => void;
   };
   ui?: PluginPanelApi;
+  /** Open Savia's native assistant using this extension's declared server action. */
+  assistant?: {
+    open(request: PluginAssistantOpenRequest): Promise<void>;
+  };
   i18n?: {
     readonly locale: PluginLocale;
     translate<C extends PluginMessages>(
@@ -303,6 +337,11 @@ export function createPluginApi({
         ),
       error: (error) =>
         localizeExternalError(error, normalizePluginLocale(getLocale())),
+    },
+    assistant: {
+      open: async (value) => {
+        await request(`${extensionPath}/assistant/open`, "POST", value);
+      },
     },
     access: {
       async effective() {

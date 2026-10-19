@@ -24,6 +24,15 @@ test("isolates dependencies for every workspace package in writable volumes", as
       ...compose.matchAll(/^      - \w+:\/workspace\/(.+)\/node_modules$/gm),
     ].map(([, directory]) => directory),
   );
+  const mountedVolumeNames = [
+    ...compose.matchAll(/^      - (\w+):\/workspace\/.+\/node_modules$/gm),
+  ].map(([, name]) => name);
+  const volumeSection = compose.match(/^volumes:\n((?:[ \t]+[^\n]*\n)*)/m)?.[1];
+  const declaredVolumeNames = new Set(
+    [...(volumeSection ?? "").matchAll(/^  ([^:\n]+):/gm)].map(
+      ([, name]) => name,
+    ),
+  );
   const seeded = new Set(
     [...dockerfile.matchAll(/\/workspace\/(.+)\/node_modules/g)].map(
       ([, directory]) => directory,
@@ -74,6 +83,12 @@ test("isolates dependencies for every workspace package in writable volumes", as
     }
   }
   assert.deepEqual([...mounted].sort(), [...workspaces].sort());
+  for (const name of mountedVolumeNames) {
+    assert.ok(
+      declaredVolumeNames.has(name),
+      `workspace dependency volume ${name} must be declared at the Compose root`,
+    );
+  }
   assert.deepEqual([...seeded].sort(), [...workspaces].sort());
 });
 
