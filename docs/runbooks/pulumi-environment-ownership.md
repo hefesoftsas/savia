@@ -48,6 +48,15 @@ Cron expressions are identified within their owning Worker: API and Flows may
 use the same schedule, while repeated names on one Worker or repeated physical
 identities are rejected.
 
+Each operation restores an existing managed environment's public runtime settings
+from Pulumi's last applied configuration into the fresh checkout. It reads a
+separate private configuration snapshot, accepts only known public runtime
+metadata, removes the temporary snapshot, and resets one-time import flags.
+Account identity and branch persistence names come from the validated environment,
+not cached credentials. This also runs when adoption is already complete, so the
+next CI checkout can preview, publish, or retire the same environment. A new
+release does not reuse a previous release's one-time bootstrap proof.
+
 For a separately authorized new environment, `plan --environment <id>
 --provision --apply` creates persistence first. Prepare the frozen release only
 after actual binding IDs exist. Exact create-only custody and physical empty

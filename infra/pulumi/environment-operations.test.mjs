@@ -295,6 +295,16 @@ test("concrete retained-data retirement uses one saved engine plan and never emp
   try {
     const deps = createEnvironmentDependencies({
       env: { CLOUDFLARE_ACCOUNT_ID: accountId },
+      appliedConfiguration: async () => ({
+        "savia-cloudflare:runtimeManaged": { value: "true" },
+        "savia-cloudflare:runtimeMode": { value: "adopt" },
+        "savia-cloudflare:runtimeProfile": {
+          value: JSON.stringify(manifest.profile),
+        },
+        "savia-cloudflare:adoptionManifest": {
+          value: JSON.stringify(manifest),
+        },
+      }),
       configuration: async () => Buffer.from("encrypted fixture"),
       emptyBucket: async () => assert.fail("emptied data"),
       run: async (_binary, args) => {
@@ -474,3 +484,292 @@ test("inventory reads an initialized empty management export without treating it
     /account|protection/,
   );
 });
+
+for (const action of [
+  "infrastructure",
+  "already-adopted",
+  "retire",
+  "default-reader",
+  "secret-cache",
+])
+  test(`fresh branch checkout restores required configuration for ${action}`, async () => {
+    const { mkdtemp, rm } = await import("node:fs/promises");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const { previewNames } =
+      await import("../../scripts/preview-environment.mjs");
+    const { resolveEnvironment } = await import("./environments.mjs");
+    const { createEnvironmentDependencies } =
+      await import("./environment-operations.mjs");
+    const { adoptionManifestHash } = await import("./environment-manifest.mjs");
+    const directory = await mkdtemp(
+      join(tmpdir(), "savia-fresh-branch-config-"),
+    );
+    const accountId = "a".repeat(32),
+      slug = "feat-config-check",
+      names = previewNames(slug),
+      descriptor = resolveEnvironment(`branch-${slug}`);
+    const workerName = names.workers.gateway;
+    const resources = [
+      { kind: "worker", name: workerName, cloudId: "b".repeat(32) },
+      {
+        kind: "d1",
+        name: names.databases.auth,
+        cloudId: "11111111-1111-4111-8111-111111111111",
+      },
+      {
+        kind: "d1",
+        name: names.databases.domain,
+        cloudId: "22222222-2222-4222-8222-222222222222",
+      },
+      { kind: "r2", name: names.bucket, cloudId: names.bucket },
+    ];
+    const manifest = {
+      version: 1,
+      accountId,
+      environment: descriptor.environment,
+      project: descriptor.project,
+      stack: descriptor.stack,
+      profile: { enabledWorkers: [workerName], retentionWorkerNames: [] },
+      resources,
+    };
+    const prefix = `urn:pulumi:${descriptor.stack}::${descriptor.project}::`;
+    const workerUrn =
+        prefix + "cloudflare:index/worker:Worker::runtime-" + workerName,
+      runtimeUrn =
+        prefix + "pulumi-nodejs:dynamic/runtime:RuntimeRelease::runtime";
+    let state = {
+      version: 3,
+      deployment: {
+        resources: [
+          {
+            type: "pulumi:pulumi:Stack",
+            urn:
+              prefix +
+              `pulumi:pulumi:Stack::${descriptor.project}-${descriptor.stack}`,
+            outputs: { runtimeStatus: "active" },
+          },
+          {
+            type: "cloudflare:index/worker:Worker",
+            urn: workerUrn,
+            id: resources[0].cloudId,
+            protect: true,
+            inputs: { accountId, name: workerName },
+            outputs: { accountId, name: workerName },
+          },
+          {
+            type: "pulumi-nodejs:dynamic/runtime:RuntimeRelease",
+            urn: runtimeUrn,
+            id: "runtime",
+            inputs: {
+              accountId,
+              environment: descriptor.environment,
+              mode: "adopt",
+              adoptionManifest: manifest,
+            },
+          },
+        ],
+      },
+    };
+    const cfg = new Map(),
+      calls = [];
+    const required = () => {
+      for (const key of [
+        "accountId",
+        "branchSlug",
+        "authDatabaseName",
+        "domainDatabaseName",
+        "bucketName",
+        "runtimeManaged",
+        "runtimeProfile",
+        "adoptionManifest",
+      ])
+        assert.ok(cfg.has(key), `fresh checkout missing ${key}`);
+      assert.equal(cfg.get("accountId"), accountId);
+      assert.equal(cfg.get("branchSlug"), slug);
+      assert.equal(cfg.get("authDatabaseName"), names.databases.auth);
+      assert.equal(cfg.get("domainDatabaseName"), names.databases.domain);
+      assert.equal(cfg.get("bucketName"), names.bucket);
+      assert.equal(cfg.get("runtimeManaged"), "true");
+      assert.equal(cfg.get("importRuntimeWorkers"), "false");
+      assert.equal(cfg.get("importAuthD1Id"), "");
+      assert.equal(cfg.get("importDomainD1Id"), "");
+      assert.equal(cfg.get("importBucketId"), "");
+      assert.equal(cfg.has("apiToken"), false);
+    };
+    const cache = Object.fromEntries(
+      Object.entries({
+        runtimeManaged: true,
+        runtimeMode: "adopt",
+        runtimeProfile: manifest.profile,
+        adoptionManifest: manifest,
+        importRuntimeWorkers: true,
+        importAuthD1Id: "old-import-only",
+        apiToken: "DO_NOT_COPY",
+      }).map(([key, value]) => [
+        `${descriptor.project}:${key}`,
+        {
+          value:
+            typeof value === "object" ? JSON.stringify(value) : String(value),
+          secret: key === "apiToken",
+        },
+      ]),
+    );
+    if (action === "secret-cache")
+      cache[`${descriptor.project}:runtimeProfile`].secret = true;
+    let snapshotPath;
+    const deps = createEnvironmentDependencies({
+      env: { CLOUDFLARE_ACCOUNT_ID: accountId },
+      appliedConfiguration:
+        action === "default-reader" ? undefined : async () => cache,
+      configuration: async () => {
+        required();
+        return Buffer.from("private configuration");
+      },
+      run: async (binary, args) => {
+        calls.push({ binary, args });
+        if (binary === "git") return { stdout: "a".repeat(40) };
+        assert.equal(binary, "pulumi");
+        if (args[0] === "config" && args[1] === "refresh") {
+          assert.equal(
+            args[args.indexOf("--stack") + 1],
+            `organization/${descriptor.project}/${descriptor.stack}`,
+          );
+          snapshotPath = args[args.indexOf("--config-file") + 1];
+          assert.ok(snapshotPath.endsWith("configuration.private.yaml"));
+          await (
+            await import("node:fs/promises")
+          ).writeFile(snapshotPath, "encrypted snapshot");
+          return { stdout: "" };
+        }
+        if (args[0] === "config" && args[1] === "--json") {
+          assert.equal(args.includes("--show-secrets"), false);
+          assert.equal(args[args.indexOf("--config-file") + 1], snapshotPath);
+          return { stdout: JSON.stringify(cache) };
+        }
+        if (args[0] === "config" && args[1] === "set") {
+          cfg.set(args[2].split(":").at(-1), args[3]);
+          return { stdout: "" };
+        }
+        if (args[0] === "config" && args[1] === "rm") {
+          cfg.delete(args[2].split(":").at(-1));
+          return { stdout: "" };
+        }
+        if (args[0] === "stack" && args[1] === "export")
+          return { stdout: JSON.stringify(state) };
+        if (args[0] === "state" && args[1] === "unprotect") {
+          required();
+          return { stdout: "" };
+        }
+        if (args[0] === "preview") {
+          required();
+          const file = args[args.indexOf("--save-plan") + 1];
+          await (
+            await import("node:fs/promises")
+          ).writeFile(file, "saved engine plan");
+          return {
+            stdout: JSON.stringify({
+              changeSummary: action === "retire" ? { delete: 2 } : { same: 1 },
+              steps:
+                action === "retire"
+                  ? [workerUrn, runtimeUrn].map((urn) => ({
+                      op: "delete",
+                      urn,
+                      oldState: state.deployment.resources.find(
+                        (r) => r.urn === urn,
+                      ),
+                    }))
+                  : [
+                      {
+                        op: "same",
+                        urn: prefix + "root",
+                        newState: { type: "pulumi:pulumi:Stack" },
+                      },
+                    ],
+            }),
+          };
+        }
+        if (args[0] === "up") {
+          state = {
+            ...state,
+            deployment: {
+              resources: state.deployment.resources.filter(
+                (r) => ![workerUrn, runtimeUrn].includes(r.urn),
+              ),
+            },
+          };
+          return { stdout: "{}" };
+        }
+        assert.fail(`unexpected command ${args.slice(0, 2).join(" ")}`);
+      },
+    });
+    const context = {
+      qualifiedStack: `organization/${descriptor.project}/${descriptor.stack}`,
+      checkpoint: { stateExport: state, resources },
+      management: {},
+      backendUrl: "private",
+    };
+    let result;
+    try {
+      if (action === "secret-cache") {
+        await assert.rejects(
+          deps.planOperation({
+            descriptor,
+            manifest,
+            manifestHash: adoptionManifestHash(manifest),
+            operation: "infrastructure",
+            args: {},
+            context,
+          }),
+          /public metadata/,
+        );
+        assert.equal(
+          calls.some(
+            (x) =>
+              ["set", "preview", "up"].includes(x.args[1]) ||
+              ["preview", "up"].includes(x.args[0]),
+          ),
+          false,
+        );
+        return;
+      }
+      if (action === "already-adopted")
+        assert.equal(
+          await deps.alreadyAdopted({ descriptor, manifest, context }),
+          true,
+        );
+      else if (action === "retire")
+        result = await deps.retire({
+          descriptor,
+          manifest,
+          manifestHash: adoptionManifestHash(manifest),
+          deleteData: false,
+          args: {},
+          context,
+        });
+      else
+        await deps.planOperation({
+          descriptor,
+          manifest,
+          manifestHash: adoptionManifestHash(manifest),
+          operation: "infrastructure",
+          args: { plan: join(directory, "reviewed.json") },
+          context,
+        });
+      required();
+      if (action === "default-reader")
+        await assert.rejects(
+          (await import("node:fs/promises")).stat(snapshotPath),
+          { code: "ENOENT" },
+        );
+      if (action !== "retire")
+        assert.equal(
+          calls.some((x) => x.args[0] === "up"),
+          false,
+        );
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+      if (result?.journalDir)
+        await rm(result.journalDir, { recursive: true, force: true });
+    }
+  });
