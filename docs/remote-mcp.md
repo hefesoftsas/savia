@@ -1,8 +1,8 @@
 # Remote MCP for Claude and ChatGPT
 
 Savia exposes a Streamable HTTP MCP endpoint at `<SAVIA_API_RESOURCE>/mcp`.
-For the production origin configured in this repository, the connection URL is
-`https://savia.hefesoft.com/mcp` after deploying this change.
+The current hosted connection URL is Preview:
+`https://savia-preview.hefesoft.com/mcp`.
 
 ## Connect from another machine
 

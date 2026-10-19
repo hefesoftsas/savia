@@ -1,20 +1,22 @@
 {
   "$schema": "../../node_modules/wrangler/config-schema.json",
-  "name": "savia",
+  "name": "savia-preview",
   "main": "src/edge-gateway.ts",
   "compatibility_date": "2026-08-31",
-  "vars": { "CANONICAL_HOST": "savia.hefesoft.com" },
+  "vars": { "CANONICAL_HOST": "savia-preview.hefesoft.com" },
   "routes": [
-    { "pattern": "savia.hefesoft.com", "custom_domain": true },
-    { "pattern": "savia.hefesoft.com/*", "zone_name": "hefesoft.com" },
-    { "pattern": "*.savia.hefesoft.com/*", "zone_name": "hefesoft.com" },
-    { "pattern": "savia.app.hefesoft.com", "custom_domain": true },
-    { "pattern": "savia-team.savia.app.hefesoft.com", "custom_domain": true },
-    { "pattern": "*.savia.app.hefesoft.com/*", "zone_name": "hefesoft.com" },
+    { "pattern": "savia-preview.hefesoft.com", "custom_domain": true },
+    {
+      "pattern": "*.savia-preview.hefesoft.com/*",
+      "zone_name": "hefesoft.com",
+    },
   ],
-  "services": [{ "binding": "API", "service": "savia-agencies" }],
+  "services": [{ "binding": "API", "service": "savia-agencies-preview" }],
   "r2_buckets": [
-    { "binding": "OFFICE_RUNTIME", "bucket_name": "savia-documents" },
+    {
+      "binding": "OFFICE_RUNTIME",
+      "bucket_name": "savia-documents-preview",
+    },
   ],
   "assets": {
     "directory": "./dist",

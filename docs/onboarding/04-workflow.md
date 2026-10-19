@@ -39,12 +39,11 @@ Every successful CI run for a push to `main` deploys the exact tested commit to
 preview. Preview has independent Workers, authentication and domain databases,
 and object storage. Pull requests never deploy.
 
-Production is promoted only through the manual `Deploy Savia production` action
-on `main`. It requires a successful preview deployment for the same commit,
-reruns CI, and waits for approval of the `production` environment. Database reset
-and emergency bypass options are not part of this workflow. The separate
-variable import workflow remains disabled.
-See [preview and production operations](../runbooks/preview-production.md).
+The hosted Savia application production deployment has been retired. Preview is
+the only hosted application environment available for releases. Historical
+production operating notes are retained in
+[preview and production operations](../runbooks/preview-production.md); do not
+use their production steps as deployment instructions.
 
 ## Conventions
 

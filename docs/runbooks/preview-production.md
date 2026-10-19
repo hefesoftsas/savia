@@ -1,8 +1,13 @@
-# Preview and production
+# Preview operations and retired production records
+
+> **Current status:** Savia's hosted application production deployment has been
+> retired. Preview is the only hosted application environment available. The
+> production details below are historical reference, not instructions for
+> deploying or operating a production application.
 
 ## Delivery flow
 
-`main` push → Savia CI → Deploy Savia preview → manual production promotion.
+`main` push → Savia CI → Deploy Savia preview.
 
 The workflow selects a compatible plugin-only lane or a complete platform
 release using the last successfully published ancestor. See
@@ -10,7 +15,7 @@ release using the last successfully published ancestor. See
 required checks, exact-version publication and recovery checkpoints.
 
 Preview URL: https://savia-preview.hefesoft.com
-Production URL: https://savia.hefesoft.com
+Former production URL: https://savia.hefesoft.com (retired)
 
 The preview workflow accepts only successful CI runs caused by a push to `main`
 in this repository. It checks out the tested SHA and rejects superseded commits.
@@ -33,7 +38,7 @@ public boot has loaded; a browser still running an older cached application
 shell must first receive the normal worker update or retry before this code can
 run. Public visitors do not register an administrative worker.
 
-## Isolated resources
+## Historical production and current preview resources
 
 | Component    | Production                  | Preview                    |
 | ------------ | --------------------------- | -------------------------- |
@@ -158,7 +163,11 @@ If a released feature disappears after **Actualizar y recargar**:
    subsequent changes; do not publish private tenant inventories or credentials
    in the recovery PR or workflow artifacts.
 
-## Promote to production
+## Historical production promotion procedure (retired)
+
+The workflow and production GitHub environment deployment described here have
+been removed. The remaining steps record the former release process only and
+cannot deploy the hosted Savia application.
 
 1. Verify that preview succeeded for the current `main` commit and test preview.
 2. Open Actions → Deploy Savia production → Run workflow, selecting `main`.
@@ -176,9 +185,9 @@ If a released feature disappears after **Actualizar y recargar**:
    Complete a browser sign-in or reuse an existing session to verify the
    deployed UI before declaring the release ready.
 
-There is no automatic production trigger, emergency CI bypass, or database reset
-input. Running preview never changes production Worker bindings or databases.
-The separate production variable import workflow remains disabled.
+The former release flow had no automatic production trigger, emergency CI
+bypass, or database reset input. Its separate production variable-import
+workflow has also been removed.
 
 Initial resource provisioning must create all six preview Worker targets before
 the first deployment because API and MCP have mutual service bindings. The

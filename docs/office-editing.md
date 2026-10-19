@@ -191,7 +191,8 @@ Brotli, and uploads its five immutable objects to `savia-documents-preview` befo
 deploying the gateway. The upload step rejects other buckets and environments.
 The rendered admin gateway configuration binds `OFFICE_RUNTIME` to the selected
 environment's documents bucket and routes `/office` and `/office/*` through its
-worker. Preview and production must use their own configured buckets.
+worker. Preview uses its own configured bucket; hosted production deployment is
+retired.
 
 Prepare compressed runtime objects locally:
 

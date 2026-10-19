@@ -23,7 +23,7 @@ Owner: platform administrator. Review date: 2026-11-05.
   Chatwoot is optional and is not part of the direct assistant flow.
 - The gateway's Wrangler asset configuration routes the exact
   `/webhooks/whatsapp` path through the Worker before the SPA fallback in local,
-  preview and production deployments. Keep this entry in both the checked-in
+  Preview deployments. Keep this entry in both the checked-in
   `apps/admin/wrangler.jsonc` and generated deployment configs; otherwise Meta
   verification requests and webhook events can receive the admin app instead
   of reaching the API.
@@ -144,11 +144,12 @@ replacement connections do not invalidate an existing healthy connection.
    secrets in the intended environment. The first is the app secret, not the
    Meta system-user messaging token held by Nango. Missing secrets keep the
    webhook unavailable and prevent enabling automatic replies. Repository deployment
-   workflows read the same two secret names from their GitHub deployment environment
-   (`preview` or `production`) and upload the pair only to the API worker. Configure
+   workflow reads the same two secret names from the Preview GitHub environment
+   and uploads the pair only to the API Worker. Configure
    both together; neither is required for deployments without this integration, but
    an incomplete pair is rejected. Values never belong in tracked configuration.
-   Preview and production credentials are configured independently.
+   Preview credentials are configured separately from local and self-hosted
+   environments.
 3. Create an active virtual employee in the intended tenant with its prompt and
    optional reference documents. Use the tenant's default model or a model
    explicitly enabled by its administrator. External contacts receive plain-text
@@ -190,7 +191,7 @@ binding before reconnecting. Sending and enabling still require a healthy sender
 The webhook checks `X-Hub-Signature-256` against the raw body and durably stores
 accepted messages before acknowledging them, including validated native payloads.
 Unsupported event types are ignored. Incoming message IDs deduplicate retries.
-Managed preview and production deployments set `WHATSAPP_PROCESSING_MODE=events`
+Managed Preview deployments set `WHATSAPP_PROCESSING_MODE=events`
 and bind `WHATSAPP_DISPATCHER` to the `WhatsappDispatcher` Durable Object. After
 persistence, the webhook awaits a short wake request before acknowledging Meta;
 it never runs AI or provider jobs in HTTP `waitUntil`. If a wake fails, it returns 503. A redelivered message resolves its existing inbox row and repairs the wake
@@ -377,7 +378,7 @@ Attachment understanding is opt-in per tenant. The server verifies metadata,
 exact download host, SHA-256 checksum, MIME signature and an 8 MiB size limit.
 Files remain in private tenant-scoped R2 keys under `whatsapp/inbound/`; scheduled
 cleanup removes files older than seven days, including after webhook secrets
-are removed. Rendered preview/production configs supply the minute schedule.
+are removed. The rendered Preview config supplies the minute schedule.
 No public attachment URL is
 created. Images and PDFs require a compatible configured AI model. Plain text
 is included as untrusted context; audio uses the existing transcription

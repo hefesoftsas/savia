@@ -91,8 +91,8 @@ and [Graph channel message permissions](https://learn.microsoft.com/en-us/graph/
 ## Enable an environment
 
 Set the two integration ID variables only after the matching Nango integrations
-and OAuth applications are ready. Hosted preview and production workflows pass
-their GitHub environment variables to the API configuration renderer. The
+and OAuth applications are ready. The Preview workflow passes its GitHub
+environment variables to the API configuration renderer. The
 providers stay unavailable when their IDs are unset. Self-hosted deployments
 accept the same backend environment variables. Local development can put them in
 the gitignored `infra/secrets/assistant-api.dev.env`.

@@ -142,27 +142,16 @@ ingress rule. Create a proxied CNAME to the tunnel ID's `cfargotunnel.com` name.
 Start the stack with `docker compose -f compose.preview.yml up -d`.
 
 Set the matching `SQL_BRIDGE_URL` (HTTPS) and `SQL_BRIDGE_SECRET` in the GitHub
-`preview` environment. Preview and production workflows upload this optional
-pair to their respective API Workers. Both values must be present together;
-invalid or partial configuration stops before any secret upload. Existing
-installations without this pair continue deploying without a bridge.
+`preview` environment. The optional pair is uploaded only to the Preview API
+Worker. Both values must be present together; invalid or partial configuration
+stops before any secret upload. Preview deployments without this pair continue
+without a bridge.
 
 Verify authenticated connection tests, discovery, metadata, and CRUD for each
-fixture engine before testing source registration and bindings in the preview
-UI. Keep fixture credentials outside the repository. Promote only after the
-same commit passes CI and preview evidence, following the production workflow.
-Production requires its own bridge secret, approved database allowlist, and
-HTTPS endpoint; never reuse the preview fixture database stack as production.
-
-### Production bridge
-
-Use `infra/db-bridge/compose.production.yml` for the independently authenticated
-production bridge and tunnel. It publishes only a loopback health port (8792)
-and does not include fixture databases. Set its private `.env` values as for
-preview, using a different shared secret and dedicated tunnel. An omitted or
-empty `DB_BRIDGE_ALLOWED_HOSTS` explicitly denies all database hosts; add only
-approved destination hostnames when real sources are ready. Configure the matching
-HTTPS URL and shared secret in the GitHub `production` environment.
+fixture engine before testing source registration and bindings in the Preview
+UI. Keep fixture credentials outside the repository. Preview is the only
+configured deployment environment; there is no production bridge profile or
+production source-promotion workflow. Keep production database sources disabled.
 
 After source policy changes, binding, unbinding, or metadata synchronization,
 the client invalidates its cached collection catalog so navigation and editing

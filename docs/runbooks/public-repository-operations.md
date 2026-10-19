@@ -12,17 +12,16 @@ permissions. It requires no deployment secrets. Source changes run unit tests,
 contract tests, type checks, and publication safety checks. Gitleaks scans the
 reachable history; only two exact synthetic test keys are allowlisted. Manual CI runs are available from Actions.
 
-## Preview and production
+## Preview and retired production
 
-Preview deploys automatically after successful `main` push CI. Production is
-manual-only, requires successful preview for the same commit, revalidates CI,
-and waits for the protected production environment approval. Deployment secrets
-remain environment-scoped. See [preview and production operations](preview-production.md).
+Preview deploys automatically after successful `main` push CI. The hosted Savia
+production application deployment has been retired; preview is the only hosted
+application environment available. Historical procedures remain in
+[the Preview runbook and retired production records](preview-production.md).
 
-The old repository workflows remain disabled. The standalone production data
-import workflow is disabled and additionally gated by
-`PRODUCTION_OPERATIONS_ENABLED=false`. This variable does not control manual
-application promotion.
+The retired production workflows and the standalone production data-import
+workflow have been removed. The shared plugin-registry deployment remains a
+separate service used by preview.
 
 Historical private branches and tags must not be pushed to the public repository.
 External notification webhooks were not duplicated during migration.
