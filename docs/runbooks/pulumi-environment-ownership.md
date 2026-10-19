@@ -48,6 +48,15 @@ Cron expressions are identified within their owning Worker: API and Flows may
 use the same schedule, while repeated names on one Worker or repeated physical
 identities are rejected.
 
+Each operation restores an existing managed environment's public runtime settings
+from Pulumi's last applied configuration into the fresh checkout. It reads a
+separate private configuration snapshot, accepts only known public runtime
+metadata, removes the temporary snapshot, and resets one-time import flags.
+Account identity and branch persistence names come from the validated environment,
+not cached credentials. This also runs when adoption is already complete, so the
+next CI checkout can preview, publish, or retire the same environment. A new
+release does not reuse a previous release's one-time bootstrap proof.
+
 For a separately authorized new environment, `plan --environment <id>
 --provision --apply` creates persistence first. Prepare the frozen release only
 after actual binding IDs exist. Exact create-only custody and physical empty
@@ -142,3 +151,14 @@ manifest and no `resources` property. This is an empty readable checkpoint,
 not management protection evidence. Audits and backend transfer accept that
 shape without rewriting the exported checkpoint; pending operations and
 malformed resource lists still stop the operation.
+
+Dry import plans may contain `newState.importID` before a physical `id` or
+outputs are resolved. The plan reader validates its exact account and native
+resource path, then compares the physical identity, kind and name with the
+reviewed manifest. Foreign accounts, unexpected path segments and conflicting
+resolved IDs are rejected.
+
+Worker reads omit the delete-only `force` flag. Desired identities retain
+`force: false` and `protect: true`; ignoring readback drift on that flag avoids
+a follow-up Worker update after import. Adoption continues to reject all
+provider updates, including updates that would only set `force: false`.

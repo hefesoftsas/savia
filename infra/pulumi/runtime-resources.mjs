@@ -18,6 +18,8 @@ export function workerIdentityOptions() {
   return {
     protect: true,
     ignoreChanges: [
+      // Read omits this delete-only flag; importing must not PATCH a Worker to set false.
+      "force",
       "subdomain",
       "logpush",
       "observability",

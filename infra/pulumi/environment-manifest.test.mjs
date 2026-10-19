@@ -183,6 +183,7 @@ test("adoption plan allows only reviewed identity imports and read-only bookkeep
       steps: [
         {
           op: "import",
+          accountId,
           kind: "worker",
           name: "savia-preview",
           cloudId: "b".repeat(32),

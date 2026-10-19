@@ -15,6 +15,7 @@ test("native Worker arguments cannot take over publication or force deletion", (
   });
   assert.equal(workerIdentityOptions().protect, true);
   assert.ok(workerIdentityOptions().ignoreChanges.includes("subdomain"));
+  assert.ok(workerIdentityOptions().ignoreChanges.includes("force"));
   assert.throws(
     () => workerIdentityArgs({ accountId, name: "other-product" }),
     /Worker/,

@@ -6,6 +6,7 @@ import {
   writeFile,
   chmod,
   appendFile,
+  rm,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, dirname, resolve } from "node:path";
@@ -209,6 +210,7 @@ export function createEnvironmentDependencies({
   catalog = readStateCatalog,
   configuration = ({ descriptor }) =>
     readFile(join(descriptor.projectDir, `Pulumi.${descriptor.stack}.yaml`)),
+  appliedConfiguration,
   emptyBucket = emptyBucketForDestroy,
   makeClient = createRuntimeCloudClient,
 } = {}) {
@@ -357,6 +359,124 @@ export function createEnvironmentDependencies({
       descriptor.stack,
       "--non-interactive",
     ]);
+  const hydrateConfiguration = async (descriptor, ctx, operation) => {
+    if (!ctx.checkpoint) return;
+    const state = settledCheckpoint(ctx.checkpoint.stateExport);
+    const status = stackOutputs(ctx.checkpoint).runtimeStatus;
+    const managed =
+      state.some(
+        (row) => row.type === "pulumi-nodejs:dynamic/runtime:RuntimeRelease",
+      ) ||
+      (typeof status === "string" && status !== "unmanaged");
+    if (managed && operation !== "provision") {
+      let cached;
+      if (appliedConfiguration)
+        cached = await appliedConfiguration({ descriptor, context: ctx });
+      else {
+        const directory = await mkdtemp(
+          join(tmpdir(), "savia-applied-configuration-"),
+        );
+        const path = join(directory, "configuration.private.yaml");
+        try {
+          await command(descriptor, [
+            "config",
+            "refresh",
+            "--force",
+            "--stack",
+            ctx.qualifiedStack,
+            "--config-file",
+            path,
+            "--non-interactive",
+          ]);
+          await chmod(path, 0o600);
+          cached = JSON.parse(
+            (
+              await command(descriptor, [
+                "config",
+                "--json",
+                "--stack",
+                ctx.qualifiedStack,
+                "--config-file",
+                path,
+              ])
+            ).stdout,
+          );
+        } finally {
+          await rm(directory, { recursive: true, force: true });
+        }
+      }
+      if (
+        !cached ||
+        Array.isArray(cached) ||
+        cached[`${descriptor.project}:runtimeManaged`]?.value !== "true"
+      )
+        throw new Error(
+          "Applied managed configuration is required for this checkpoint",
+        );
+      const restored = [];
+      for (const key of [
+        "runtimeManaged",
+        "runtimeMode",
+        "runtimeProfile",
+        "adoptionManifest",
+        "runtimeRetired",
+        "deleteRuntimeData",
+        "environmentDeleted",
+        "adoptSearchIndex",
+        "artifactDirectory",
+        "artifactDigest",
+        "configDigest",
+        ...(operation === "release" ? [] : ["runtimeBootstrapProof"]),
+      ]) {
+        const item = cached[`${descriptor.project}:${key}`];
+        if (item === undefined) continue;
+        if (item.secret || typeof item.value !== "string")
+          throw new Error(
+            "Runtime configuration must contain only public metadata",
+          );
+        restored.push([key, item.value]);
+      }
+      for (const [key, value] of restored)
+        await setConfig(descriptor, key, value);
+      for (const key of [
+        "runtimeRetired",
+        "deleteRuntimeData",
+        "environmentDeleted",
+      ])
+        if (cached[`${descriptor.project}:${key}`] === undefined)
+          await setConfig(descriptor, key, false);
+      if (operation === "release")
+        await command(descriptor, [
+          "config",
+          "rm",
+          `${descriptor.project}:runtimeBootstrapProof`,
+          "--stack",
+          descriptor.stack,
+          "--non-interactive",
+        ]);
+    }
+    await setConfig(descriptor, "accountId", accountId);
+    if (descriptor.kind === "branch") {
+      const names = previewNames(descriptor.environment.slice(7));
+      for (const [key, value] of Object.entries({
+        branchSlug: names.slug,
+        authDatabaseName: names.databases.auth,
+        domainDatabaseName: names.databases.domain,
+        bucketName: names.bucket,
+        importAuthD1Id: "",
+        importDomainD1Id: "",
+        importBucketId: "",
+      }))
+        await setConfig(descriptor, key, value);
+    }
+    if (descriptor.kind === "application") {
+      await setConfig(descriptor, "environment", descriptor.environment);
+      await setConfig(descriptor, "managementProof", ctx.management);
+    }
+    await setConfig(descriptor, "importRuntimeWorkers", false);
+    if (descriptor.kind === "shared")
+      await setConfig(descriptor, "adoptExisting", false);
+  };
   const currentExport = async (descriptor) =>
     JSON.parse(
       (
@@ -576,6 +696,7 @@ export function createEnvironmentDependencies({
           release.artifactDirectory,
         ),
       };
+    await hydrateConfiguration(descriptor, ctx, operation);
     await prepareConfig(operation, descriptor, manifest, ctx, release);
     const directory = await mkdtemp(join(tmpdir(), "savia-environment-plan-")),
       planPath = resolve(args.plan ?? join(directory, "reviewed.json")),
@@ -834,6 +955,7 @@ export function createEnvironmentDependencies({
       )
         throw new Error("Saved retirement intent identity mismatch");
     }
+    await hydrateConfiguration(descriptor, ctx, "retire");
     const directory = await retirementJournal(descriptor, manifest);
     let stage = "snapshots-written";
     try {
@@ -1042,17 +1164,22 @@ export function createEnvironmentDependencies({
     },
     readManifest: async (path) => JSON.parse(await readFile(path, "utf8")),
     readSavedPlan: async (path) => JSON.parse(await readFile(path, "utf8")),
-    alreadyAdopted: async ({ context: ctx, manifest }) =>
-      !!ctx.checkpoint &&
-      manifest.resources.every((row) =>
-        ctx.checkpoint.resources.some(
-          (actual) =>
-            actual.kind === row.kind && actual.cloudId === row.cloudId,
-        ),
-      ) &&
-      ctx.checkpoint.stateExport.deployment.resources.some(
-        (row) => row.type === "pulumi-nodejs:dynamic/runtime:RuntimeRelease",
-      ),
+    alreadyAdopted: async ({ descriptor, context: ctx, manifest }) => {
+      const adopted =
+        !!ctx.checkpoint &&
+        manifest.resources.every((row) =>
+          ctx.checkpoint.resources.some(
+            (actual) =>
+              actual.kind === row.kind && actual.cloudId === row.cloudId,
+          ),
+        ) &&
+        settledCheckpoint(ctx.checkpoint.stateExport).some(
+          (row) => row.type === "pulumi-nodejs:dynamic/runtime:RuntimeRelease",
+        );
+      if (adopted)
+        await hydrateConfiguration(descriptor, ctx, "infrastructure");
+      return adopted;
+    },
     inspectReferences: (manifest) =>
       makeClient(
         {

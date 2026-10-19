@@ -1,4 +1,40 @@
 import { adoptionManifestHash } from "./environment-manifest.mjs";
+function plannedImportIdentity(state, kind, name, accountId) {
+  if (
+    state.outputs?.accountId !== undefined &&
+    state.outputs.accountId !== accountId
+  )
+    throw new Error("Import output account mismatch");
+  if (state.importID === undefined) return undefined;
+  if (
+    typeof state.importID !== "string" ||
+    !/^[a-f0-9]{32}$/.test(accountId ?? "")
+  )
+    throw new Error("Import requires a concrete account-qualified identity");
+  const parts = state.importID.split("/");
+  if (
+    parts[0] !== accountId ||
+    !parts[1] ||
+    (kind === "r2"
+      ? parts.length !== 3 || parts[1] !== name || parts[2] !== "default"
+      : !["worker", "d1", "kv", "queue"].includes(kind) || parts.length !== 2)
+  )
+    throw new Error("Import identity account or resource path mismatch");
+  const id = parts[1],
+    known = [
+      state.id,
+      state.outputs?.id,
+      ...(kind === "d1" ? [state.outputs?.uuid] : []),
+    ];
+  if (
+    known.some(
+      (value) =>
+        value !== undefined && value !== id && value !== state.importID,
+    )
+  )
+    throw new Error("Planned import disagrees with resolved physical identity");
+  return id;
+}
 export function normalizeEnvironmentPlan(raw) {
   if (!Array.isArray(raw?.steps) || !raw.changeSummary)
     throw new Error("Detailed Pulumi preview is required");
@@ -32,6 +68,7 @@ export function normalizeEnvironmentPlan(raw) {
         type: state.type,
         urn: step.urn,
         kind: kinds[state.type],
+        accountId: inputs.accountId ?? outputs.accountId,
         name:
           inputs.name ??
           inputs.queueName ??
@@ -46,6 +83,15 @@ export function normalizeEnvironmentPlan(raw) {
           : result.kind === "d1"
             ? (outputs.uuid ?? outputs.id ?? state.id)
             : state.id;
+      if (step.op === "import") {
+        const imported = plannedImportIdentity(
+          state,
+          result.kind,
+          result.name,
+          result.accountId,
+        );
+        if (imported !== undefined) result.cloudId = imported;
+      }
       if (state.type === "pulumi-nodejs:dynamic/runtime:RuntimeRelease")
         Object.assign(result, {
           type: "savia:runtime:RuntimeRelease",
