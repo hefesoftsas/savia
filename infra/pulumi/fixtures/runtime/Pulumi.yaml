@@ -1,0 +1,6 @@
+name: savia-runtime-fixture
+runtime:
+  name: nodejs
+  options:
+    typescript: true
+description: Isolated compatibility probe; never targets application resources.

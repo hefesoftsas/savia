@@ -8,9 +8,12 @@ resources by environment. They approved `preview`, `production`, `branch-*`,
 environment must preserve its versioned definition and the infrastructure needed
 to recreate it. This migration must preserve the running Preview application.
 
-Status: approved by the user on October 19, 2026. Implementation planning is the
-next stage. This document does not record a completed migration or authorize
-production deployment or further data deletion.
+Status: approved by the user on October 19, 2026; implementation started. The
+[disposable compatibility probe](2026-10-19-pulumi-runtime-probe.md) exposed a
+Durable Object retention conflict in the teardown design. Live ownership changes
+are blocked at that proof gate pending correction and verification. This document
+does not record a completed migration or authorize production deployment or
+further data deletion.
 
 ## Current evidence
 
