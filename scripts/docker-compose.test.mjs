@@ -104,6 +104,24 @@ test("connects the development Worker to the ready Mailpit service", () => {
   );
 });
 
+test("retains preview bridge fixtures without retired production profiles", async () => {
+  await assert.rejects(
+    readFile("infra/db-bridge/compose.production.yml", "utf8"),
+    { code: "ENOENT" },
+  );
+  await assert.rejects(
+    readFile("infra/pulumi/wrangler.domain-transition.jsonc", "utf8"),
+    { code: "ENOENT" },
+  );
+  const previewBridge = await readFile(
+    "infra/db-bridge/compose.preview.yml",
+    "utf8",
+  );
+  assert.match(previewBridge, /^name: savia-db-bridge-preview$/m);
+  for (const engine of ["postgres", "mysql", "mssql", "mongodb"])
+    assert.match(previewBridge, new RegExp(`^  ${engine}:$`, "m"));
+});
+
 test("installs the package manager pinned by the repository", async () => {
   const dockerfile = await readFile(".devcontainer/Dockerfile", "utf8");
   const manifest = JSON.parse(await readFile("package.json", "utf8"));

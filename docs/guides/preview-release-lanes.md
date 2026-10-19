@@ -45,11 +45,11 @@ inactive versions through the normal management process when needed.
 
 ## Full platform updates
 
-The complete lane preserves the established write pause, drain, Durable Object
-snapshot, coherent D1/R2 backup, encrypted archive, infrastructure, migration,
-Worker publication and recovery sequence. Production promotion remains separate.
-The existing production gate still requires the full **Deploy preview** job; a
-plugin-only Preview publication alone does not authorize production promotion.
+The complete lane preserves the established Preview write pause, drain, Durable
+Object snapshot, coherent D1/R2 backup, infrastructure, migration, Worker
+publication and recovery sequence. The hosted Savia production application
+deployment has been retired; full platform releases publish only to Preview.
+Plugin-only Preview publication remains separate from the full platform lane.
 
 API-based R2 downloads use four concurrent workers by default. Set
 `--r2-concurrency 1` through `--r2-concurrency 8` on `infra/pulumi/backup.mjs` to

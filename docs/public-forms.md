@@ -133,8 +133,8 @@ provider calls; start with a small budget for public quotations.
    setting is missing, the canonical URL and Savia-hosted fallback remain usable.
 5. Set `SAVIA_PUBLIC_ORIGIN` to the canonical HTTPS origin serving the admin gateway
    and public pages. Links always use this origin, even when created from an agency
-   subdomain. Configure preview and production independently.
-6. Deploy API and admin together. The production configuration generator includes
+   subdomain. Configure the active Preview environment.
+6. Deploy API and admin together to Preview. Its generated configuration includes
    the `PUBLIC_FORMS_RATE_LIMITER` binding (30 requests per minute per IP).
 
 Missing configuration fails closed. Public-host deployments reject Turnstile test

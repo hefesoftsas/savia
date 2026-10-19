@@ -1,5 +1,9 @@
 # Flows backup and restore
 
+> **Current status:** The hosted production application and its backup workflows
+> have been retired. Use the Preview stack for current operations. Production
+> capture and restore procedures below are historical reference only.
+
 The Pulumi backup tools capture the Flows D1 database and its three R2 buckets
 alongside the platform's auth/domain D1 databases and documents bucket. A
 version 2 manifest binds the files to the Pulumi stack, Cloudflare account,

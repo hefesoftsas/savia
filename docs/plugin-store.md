@@ -468,7 +468,7 @@ connector-gateway → app savia-request (modo mock) → respuesta normalizada.
 
 ## Automatic deployment of release plugin ZIPs
 
-Preview and production workflows discover every `.zip` file directly inside
+The Preview release workflow discovers every `.zip` file directly inside
 `deployment/plugins/`. Required plugins are installed/updated **and
 activated** in every existing tenant and data domain, including the implicit
 platform domain. Plugins listed under `optional` in

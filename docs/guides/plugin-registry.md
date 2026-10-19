@@ -54,6 +54,10 @@ The Worker denies all access before valid credentials exist. Use its HTTPS origi
 
 `.github/workflows/deploy-plugin-registry.yml` provides a manual independent deployment. It accepts only dispatches from `main`, checks out the selected commit explicitly, and rejects a commit superseded on `main` after tests and immediately before the credential-bearing deployment step. It uses the protected `production` GitHub environment with its existing `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN`, plus `PLUGIN_REGISTRY_CREDENTIALS`. Credentials are available only in the deployment step; installation and tests run without them. The independent Worker and bucket remain outside preview teardown. The existing `shared` stack and production backend secrets must be configured before running it; the workflow fails closed if either is missing. Preview reset and teardown workflows do not manage this bucket. Credential changes take effect independently of Savia releases.
 
+This separate shared registry deployment is retained for Preview's plugin reads.
+It does not deploy the Savia application. The hosted Savia production
+application environment and its deployment workflow are retired.
+
 ## Configure consumers
 
 Set the API Worker secret `PLUGIN_REGISTRY_TENANTS` to a JSON object. Map the exact **local tenant key**, which can differ between environments, to the registry origin and a read-only token. Optionally add `publishToken` with a separate credential authorized to publish to the same namespace. Omitting it keeps in-app publication disabled; the read token is never reused for publishing:
@@ -70,7 +74,7 @@ Set the API Worker secret `PLUGIN_REGISTRY_TENANTS` to a JSON object. Map the ex
 
 No wildcard or automatic inheritance exists. A tenant absent from this map has no shared catalog. Corresponding production/Docker tenants can point to the same namespace using different tokens. The server never sends those tokens to the browser. HTTPS is required, with HTTP allowed only for localhost/loopback development. Redirects are refused to prevent forwarding credentials.
 
-- **Workers:** `wrangler secret put PLUGIN_REGISTRY_TENANTS --config apps/api/wrangler.preview.jsonc` (use the production config for production). The existing secret upload helper also accepts this optional value.
+- **Workers:** `wrangler secret put PLUGIN_REGISTRY_TENANTS --config apps/api/wrangler.preview.jsonc`. The existing secret upload helper also accepts this optional value.
 - **Local development:** add `PLUGIN_REGISTRY_TENANTS='{"tenant:42":{...}}'` to `infra/secrets/plugin-registry.dev.env`, then restart `pnpm dev`.
 - **Docker:** add the same environment variable to the file selected by `SAVIA_ENV_FILE`, then recreate the Savia service. Both SQLite and PostgreSQL use the same registry consumer. Tokens remain server-side.
 
@@ -124,7 +128,7 @@ The shared service is deployed at `https://savia-plugin-registry.jose-douglas-de
 
 The initial publication reused 24 retained ZIPs after comparing their contents with the repository packages (the portal's earlier version differs only by its manifest version). The current portal and quotes releases were packaged from the repository. Tenant-authored packages were not shared. All six configured reader credentials (four preview tenants and two production tenants) were verified, read-only publication was rejected, and all 26 release ZIPs were downloaded with verified digests into a protected local recovery copy. Scheduled independent backups remain an operator follow-up.
 
-The environment-specific tenant maps are stored in the API Worker secrets and GitHub environment secrets. They take effect in the UI when the consumer changes pass review and deploy through the existing preview/production gates. The central service is already active independently of that rollout.
+The Preview tenant map is stored in the API Worker secret and Preview GitHub environment secret. It takes effect in the UI when the consumer changes pass review and deploy through the Preview gate. The central service is already active independently of that rollout.
 
 In the plugin IDE, the shared catalog destination is shown only when the server reports a configured publisher. Publication requires workspace extension administration, validates the ZIP before forwarding it, rejects redirects, and preserves immutable-version conflicts. Neither registry credential reaches the browser. A shared release still requires import and installation in each consuming workspace.
 
