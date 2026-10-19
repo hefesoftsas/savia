@@ -4,6 +4,18 @@ The user requested removal of the production deployment and explicitly confirmed
 permanent deletion of its data. Preview is now the only hosted Savia application
 environment. The independent shared plugin registry remains available to Preview.
 
+## Scope correction
+
+The user subsequently clarified that the intent was to destroy the deployed
+environment through Pulumi while retaining its infrastructure definitions for a
+future deployment. Removing those definitions in PR #350 exceeded that intent.
+The definitions and workflows are restored with production operations disabled;
+Preview remains the only running application environment. See
+[production rebuild](production-rebuild.md). This correction does not undo the
+cloud destruction or recover the production data and backups that were deleted
+with explicit confirmation. The repository changes below record the original
+retirement operation, not the final desired repository state.
+
 ## Infrastructure operations
 
 The original production Pulumi stack managed data resources, while Wrangler had

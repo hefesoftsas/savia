@@ -1,15 +1,17 @@
 # Savia infrastructure and disaster recovery
 
-Owner: infrastructure. Review date: 2026-10-17.
+Owner: infrastructure. Review date: 2026-10-18.
 
-> **Current status:** The standard production stack and Savia application
-> production deployment have been retired. Only the standard Preview application
-> environment is active. Production-specific configuration and procedures in
-> this historical runbook describe the former setup; preserve them as evidence,
-> but do not use them to deploy or recreate production.
+**Current status:** Production was destroyed, including its data and state backend.
+Its infrastructure definitions and deployment workflows are retained for a future
+rebuild; they are not evidence of live resources. Production operations are gated
+by `PRODUCTION_OPERATIONS_ENABLED` and remain disabled. Preview stays online.
+Start with [rebuilding the stopped production environment](production-rebuild.md).
+The adoption and recovery procedures below describe the former environment;
+its deleted IDs and checkpoint must not be reused as live resources.
 
 `infra/pulumi` is the authoritative infrastructure project for standard
-preview, temporary branch previews, the isolated plugin editor, and
+preview/production, temporary branch previews, the isolated plugin editor, and
 the shared plugin registry. Each deployment profile has its own Pulumi project
 and state; shared resources are never owned by a disposable preview stack. Pulumi owns D1, R2, optional Flows KV/Queues,
 and the protected state bucket. `worker-config.mjs` and
@@ -82,27 +84,29 @@ a code-only change as a completed live migration: provider callback registration
 and valid wildcard TLS are release prerequisites. Rollback requires the previous
 release and origin config, followed by renewed authentication.
 
-## Retired temporary hostname bridge
+## Temporary hostname bridge
 
-The historical `savia-domain-transition` bridge redirected canonical and tenant
-hosts during the former production cutover. Its source remains as historical
-evidence in `infra/pulumi/domain-transition.mjs`; its Wrangler manifest was
-removed when production was retired. No production bridge or route-transfer
-workflow remains. The details below describe the former deployment only and
-must not be used to recreate production.
+Until the production canonical cutover is ready, `savia-domain-transition`
+redirects the new canonical and tenant hosts to the currently active old hosts.
+Its source and Wrangler manifest are in `infra/pulumi/domain-transition.mjs` and
+`infra/pulumi/wrangler.domain-transition.jsonc`. It has no data bindings or
+secrets and uses temporary, noncached redirects. Authentication links restart at
+the active root and write requests are rejected rather than replayed.
 
-The former production workflow captured the versions of `savia-auth`,
-`savia-agencies`, and `savia` independently of Flows before mutations. On
-failure or cancellation it restored all three, including authentication,
-before restoring bridge routes. Its private metadata contained version IDs and
-migration tags only; restore refused account, Worker identity, or Durable Object
-lifecycle mismatches. No secrets or database contents were copied into it.
+Before any production Worker mutation, the workflow captures the current
+versions of `savia-auth`, `savia-agencies`, and `savia` independently of Flows.
+On failure or cancellation it restores all three, including authentication,
+before restoring bridge routes. The private metadata contains version IDs and
+migration tags only; restore refuses account, Worker identity, or Durable Object
+lifecycle mismatches. No secrets or database contents are copied into it.
 
-The former workflow transferred the two known new-host routes from this bridge
-to `savia` before gateway deployment. The generated gateway manifest declared
-both routes, including the canonical path route, to prevent an old/new redirect
-loop. A failed rollout restored the bridge routes. Unknown route owners failed
-closed before changes. These procedures are retired with production.
+The production workflow transfers only the two known new-host routes from this
+bridge to `savia` immediately before gateway deployment. The generated gateway
+manifest declares both routes, including the canonical path route, so the bridge
+cannot intercept the final release and create an old/new redirect loop. A failed
+rollout restores the bridge routes. Unknown route owners fail closed before any
+changes. The bridge can remain deployed without routes after a successful
+cutover; do not reattach it after production has changed its canonical origin.
 
 ## Tenant login domains
 
@@ -325,16 +329,16 @@ via `scripts/preview-destroy.mjs`, not by these scripts.
 
 ## Backups (data, not just infra)
 
-Pulumi recreates empty containers; backups capture the data. The former
-production deployment required a successful encrypted backup before IaC apply
-and migrations. Its `.github/workflows/backup-production.yml` daily capture at
+Pulumi recreates empty containers; backups capture the data. Production deploys
+now require a successful encrypted backup before IaC apply and migrations.
+`.github/workflows/backup-production.yml` also declares a daily capture at
 08:23 UTC (03:23 America/Bogota) and supports manual dispatch. It shares the
 `savia-production` concurrency lock with deployment, retains encrypted archives
 in the private `savia-production-backups` R2 bucket for 30 days, and removes
 plaintext files even on failure. Neither daily nor production-release workflows
 upload database archives to GitHub artifacts. GitHub stores execution logs and
 non-sensitive step summaries only.
-That workflow has been removed, so this historical schedule is inactive. No
+The schedule takes effect when the workflow reaches the default branch; no
 schedule or cloud deployment is created by editing these files locally.
 
 The daily workflow uses the dedicated `production-backup` GitHub environment,
@@ -502,7 +506,7 @@ completion record and cannot satisfy freshness. Run identity comes from
 `GITHUB_RUN_ID`, `GITHUB_RUN_ATTEMPT` and `GITHUB_SHA` (or `SAVIA_SOURCE_SHA`).
 The AWS CLI is required; credentials are passed only in its isolated environment.
 
-The removed `.github/workflows/check-production-backups.yml` checked R2 every six hours using
+`.github/workflows/check-production-backups.yml` checks R2 every six hours using
 the main-only `production-backup` environment without interactive approvals. It
 requires a verified daily completion record and its matching nonempty ciphertext
 to be at most 36 hours old. It paginates S3 listings, checks metadata, timestamps,

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { access, readFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 function workflow(name) {
@@ -50,27 +50,55 @@ test("plugin validation is part of the required Contract tests gate", async () =
   assert.match(contracts, /run: exit 1/);
 });
 
-test("production application deployment and backup workflows are retired", async () => {
-  for (const name of [
-    "deploy-cloudflare.yml",
-    "backup-production.yml",
-    "check-production-backups.yml",
-    "import-savia-request-variables.yml",
-  ]) {
-    await assert.rejects(
-      access(new URL(`../.github/workflows/${name}`, import.meta.url)),
-      {
-        code: "ENOENT",
-      },
-    );
-  }
+test("production deployment is limited to main and has ordered Worker stages", async () => {
+  const deploy = await workflow("deploy-cloudflare.yml");
 
-  const pulumi = await workflow("pulumi.yml");
-  assert.match(pulumi, /options: \[preview, apply\]/);
-  assert.match(pulumi, /default: preview/);
-  assert.match(pulumi, /environment: preview/);
-  assert.match(pulumi, /SAVIA_INFRA_STACK: preview/);
-  assert.doesNotMatch(pulumi, /inputs\.stack|production/);
+  assert.doesNotMatch(deploy, /workflow_run:/);
+  assert.match(deploy, /workflow_dispatch:/);
+  assert.match(deploy, /group: savia-production/);
+  assert.match(deploy, /verify:[\s\S]*?uses: \.\/\.github\/workflows\/ci\.yml/);
+  assert.match(deploy, /needs: preview-check/);
+  assert.match(deploy, /needs\.verify\.result == 'success'/);
+  assert.match(deploy, /ref: \$\{\{ github\.sha \}\}/);
+  assert.match(deploy, /deploy:\n\s+needs: verify/);
+  assert.match(deploy, /git ls-remote --exit-code origin refs\/heads\/main/);
+  assert.doesNotMatch(deploy, /pnpm test && pnpm run typecheck/);
+  assert.match(
+    deploy,
+    /runs-on: ubuntu-24\.04\n\s+environment: production\n\s+env:\n\s+PNPM_CONFIG_STRICT_DEP_BUILDS: "false"\n\s+SAVIA_BACKUP_ENVIRONMENT: production\n\s+steps:/,
+  );
+  assert.match(deploy, /savia-auth/);
+  assert.match(deploy, /- name: Deploy private Savia FastMCP/);
+  assert.match(deploy, /workingDirectory: apps\/mcp/);
+  assert.match(deploy, /name: Deploy private QuickJS hook executor/);
+  assert.match(deploy, /workingDirectory: apps\/hook-executor/);
+  assert.match(deploy, /SAVIA_MCP_SHARED_SECRET/);
+  assert.match(
+    deploy,
+    /- name: Apply Savia domain migrations\n\s+run: node scripts\/apply-d1-migrations\.mjs/,
+  );
+  assert.match(deploy, /savia-agencies/);
+  assert.match(
+    deploy,
+    /- name: Deploy private Savia request[\s\S]*?workingDirectory: apps\/savia-request/,
+  );
+  assert.match(
+    deploy,
+    /Apply Savia domain migrations[\s\S]*?Deploy private QuickJS hook executor[\s\S]*?Deploy savia-agencies[\s\S]*?Deploy savia-auth[\s\S]*?Deploy private Savia request/,
+  );
+  assert.match(deploy, /upload-cloudflare-secrets\.mjs/);
+  assert.doesNotMatch(deploy, /\n\s+secrets:/);
+  assert.match(deploy, /ASSISTANT_SETTINGS_ENCRYPTION_KEY/);
+  assert.match(deploy, /NANGO_API_KEY/);
+  assert.match(deploy, /deployments status --name savia/);
+  assert.match(deploy, /CLOUDFLARE_API_TOKEN/);
+  assert.match(deploy, /BETTER_AUTH_SECRET/);
+  assert.match(
+    deploy,
+    /- name: Deploy savia gateway[\s\S]*?command: --cwd \.\.\/admin deploy --config wrangler\.production\.jsonc[\s\S]*?workingDirectory: apps\/api/,
+  );
+  assert.doesNotMatch(deploy, /branches:\s*\["\*"\]/);
+  assert.doesNotMatch(deploy, /curl[^\n]*savia\.app\.hefesoft\.com\/health/);
 });
 
 test("QuickJS PR previews require an explicit label on same-repository main PRs", async () => {
@@ -103,6 +131,43 @@ test("QuickJS PR previews require an explicit label on same-repository main PRs"
   assert.doesNotMatch(preview, /cleanup:|preview-destroy\.mjs/);
 });
 
+test("production import is disabled unless explicitly enabled", async () => {
+  const source = await workflow("import-savia-request-variables.yml");
+  assert.match(source, /vars\.PRODUCTION_OPERATIONS_ENABLED == 'true'/);
+  assert.match(source, /github\.ref == 'refs\/heads\/main'/);
+  assert.match(source, /environment: production/);
+});
+
+test("production operations fail closed behind an explicit repository variable", async () => {
+  const deploy = await workflow("deploy-cloudflare.yml");
+  const backup = await workflow("backup-production.yml");
+  const freshness = await workflow("check-production-backups.yml");
+  const pulumi = await workflow("pulumi.yml");
+
+  assert.match(
+    deploy,
+    /if: \$\{\{ vars\.PRODUCTION_OPERATIONS_ENABLED == 'true' && github\.event_name == 'workflow_dispatch' && github\.ref == 'refs\/heads\/main'/,
+  );
+  const deployJob = deploy.slice(deploy.indexOf("\n  deploy:"));
+  assert.match(
+    deployJob,
+    /if: \$\{\{ vars\.PRODUCTION_OPERATIONS_ENABLED == 'true' && github\.event_name == 'workflow_dispatch' && github\.ref == 'refs\/heads\/main'/,
+  );
+  assert.match(
+    backup,
+    /if: \$\{\{ vars\.PRODUCTION_OPERATIONS_ENABLED == 'true' && github\.ref == 'refs\/heads\/main' \}\}/,
+  );
+  assert.match(
+    freshness,
+    /if: \$\{\{ vars\.PRODUCTION_OPERATIONS_ENABLED == 'true' && github\.ref == 'refs\/heads\/main' \}\}/,
+  );
+  assert.match(
+    pulumi,
+    /if: \$\{\{ github\.event_name == 'workflow_dispatch' && \(inputs\.stack == 'preview' \|\| \(inputs\.stack == 'production' && vars\.PRODUCTION_OPERATIONS_ENABLED == 'true'\)\) \}\}/,
+  );
+  assert.match(pulumi, /options: \[preview, production\]/);
+});
+
 test("preview deploys only successful same-repository main CI and uses its own environment", async () => {
   const preview = await workflow("deploy-preview.yml");
   assert.match(preview, /workflow_run:/);
@@ -127,7 +192,7 @@ test("preview deploys only successful same-repository main CI and uses its own e
 });
 
 test("release plugins deploy to all workspaces using existing environment credentials", async () => {
-  for (const name of ["deploy-preview.yml"]) {
+  for (const name of ["deploy-cloudflare.yml", "deploy-preview.yml"]) {
     const source = await workflow(name);
     assert.ok(
       source.indexOf("name: Deploy savia gateway") <
@@ -162,7 +227,7 @@ test("registry deployment exposes Cloudflare credentials only to the deploy step
 });
 
 test("environment deployments forward the private registry tenant map", async () => {
-  for (const name of ["deploy-preview.yml"]) {
+  for (const name of ["deploy-preview.yml", "deploy-cloudflare.yml"]) {
     const source = await workflow(name);
     const upload = source.slice(
       source.indexOf("name: Upload secrets"),
@@ -238,6 +303,12 @@ test("Preview lanes are exclusive and plugin health stays within rollback protec
     pluginJob,
     /Verify existing Preview remains healthy|pulumi up|backup\.mjs|apply-d1-migrations/,
   );
+});
+
+test("production promotion still requires the full verified Preview job", async () => {
+  const production = await workflow("deploy-cloudflare.yml");
+  assert.match(production, /Deploy preview/);
+  assert.doesNotMatch(production, /Publish changed Preview plugins/);
 });
 
 test("manual previews validate trusted source before executing repository code", async () => {

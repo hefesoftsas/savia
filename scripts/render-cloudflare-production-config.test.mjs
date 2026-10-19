@@ -462,30 +462,6 @@ test("preview isolates worker names, bindings, origins, storage and schedules", 
   }
 });
 
-test("checked-in admin gateway config targets preview resources only", async () => {
-  const source = await readFile(
-    new URL("../apps/admin/wrangler.jsonc", import.meta.url),
-    "utf8",
-  );
-  const admin = JSON.parse(source.replace(/,\s*([}\]])/g, "$1"));
-
-  assert.equal(admin.name, "savia-preview");
-  assert.equal(admin.vars.CANONICAL_HOST, "savia-preview.hefesoft.com");
-  assert.deepEqual(admin.routes, [
-    { custom_domain: true, pattern: "savia-preview.hefesoft.com" },
-    {
-      pattern: "*.savia-preview.hefesoft.com/*",
-      zone_name: "hefesoft.com",
-    },
-  ]);
-  assert.deepEqual(admin.services, [
-    { binding: "API", service: "savia-agencies-preview" },
-  ]);
-  assert.deepEqual(admin.r2_buckets, [
-    { binding: "OFFICE_RUNTIME", bucket_name: "savia-documents-preview" },
-  ]);
-});
-
 test("preview refuses production storage defaults and unknown environments", async () => {
   const base = {
     authD1Id: "auth",
@@ -636,4 +612,18 @@ test("allows public MCP Workers on the API worker's own Cloudflare zone", async 
   } finally {
     await rm(outputRoot, { recursive: true, force: true });
   }
+});
+
+// The stopped environment remains rebuildable at its canonical hostname.
+test("retains the production gateway definition without old-host redirects", async () => {
+  const source = await readFile(
+    new URL("../apps/admin/wrangler.jsonc", import.meta.url),
+    "utf8",
+  );
+  assert.match(source, /"name": "savia"/);
+  assert.match(source, /"CANONICAL_HOST": "savia\.hefesoft\.com"/);
+  assert.match(source, /"service": "savia-agencies"/);
+  assert.match(source, /"bucket_name": "savia-documents"/);
+  assert.doesNotMatch(source, /savia\.app\.hefesoft\.com/);
+  assert.doesNotMatch(source, /savia-preview/);
 });

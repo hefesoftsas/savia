@@ -9,6 +9,12 @@ on:
       - .github/workflows/pulumi.yml
   workflow_dispatch:
     inputs:
+      stack:
+        description: Stack to preview (preview or production)
+        required: true
+        type: choice
+        options: [preview, production]
+        default: preview
       operation:
         description: Preview or apply the saved infrastructure plan
         type: choice
@@ -58,12 +64,12 @@ jobs:
   preview:
     name: Pulumi preview
     needs: [unit, runtime-compatibility]
-    if: ${{ github.event_name == 'workflow_dispatch' }}
+    if: ${{ github.event_name == 'workflow_dispatch' && (inputs.stack == 'preview' || (inputs.stack == 'production' && vars.PRODUCTION_OPERATIONS_ENABLED == 'true')) }}
     runs-on: ubuntu-24.04
     concurrency:
-      group: savia-preview
+      group: savia-${{ inputs.stack }}
       cancel-in-progress: false
-    environment: preview
+    environment: ${{ inputs.stack }}
     env:
       PULUMI_BACKEND_URL: ${{ secrets.PULUMI_BACKEND_URL }}
       PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
@@ -99,6 +105,6 @@ jobs:
 
       - name: Review or apply the infrastructure plan
         env:
-          SAVIA_INFRA_STACK: preview
+          SAVIA_INFRA_STACK: ${{ inputs.stack }}
           SAVIA_INFRA_OPERATION: ${{ inputs.operation }}
         run: node infra/pulumi/deploy-stack.mjs --stack "$SAVIA_INFRA_STACK" "--$SAVIA_INFRA_OPERATION"
