@@ -5,6 +5,7 @@ import {
   runEnvironmentOperation,
 } from "./environment.mjs";
 import { stateBackendUrl } from "./naming.mjs";
+import { adoptionManifestHash } from "./environment-manifest.mjs";
 const accountId = "a".repeat(32);
 const manifest = {
   version: 1,
@@ -87,6 +88,42 @@ test("lifecycle requires exact targets and rejects wildcard mutations", () => {
       "--apply",
     ]).deleteData,
     false,
+  );
+  assert.deepEqual(
+    parseEnvironmentArgs([
+      "apply",
+      "--environment",
+      "production",
+      "--provision",
+      "--plan",
+      "/saved-provision.json",
+      "--apply",
+    ]),
+    {
+      action: "apply",
+      environment: "production",
+      all: false,
+      manifest: undefined,
+      artifact: undefined,
+      plan: "/saved-provision.json",
+      out: undefined,
+      apply: true,
+      deleteData: false,
+      provision: true,
+    },
+  );
+  assert.throws(() =>
+    parseEnvironmentArgs([
+      "apply",
+      "--environment",
+      "production",
+      "--provision",
+      "--artifact",
+      "/release",
+      "--plan",
+      "/saved.json",
+      "--apply",
+    ]),
   );
 });
 test("read-only production inventory reports absence without initializing it", async () => {
@@ -242,7 +279,10 @@ test("explicit infrastructure provisioning cannot remove an active or retained r
     ]),
     deps = dependencies();
   assert.equal(args.provision, true);
-  await assert.rejects(runEnvironmentOperation(args, deps), /runtime|adopt/i);
+  await assert.rejects(
+    runEnvironmentOperation(args, deps),
+    /runtime|adopt|empty environment/i,
+  );
   assert.deepEqual(deps.calls, []);
   deps.inventory = async () => ({
     ...manifest,
@@ -262,4 +302,70 @@ test("explicit infrastructure provisioning cannot remove an active or retained r
       "--apply",
     ]),
   );
+});
+
+test("saved provision plan applies only when explicitly selected and binds the empty manifest", async () => {
+  const deps = dependencies();
+  const emptyProduction = {
+    version: 1,
+    accountId,
+    environment: "production",
+    project: "savia-cloudflare",
+    stack: "production",
+    profile: { enabledWorkers: [] },
+    resources: [],
+  };
+  deps.env = {
+    ...deps.env,
+    PRODUCTION_OPERATIONS_ENABLED: "true",
+    GITHUB_REF: "refs/heads/main",
+  };
+  deps.inventory = async () => ({
+    ...emptyProduction,
+    status: "defined-not-deployed",
+  });
+  const savedProvision = {
+    accountId,
+    environment: "production",
+    operation: "provision",
+    manifest: emptyProduction,
+    manifestHash: adoptionManifestHash(emptyProduction),
+  };
+  let appliedPlan;
+  deps.readSavedPlan = async () => savedProvision;
+  deps.applyPlan = async (plan) => {
+    appliedPlan = plan;
+    deps.calls.push("apply");
+  };
+  const apply = parseEnvironmentArgs([
+    "apply",
+    "--environment",
+    "production",
+    "--provision",
+    "--plan",
+    "/saved-provision.json",
+    "--apply",
+  ]);
+  await runEnvironmentOperation(apply, deps);
+  assert.deepEqual(deps.calls, ["apply"]);
+  assert.equal(appliedPlan, savedProvision);
+
+  deps.calls.length = 0;
+  await assert.rejects(
+    runEnvironmentOperation(
+      parseEnvironmentArgs([
+        "apply",
+        "--environment",
+        "production",
+        "--plan",
+        "/saved-provision.json",
+        "--artifact",
+        "/release",
+        "--apply",
+      ]),
+      deps,
+    ),
+    /identity|operation|provision/i,
+  );
+  assert.deepEqual(deps.calls, []);
 });

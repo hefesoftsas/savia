@@ -97,7 +97,18 @@ test("production managed releases retain private R2 recovery before migration, w
     new URL("../../.github/workflows/deploy-cloudflare.yml", import.meta.url),
     "utf8",
   );
-  assert.doesNotMatch(source, /actions\/upload-artifact/);
+  assert.equal(
+    (source.match(/uses: actions\/upload-artifact/g) ?? []).length,
+    1,
+  );
+  assert.match(
+    source,
+    /name: production-bootstrap-custody\n\s+path: \$\{\{ runner.temp \}\}\/production-bootstrap-custody\.enc/,
+  );
+  assert.match(
+    source,
+    /encrypt-flows-backup\.mjs --action encrypt --input.*production-bootstrap-custody\.tar\.gz.*--output.*production-bootstrap-custody\.enc/,
+  );
   assert.match(source, /R2_BACKUP_ACCESS_KEY_ID:/);
   assert.match(source, /R2_BACKUP_SECRET_ACCESS_KEY:/);
   const { standardReleaseCommands } =

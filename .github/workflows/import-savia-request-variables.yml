@@ -20,7 +20,7 @@ jobs:
     if: ${{ vars.PRODUCTION_OPERATIONS_ENABLED == 'true' && github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
-    environment: production
+    environment: production-app
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

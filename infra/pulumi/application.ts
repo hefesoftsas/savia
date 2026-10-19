@@ -111,10 +111,10 @@ const productionBackupsLifecycle = productionBackups
       "production-backups-lifecycle",
       {
         accountId,
-        bucketName: productionBackups.name,
+        bucketName: names.backupBucket!,
         rules: [productionBackupLifecycleRule()],
       },
-      stateOpts,
+      { ...stateOpts, dependsOn: productionBackups },
     )
   : null;
 if (productionBackups) {
@@ -122,10 +122,10 @@ if (productionBackups) {
     "production-backups-public-access",
     {
       accountId,
-      bucketName: productionBackups.name,
+      bucketName: names.backupBucket!,
       enabled: false,
     },
-    stateOpts,
+    { ...stateOpts, dependsOn: productionBackups },
   );
 }
 

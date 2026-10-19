@@ -11,8 +11,7 @@ config:
   savia-cloudflare:documentsBucket: savia-documents
   savia-cloudflare:authDatabaseName: savia-auth-local-canonical-20260913-v2
   savia-cloudflare:domainDatabaseName: savia-agencies-local-canonical-20260913-v2
-  savia-cloudflare:stateBucket: savia-pulumi-state
+  savia-cloudflare:stateBucket: savia-pulumi-state-preview
   savia-cloudflare:backupBucket: savia-production-backups
   savia-cloudflare:flowsEnabled: "false"
   savia-cloudflare:flowsExecutionEnabled: "false"
-encryptionsalt: v1:fDSS20NCH60=:v1:8ItBuX966nkME5rI:GWjrCv4OCVypa6kmK1sJK4Ix9GmXyQ==

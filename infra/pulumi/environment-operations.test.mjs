@@ -1,6 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { verifySavedEnvironmentPlan } from "./environment-operations.mjs";
+import {
+  assertProvisionPlan,
+  verifySavedEnvironmentPlan,
+} from "./environment-operations.mjs";
+import { productionBackupLifecycleRule } from "./naming.mjs";
+const accountId = "a".repeat(32);
 const plan = {
   accountId: "a".repeat(32),
   environment: "preview",
@@ -19,6 +24,167 @@ test("saved release plans bind artifact, checkpoint, account, source revision an
       () => verifySavedEnvironmentPlan(plan, { ...actual, [key]: "changed" }),
       /saved|plan/i,
     );
+});
+
+test("first-install provision plans allow only persistence creates in the selected stack", () => {
+  const plan = {
+    steps: [
+      {
+        op: "create",
+        type: "pulumi:providers:cloudflare",
+        urn: "urn:pulumi:production::savia-cloudflare::pulumi:providers:cloudflare::default_7_0_0",
+      },
+      {
+        op: "update",
+        type: "pulumi:pulumi:Stack",
+        urn: "urn:pulumi:production::savia-cloudflare::pulumi:pulumi:Stack::savia-cloudflare-production",
+      },
+      {
+        op: "create",
+        kind: "d1",
+        type: "cloudflare:index/d1Database:D1Database",
+        accountId,
+        name: "savia-auth-local-canonical-20260913-v2",
+        urn: "urn:pulumi:production::savia-cloudflare::cloudflare:index/d1Database:D1Database::auth-db",
+      },
+      {
+        op: "create",
+        kind: "r2",
+        type: "cloudflare:index/r2Bucket:R2Bucket",
+        accountId,
+        name: "savia-documents",
+        urn: "urn:pulumi:production::savia-cloudflare::cloudflare:index/r2Bucket:R2Bucket::documents",
+      },
+      {
+        op: "create",
+        kind: "r2",
+        type: "cloudflare:index/r2Bucket:R2Bucket",
+        accountId,
+        name: "savia-production-backups",
+        storageClass: "Standard",
+        urn: "urn:pulumi:production::savia-cloudflare::cloudflare:index/r2Bucket:R2Bucket::production-backups",
+      },
+      {
+        op: "create",
+        type: "cloudflare:index/r2BucketLifecycle:R2BucketLifecycle",
+        accountId,
+        bucketName: "savia-production-backups",
+        rules: [
+          {
+            id: "expire-production-backups-after-30-days",
+            enabled: true,
+            conditions: { prefix: "production/" },
+            deleteObjectsTransition: {
+              condition: { type: "Age", maxAge: 30 * 24 * 60 * 60 },
+            },
+          },
+        ],
+        urn: "urn:pulumi:production::savia-cloudflare::cloudflare:index/r2BucketLifecycle:R2BucketLifecycle::production-backups-lifecycle",
+      },
+      {
+        op: "create",
+        type: "cloudflare:index/r2ManagedDomain:R2ManagedDomain",
+        accountId,
+        bucketName: "savia-production-backups",
+        enabled: false,
+        urn: "urn:pulumi:production::savia-cloudflare::cloudflare:index/r2ManagedDomain:R2ManagedDomain::production-backups-public-access",
+      },
+    ],
+  };
+  assert.equal(
+    assertProvisionPlan(plan, "production", {
+      accountId,
+      profile: { flowsEnabled: false },
+    }),
+    true,
+  );
+  for (const badStep of [
+    { ...plan.steps[2], op: "delete" },
+    { ...plan.steps[2], op: "update" },
+    {
+      op: "create",
+      kind: "worker",
+      name: "savia",
+      urn: "urn:pulumi:production::savia-cloudflare::cloudflare:index/worker:Worker::gateway",
+    },
+    {
+      op: "create",
+      kind: "r2",
+      name: "savia-pulumi-state-preview",
+      urn: "urn:pulumi:production::savia-cloudflare::cloudflare:index/r2Bucket:R2Bucket::state-backend",
+    },
+    {
+      ...plan.steps[2],
+      urn: "urn:pulumi:preview::savia-cloudflare::cloudflare:index/d1Database:D1Database::auth-db",
+    },
+    {
+      ...plan.steps[2],
+      name: "savia-auth-preview",
+    },
+    {
+      ...plan.steps[3],
+      name: "unrelated-data-bucket",
+    },
+    {
+      ...plan.steps[0],
+      op: "update",
+    },
+    {
+      ...plan.steps[2],
+      accountId: "b".repeat(32),
+    },
+  ]) {
+    assert.throws(() =>
+      assertProvisionPlan({ steps: [badStep] }, "production", {
+        accountId,
+        profile: { flowsEnabled: false },
+      }),
+    );
+  }
+  assert.throws(() =>
+    assertProvisionPlan(
+      {
+        steps: plan.steps.map((step, index) =>
+          index === 5 ? { ...step, bucketName: "savia-documents" } : step,
+        ),
+      },
+      "production",
+      { accountId, profile: { flowsEnabled: false } },
+    ),
+  );
+  for (const [index, changes] of [
+    [4, { storageClass: "InfrequentAccess" }],
+    [5, { rules: [{ ...productionBackupLifecycleRule(), enabled: false }] }],
+    [
+      5,
+      {
+        rules: [
+          { ...productionBackupLifecycleRule(), conditions: { prefix: "" } },
+        ],
+      },
+    ],
+    [
+      5,
+      {
+        rules: [{ ...productionBackupLifecycleRule(), id: "unexpected-rule" }],
+      },
+    ],
+    [6, { enabled: true }],
+    [5, { bucketName: "savia-documents" }],
+    [6, { bucketName: "savia-documents" }],
+  ]) {
+    assert.throws(() =>
+      assertProvisionPlan(
+        {
+          steps: plan.steps.map((step, stepIndex) =>
+            stepIndex === index ? { ...step, ...changes } : step,
+          ),
+        },
+        "production",
+        { accountId, profile: { flowsEnabled: false } },
+      ),
+    );
+  }
 });
 
 test("concrete adoption saves and applies the guarded plan, then clears one-time Worker imports", async () => {

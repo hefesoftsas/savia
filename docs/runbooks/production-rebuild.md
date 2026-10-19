@@ -25,6 +25,53 @@ infrastructure updates.
 
 ## Future rebuild sequence
 
+The application uses the protected GitHub environment `production-app`; the
+existing `production` environment and its seven secrets remain dedicated to the
+shared plugin registry. Configure `production-app` with the same required
+reviewer and `main` branch restriction before enabling a release. The
+`production-backup` environment is `main`-only and has no recurring interactive
+approval, so its scheduled recovery jobs can run unattended with restricted
+backup credentials. Never copy Preview application encryption keys into a fresh
+production installation.
+
+The application stack uses the existing `savia-pulumi-state-preview` bucket,
+owned and protected by the independent `savia-management/management` stack.
+Its historical bucket name does not make it Preview application storage. Each
+environment has its own qualified checkpoint; rebuilding production creates
+neither another backend bucket nor a new owner for the current bucket.
+
+For the first deployment, dispatch **Deploy Savia production** on reviewed
+`main` with `initialize_environment=true`. This remains behind the normal
+production operations flag, exact-commit Preview promotion proof, CI, and
+`production-app` reviewer gate. The initialization helper checks mandatory
+application/backup credentials before planning, accepts only the six declared
+production persistence creations, and applies that exact saved plan. A
+nonempty manifest or any extra mutation fails closed. The ordinary readiness
+preflight still runs after persistence creation and before runtime publication.
+Provisioning and the managed release share one runner so the create-only
+bootstrap proof stays in private local configuration until consumed.
+Before any runtime publication, the workflow also retains the new configuration,
+exact provision plan and checkpoint as the seven-day encrypted artifact
+`production-bootstrap-custody`, using `SAVIA_BACKUP_KEY`. This contains bootstrap
+configuration rather than application data; application recovery archives remain
+in private R2. Download this custody after the first run and keep it with the
+private operation record, including after a failed initialization. Never upload
+plaintext configuration/checkpoints or resume from a fresh checkout without
+reconciling the preserved proof and current state.
+
+The equivalent lifecycle commands are:
+
+```sh
+node infra/pulumi/environment.mjs plan --environment production --provision --plan /secure/production-provision.json
+# Inspect the saved plan before applying it; no artifact is used for persistence.
+node infra/pulumi/environment.mjs apply --environment production --provision --plan /secure/production-provision.json --apply
+```
+
+Use the default `initialize_environment=false` for subsequent deployments.
+Initialization is not a repair path for a partial first deployment. Preserve the
+private configuration, checkpoint, and operation evidence and reconcile the
+exact state before retrying; do not delete data or mint another bootstrap proof.
+
 This is an operator checklist for a separately authorized rebuild, not an
 automatic operation performed by this change.
 

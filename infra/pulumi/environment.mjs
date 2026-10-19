@@ -45,12 +45,23 @@ export function parseEnvironmentArgs(argv) {
     throw new Error("Wildcard mutations are forbidden");
   if (["adopt", "destroy"].includes(action) && !values["--manifest"])
     throw new Error("Reviewed --manifest is required");
+  if (action === "apply") {
+    const provision = flags.has("--provision");
+    if (
+      !values["--plan"] ||
+      !flags.has("--apply") ||
+      (provision ? values["--artifact"] : !values["--artifact"])
+    )
+      throw new Error(
+        provision
+          ? "Provision apply requires --plan and --apply without --artifact"
+          : "Release apply requires --artifact, --plan and --apply",
+      );
+  }
   if (
-    action === "apply" &&
-    (!values["--artifact"] || !values["--plan"] || !flags.has("--apply"))
+    flags.has("--provision") &&
+    (!["plan", "apply"].includes(action) || values["--artifact"])
   )
-    throw new Error("Apply requires --artifact, --plan and --apply");
-  if (flags.has("--provision") && (action !== "plan" || values["--artifact"]))
     throw new Error("--provision is an infrastructure-only plan option");
   if (flags.has("--delete-data") && action !== "destroy")
     throw new Error("--delete-data is destroy-only");
@@ -129,7 +140,7 @@ export async function runEnvironmentOperation(args, deps) {
     saved &&
     (saved.accountId !== accountId ||
       saved.environment !== args.environment ||
-      saved.operation !== "release")
+      saved.operation !== (args.provision ? "provision" : "release"))
   )
     throw new Error("Saved plan identity mismatch");
   const raw = args.manifest
@@ -155,6 +166,10 @@ export async function runEnvironmentOperation(args, deps) {
     checkpoints: context.checkpoints,
   });
   reviewedLiveIdentity(manifest, live);
+  if (args.provision && manifest.resources.length)
+    throw new Error(
+      "Infrastructure provisioning requires an empty environment manifest",
+    );
   const manifestHash = adoptionManifestHash(manifest);
   if (args.action === "destroy") {
     const refs = await deps.inspectReferences(manifest);

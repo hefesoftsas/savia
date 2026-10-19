@@ -13,8 +13,12 @@ import { join, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { assertBackendConfigured, assertSafePlan } from "./deploy-stack.mjs";
 import { renderEnvFromOutputs } from "./outputs.mjs";
-import { assertAccountId, stateBackendUrl } from "./naming.mjs";
-import { resolveEnvironment } from "./environments.mjs";
+import {
+  assertAccountId,
+  productionBackupLifecycleRule,
+  stateBackendUrl,
+} from "./naming.mjs";
+import { resolveEnvironment, resourcePolicy } from "./environments.mjs";
 import { inventoryEnvironment } from "./environment-inventory.mjs";
 import {
   validateAdoptionManifest,
@@ -50,6 +54,16 @@ const hash = (value) =>
         : JSON.stringify(value),
     )
     .digest("hex");
+const canonicalJson = (value) =>
+  JSON.stringify(value, (_key, item) =>
+    item && typeof item === "object" && !Array.isArray(item)
+      ? Object.fromEntries(
+          Object.entries(item).sort(([left], [right]) =>
+            left.localeCompare(right),
+          ),
+        )
+      : item,
+  );
 export async function writePrivateJson(path, value) {
   await mkdir(dirname(path), { recursive: true, mode: 0o700 });
   await writeFile(path, JSON.stringify(value, null, 2), {
@@ -87,6 +101,112 @@ export function verifySavedEnvironmentPlan(plan, actual) {
   ])
     if (plan[key] !== actual[key])
       throw new Error(`Saved plan no longer matches ${key}`);
+  return true;
+}
+export function assertProvisionPlan(
+  plan,
+  environment,
+  { accountId, profile = {} } = {},
+) {
+  const descriptor = resolveEnvironment(environment),
+    stackPrefix = `urn:pulumi:${descriptor.stack}::${descriptor.project}::`,
+    selectedProfile = {
+      ...profile,
+      ...(environment === "production" && !profile.databaseNames
+        ? {
+            databaseNames: {
+              auth: "savia-auth-local-canonical-20260913-v2",
+              domain: "savia-agencies-local-canonical-20260913-v2",
+            },
+          }
+        : {}),
+    },
+    policy = resourcePolicy(environment, selectedProfile),
+    persistenceTypes = {
+      d1: "cloudflare:index/d1Database:D1Database",
+      r2: "cloudflare:index/r2Bucket:R2Bucket",
+      kv: "cloudflare:index/workersKvNamespace:WorkersKvNamespace",
+      queue: "cloudflare:index/queue:Queue",
+      vectorize: "savia:vectorize:Index",
+    },
+    protectedBackupTypes = new Map([
+      [
+        "cloudflare:index/r2BucketLifecycle:R2BucketLifecycle",
+        "production-backups-lifecycle",
+      ],
+      [
+        "cloudflare:index/r2ManagedDomain:R2ManagedDomain",
+        "production-backups-public-access",
+      ],
+    ]),
+    unchanged = new Set(["same", "read", "refresh", "read-discard"]);
+  if (!Array.isArray(plan?.steps))
+    throw new Error("First-install persistence plan is required");
+  const hasBackupPolicy = plan.steps.some((step) =>
+      protectedBackupTypes.has(step.type),
+    ),
+    hasProductionBackupBucket = plan.steps.some(
+      (step) =>
+        step.type === "cloudflare:index/r2Bucket:R2Bucket" &&
+        step.name === "savia-production-backups" &&
+        step.accountId === accountId &&
+        step.storageClass === "Standard",
+    );
+  if (
+    hasBackupPolicy &&
+    descriptor.environment === "production" &&
+    !hasProductionBackupBucket
+  )
+    throw new Error(
+      "Production backup policy has no matching protected bucket",
+    );
+  for (const step of plan.steps) {
+    if (typeof step.urn !== "string" || !step.urn.startsWith(stackPrefix))
+      throw new Error("Provision plan contains a resource outside its stack");
+    if (step.type?.startsWith("pulumi:providers:")) {
+      if (
+        step.type !== "pulumi:providers:cloudflare" ||
+        !["create", "same", "read", "refresh", "read-discard"].includes(step.op)
+      )
+        throw new Error("Provision plan contains an unsafe provider operation");
+      continue;
+    }
+    if (step.type === "pulumi:pulumi:Stack") {
+      if (!["create", "update", "same"].includes(step.op))
+        throw new Error("Provision plan contains an unsafe stack operation");
+      continue;
+    }
+    const backupLogicalName = protectedBackupTypes.get(step.type);
+    if (
+      backupLogicalName &&
+      descriptor.environment === "production" &&
+      step.urn.endsWith(`::${backupLogicalName}`) &&
+      accountId &&
+      step.accountId === accountId &&
+      step.bucketName === "savia-production-backups" &&
+      (step.type !== "cloudflare:index/r2BucketLifecycle:R2BucketLifecycle" ||
+        canonicalJson(step.rules) ===
+          canonicalJson([productionBackupLifecycleRule()])) &&
+      (step.type !== "cloudflare:index/r2ManagedDomain:R2ManagedDomain" ||
+        step.enabled === false) &&
+      (step.op === "create" || unchanged.has(step.op))
+    )
+      continue;
+    if (
+      !Object.hasOwn(persistenceTypes, step.kind) ||
+      step.type !== persistenceTypes[step.kind] ||
+      !accountId ||
+      step.accountId !== accountId ||
+      !policy.matches({ kind: step.kind, name: step.name }) ||
+      (environment === "production" &&
+        selectedProfile.flowsEnabled !== true &&
+        step.name.startsWith("savia-flows")) ||
+      ["savia-pulumi-state-preview", "savia-pulumi-state"].includes(step.name)
+    )
+      throw new Error("Provision plan contains a non-persistence resource");
+    if (step.op === "create" || unchanged.has(step.op)) continue;
+    throw new Error("Provision plan may create persistence only");
+  }
   return true;
 }
 function stackOutputs(checkpoint) {
@@ -720,7 +840,44 @@ export function createEnvironmentDependencies({
     await chmod(pulumiPlanPath, 0o600);
     const normalized = normalizeEnvironmentPlan(raw);
     if (operation === "adopt") assertAdoptionPlan(normalized, manifest);
-    else assertSafePlan(normalized);
+    else if (operation === "provision") {
+      if (manifest.resources.length)
+        throw new Error("Provisioning requires an empty environment manifest");
+      assertSafePlan(normalized);
+      normalized.steps = normalized.steps.map((step, index) => {
+        const source = raw.steps[index],
+          state = source?.newState ?? source?.oldState ?? {};
+        if (
+          operation !== "provision" ||
+          ![
+            "cloudflare:index/r2Bucket:R2Bucket",
+            "cloudflare:index/r2BucketLifecycle:R2BucketLifecycle",
+            "cloudflare:index/r2ManagedDomain:R2ManagedDomain",
+          ].includes(step.type)
+        )
+          return step;
+        const inputs = state.inputs ?? {},
+          outputs = state.outputs ?? {};
+        return {
+          ...step,
+          ...(step.type === "cloudflare:index/r2Bucket:R2Bucket"
+            ? {
+                storageClass: inputs.storageClass ?? outputs.storageClass,
+              }
+            : {
+                bucketName: inputs.bucketName ?? outputs.bucketName,
+                ...(step.type ===
+                "cloudflare:index/r2BucketLifecycle:R2BucketLifecycle"
+                  ? { rules: inputs.rules ?? outputs.rules }
+                  : { enabled: inputs.enabled ?? outputs.enabled }),
+              }),
+        };
+      });
+      assertProvisionPlan(normalized, descriptor.environment, {
+        accountId,
+        profile: manifest.profile,
+      });
+    } else assertSafePlan(normalized);
     const plan = {
       version: 1,
       accountId,
@@ -769,7 +926,13 @@ export function createEnvironmentDependencies({
     if (plan.manifestHash !== adoptionManifestHash(manifest))
       throw new Error("Saved plan manifest changed");
     if (plan.operation === "adopt") assertAdoptionPlan(plan, manifest);
-    else assertSafePlan(plan);
+    else if (plan.operation === "provision") {
+      assertSafePlan(plan);
+      assertProvisionPlan(plan, descriptor.environment, {
+        accountId,
+        profile: manifest.profile,
+      });
+    } else assertSafePlan(plan);
     validateManagementOutputs(ctx.management, {
       accountId,
       backendUrl: ctx.backendUrl,
