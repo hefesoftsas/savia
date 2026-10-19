@@ -306,6 +306,7 @@ export function assertAdoptionPlan(plan, manifest) {
       continue;
     if (
       step.op === "import" &&
+      step.accountId === manifest.accountId &&
       manifest.resources.some(
         (r) =>
           r.kind === step.kind &&

@@ -124,7 +124,7 @@ test("concrete adoption saves and applies the guarded plan, then clears one-time
                 op: "import",
                 newState: {
                   type: "cloudflare:index/worker:Worker",
-                  id: cloudId,
+                  importID: `${accountId}/${cloudId}`,
                   inputs: { accountId, name },
                 },
               },

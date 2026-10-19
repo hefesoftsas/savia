@@ -142,3 +142,14 @@ manifest and no `resources` property. This is an empty readable checkpoint,
 not management protection evidence. Audits and backend transfer accept that
 shape without rewriting the exported checkpoint; pending operations and
 malformed resource lists still stop the operation.
+
+Dry import plans may contain `newState.importID` before a physical `id` or
+outputs are resolved. The plan reader validates its exact account and native
+resource path, then compares the physical identity, kind and name with the
+reviewed manifest. Foreign accounts, unexpected path segments and conflicting
+resolved IDs are rejected.
+
+Worker reads omit the delete-only `force` flag. Desired identities retain
+`force: false` and `protect: true`; ignoring readback drift on that flag avoids
+a follow-up Worker update after import. Adoption continues to reject all
+provider updates, including updates that would only set `force: false`.
