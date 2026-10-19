@@ -32,6 +32,7 @@ test("compiled application, branch and shared programs register exact runtime id
           "index.ts",
           "branch-preview/index.ts",
           "shared-registry/index.ts",
+          "management/index.ts",
         ].map((file) => join(root, "infra/pulumi", file)),
       ],
       { cwd: root, stdio: "pipe" },
@@ -72,6 +73,26 @@ test("compiled application, branch and shared programs register exact runtime id
           flowsEnabled: true,
           flowsExecutionEnabled: true,
           pagesSearchIndex: "savia-pages-search-preview",
+          stateBucket: "savia-pulumi-state-preview",
+          managementProof: {
+            accountId,
+            backendBuckets: ["savia-pulumi-state-preview"],
+            protected: true,
+            checkpoint: {
+              deployment: {
+                resources: [
+                  {
+                    urn: "urn:pulumi:management::savia-management::cloudflare:index/r2Bucket:R2Bucket::state-backend",
+                    type: "cloudflare:index/r2Bucket:R2Bucket",
+                    id: `${accountId}/savia-pulumi-state-preview/default`,
+                    protect: true,
+                    inputs: { accountId, name: "savia-pulumi-state-preview" },
+                    outputs: { accountId, name: "savia-pulumi-state-preview" },
+                  },
+                ],
+              },
+            },
+          },
         },
         outputs: [
           "authD1Id",
@@ -79,6 +100,8 @@ test("compiled application, branch and shared programs register exact runtime id
           "documentsBucketName",
           "resolvedEnvironment",
           "flowsResources",
+          "stateBackendBucketName",
+          "stateBackendUrl",
         ],
       },
       {
@@ -115,6 +138,14 @@ test("compiled application, branch and shared programs register exact runtime id
         ],
       },
     ];
+    cases.push({
+      project: "savia-management",
+      stack: "management",
+      entry: "management/index.js",
+      names: [],
+      config: { backendBuckets: ["savia-pulumi-state-preview"] },
+      outputs: ["accountId", "backendBuckets", "protected"],
+    });
     // previewNames uses suffix rather than a separate slug field.
     cases[1].config.branchSlug = "feat-secop-tender-tracke";
     for (const example of cases) {
@@ -180,7 +211,7 @@ process.stdout.write(JSON.stringify({resources,values}));`,
         output.resources.filter(
           (row) => row.type === "pulumi-nodejs:dynamic/runtime:RuntimeRelease",
         ).length,
-        1,
+        example.stack === "management" ? 0 : 1,
       );
       assert.equal(
         output.resources.some((row) =>
@@ -188,13 +219,26 @@ process.stdout.write(JSON.stringify({resources,values}));`,
         ),
         false,
       );
-      assert.equal(output.values.runtimeStatus, "adopted");
       assert.equal(
-        output.values.environmentInventory.resources.filter(
-          (row) => row.kind === "worker",
-        ).length,
-        example.names.length,
+        output.resources.some((row) => row.name === "state-backend"),
+        example.stack === "management",
       );
+      if (example.stack !== "management") {
+        assert.equal(output.values.runtimeStatus, "adopted");
+        assert.equal(
+          output.values.environmentInventory.resources.filter(
+            (row) => row.kind === "worker",
+          ).length,
+          example.names.length,
+        );
+      } else {
+        assert.equal(
+          output.resources.filter((row) => !row.type.startsWith("pulumi:"))
+            .length,
+          1,
+        );
+        assert.equal(output.values.protected, true);
+      }
       for (const name of example.outputs)
         assert.ok(name in output.values, `missing ${example.project}/${name}`);
     }

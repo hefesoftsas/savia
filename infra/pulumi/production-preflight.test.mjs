@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   normalizeProductionConfig,
-  validateProductionReadiness,
+  validateProductionReadiness as validateReadiness,
 } from "./production-preflight.mjs";
 
 const accountId = "a".repeat(32);
@@ -79,15 +79,31 @@ const stateExport = {
         protect: true,
         outputs: { name: "savia-documents", accountId },
       },
-      {
-        urn: "urn:pulumi:production::savia-cloudflare::cloudflare:index/r2Bucket:R2Bucket::state-backend",
-        type: "cloudflare:index/r2Bucket:R2Bucket",
-        protect: true,
-        outputs: { name: "savia-pulumi-state", accountId },
-      },
     ],
   },
 };
+
+const management = {
+  accountId,
+  backendBuckets: ["savia-pulumi-state"],
+  protected: true,
+  checkpoint: {
+    deployment: {
+      resources: [
+        {
+          urn: "urn:pulumi:management::savia-management::cloudflare:index/r2Bucket:R2Bucket::state-backend",
+          type: "cloudflare:index/r2Bucket:R2Bucket",
+          id: `${accountId}/savia-pulumi-state/default`,
+          protect: true,
+          inputs: { accountId, name: "savia-pulumi-state" },
+          outputs: { accountId, name: "savia-pulumi-state" },
+        },
+      ],
+    },
+  },
+};
+const validateProductionReadiness = (args) =>
+  validateReadiness({ management, ...args });
 
 const env = {
   CLOUDFLARE_ACCOUNT_ID: accountId,
@@ -888,5 +904,19 @@ test("requires the writer barrier control credential before production mutations
         env: { ...env, SAVIA_BACKUP_CONTROL_SECRET: undefined },
       }),
     /SAVIA_BACKUP_CONTROL_SECRET/,
+  );
+});
+
+test("production cannot treat its own checkpoint as proof of management backend protection", () => {
+  assert.throws(
+    () =>
+      validateProductionReadiness({
+        outputs,
+        stackConfig,
+        stateExport,
+        env,
+        management: undefined,
+      }),
+    /management/i,
   );
 });

@@ -50,16 +50,10 @@ describe("pulumi destroy guards", () => {
     );
   });
 
-  it("excludes the protected state backend resource from Pulumi destroy", () => {
+  it("application destroy cannot target the independent management stack", () => {
+    assert.throws(() => buildPulumiDestroyArgs("management", true));
     const args = buildPulumiDestroyArgs("preview", true);
-    assert.deepEqual(args, [
-      "destroy",
-      "--stack",
-      "preview",
-      "--yes",
-      "--exclude",
-      "urn:pulumi:preview::savia-cloudflare::cloudflare:index/r2Bucket:R2Bucket::state-backend",
-    ]);
+    assert.deepEqual(args, ["destroy", "--stack", "preview", "--yes"]);
     assert.deepEqual(buildPulumiDestroyArgs("preview", false), [
       "destroy",
       "--stack",

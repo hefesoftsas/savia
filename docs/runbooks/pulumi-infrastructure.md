@@ -28,6 +28,33 @@ protected, even for preview, and is excluded from application teardown.
 Secrets in checkpoint/configuration are encrypted with the stack passphrase.
 Do not pass `--show-secrets`, commit checkpoints, or expose the state bucket.
 
+## Environment ownership migration
+
+The environment ownership source defines `savia-management/management` as the
+sole owner of the existing protected `savia-pulumi-state-preview` bucket. This
+source change does not itself confirm that the live ownership transfer ran.
+Application programs preserve the backend name/URL outputs as references and
+require a public `managementProof` validated against the independent management
+checkpoint. Lifecycle operations must refresh that proof before each plan/apply.
+No data, credentials, bucket name or backend URL moves between cloud accounts.
+
+Switch source and state ownership only while all infrastructure-changing
+workflows are disabled and their in-flight runs have finished. First export both
+checkpoints and copy the encrypted stack configurations into a private directory.
+`planBackendOwnershipMove` validates exact qualified stacks, account, physical
+bucket identity, protection and settled checkpoints. `moveBackendOwnership`
+defaults to planning; applying requires a fresh verified freeze journal and moves
+only the one bucket through `pulumi state move`. It never imports the bucket a
+second time, removes state entries, recreates the backend, or initializes
+production. It verifies the resulting independent protection and fingerprints of
+all other cloud resources. On interruption, preserve its private journal and
+exports and inspect both checkpoints before any further mutation.
+
+The application destroy path cannot select `management`; protection of the
+backend no longer depends on excluding an application-owned bucket. Production
+preflight requires independently verified management custody. Keep production
+operations disabled throughout the Preview/branch/shared adoption.
+
 ## Preview tenant hostname routing
 
 The standard Preview gateway manifest declares both the canonical Custom Domain

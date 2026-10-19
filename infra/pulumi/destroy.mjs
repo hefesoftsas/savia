@@ -98,15 +98,9 @@ export function r2BucketsForDestroy(outputs) {
   return buckets;
 }
 
-export function buildPulumiDestroyArgs(stack, hasStateBackend) {
-  const args = ["destroy", "--stack", stack, "--yes"];
-  if (hasStateBackend) {
-    args.push(
-      "--exclude",
-      `urn:pulumi:${stack}::savia-cloudflare::cloudflare:index/r2Bucket:R2Bucket::state-backend`,
-    );
-  }
-  return args;
+export function buildPulumiDestroyArgs(stack, _hasStateBackend) {
+  normalizeEnvironment(stack);
+  return ["destroy", "--stack", stack, "--yes"];
 }
 
 // R2 buckets cannot be deleted while they hold objects. Pulumi's destroy

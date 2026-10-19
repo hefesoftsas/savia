@@ -2,11 +2,14 @@ import * as pulumi from "@pulumi/pulumi";
 import * as cloudflare from "@pulumi/cloudflare";
 import { registerConfiguredRuntime } from "./runtime-resources.ts";
 import { VectorizeIndex } from "./vectorize-resource.ts";
+import {
+  managementBackendName,
+  validateManagementOutputs,
+} from "./management-resources.mjs";
 import { validateTenantSubdomains } from "./worker-config.mjs";
 import {
   resolveInfraNames,
   stackProtection,
-  stateBackendName,
   stateBackendUrl as buildStateBackendUrl,
   assertAccountId,
   productionBackupLifecycleRule,
@@ -33,7 +36,10 @@ if (shouldExecuteFlows && !shouldProvisionFlows) {
 }
 const configuredStateBucket = config.get("stateBucket");
 const configuredBackupBucket = config.get("backupBucket");
-const stateBucketName = stateBackendName(environment, configuredStateBucket);
+const stateBucketName =
+  configuredStateBucket === undefined
+    ? undefined
+    : managementBackendName(configuredStateBucket);
 
 const names = resolveInfraNames({
   environment,
@@ -123,18 +129,17 @@ if (productionBackups) {
   );
 }
 
-// The self-managed Pulumi backend is optional during bootstrap. When enabled,
-// protect its bucket even in preview because it contains the state itself.
+// The bucket's physical name/URL remain stable. Ownership lives exclusively in
+// savia-management; lifecycle commands refresh this public custody proof from
+// that independent checkpoint before planning or applying an application stack.
 const stateBackendUrlValue = stateBucketName
   ? buildStateBackendUrl(accountId, stateBucketName)
   : null;
-const stateBackend = stateBucketName
-  ? new cloudflare.R2Bucket(
-      "state-backend",
-      { accountId, name: stateBucketName },
-      { protect: true },
-    )
-  : null;
+if (stateBucketName)
+  validateManagementOutputs(config.requireObject("managementProof"), {
+    accountId,
+    backendUrl: stateBackendUrlValue!,
+  });
 
 // Flows data resources are opt-in. Wrangler remains the sole publisher of
 // the Flows Worker and its attached bindings, migrations, workflows, and cron.
@@ -229,7 +234,7 @@ export const flowsResources = flows
     }
   : null;
 export const plannedFlowsResourceNames = names.flows;
-export const stateBackendBucketName = stateBackend?.name ?? null;
+export const stateBackendBucketName = stateBucketName ?? null;
 export const stateBackendUrl = stateBackendUrlValue;
 
 // Ownership is enabled by a reviewed adoption plan. Existing persistence
