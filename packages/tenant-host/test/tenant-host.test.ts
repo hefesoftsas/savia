@@ -31,7 +31,7 @@ describe("tenant-host", () => {
   it("parses the Slack-style tenant subdomain", () => {
     expect(
       parseTenantSlugFromHostname(
-        "merkaseguros.savia.app.hefesoft.com",
+        "merkaseguros.savia.hefesoft.com",
         DEFAULT_CANONICAL_HOST,
       ),
     ).toBe("merkaseguros");
@@ -40,7 +40,7 @@ describe("tenant-host", () => {
   it("is case-insensitive and ignores a trailing dot", () => {
     expect(
       parseTenantSlugFromHostname(
-        "MerkaSeguros.SAVIA.APP.HEFESOFT.COM.",
+        "MerkaSeguros.SAVIA.HEFESOFT.COM.",
         DEFAULT_CANONICAL_HOST,
       ),
     ).toBe("merkaseguros");
@@ -48,10 +48,7 @@ describe("tenant-host", () => {
 
   it("returns null for the canonical host and unrelated hosts", () => {
     expect(
-      parseTenantSlugFromHostname(
-        "savia.app.hefesoft.com",
-        DEFAULT_CANONICAL_HOST,
-      ),
+      parseTenantSlugFromHostname("savia.hefesoft.com", DEFAULT_CANONICAL_HOST),
     ).toBeNull();
     expect(
       parseTenantSlugFromHostname("evil.example.com", DEFAULT_CANONICAL_HOST),
@@ -64,16 +61,12 @@ describe("tenant-host", () => {
   it("rejects nested subdomains and reserved slugs", () => {
     expect(
       parseTenantSlugFromHostname(
-        "a.merkaseguros.savia.app.hefesoft.com",
+        "a.merkaseguros.savia.hefesoft.com",
         DEFAULT_CANONICAL_HOST,
       ),
     ).toBeNull();
-    expect(
-      parseTenantSlugFromHostname("api.savia.app.hefesoft.com"),
-    ).toBeNull();
-    expect(
-      parseTenantSlugFromHostname("admin.savia.app.hefesoft.com"),
-    ).toBeNull();
+    expect(parseTenantSlugFromHostname("api.savia.hefesoft.com")).toBeNull();
+    expect(parseTenantSlugFromHostname("admin.savia.hefesoft.com")).toBeNull();
     expect(isReservedTenantSlug("API")).toBe(true);
     expect(isReservedTenantSlug("merkaseguros")).toBe(false);
   });
@@ -89,40 +82,34 @@ describe("tenant-host", () => {
 
   it("builds tenant hostnames and origins", () => {
     expect(buildTenantHostname("merkaseguros")).toBe(
-      "merkaseguros.savia.app.hefesoft.com",
+      "merkaseguros.savia.hefesoft.com",
     );
     expect(buildTenantOrigin("merkaseguros")).toBe(
-      "https://merkaseguros.savia.app.hefesoft.com",
+      "https://merkaseguros.savia.hefesoft.com",
     );
   });
 
   it("allowlists only https tenant origins under the canonical host", () => {
     expect(
-      isAllowedTenantOrigin("https://merkaseguros.savia.app.hefesoft.com"),
+      isAllowedTenantOrigin("https://merkaseguros.savia.hefesoft.com"),
     ).toBe(true);
+    expect(isAllowedTenantOrigin("https://savia.hefesoft.com")).toBe(false);
     expect(
-      isAllowedTenantOrigin("https://savia.app.hefesoft.com"),
+      isAllowedTenantOrigin("http://merkaseguros.savia.hefesoft.com"),
     ).toBe(false);
-    expect(
-      isAllowedTenantOrigin("http://merkaseguros.savia.app.hefesoft.com"),
-    ).toBe(false);
-    expect(isAllowedTenantOrigin("https://api.savia.app.hefesoft.com")).toBe(
-      false,
-    );
+    expect(isAllowedTenantOrigin("https://api.savia.hefesoft.com")).toBe(false);
     expect(isAllowedTenantOrigin("https://evil.com")).toBe(false);
     expect(isAllowedTenantOrigin("not-a-url")).toBe(false);
   });
 
   it("recognizes the canonical origin and the combined allowlist", () => {
-    expect(isCanonicalOrigin("https://savia.app.hefesoft.com")).toBe(true);
-    expect(isCanonicalOrigin("https://merkaseguros.savia.app.hefesoft.com")).toBe(
+    expect(isCanonicalOrigin("https://savia.hefesoft.com")).toBe(true);
+    expect(isCanonicalOrigin("https://merkaseguros.savia.hefesoft.com")).toBe(
       false,
     );
+    expect(isAllowedPublicOrigin("https://savia.hefesoft.com")).toBe(true);
     expect(
-      isAllowedPublicOrigin("https://savia.app.hefesoft.com"),
-    ).toBe(true);
-    expect(
-      isAllowedPublicOrigin("https://merkaseguros.savia.app.hefesoft.com"),
+      isAllowedPublicOrigin("https://merkaseguros.savia.hefesoft.com"),
     ).toBe(true);
     expect(isAllowedPublicOrigin("https://evil.com")).toBe(false);
   });
@@ -130,13 +117,13 @@ describe("tenant-host", () => {
   it("computes the shared cookie domain for subdomains and canonical host", () => {
     expect(
       cookieDomainForHost(
-        "merkaseguros.savia.app.hefesoft.com",
+        "merkaseguros.savia.hefesoft.com",
         DEFAULT_CANONICAL_HOST,
       ),
-    ).toBe(".savia.app.hefesoft.com");
+    ).toBe(".savia.hefesoft.com");
     expect(
-      cookieDomainForHost("savia.app.hefesoft.com", DEFAULT_CANONICAL_HOST),
-    ).toBe(".savia.app.hefesoft.com");
+      cookieDomainForHost("savia.hefesoft.com", DEFAULT_CANONICAL_HOST),
+    ).toBe(".savia.hefesoft.com");
     expect(
       cookieDomainForHost("localhost", DEFAULT_CANONICAL_HOST),
     ).toBeUndefined();
@@ -155,17 +142,15 @@ describe("tenant-host", () => {
     expect(
       isAllowedTenantOrigin("https://merkaseguros.savia-preview.hefesoft.com"),
     ).toBe(true);
-    expect(
-      isCanonicalOrigin("https://savia-preview.hefesoft.com"),
-    ).toBe(true);
+    expect(isCanonicalOrigin("https://savia-preview.hefesoft.com")).toBe(true);
     expect(
       isAllowedPublicOrigin("https://merkaseguros.savia-preview.hefesoft.com"),
     ).toBe(true);
-    expect(
-      cookieDomainForHost("merkaseguros.savia-preview.hefesoft.com"),
-    ).toBe(".savia-preview.hefesoft.com");
-    expect(
-      cookieDomainForHost("savia-preview.hefesoft.com"),
-    ).toBe(".savia-preview.hefesoft.com");
+    expect(cookieDomainForHost("merkaseguros.savia-preview.hefesoft.com")).toBe(
+      ".savia-preview.hefesoft.com",
+    );
+    expect(cookieDomainForHost("savia-preview.hefesoft.com")).toBe(
+      ".savia-preview.hefesoft.com",
+    );
   });
 });

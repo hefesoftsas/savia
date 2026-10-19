@@ -42,7 +42,7 @@ function validateProductionConfig(config) {
     throw new Error("Production Pulumi config must select production");
   if (!/^[a-f\d]{32}$/i.test(values.accountId))
     throw new Error("Production config accountId is invalid");
-  if (values.publicOrigin !== "https://savia.app.hefesoft.com")
+  if (values.publicOrigin !== "https://savia.hefesoft.com")
     throw new Error(
       "Production publicOrigin does not match the canonical origin",
     );
@@ -314,9 +314,15 @@ export function validateProductionReadiness({
     throw new Error(
       "Production Pulumi config account does not match the adopted stack",
     );
+  // Allow only the explicit old -> new hostname transition before Pulumi apply.
+  // Resource identity and deletion-protection checks below still apply unchanged.
+  const migratingCanonicalOrigin =
+    config.publicOrigin === "https://savia.hefesoft.com" &&
+    outputs.resolvedPublicOrigin === "https://savia.app.hefesoft.com";
   if (
-    outputs.resolvedPublicOrigin !== "https://savia.app.hefesoft.com" ||
-    config.publicOrigin !== outputs.resolvedPublicOrigin
+    !migratingCanonicalOrigin &&
+    (outputs.resolvedPublicOrigin !== "https://savia.hefesoft.com" ||
+      config.publicOrigin !== outputs.resolvedPublicOrigin)
   )
     throw new Error(
       "Production public origin does not match the adopted stack",

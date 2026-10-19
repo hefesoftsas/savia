@@ -173,7 +173,7 @@ describe("Flows maintenance CLI", () => {
       `${ORIGIN}/path`,
       `${ORIGIN}?tenant=one`,
       "https://user:password@savia-preview.hefesoft.com",
-      "https://savia.app.hefesoft.com",
+      "https://savia.hefesoft.com",
     ]) {
       assert.throws(() =>
         validateMaintenanceEnvironment({ ...ENV, SAVIA_PUBLIC_ORIGIN: value }),

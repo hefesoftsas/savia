@@ -65,12 +65,12 @@ it("clears old branding when the host changes and ignores its stale response", a
     .mockResolvedValueOnce(new Response(JSON.stringify({ data: null })));
   vi.stubGlobal("fetch", fetcher);
   const view = render(
-    <TenantBrandingProvider hostname="first.savia.app.hefesoft.com">
+    <TenantBrandingProvider hostname="first.savia.hefesoft.com">
       <Name />
     </TenantBrandingProvider>,
   );
   view.rerender(
-    <TenantBrandingProvider hostname="second.savia.app.hefesoft.com">
+    <TenantBrandingProvider hostname="second.savia.hefesoft.com">
       <Name />
     </TenantBrandingProvider>,
   );
@@ -100,7 +100,7 @@ it("removes applied colors immediately on host change and null branding", async 
     );
   vi.stubGlobal("fetch", fetcher);
   const view = render(
-    <TenantBrandingProvider hostname="first.savia.app.hefesoft.com">
+    <TenantBrandingProvider hostname="first.savia.hefesoft.com">
       <Name />
     </TenantBrandingProvider>,
   );
@@ -111,7 +111,7 @@ it("removes applied colors immediately on host change and null branding", async 
     ).toBe("#125633"),
   );
   view.rerender(
-    <TenantBrandingProvider hostname="second.savia.app.hefesoft.com">
+    <TenantBrandingProvider hostname="second.savia.hefesoft.com">
       <Name />
     </TenantBrandingProvider>,
   );

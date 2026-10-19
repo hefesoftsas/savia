@@ -10,7 +10,7 @@ release using the last successfully published ancestor. See
 required checks, exact-version publication and recovery checkpoints.
 
 Preview URL: https://savia-preview.hefesoft.com
-Production URL: https://savia.app.hefesoft.com
+Production URL: https://savia.hefesoft.com
 
 The preview workflow accepts only successful CI runs caused by a push to `main`
 in this repository. It checks out the tested SHA and rejects superseded commits.

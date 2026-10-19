@@ -20,7 +20,7 @@ const production = {
   deploymentEnvironment: "production",
   authD1Id: "auth-id",
   domainD1Id: "domain-id",
-  publicOrigin: "https://savia.app.hefesoft.com",
+  publicOrigin: "https://savia.hefesoft.com",
   documentsBucket: "savia-documents",
 };
 const flows = {
@@ -224,7 +224,7 @@ test("production manifests bind the adopted D1 names from stack outputs", async 
   }
 });
 
-test("production gateway adds only explicitly configured tenant custom domains", async () => {
+test("production gateway preserves configured tenant domains alongside migration wildcard routes", async () => {
   const root = await mkdtemp(join(tmpdir(), "savia-iac-tenant-domains-"));
   try {
     await renderProductionConfigs({
@@ -234,14 +234,17 @@ test("production gateway adds only explicitly configured tenant custom domains",
     });
     const gateway = await readConfig(root, "admin", "production");
     assert.deepEqual(gateway.routes, [
+      { custom_domain: true, pattern: "savia.hefesoft.com" },
+      { custom_domain: true, pattern: "tenant-home.savia.hefesoft.com" },
+      { custom_domain: true, pattern: "acme-team.savia.hefesoft.com" },
+      { pattern: "savia.hefesoft.com/*", zone_name: "hefesoft.com" },
+      { pattern: "*.savia.hefesoft.com/*", zone_name: "hefesoft.com" },
       { custom_domain: true, pattern: "savia.app.hefesoft.com" },
+      { custom_domain: true, pattern: "savia-team.savia.app.hefesoft.com" },
       { custom_domain: true, pattern: "tenant-home.savia.app.hefesoft.com" },
       { custom_domain: true, pattern: "acme-team.savia.app.hefesoft.com" },
+      { pattern: "*.savia.app.hefesoft.com/*", zone_name: "hefesoft.com" },
     ]);
-    assert.equal(
-      gateway.routes.some((route) => route.pattern.includes("*")),
-      false,
-    );
   } finally {
     await rm(root, { recursive: true, force: true });
   }

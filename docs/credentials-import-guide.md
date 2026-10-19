@@ -60,7 +60,7 @@ pnpm savia:credentials:import --bitwarden <ruta-al-export.json> [opciones]
 | `--audit`                      | Muestra un resumen detallado del mapeo de variables y estado de cada flow.                         | `false`                          |
 | `--export-sql <archivo.sql>`   | Genera un script SQL con sentencias idempotentes para Cloudflare D1.                               | —                                |
 | `--export-env <archivo.env>`   | Genera un archivo con las variables a nivel Cloudflare Worker (`CRM_INTEGRATION_KEY`).             | —                                |
-| `--api-url <url>`              | URL base de Savia en producción para el modo `--target production`.                                | `https://savia.app.hefesoft.com` |
+| `--api-url <url>`              | URL base de Savia en producción para el modo `--target production`.                                | `https://savia.hefesoft.com` |
 | `--token <token>`              | Token de sesión de Platform Administrator para el modo `--target production`.                      | —                                |
 | `--port <puerto>`              | Puerto del worker local de Savia Request.                                                          | `8797`                           |
 
@@ -94,7 +94,7 @@ Savia expone una ruta proxy autenticada protegida con rol de Administrador de Pl
    pnpm savia:credentials:import \
      --bitwarden /ruta/a/bitwarden_org_export.json \
      --target production \
-     --api-url https://savia.app.hefesoft.com \
+     --api-url https://savia.hefesoft.com \
      --token "TU_TOKEN_DE_ADMINISTRADOR" \
      --apply
    ```

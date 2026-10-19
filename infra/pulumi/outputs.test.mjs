@@ -160,7 +160,7 @@ describe("pulumi stack outputs", () => {
     const names = resolveInfraNames({
       environment: "production",
       documentsBucket: "savia-documents",
-      publicOrigin: "https://savia.app.hefesoft.com",
+      publicOrigin: "https://savia.hefesoft.com",
     });
     const production = {
       ...OUTPUTS,
@@ -204,7 +204,7 @@ describe("pulumi stack outputs", () => {
     const adoptedNames = resolveInfraNames({
       environment: "production",
       documentsBucket: "savia-documents",
-      publicOrigin: "https://savia.app.hefesoft.com",
+      publicOrigin: "https://savia.hefesoft.com",
       authDatabaseName: "savia-auth-local-canonical-20260913-v2",
       domainDatabaseName: "savia-agencies-local-canonical-20260913-v2",
     });

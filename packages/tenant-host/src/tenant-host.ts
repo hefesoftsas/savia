@@ -1,8 +1,8 @@
 /**
  * Tenant-dedicated hostnames, Slack style.
  *
- * Canonical host: `savia.app.hefesoft.com`
- * Tenant host:    `<slug>.savia.app.hefesoft.com` (one DNS label, e.g. `merkaseguros`)
+ * Canonical host: `savia.hefesoft.com`
+ * Tenant host:    `<slug>.savia.hefesoft.com` (one DNS label, e.g. `merkaseguros`)
  *
  * This module is intentionally dependency-free so the admin SPA, the API worker
  * and the auth worker can share the exact same parsing rules. Keep the three
@@ -23,7 +23,7 @@ export {
   TENANT_SLUG_PATTERN,
 };
 
-export const DEFAULT_CANONICAL_HOST = "savia.app.hefesoft.com";
+export const DEFAULT_CANONICAL_HOST = "savia.hefesoft.com";
 export const PREVIEW_CANONICAL_HOST = "savia-preview.hefesoft.com";
 export const KNOWN_CANONICAL_HOSTS: ReadonlyArray<string> = [
   DEFAULT_CANONICAL_HOST,
@@ -162,7 +162,7 @@ export function isAllowedPublicOrigin(
 
 /**
  * Shared cookie domain for SSO across tenant subdomains and canonical host.
- * Returns `.<canonical>` (e.g. `.savia.app.hefesoft.com`) when host is the
+ * Returns `.<canonical>` (e.g. `.savia.hefesoft.com`) when host is the
  * canonical host or a valid tenant host. Returns undefined for IP addresses
  * or localhost (RFC 6265 compliance).
  */

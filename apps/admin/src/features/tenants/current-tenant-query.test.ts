@@ -9,23 +9,23 @@ describe("currentTenantQueryOptions", () => {
     const options = currentTenantQueryOptions({
       apiClient: { get } as unknown as ApiClient,
       sessionGeneration: 3,
-      hostname: "merka.savia.app.hefesoft.com",
+      hostname: "merka.savia.hefesoft.com",
     });
 
     expect(options.queryKey).toEqual([
       "savia-read",
       3,
       "tenant",
-      "merka.savia.app.hefesoft.com",
+      "merka.savia.hefesoft.com",
       "current-tenant",
-      { hostname: "merka.savia.app.hefesoft.com" },
+      { hostname: "merka.savia.hefesoft.com" },
     ]);
     expect(
       hashKey(
         currentTenantQueryOptions({
           apiClient: { get } as unknown as ApiClient,
           sessionGeneration: 4,
-          hostname: "merka.savia.app.hefesoft.com",
+          hostname: "merka.savia.hefesoft.com",
         }).queryKey,
       ),
     ).not.toBe(hashKey(options.queryKey));
@@ -36,7 +36,7 @@ describe("currentTenantQueryOptions", () => {
     const options = currentTenantQueryOptions({
       apiClient: { get } as unknown as ApiClient,
       sessionGeneration: 3,
-      hostname: "merka.savia.app.hefesoft.com",
+      hostname: "merka.savia.hefesoft.com",
     });
     const controller = new AbortController();
 

@@ -6,7 +6,7 @@ import {
 } from "./production-backup-gate.mjs";
 const env = {
   SAVIA_BACKUP_CONTROL_URL:
-    "https://savia.app.hefesoft.com/api/_internal/backup-gate",
+    "https://savia.hefesoft.com/api/_internal/backup-gate",
   SAVIA_BACKUP_CONTROL_SECRET: "s".repeat(64),
 };
 

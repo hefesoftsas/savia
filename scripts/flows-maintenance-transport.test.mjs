@@ -121,7 +121,7 @@ test("starts a production maintenance session through the private production API
     /rejected destination/,
   );
   await transport.fetchImpl(
-    "https://savia.app.hefesoft.com/api/public/savia-flows/maintenance",
+    "https://savia.hefesoft.com/api/public/savia-flows/maintenance",
     { method: "POST" },
   );
   await transport.close();

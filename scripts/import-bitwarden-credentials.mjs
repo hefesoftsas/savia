@@ -383,7 +383,7 @@ function parseCliArgs(argv) {
   const args = {
     bitwarden: "",
     target: "local",
-    apiUrl: "https://savia.app.hefesoft.com",
+    apiUrl: "https://savia.hefesoft.com",
     token: "",
     apply: false,
     exportSql: "",

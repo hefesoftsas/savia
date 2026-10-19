@@ -12,7 +12,7 @@ const outputs = {
   domainD1Id: "22222222-2222-4222-8222-222222222222",
   documentsBucketName: "savia-documents",
   resolvedEnvironment: "production",
-  resolvedPublicOrigin: "https://savia.app.hefesoft.com",
+  resolvedPublicOrigin: "https://savia.hefesoft.com",
   workerNames: { auth: "savia-auth", api: "savia-agencies" },
   databaseNames: {
     auth: "savia-auth-local-canonical-20260913-v2",
@@ -41,7 +41,7 @@ const outputs = {
 const stackConfig = {
   accountId,
   environment: "production",
-  publicOrigin: "https://savia.app.hefesoft.com",
+  publicOrigin: "https://savia.hefesoft.com",
   documentsBucket: "savia-documents",
   stateBucket: "savia-pulumi-state",
   authDatabaseName: "savia-auth-local-canonical-20260913-v2",
@@ -165,6 +165,48 @@ test("accepts adopted, protected production state and emits current Flows flags"
       SAVIA_FLOWS_PLANNED: "false",
       SAVIA_FLOWS_PLANNED_EXECUTION_ENABLED: "false",
     },
+  );
+});
+
+test("allows only the known legacy origin before the canonical hostname migration", () => {
+  assert.doesNotThrow(() =>
+    validateProductionReadiness({
+      outputs: {
+        ...outputs,
+        resolvedPublicOrigin: "https://savia.app.hefesoft.com",
+      },
+      stackConfig,
+      stateExport,
+      env,
+    }),
+  );
+  for (const origin of [
+    "https://attacker.example",
+    "https://savia-preview.hefesoft.com",
+  ]) {
+    assert.throws(
+      () =>
+        validateProductionReadiness({
+          outputs: { ...outputs, resolvedPublicOrigin: origin },
+          stackConfig,
+          stateExport,
+          env,
+        }),
+      /public origin/i,
+    );
+  }
+  assert.throws(
+    () =>
+      validateProductionReadiness({
+        outputs,
+        stackConfig: {
+          ...stackConfig,
+          publicOrigin: "https://savia.app.hefesoft.com",
+        },
+        stateExport,
+        env,
+      }),
+    /canonical origin/i,
   );
 });
 
@@ -407,7 +449,7 @@ test("normalizes Pulumi CLI-wrapped booleans and rejects secret or malformed con
       config: {
         "savia-cloudflare:accountId": accountId,
         "savia-cloudflare:environment": "production",
-        "savia-cloudflare:publicOrigin": "https://savia.app.hefesoft.com",
+        "savia-cloudflare:publicOrigin": "https://savia.hefesoft.com",
         "savia-cloudflare:documentsBucket": "savia-documents",
         "savia-cloudflare:stateBucket": "savia-pulumi-state",
         "savia-cloudflare:authDatabaseName":

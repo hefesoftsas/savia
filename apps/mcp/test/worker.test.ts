@@ -104,7 +104,7 @@ describe("Savia MCP Cloudflare Worker", () => {
     });
 
     const env = {
-      SAVIA_API_URL: "https://savia.app.hefesoft.com",
+      SAVIA_API_URL: "https://savia.hefesoft.com",
       SAVIA_MCP_SHARED_SECRET: "test-secret-123",
       API: { fetch: mockApiFetch as typeof fetch },
     };
