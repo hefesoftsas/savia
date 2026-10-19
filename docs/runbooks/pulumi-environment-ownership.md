@@ -40,6 +40,10 @@ deletion request. It is never implied by `--force` on the legacy branch wrapper.
 Shared and management cannot be destroyed through application operations.
 Production requires both the existing explicit operations flag and reviewed
 `main`; this migration does not enable either production deployment or deletion.
+Preview inventory accepts checkpoint-exported database names only when they
+exactly match its isolated `savia-auth-preview` and `savia-agencies-preview`
+names. These outputs are observations, not production-only naming overrides;
+foreign or swapped names stop inventory before adoption.
 
 For a separately authorized new environment, `plan --environment <id>
 --provision --apply` creates persistence first. Prepare the frozen release only

@@ -47,7 +47,19 @@ test("concrete adoption saves and applies the guarded plan, then clears one-time
       resources: [{ kind: "worker", name, cloudId }],
     };
     const raw = {
-      deployment: { resources: [{ type: "pulumi:pulumi:Stack", outputs: {} }] },
+      deployment: {
+        resources: [
+          {
+            type: "pulumi:pulumi:Stack",
+            outputs: {
+              databaseNames: {
+                auth: "savia-auth-preview",
+                domain: "savia-agencies-preview",
+              },
+            },
+          },
+        ],
+      },
     };
     const management = {
       deployment: {
