@@ -2,6 +2,11 @@ name: Deploy Savia production
 
 on:
   workflow_dispatch:
+    inputs:
+      initialize_environment:
+        description: Create fresh production persistence before the first managed release (fails if production exists)
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -48,7 +53,7 @@ jobs:
     if: ${{ vars.PRODUCTION_OPERATIONS_ENABLED == 'true' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && needs.verify.result == 'success' && always() }}
     name: Deploy production
     runs-on: ubuntu-24.04
-    environment: production
+    environment: production-app
     env:
       PNPM_CONFIG_STRICT_DEP_BUILDS: "false"
       SAVIA_BACKUP_ENVIRONMENT: production
@@ -86,6 +91,66 @@ jobs:
       - name: Install dependencies
         if: ${{ success() && !cancelled() }}
         run: pnpm install --frozen-lockfile
+
+      - name: Install infrastructure toolchain for first installation
+        if: ${{ success() && !cancelled() && inputs.initialize_environment }}
+        uses: ./.github/actions/install-pulumi
+
+      - name: Initialize empty production persistence from its exact saved plan
+        if: ${{ success() && !cancelled() && inputs.initialize_environment }}
+        run: node infra/pulumi/production-bootstrap.mjs --plan "$RUNNER_TEMP/production-provision.json"
+        env:
+          PRODUCTION_OPERATIONS_ENABLED: ${{ vars.PRODUCTION_OPERATIONS_ENABLED }}
+          PULUMI_BACKEND_URL: ${{ secrets.PULUMI_BACKEND_URL }}
+          PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_STATE_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_STATE_SECRET_ACCESS_KEY }}
+          BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
+          SAVIA_MCP_SHARED_SECRET: ${{ secrets.SAVIA_MCP_SHARED_SECRET }}
+          SAVIA_REQUEST_ENCRYPTION_KEY: ${{ secrets.SAVIA_REQUEST_ENCRYPTION_KEY }}
+          EXTENSION_CONNECTIONS_ENCRYPTION_KEY: ${{ secrets.EXTENSION_CONNECTIONS_ENCRYPTION_KEY }}
+          ASSISTANT_SETTINGS_ENCRYPTION_KEY: ${{ secrets.ASSISTANT_SETTINGS_ENCRYPTION_KEY }}
+          CRM_INTEGRATION_KEY: ${{ secrets.CRM_INTEGRATION_KEY }}
+          NANGO_API_KEY: ${{ secrets.NANGO_API_KEY }}
+          SAVIA_BACKUP_CONTROL_SECRET: ${{ secrets.SAVIA_BACKUP_CONTROL_SECRET }}
+          SAVIA_BACKUP_KEY: ${{ secrets.SAVIA_BACKUP_KEY }}
+          R2_BACKUP_ACCESS_KEY_ID: ${{ secrets.R2_BACKUP_ACCESS_KEY_ID }}
+          R2_BACKUP_SECRET_ACCESS_KEY: ${{ secrets.R2_BACKUP_SECRET_ACCESS_KEY }}
+
+      - name: Preserve encrypted first-install configuration for reconciliation
+        if: ${{ always() && inputs.initialize_environment }}
+        env:
+          SAVIA_BACKUP_KEY: ${{ secrets.SAVIA_BACKUP_KEY }}
+          PULUMI_BACKEND_URL: ${{ secrets.PULUMI_BACKEND_URL }}
+          PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_STATE_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_STATE_SECRET_ACCESS_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          if [ -f "$RUNNER_TEMP/production-provision.json" ]; then
+            custody="$RUNNER_TEMP/production-bootstrap-custody"
+            mkdir -p "$custody"
+            cp infra/pulumi/Pulumi.production.yaml "$custody/"
+            cp "$RUNNER_TEMP/production-provision.json" "$custody/"
+            cp "$RUNNER_TEMP/production-provision.json.pulumi.json" "$custody/"
+            timeout 30s pulumi stack export --stack production --cwd infra/pulumi --non-interactive > "$custody/checkpoint.private.json" 2> "$custody/export.private.log" || true
+            tar -czf "$RUNNER_TEMP/production-bootstrap-custody.tar.gz" -C "$RUNNER_TEMP" production-bootstrap-custody
+            node scripts/encrypt-flows-backup.mjs --action encrypt --input "$RUNNER_TEMP/production-bootstrap-custody.tar.gz" --output "$RUNNER_TEMP/production-bootstrap-custody.enc"
+            rm -rf "$custody" "$RUNNER_TEMP/production-bootstrap-custody.tar.gz"
+          fi
+
+      - name: Retain only encrypted bootstrap configuration
+        if: ${{ always() && inputs.initialize_environment }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-bootstrap-custody
+          path: ${{ runner.temp }}/production-bootstrap-custody.enc
+          retention-days: 7
+          if-no-files-found: ignore
 
       - name: Load infrastructure stack outputs
         if: ${{ success() && !cancelled() }}

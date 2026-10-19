@@ -80,7 +80,7 @@ jobs:
     concurrency:
       group: savia-${{ inputs.stack }}
       cancel-in-progress: false
-    environment: ${{ inputs.stack }}
+    environment: ${{ inputs.stack == 'production' && 'production-app' || 'preview' }}
     env:
       PULUMI_BACKEND_URL: ${{ secrets.PULUMI_BACKEND_URL }}
       PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
