@@ -121,8 +121,9 @@ savia-cloudflare:tenantSubdomains:
 ```
 
 The stack exports this list and the renderer preserves each explicit Custom
-Domain in addition to production wildcard routing. During migration, matching
-legacy exact tenant attachments are retained too. Wrangler owns these exact
+Domain under `savia.hefesoft.com` in addition to production wildcard routing.
+Legacy exact tenant attachments under `savia.app.hefesoft.com` must be retired
+and are not declared by the renderer. Wrangler owns the canonical tenant
 attachments and their DNS/certificate provisioning. Do not create an overlapping
 Pulumi Worker-domain resource. Preview rejects nonempty explicit tenant lists
 and retains its own canonical hostname.
