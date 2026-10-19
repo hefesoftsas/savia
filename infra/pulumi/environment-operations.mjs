@@ -90,7 +90,7 @@ export function verifySavedEnvironmentPlan(plan, actual) {
 }
 function stackOutputs(checkpoint) {
   return (
-    checkpoint?.stateExport.deployment.resources.find(
+    (checkpoint ? settledCheckpoint(checkpoint.stateExport) : []).find(
       (row) => row.type === "pulumi:pulumi:Stack",
     )?.outputs ?? {}
   );

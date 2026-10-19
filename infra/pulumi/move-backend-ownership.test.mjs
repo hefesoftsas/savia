@@ -210,3 +210,12 @@ test("successful move changes only backend custody and retains its physical iden
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+test("backend transfer accepts a genuinely empty initialized destination export", () => {
+  const rows = fixtures();
+  rows[1].stateExport = {
+    version: 3,
+    deployment: { manifest: {}, metadata: {} },
+  };
+  assert.equal(makePlan(rows).destination, destination);
+});
