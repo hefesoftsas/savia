@@ -88,8 +88,16 @@ test("immutable artifacts cannot publish code or assets outside the frozen direc
     await writeFile(join(source, "worker.mjs"), "export default {};");
     for (const [index, config] of [
       { main: "../outside.mjs" },
+      {
+        main: "worker.mjs",
+        vars: { BETTER_AUTH_BOOTSTRAP_PASSWORD: "CREDENTIAL_CANARY" },
+      },
       { main: "/private/outside.mjs" },
       { main: "worker.mjs", assets: { directory: "../../outside" } },
+      {
+        main: "worker.mjs",
+        d1_databases: [{ migrations_dir: "../../outside" }],
+      },
       { main: "worker.mjs", build: { command: "download-unhashed-code" } },
     ].entries()) {
       await assert.rejects(

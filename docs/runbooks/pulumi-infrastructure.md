@@ -734,3 +734,19 @@ zero changes to cloud resources; its Worker was not republished. Production
 application state and production CI backend credentials still require separate
 adoption before promotion. No Flows, AI, browser, containers or email service was
 activated by this rollout.
+
+First standard installation uses a create-only persistence proof recorded by
+`plan --provision --apply`. Before initializing schemas, the runtime checks the
+exact data identities, empty D1/R2/KV storage, and absence of namespace data,
+attachments, or existing callers. It then starts authenticated maintenance
+endpoints while the gateway remains unavailable. The normal encrypted backup
+still precedes final publication. Retained environments start maintenance code
+without initializing or migrating their schemas before that backup. A partially
+initialized first installation fails closed and requires explicit reconciliation;
+retrying does not authorize overwriting existing schemas or changing keys.
+
+A refresh reports maintenance when a persisted Flows execution pause remains in
+D1. Intentional execution-disabled profiles remain valid. The temporary backup
+pause and final publication use distinct policy generations within one frozen
+artifact. Retirement evidence includes a private per-command journal with
+started/completed/failed statuses; config values and credentials are omitted.

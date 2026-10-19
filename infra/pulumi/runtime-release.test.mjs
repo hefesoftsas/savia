@@ -311,3 +311,33 @@ test("failed emergency pause preserves the publication and recovery errors", asy
       /pause failed/i.test(error.message),
   );
 });
+
+test("read-only adoption reports unpublished native identities as maintenance instead of ready", async () => {
+  const state = await adoptRuntime(inputs, {
+    readSnapshot: async () => ({
+      ...snapshot,
+      workerVersions: [{ ...worker, versionId: null }],
+    }),
+  });
+  assert.equal(state.status, "maintenance");
+  assert.equal(state.workerVersions[0].versionId, null);
+});
+
+test("refresh cannot report ready while the observed execution policy remains paused", async () => {
+  const state = await readRuntime(
+    inputs,
+    {
+      status: "ready",
+      workerVersions: snapshot.workerVersions,
+      namespaceIds: [],
+    },
+    {
+      readSnapshot: async () => ({
+        ...snapshot,
+        maintenanceWorkerNames: [worker.name],
+      }),
+    },
+  );
+  assert.equal(state.status, "maintenance");
+  assert.equal(Object.hasOwn(state, "maintenanceWorkerNames"), false);
+});

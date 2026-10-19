@@ -123,6 +123,9 @@ export async function createBranchPublisher(
         )
           .update("savia:auth-tenant-user-administration:v1")
           .digest("hex");
+        if (env.BETTER_AUTH_BOOTSTRAP_PASSWORD?.trim())
+          secrets.BETTER_AUTH_BOOTSTRAP_PASSWORD =
+            env.BETTER_AUTH_BOOTSTRAP_PASSWORD;
         for (const [role, { path }] of configs)
           if (required[role].length)
             await runWrangler(["secret", "bulk", "--config", path], {
@@ -130,7 +133,13 @@ export async function createBranchPublisher(
               env,
               input: JSON.stringify(
                 Object.fromEntries(
-                  required[role].map((key) => [key, secrets[key]]),
+                  [
+                    ...required[role],
+                    ...(role === "auth" &&
+                    secrets.BETTER_AUTH_BOOTSTRAP_PASSWORD
+                      ? ["BETTER_AUTH_BOOTSTRAP_PASSWORD"]
+                      : []),
+                  ].map((key) => [key, secrets[key]]),
                 ),
               ),
             });

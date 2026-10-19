@@ -5,6 +5,7 @@ import { mkdtemp, writeFile, symlink, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { validateRuntimeInputs } from "./runtime-release.mjs";
 import { previewNames } from "../../scripts/preview-environment.mjs";
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const accountId = "a".repeat(32);
@@ -153,6 +154,16 @@ test("compiled application, branch and shared programs register exact runtime id
       names: [],
       config: { ...cases[0].config, environmentDeleted: true },
     });
+    cases.push({
+      ...cases[0],
+      fresh: true,
+      config: {
+        ...cases[0].config,
+        artifactDigest: "c".repeat(64),
+        configDigest: "d".repeat(64),
+        artifactDirectory: "/private/frozen-build",
+      },
+    });
     // previewNames uses suffix rather than a separate slug field.
     cases[1].config.branchSlug = "feat-secop-tender-tracke";
     for (const example of cases) {
@@ -161,7 +172,7 @@ test("compiled application, branch and shared programs register exact runtime id
           accountId,
           ...example.config,
           runtimeManaged: true,
-          runtimeMode: "adopt",
+          runtimeMode: example.fresh ? "release" : "adopt",
           runtimeProfile: { enabledWorkers: example.names },
           adoptionManifest: {
             version: 1,
@@ -169,8 +180,8 @@ test("compiled application, branch and shared programs register exact runtime id
             environment: example.stack,
             project: example.project,
             stack: example.stack,
-            profile: { enabledWorkers: example.names },
-            resources: example.names.map((name, i) => ({
+            profile: { enabledWorkers: example.fresh ? [] : example.names },
+            resources: (example.fresh ? [] : example.names).map((name, i) => ({
               kind: "worker",
               name,
               cloudId: i.toString(16).padStart(32, "b"),
@@ -184,9 +195,9 @@ test("compiled application, branch and shared programs register exact runtime id
       const script = join(dir, `check-${example.stack}.mjs`);
       await writeFile(
         script,
-        `import * as pulumi from '@pulumi/pulumi';
+        `import * as pulumi from '@pulumi/pulumi';import {createHash} from 'node:crypto';
 const resources=[];
-pulumi.runtime.setMocks({newResource:args=>{resources.push({type:args.type,name:args.name,inputs:args.inputs});return {id:args.type.includes('Worker')?'b'.repeat(32):args.name,state:{...args.inputs,uuid:'11111111-1111-1111-1111-111111111111',status:'adopted',workerVersions:[],namespaceIds:[],attachments:[],retentionWorkerNames:[]}};},call:args=>args.inputs},${JSON.stringify(example.project)},${JSON.stringify(example.stack)});
+pulumi.runtime.setMocks({newResource:args=>{resources.push({type:args.type,name:args.name,inputs:args.inputs});return {id:args.type.includes('Worker')?createHash('md5').update(args.name).digest('hex'):args.name,state:{...args.inputs,uuid:'11111111-1111-1111-1111-111111111111',status:'adopted',workerVersions:[],namespaceIds:[],attachments:[],retentionWorkerNames:[]}};},call:args=>args.inputs},${JSON.stringify(example.project)},${JSON.stringify(example.stack)});
 const program=await import(${JSON.stringify(new URL(`infra/pulumi/${example.entry}`, `file://${dir}/`).href)});
 const values=await pulumi.output(Object.fromEntries(Object.entries(program))).promise();
 process.stdout.write(JSON.stringify({resources,values}));`,
@@ -254,6 +265,34 @@ process.stdout.write(JSON.stringify({resources,values}));`,
           1,
         );
         assert.equal(output.values.protected, true);
+      }
+      if (example.fresh) {
+        const release = output.resources.find(
+          (row) => row.type === "pulumi-nodejs:dynamic/runtime:RuntimeRelease",
+        );
+        assert.equal(
+          release.inputs.adoptionManifest.resources.filter(
+            (row) => row.kind === "worker",
+          ).length,
+          example.names.length,
+        );
+        validateRuntimeInputs(
+          Object.fromEntries(
+            [
+              "accountId",
+              "environment",
+              "workers",
+              "mode",
+              "adoptionManifest",
+              "artifactDigest",
+              "configDigest",
+              "artifactDirectory",
+              "deleteData",
+            ]
+              .filter((key) => release.inputs[key] !== undefined)
+              .map((key) => [key, release.inputs[key]]),
+          ),
+        );
       }
       for (const name of example.outputs)
         assert.ok(name in output.values, `missing ${example.project}/${name}`);

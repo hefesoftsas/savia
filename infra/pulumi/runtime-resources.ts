@@ -12,6 +12,7 @@ interface Registration {
   importExisting?: boolean;
   retired?: boolean;
   deleteData?: boolean;
+  bootstrapProof?: object;
   mode?: "adopt" | "release";
   artifactDigest?: string;
   configDigest?: string;
@@ -35,6 +36,48 @@ export function registerRuntime(options: Registration) {
     name: worker.name,
     cloudId: worker.id,
   }));
+  const original = (options.manifest ?? {}) as Record<string, any>;
+  const releaseManifest =
+    options.mode === "release"
+      ? pulumi
+          .all([
+            pulumi.output(identities),
+            pulumi.output(options.dataInventory ?? []),
+          ])
+          .apply(([items, data]) => ({
+            ...original,
+            version: 1,
+            accountId: options.accountId,
+            environment: options.environment,
+            project: plan.descriptor.project,
+            stack: plan.descriptor.stack,
+            profile: {
+              ...(original.profile ?? {}),
+              enabledWorkers: items.map((row) => row.name).sort(),
+              retentionWorkerNames: (
+                original.profile?.retentionWorkerNames ?? []
+              ).filter((name: string) =>
+                items.some((row) => row.name === name),
+              ),
+            },
+            resources: [
+              ...(original.resources ?? []).filter(
+                (row: any) =>
+                  !["worker", "d1", "r2", "kv", "queue", "vectorize"].includes(
+                    row.kind,
+                  ),
+              ),
+              ...data,
+              ...items.map((row) => ({
+                ...original.resources?.find(
+                  (old: any) => old.kind === "worker" && old.name === row.name,
+                ),
+                kind: "worker",
+                ...row,
+              })),
+            ],
+          }))
+      : options.manifest;
   const release = plan.retired
     ? undefined
     : new RuntimeRelease(
@@ -44,14 +87,18 @@ export function registerRuntime(options: Registration) {
           environment: options.environment,
           workers: identities,
           mode: options.mode ?? "adopt",
-          adoptionManifest: options.manifest,
+          adoptionManifest: releaseManifest,
           artifactDigest: options.artifactDigest,
           configDigest: options.configDigest,
           artifactDirectory: options.artifactDirectory,
           deleteData: options.deleteData ?? false,
+          bootstrapProof: options.bootstrapProof,
         },
         runtimeDependencies,
-        { dependsOn: [...workers, ...(options.dataDependencies ?? [])] },
+        {
+          dependsOn: [...workers, ...(options.dataDependencies ?? [])],
+          protect: ["production", "shared"].includes(options.environment),
+        },
       );
   const inventory = pulumi.output({
     accountId: options.accountId,
@@ -120,6 +167,7 @@ export function registerConfiguredRuntime(
     importExisting: config.getBoolean("importRuntimeWorkers") ?? false,
     retired: config.getBoolean("runtimeRetired") ?? false,
     deleteData: config.getBoolean("deleteRuntimeData") ?? false,
+    bootstrapProof: config.getObject<object>("runtimeBootstrapProof"),
     mode,
     artifactDigest: config.get("artifactDigest"),
     configDigest: config.get("configDigest"),

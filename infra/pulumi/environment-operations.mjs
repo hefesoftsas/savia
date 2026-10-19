@@ -1,5 +1,12 @@
 import { createHash } from "node:crypto";
-import { mkdir, mkdtemp, readFile, writeFile, chmod } from "node:fs/promises";
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  writeFile,
+  chmod,
+  appendFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -286,6 +293,10 @@ export function createEnvironmentDependencies({
       (row) =>
         row.project === descriptor.project && row.stack === descriptor.stack,
     );
+    if (checkpoint && checkpoint.accountId !== accountId)
+      throw new Error(
+        "Selected checkpoint belongs to another Cloudflare account",
+      );
     if (checkpoint && checkpoint.backendUrl !== env.PULUMI_BACKEND_URL)
       throw new Error(
         "Environment checkpoint is in another verified backend; select that backend explicitly",
@@ -305,8 +316,37 @@ export function createEnvironmentDependencies({
     env: { ...executionEnv, PULUMI_ENABLE_STREAMING_JSON_PREVIEW: undefined },
     maxBuffer: 64 * 1024 * 1024,
   });
-  const command = (descriptor, args) =>
-    run("pulumi", args, options(descriptor));
+  let activeJournal;
+  const recordCommand = async (entry) => {
+    if (activeJournal)
+      await appendFile(
+        join(activeJournal, "commands.jsonl"),
+        JSON.stringify(entry) + "\n",
+        { mode: 0o600 },
+      );
+  };
+  const command = async (descriptor, args) => {
+    const entry = {
+      operation: args.slice(
+        0,
+        args[0] === "config" || args[0] === "state" || args[0] === "stack"
+          ? 2
+          : 1,
+      ),
+      stack: descriptor.stack,
+      ...(args[0] === "config" ? { key: args[2] } : {}),
+      ...(args[0] === "state" ? { urn: args[2] } : {}),
+    };
+    await recordCommand({ ...entry, status: "started" });
+    try {
+      const result = await run("pulumi", args, options(descriptor));
+      await recordCommand({ ...entry, status: "completed" });
+      return result;
+    } catch (error) {
+      await recordCommand({ ...entry, status: "failed" });
+      throw error;
+    }
+  };
   const setConfig = async (descriptor, key, value) =>
     command(descriptor, [
       "config",
@@ -491,6 +531,12 @@ export function createEnvironmentDependencies({
       deleteRuntimeData: false,
     }))
       await setConfig(descriptor, key, value);
+    if (release && descriptor.kind === "application")
+      await setConfig(
+        descriptor,
+        "adoptSearchIndex",
+        manifest.resources.some((row) => row.kind === "vectorize"),
+      );
     if (release)
       for (const key of ["artifactDirectory", "artifactDigest", "configDigest"])
         await setConfig(descriptor, key, release[key]);
@@ -618,6 +664,44 @@ export function createEnvironmentDependencies({
       "--non-interactive",
       "--json",
     ]);
+    if (
+      plan.operation === "provision" &&
+      !manifest.resources.length &&
+      plan.steps.every(
+        (step) =>
+          ["create", "same", "read", "refresh", "read-discard"].includes(
+            step.op,
+          ) ||
+          (step.op === "update" && step.type === "pulumi:pulumi:Stack"),
+      )
+    ) {
+      const resources = normalizeCheckpoint({
+        qualifiedStack: ctx.qualifiedStack,
+        backendUrl: ctx.backendUrl,
+        stateExport: await currentExport(descriptor),
+        accountId,
+      })
+        .resources.filter((row) =>
+          ["d1", "r2", "kv", "queue", "vectorize"].includes(row.kind),
+        )
+        .map(({ kind, name, cloudId }) => ({ kind, name, cloudId }));
+      await setConfig(descriptor, "runtimeBootstrapProof", {
+        version: 1,
+        accountId,
+        environment: descriptor.environment,
+        resources,
+        planDigest: plan.pulumiPlanDigest,
+      });
+    }
+    if (plan.operation === "release")
+      await command(descriptor, [
+        "config",
+        "rm",
+        `${descriptor.project}:runtimeBootstrapProof`,
+        "--stack",
+        descriptor.stack,
+        "--non-interactive",
+      ]);
     if (plan.operation === "adopt") {
       await setConfig(descriptor, "importRuntimeWorkers", false);
       if (descriptor.kind === "shared")
@@ -654,6 +738,7 @@ export function createEnvironmentDependencies({
       environment: descriptor.environment,
       manifestHash: adoptionManifestHash(manifest),
     });
+    activeJournal = directory;
     return directory;
   };
   const privateStage = async (directory, stage) =>
@@ -885,12 +970,23 @@ export function createEnvironmentDependencies({
         async () => {
           for (const row of rows.filter(
             (row) => row.type === "cloudflare:index/r2Bucket:R2Bucket",
-          ))
+          )) {
+            await recordCommand({
+              operation: ["r2", "empty"],
+              bucket: row.outputs.name,
+              status: "started",
+            });
             await emptyBucket({
               bucket: row.outputs.name,
               accountId,
               token: env.CLOUDFLARE_API_TOKEN,
             });
+            await recordCommand({
+              operation: ["r2", "empty"],
+              bucket: row.outputs.name,
+              status: "completed",
+            });
+          }
         },
       );
       stage = "data-deleted";

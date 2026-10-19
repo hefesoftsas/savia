@@ -126,7 +126,7 @@ export function createRuntimeCloudClient(
         parentWorker: route.script,
       }));
   }
-  async function readSnapshot() {
+  async function readSnapshot({ allowUndeployed = false } = {}) {
     const names = new Set(workers.map((w) => w.name));
     const namespaceIds = (await list("/workers/durable_objects/namespaces"))
       .filter((r) => names.has(r.script))
@@ -135,13 +135,24 @@ export function createRuntimeCloudClient(
         className: r.class,
         namespaceId: r.id,
       }));
-    const secretWorkerNames = [];
+    const secretWorkerNames = [],
+      undeployedWorkerNames = [],
+      maintenanceWorkerNames = [];
     const workerVersions = [],
       attachments = [];
     for (const worker of workers) {
       const native = await api(`/workers/workers/${worker.cloudId}`);
       if (native.id !== worker.cloudId || native.name !== worker.name)
         throw new Error("Cloudflare Worker identity mismatch");
+      if (native.deployed_on === null) {
+        if (!allowUndeployed)
+          throw new Error(
+            "Runtime identity is undeployed; bootstrap is required",
+          );
+        workerVersions.push({ ...worker, versionId: null });
+        undeployedWorkerNames.push(worker.name);
+        continue;
+      }
       const path = `/workers/scripts/${worker.name}`;
       const deployment = await api(`${path}/deployments`);
       const versions = deployment.deployments?.[0]?.versions;
@@ -157,6 +168,55 @@ export function createRuntimeCloudClient(
       const settings = await api(`${path}/settings`);
       if (settings.bindings?.some((binding) => binding.type === "secret_text"))
         secretWorkerNames.push(worker.name);
+      const flags = Object.fromEntries(
+        (settings.bindings ?? [])
+          .filter((binding) => binding.type === "plain_text")
+          .map((binding) => [binding.name, binding.text]),
+      );
+      let maintenance = [
+        "SAVIA_RUNTIME_BOOTSTRAP",
+        "SAVIA_RUNTIME_RETIRED",
+        "SAVIA_RUNTIME_WARMUP",
+        "SAVIA_MAINTENANCE",
+        "SAVIA_FLOWS_MAINTENANCE",
+      ].some((key) => flags[key] === "true");
+      if (
+        /^savia-flows(?:-preview)?$/.test(worker.name) &&
+        flags.SAVIA_FLOWS_EXECUTION_ENABLED === "true" &&
+        !maintenance
+      ) {
+        const database = settings.bindings?.find(
+          (binding) => binding.type === "d1" && binding.name === "DB",
+        );
+        if (!database || !/^[a-f\d-]{36}$/.test(database.id))
+          throw new Error("Flows policy database identity is unavailable");
+        const query = async (sql) => {
+          const result = await api(`/d1/database/${database.id}/query`, {
+            method: "POST",
+            body: { sql },
+          });
+          if (
+            !Array.isArray(result) ||
+            result.length !== 1 ||
+            result[0].success !== true ||
+            !Array.isArray(result[0].results)
+          )
+            throw new Error("Cannot observe Flows execution policy");
+          return result[0].results;
+        };
+        const tables = await query(
+          "SELECT name FROM sqlite_schema WHERE type = 'table' AND name = 'savia_flows_execution_control'",
+        );
+        if (tables.length) {
+          const rows = await query(
+            "SELECT paused, generation FROM savia_flows_execution_control WHERE id = 1",
+          );
+          if (rows.some((row) => row.paused !== 0 && row.paused !== 1))
+            throw new Error("Invalid Flows execution policy");
+          maintenance = rows.some((row) => row.paused === 1);
+        }
+      }
+      if (maintenance) maintenanceWorkerNames.push(worker.name);
       const schedule = await api(`${path}/schedules`);
       for (const row of schedule.schedules ?? [])
         attachments.push({
@@ -200,7 +260,14 @@ export function createRuntimeCloudClient(
       inputs.environment?.startsWith("branch-")
     )
       attachments.push(...(await readRoutes()));
-    return { workerVersions, namespaceIds, attachments, secretWorkerNames };
+    return {
+      workerVersions,
+      namespaceIds,
+      attachments,
+      secretWorkerNames,
+      undeployedWorkerNames,
+      maintenanceWorkerNames,
+    };
   }
   async function inspectReferences(manifest) {
     const names = new Set(
@@ -217,6 +284,7 @@ export function createRuntimeCloudClient(
       for (const id of [row.cloudId, row.name])
         dataTargets.set(`${row.kind}:${id}`, row.name);
     for (const worker of await list("/workers/workers")) {
+      if (worker.deployed_on === null) continue;
       const settings = await api(`/workers/scripts/${worker.name}/settings`);
       for (const binding of settings.bindings ?? []) {
         let target;

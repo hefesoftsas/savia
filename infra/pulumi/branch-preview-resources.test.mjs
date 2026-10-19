@@ -167,348 +167,80 @@ test("validates Pulumi outputs against the requested branch names and IDs", () =
   );
 });
 
-test("checks Cloudflare inventory before creating and adopting a remote branch stack", async () => {
-  const calls = [];
-  const events = [];
-  const names = previewNames("feature-login");
-  const outputs = {
-    branchSlug: "feature-login",
-    cloudflareAccountId: TEST_ACCOUNT_ID,
-    authDatabaseName: names.databases.auth,
-    domainDatabaseName: names.databases.domain,
-    documentsBucketName: names.bucket,
-    authD1Id: "auth-id",
-    domainD1Id: "domain-id",
-  };
-  const env = {
-    PULUMI_BACKEND_URL:
-      "s3://state?endpoint=account.r2.cloudflarestorage.com&region=auto",
-    PULUMI_CONFIG_PASSPHRASE: "passphrase-not-logged",
-    AWS_ACCESS_KEY_ID: "access-key-not-logged",
-    AWS_SECRET_ACCESS_KEY: "secret-key-not-logged",
-    CLOUDFLARE_ACCOUNT_ID: TEST_ACCOUNT_ID,
-    CLOUDFLARE_API_TOKEN: "token-not-logged",
-  };
-  const run = async (command, args) => {
-    calls.push([command, args]);
-    events.push({ type: "command", command, args });
-    if (args.includes("d1") && args.includes("list")) {
-      return {
-        stdout: JSON.stringify({
-          result: [
-            { name: names.databases.auth, uuid: "auth-id" },
-            { name: names.databases.domain, uuid: "domain-id" },
-          ],
-        }),
-      };
-    }
-    if (args[0] === "stack" && args[1] === "select") {
-      throw Object.assign(new Error("no stack named branch-feature-login"), {
-        stderr: "no stack named branch-feature-login",
-      });
-    }
-    if (args[0] === "stack" && args[1] === "output") {
-      return { stdout: JSON.stringify(outputs) };
-    }
-    if (args[0] === "preview") {
-      return { stdout: JSON.stringify({ changeSummary: { import: 3 } }) };
-    }
-    return { stdout: "" };
-  };
-
-  const result = await ensureBranchInfrastructure({
-    slug: "feature-login",
-    env,
-    run,
-    fetchImpl: async () => {
-      events.push({ type: "r2-list" });
-      return {
-        ok: true,
-        status: 200,
-        json: async () => ({
-          success: true,
-          result: { buckets: [{ name: names.bucket }] },
-          result_info: { total_count: 1 },
-        }),
-      };
+function branchDependencyFixture(outputs) {
+  const names = previewNames("feature-login"),
+    events = [];
+  const deps = {
+    context: async () => ({
+      checkpoint: outputs
+        ? {
+            stateExport: {
+              deployment: {
+                resources: [{ type: "pulumi:pulumi:Stack", outputs }],
+              },
+            },
+          }
+        : undefined,
+    }),
+    inventory: async () => ({
+      version: 1,
+      accountId: TEST_ACCOUNT_ID,
+      environment: "branch-feature-login",
+      project: "savia-branch-preview",
+      stack: "branch-feature-login",
+      profile: {
+        enabledWorkers: [],
+        flowsEnabled: false,
+        searchEnabled: false,
+        tenantSubdomains: [],
+      },
+      resources: [],
+    }),
+    assertManagementProtected: async () => true,
+    plan: async (args) => {
+      events.push(args);
+      return { operation: "provision" };
     },
-  });
-  assert.equal(result.stack, "branch-feature-login");
-  assert.deepEqual(result.outputs, outputs);
-  const initIndex = calls.findIndex(
-    ([, args]) => args[0] === "stack" && args[1] === "init",
-  );
-  const initEventIndex = events.findIndex(
-    (event) =>
-      event.type === "command" &&
-      event.args[0] === "stack" &&
-      event.args[1] === "init",
-  );
-  const r2InventoryIndex = events.findIndex(
-    (event) => event.type === "r2-list",
-  );
-  assert.ok(initIndex >= 0);
-  assert.ok(r2InventoryIndex >= 0);
-  assert.ok(initEventIndex > r2InventoryIndex);
-  const d1InventoryIndex = calls.findIndex(
-    ([, args]) => args.includes("d1") && args.includes("list"),
-  );
-  assert.ok(d1InventoryIndex >= 0 && d1InventoryIndex < initIndex);
-  const configCalls = calls.filter(
-    ([, args]) => args[0] === "config" && args[1] === "set",
-  );
-  assert.ok(
-    configCalls.some(
-      ([, args]) =>
-        args[2] === "importAuthD1Id" &&
-        args[3] === `${TEST_ACCOUNT_ID}/auth-id`,
-    ),
-  );
-  assert.ok(
-    configCalls.some(
-      ([, args]) =>
-        args[2] === "importBucketId" &&
-        args[3] === `${TEST_ACCOUNT_ID}/${names.bucket}/default`,
-    ),
-  );
-  assert.ok(
-    calls.some(
-      ([, args]) => args[0] === "preview" && args.includes("--save-plan"),
-    ),
-  );
-  assert.ok(
-    calls.some(([, args]) => args[0] === "up" && args.includes("--plan")),
-  );
-  assert.ok(
-    calls.every(
-      ([, args]) =>
-        !args.some((arg) =>
-          /passphrase-not-logged|access-key-not-logged|token-not-logged/.test(
-            arg,
-          ),
-        ),
-    ),
-  );
-});
-
-test("refuses an existing branch stack whose outputs name another branch before updating it", async () => {
-  const calls = [];
-  const names = previewNames("feature-login");
-  const env = {
-    PULUMI_BACKEND_URL:
-      "s3://state?endpoint=account.r2.cloudflarestorage.com&region=auto",
-    PULUMI_CONFIG_PASSPHRASE: "passphrase",
-    AWS_ACCESS_KEY_ID: "access-key",
-    AWS_SECRET_ACCESS_KEY: "secret-key",
-    CLOUDFLARE_ACCOUNT_ID: TEST_ACCOUNT_ID,
-    CLOUDFLARE_API_TOKEN: "token",
-  };
-  const run = async (command, args) => {
-    calls.push([command, args]);
-    if (args.includes("d1") && args.includes("list")) {
-      return { stdout: JSON.stringify({ result: [] }) };
-    }
-    if (args[0] === "stack" && args[1] === "output") {
-      return {
-        stdout: JSON.stringify({
-          branchSlug: "other-branch",
-          cloudflareAccountId: TEST_ACCOUNT_ID,
-          authDatabaseName: names.databases.auth,
-          domainDatabaseName: names.databases.domain,
-          documentsBucketName: names.bucket,
-          authD1Id: "auth-id",
-          domainD1Id: "domain-id",
-        }),
+    applyPlan: async () => {
+      events.push("apply");
+      outputs = {
+        branchSlug: "feature-login",
+        cloudflareAccountId: TEST_ACCOUNT_ID,
+        authDatabaseName: names.databases.auth,
+        domainDatabaseName: names.databases.domain,
+        documentsBucketName: names.bucket,
+        authD1Id: "auth-id",
+        domainD1Id: "domain-id",
       };
-    }
-    return { stdout: "" };
+      return { status: "applied" };
+    },
   };
-
+  return { deps, events };
+}
+test("legacy branch selection is read-only and rejects absent or mismatched stack outputs", async () => {
+  const { deps, events } = branchDependencyFixture();
   await assert.rejects(
-    ensureBranchInfrastructure({
+    selectBranchInfrastructure({
       slug: "feature-login",
-      env,
-      run,
-      fetchImpl: async () => ({
-        ok: true,
-        status: 200,
-        json: async () => ({
-          success: true,
-          result: { buckets: [] },
-          result_info: { total_count: 0 },
-        }),
-      }),
+      env: { CLOUDFLARE_ACCOUNT_ID: TEST_ACCOUNT_ID },
+      dependencies: deps,
     }),
-    /branch slug does not match/,
+    /No deployed stack/,
   );
-  assert.equal(
-    calls.some(([, args]) => args[0] === "up" || args[0] === "config"),
-    false,
-  );
-});
-
-test("destroy selection never initializes a missing branch stack", async () => {
-  const calls = [];
-  const env = {
-    PULUMI_BACKEND_URL:
-      "s3://state?endpoint=account.r2.cloudflarestorage.com&region=auto",
-    PULUMI_CONFIG_PASSPHRASE: "passphrase",
-    AWS_ACCESS_KEY_ID: "access-key",
-    AWS_SECRET_ACCESS_KEY: "secret-key",
-    CLOUDFLARE_ACCOUNT_ID: TEST_ACCOUNT_ID,
-    CLOUDFLARE_API_TOKEN: "token",
-  };
-  const run = async (command, args) => {
-    calls.push([command, args]);
-    if (args[0] === "stack" && args[1] === "select") {
-      throw Object.assign(new Error("no stack named branch-feature-login"), {
-        stderr: "no stack named branch-feature-login",
-      });
-    }
-    return { stdout: "" };
-  };
-  await assert.rejects(
-    selectBranchInfrastructure({ slug: "feature-login", env, run }),
-    /no stack named/,
-  );
-  assert.equal(
-    calls.some(([, args]) => args[0] === "stack" && args[1] === "init"),
-    false,
-  );
-});
-
-test("refuses a destructive saved plan before the Pulumi up command", async () => {
-  const calls = [];
-  const names = previewNames("feature-login");
-  const env = {
-    PULUMI_BACKEND_URL:
-      "s3://state?endpoint=account.r2.cloudflarestorage.com&region=auto",
-    PULUMI_CONFIG_PASSPHRASE: "passphrase",
-    AWS_ACCESS_KEY_ID: "access-key",
-    AWS_SECRET_ACCESS_KEY: "secret-key",
-    CLOUDFLARE_ACCOUNT_ID: TEST_ACCOUNT_ID,
-    CLOUDFLARE_API_TOKEN: "token",
-  };
-  const run = async (command, args) => {
-    calls.push([command, args]);
-    if (args.includes("d1") && args.includes("list")) {
-      return { stdout: JSON.stringify({ result: [] }) };
-    }
-    if (args[0] === "stack" && args[1] === "select") {
-      throw Object.assign(new Error("no stack named branch-feature-login"), {
-        stderr: "no stack named branch-feature-login",
-      });
-    }
-    if (args[0] === "preview") {
-      return { stdout: JSON.stringify({ changeSummary: { delete: 1 } }) };
-    }
-    if (args[0] === "stack" && args[1] === "output") {
-      return {
-        stdout: JSON.stringify({
-          branchSlug: "feature-login",
-          cloudflareAccountId: TEST_ACCOUNT_ID,
-          authDatabaseName: names.databases.auth,
-          domainDatabaseName: names.databases.domain,
-          documentsBucketName: names.bucket,
-          authD1Id: "auth-id",
-          domainD1Id: "domain-id",
-        }),
-      };
-    }
-    return { stdout: "" };
-  };
-
-  await assert.rejects(
-    ensureBranchInfrastructure({
-      slug: "feature-login",
-      env,
-      run,
-      fetchImpl: async () => ({
-        ok: true,
-        status: 200,
-        json: async () => ({
-          success: true,
-          result: { buckets: [] },
-          result_info: { total_count: 0 },
-        }),
-      }),
-    }),
-    /Refusing destructive infrastructure plan: delete/,
-  );
-  assert.equal(
-    calls.some(([, args]) => args[0] === "up"),
-    false,
-  );
-});
-
-test("allows an existing outputless branch stack only when its exported state has no managed resources", async () => {
-  const calls = [];
-  const names = previewNames("feature-login");
-  const outputs = {
-    branchSlug: "feature-login",
+  assert.deepEqual(events, []);
+  const wrong = branchDependencyFixture({
+    branchSlug: "other",
     cloudflareAccountId: TEST_ACCOUNT_ID,
-    authDatabaseName: names.databases.auth,
-    domainDatabaseName: names.databases.domain,
-    documentsBucketName: names.bucket,
-    authD1Id: "auth-id",
-    domainD1Id: "domain-id",
-  };
-  const env = {
-    PULUMI_BACKEND_URL:
-      "s3://state?endpoint=account.r2.cloudflarestorage.com&region=auto",
-    PULUMI_CONFIG_PASSPHRASE: "passphrase",
-    AWS_ACCESS_KEY_ID: "access-key",
-    AWS_SECRET_ACCESS_KEY: "secret-key",
-    CLOUDFLARE_ACCOUNT_ID: TEST_ACCOUNT_ID,
-    CLOUDFLARE_API_TOKEN: "token",
-  };
-  const run = async (command, args) => {
-    calls.push([command, args]);
-    if (args.includes("d1") && args.includes("list")) {
-      return { stdout: JSON.stringify({ result: [] }) };
-    }
-    if (args[0] === "stack" && args[1] === "output") {
-      return {
-        stdout:
-          calls.filter(([, callArgs]) => callArgs[1] === "output").length > 1
-            ? JSON.stringify(outputs)
-            : "{}",
-      };
-    }
-    if (args[0] === "stack" && args[1] === "export") {
-      return {
-        stdout: JSON.stringify({
-          deployment: {
-            resources: [
-              { type: "pulumi:pulumi:Stack" },
-              { type: "pulumi:providers:cloudflare" },
-            ],
-          },
-        }),
-      };
-    }
-    if (args[0] === "preview") {
-      return { stdout: JSON.stringify({ changeSummary: { create: 3 } }) };
-    }
-    return { stdout: "" };
-  };
-
-  const result = await ensureBranchInfrastructure({
-    slug: "feature-login",
-    env,
-    run,
-    fetchImpl: async () => ({
-      ok: true,
-      status: 200,
-      json: async () => ({
-        success: true,
-        result: { buckets: [] },
-        result_info: { total_count: 0 },
-      }),
-    }),
   });
-  assert.deepEqual(result.outputs, outputs);
-  assert.ok(calls.some(([, args]) => args[0] === "up"));
+  await assert.rejects(
+    ensureBranchInfrastructure({
+      slug: "feature-login",
+      env: { CLOUDFLARE_ACCOUNT_ID: TEST_ACCOUNT_ID },
+      dependencies: wrong.deps,
+    }),
+    /slug does not match/,
+  );
+  assert.deepEqual(wrong.events, []);
 });
 
 test("R2 inventory supports the current cursor schema and total-count-only terminal page", async () => {

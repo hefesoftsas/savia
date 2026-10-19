@@ -16,6 +16,7 @@ export interface RuntimeInputs {
   artifactDirectory?: pulumi.Input<string>;
   adoptionManifest?: pulumi.Input<object>;
   deleteData?: pulumi.Input<boolean>;
+  bootstrapProof?: pulumi.Input<object>;
 }
 
 export class RuntimeRelease extends pulumi.dynamic.Resource {

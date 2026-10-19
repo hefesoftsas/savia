@@ -17,6 +17,8 @@ import { verifyRuntimeArtifact, publishRuntime } from "./runtime-publisher.mjs";
 export function standardReleaseCommands({
   environment,
   provisionedFlows = false,
+  runtimeState = "active",
+  flowsPolicyGeneration,
   desiredFlows = false,
   configs,
   recoveryDirectory,
@@ -29,8 +31,17 @@ export function standardReleaseCommands({
     typeof desiredFlows !== "boolean"
   )
     throw new Error("Invalid Flows profile");
+  if (!["active", "maintenance"].includes(runtimeState))
+    throw new Error("Unknown existing runtime state");
   if (provisionedFlows && !desiredFlows)
     throw new Error("Preserve existing Flows data; pause execution instead");
+  if (
+    desiredFlows &&
+    (!Number.isSafeInteger(flowsPolicyGeneration) || flowsPolicyGeneration < 2)
+  )
+    throw new Error(
+      "A final Flows generation with a separate backup pause generation is required",
+    );
   if (!isAbsolute(recoveryDirectory ?? ""))
     throw new Error("Private recovery directory required");
   for (const path of Object.values(configs))
@@ -68,21 +79,23 @@ export function standardReleaseCommands({
       kind: "canonical-capture",
       metadataPath: join(recoveryDirectory, "canonical-domain-recovery.json"),
     });
-  if (provisionedFlows)
+  if (provisionedFlows && runtimeState === "active")
     quiesce.push({
       kind: "capture",
       metadataPath,
       configs: { agencies: configs.api, flows: configs.flows },
     });
   if (configs.backupCoordinator) quiesce.push(wrangler("backupCoordinator"));
+  quiesce.push(wrangler("api", ["--var", "SAVIA_MAINTENANCE:true"]));
   if (provisionedFlows) {
-    quiesce.push(wrangler("api", ["--var", "SAVIA_MAINTENANCE:true"]));
     quiesce.push(
       wrangler("flows", [
         "--var",
         "SAVIA_FLOWS_EXECUTION_ENABLED:false",
         "--var",
         "SAVIA_FLOWS_MAINTENANCE:true",
+        "--var",
+        `SAVIA_FLOWS_POLICY_GENERATION:${flowsPolicyGeneration - 1}`,
       ]),
     );
     quiesce.push({ kind: "drain", milliseconds: 45_000 });
@@ -118,7 +131,7 @@ export function standardReleaseCommands({
       kind: "remove-plaintext",
       paths: [backupDir, snapshot, archive],
     });
-  } else if (provisionedFlows) {
+  } else {
     backup.push(
       node("infra/pulumi/backup.mjs", [
         "--stack",
@@ -126,8 +139,7 @@ export function standardReleaseCommands({
         "--apply",
         "--confirm-quiescent",
         environment,
-        "--flows-snapshot",
-        snapshot,
+        ...(provisionedFlows ? ["--flows-snapshot", snapshot] : []),
         "--out-dir",
         backupDir,
       ]),
@@ -210,6 +222,7 @@ export async function createStandardPublisher(
     sleep = (ms) => new Promise((done) => setTimeout(done, ms)),
     capture = captureRecovery,
     restore = restoreRecovery,
+    encrypt = encryptBackup,
   } = {},
 ) {
   if (
@@ -254,12 +267,25 @@ export async function createStandardPublisher(
   if (!(await stat(migrationDirectory)).isDirectory())
     throw new Error("Frozen standard migrations are missing");
   const uploads = buildSecretUploads(inputs.environment, env);
+  const backupKey = env.SAVIA_BACKUP_KEY ?? env.SAVIA_FLOWS_BACKUP_KEY;
+  if (!/^[a-f\d]{64}$/i.test(backupKey ?? ""))
+    throw new Error(
+      "A 256-bit backup key is required before standard publication",
+    );
   for (const upload of uploads)
     if (!byName.has(upload.worker))
       throw new Error("Secret target missing from release profile");
+  const finalFlowsGeneration = configs.flows
+    ? Number(
+        JSON.parse(await readFile(configs.flows, "utf8")).vars
+          ?.SAVIA_FLOWS_POLICY_GENERATION,
+      )
+    : undefined;
   const plan = standardReleaseCommands({
     environment: inputs.environment,
     provisionedFlows: env.SAVIA_FLOWS_PROVISIONED === "true",
+    runtimeState: env.SAVIA_FLOWS_RUNTIME_STATE ?? "active",
+    flowsPolicyGeneration: finalFlowsGeneration,
     desiredFlows: !!configs.flows,
     configs,
     recoveryDirectory,
@@ -307,11 +333,7 @@ export async function createStandardPublisher(
         { cwd: root, env },
       );
       try {
-        await encryptBackup(
-          step.archive,
-          step.output,
-          env.SAVIA_FLOWS_BACKUP_KEY,
-        );
+        await encrypt(step.archive, step.output, backupKey);
       } finally {
         await rm(step.archive, { force: true });
       }

@@ -8,6 +8,7 @@ const inputKeys = [
   "artifactDirectory",
   "adoptionManifest",
   "deleteData",
+  "bootstrapProof",
 ];
 export function validateRuntimeInputs(inputs) {
   if (!inputs || Object.keys(inputs).some((k) => !inputKeys.includes(k)))
@@ -152,6 +153,36 @@ export function validateRuntimeInputs(inputs) {
     )
       throw new Error("Adoption manifest does not match runtime identity");
   }
+  if (inputs.bootstrapProof !== undefined) {
+    const proof = inputs.bootstrapProof;
+    if (
+      !proof ||
+      Object.keys(proof).some(
+        (key) =>
+          ![
+            "version",
+            "accountId",
+            "environment",
+            "resources",
+            "planDigest",
+          ].includes(key),
+      ) ||
+      proof.version !== 1 ||
+      proof.accountId !== inputs.accountId ||
+      proof.environment !== inputs.environment ||
+      !/^[a-f\d]{64}$/.test(proof.planDigest ?? "") ||
+      !Array.isArray(proof.resources) ||
+      proof.resources.some(
+        (row) =>
+          !row ||
+          Object.keys(row).sort().join(",") !== "cloudId,kind,name" ||
+          !["d1", "r2", "kv", "queue", "vectorize"].includes(row.kind) ||
+          typeof row.name !== "string" ||
+          typeof row.cloudId !== "string",
+      )
+    )
+      throw new Error("Invalid public bootstrap proof");
+  }
   for (const key of ["deleteData"])
     if (inputs[key] !== undefined && typeof inputs[key] !== "boolean")
       throw new Error(`Invalid ${key}`);
@@ -209,7 +240,7 @@ function cleanSnapshot(snapshot, inputs) {
     ({ name, cloudId, versionId }) => {
       if (
         !inputs.workers.some((w) => w.name === name && w.cloudId === cloudId) ||
-        typeof versionId !== "string"
+        (versionId !== null && typeof versionId !== "string")
       )
         throw new Error("Snapshot Worker identity mismatch");
       return { name, cloudId, versionId };
@@ -258,7 +289,21 @@ function cleanSnapshot(snapshot, inputs) {
       ...namespaceIds.map((row) => row.workerName),
     ]),
   ].sort();
-  return { workerVersions, namespaceIds, attachments, retentionWorkerNames };
+  const maintenanceWorkerNames = snapshot.maintenanceWorkerNames ?? [];
+  if (
+    !Array.isArray(maintenanceWorkerNames) ||
+    maintenanceWorkerNames.some(
+      (name) => !inputs.workers.some((worker) => worker.name === name),
+    )
+  )
+    throw new Error("Invalid maintenance host metadata");
+  return {
+    workerVersions,
+    namespaceIds,
+    attachments,
+    retentionWorkerNames,
+    observedMaintenance: maintenanceWorkerNames.length > 0,
+  };
 }
 const sorted = (rows) =>
   JSON.stringify(
@@ -272,7 +317,10 @@ const sorted = (rows) =>
   );
 export async function readRuntime(inputs, previous, deps) {
   validateRuntimeInputs(inputs);
-  const live = cleanSnapshot(await deps.readSnapshot(inputs), inputs);
+  const { observedMaintenance, ...live } = cleanSnapshot(
+    await deps.readSnapshot(inputs),
+    inputs,
+  );
   const drift =
     previous?.status === "ready" &&
     previous.workerVersions &&
@@ -282,7 +330,12 @@ export async function readRuntime(inputs, previous, deps) {
     runtimeId: `${inputs.accountId}/${inputs.environment}`,
     ...live,
     releaseDigest: previous?.releaseDigest ?? null,
-    status: drift ? "maintenance" : (previous?.status ?? "adopted"),
+    status:
+      observedMaintenance ||
+      drift ||
+      live.workerVersions.some((row) => row.versionId === null)
+        ? "maintenance"
+        : (previous?.status ?? "adopted"),
   };
 }
 export async function adoptRuntime(inputs, deps) {
@@ -318,9 +371,19 @@ export async function releaseRuntime(previous, inputs, deps) {
   )
     throw new Error("Invalid bootstrap Worker identities");
   const before = await readRuntime(inputs, previous, deps);
+  if (before.workerVersions.some((row) => row.versionId === null))
+    throw new Error("Runtime bootstrap did not publish every identity");
   try {
     await deps.publish(inputs, before);
-    const after = await readRuntime(inputs, previous, deps);
+    const observed = await deps.readSnapshot(inputs);
+    if (cleanSnapshot(observed, inputs).observedMaintenance)
+      throw new Error("Publication left the runtime in maintenance");
+    const after = await readRuntime(inputs, previous, {
+      ...deps,
+      readSnapshot: async () => observed,
+    });
+    if (after.workerVersions.some((row) => row.versionId === null))
+      throw new Error("Publication left an undeployed Worker identity");
     const key = (row) => `${row.workerName}/${row.className}`;
     const oldNamespaces = new Map(
       before.namespaceIds.map((row) => [key(row), row.namespaceId]),

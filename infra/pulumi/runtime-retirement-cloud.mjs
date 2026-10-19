@@ -20,7 +20,7 @@ export async function retireCloudRuntime(
   const environment = resolveEnvironment(inputs.environment);
   if (!["application", "branch"].includes(environment.kind))
     throw new Error("Shared and management environments are protected");
-  const live = await client.readSnapshot();
+  const live = await client.readSnapshot({ allowUndeployed: true });
   for (const old of state.namespaceIds ?? [])
     if (
       !live.namespaceIds.some(
@@ -75,6 +75,13 @@ export async function retireCloudRuntime(
   const configs = new Map();
   // Prepare every target/class before stopping any producer or ingress.
   for (const worker of inputs.workers) {
+    if (live.undeployedWorkerNames?.includes(worker.name)) {
+      if (live.namespaceIds.some((row) => row.workerName === worker.name))
+        throw new Error(
+          "Undeployed host has namespace data; reconcile its lifecycle before retirement",
+        );
+      continue;
+    }
     const settings = await client.api(
       `/workers/scripts/${worker.name}/settings`,
     );
@@ -124,6 +131,7 @@ export async function retireCloudRuntime(
       main,
       compatibility_date: settings.compatibility_date ?? "2026-10-01",
       compatibility_flags: settings.compatibility_flags ?? [],
+      vars: { SAVIA_RUNTIME_RETIRED: "true" },
       workers_dev: false,
       preview_urls: false,
       routes: [],
@@ -140,9 +148,10 @@ export async function retireCloudRuntime(
   }
   const publish = async (names) => {
     for (const name of names)
-      await runWrangler(["deploy", "--config", configs.get(name)], {
-        cwd: directory,
-      });
+      if (!live.undeployedWorkerNames?.includes(name))
+        await runWrangler(["deploy", "--config", configs.get(name)], {
+          cwd: directory,
+        });
   };
   return retireRuntime(
     { ...state, retentionWorkerNames: retainedSecrets },
@@ -151,10 +160,11 @@ export async function retireCloudRuntime(
       inspectReferences: () => client.inspectReferences(manifest),
       stopProducers: async () => {
         for (const worker of inputs.workers)
-          await client.api(`/workers/scripts/${worker.name}/schedules`, {
-            method: "PUT",
-            body: [],
-          });
+          if (!live.undeployedWorkerNames?.includes(worker.name))
+            await client.api(`/workers/scripts/${worker.name}/schedules`, {
+              method: "PUT",
+              body: [],
+            });
         const consumers = live.attachments.filter(
           (row) => row.kind === "consumer",
         );
@@ -171,10 +181,11 @@ export async function retireCloudRuntime(
       },
       removeIngress: async () => {
         for (const worker of inputs.workers)
-          await client.api(`/workers/scripts/${worker.name}/subdomain`, {
-            method: "POST",
-            body: { enabled: false, previews_enabled: false },
-          });
+          if (!live.undeployedWorkerNames?.includes(worker.name))
+            await client.api(`/workers/scripts/${worker.name}/subdomain`, {
+              method: "POST",
+              body: { enabled: false, previews_enabled: false },
+            });
         for (const row of live.attachments) {
           if (row.kind === "domain")
             await client.api(`/workers/domains/${row.cloudId}`, {
@@ -195,7 +206,8 @@ export async function retireCloudRuntime(
         ))
           await client.api(`/workflows/${row.name}`, { method: "DELETE" });
       },
-      readNamespaces: async () => (await client.readSnapshot()).namespaceIds,
+      readNamespaces: async () =>
+        (await client.readSnapshot({ allowUndeployed: true })).namespaceIds,
     },
   );
 }

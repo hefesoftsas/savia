@@ -28,14 +28,14 @@ export async function listEnvironmentCloudResources({
     { env },
   );
   const [snapshot, routes] = await Promise.all([
-    client.readSnapshot(),
+    client.readSnapshot({ allowUndeployed: true }),
     client.readRoutes(),
   ]);
   const rows = [];
   for (const worker of workers) {
-    const settings = await client.api(
-      `/workers/scripts/${worker.name}/settings`,
-    );
+    const settings = snapshot.undeployedWorkerNames?.includes(worker.name)
+      ? { bindings: [] }
+      : await client.api(`/workers/scripts/${worker.name}/settings`);
     const dependencies = [
       ...new Set(
         (settings.bindings ?? []).flatMap((binding) =>
@@ -53,8 +53,9 @@ export async function listEnvironmentCloudResources({
       kind: "worker",
       ...worker,
       accountId,
-      versionId: snapshot.workerVersions.find((row) => row.name === worker.name)
-        ?.versionId,
+      versionId:
+        snapshot.workerVersions.find((row) => row.name === worker.name)
+          ?.versionId ?? undefined,
       hasOpaqueSecrets: snapshot.secretWorkerNames.includes(worker.name),
       dependencies,
     });

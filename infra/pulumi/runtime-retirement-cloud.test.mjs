@@ -73,3 +73,36 @@ test("cloud retirement keeps opaque keys without reading artifacts or serializin
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+test("retiring an undeployed native identity does not publish or query nonexistent script endpoints", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "savia-undeployed-retire-"));
+  try {
+    const accountId = "a".repeat(32),
+      workers = [{ name: "savia-preview", cloudId: "b".repeat(32) }],
+      snapshot = {
+        workerVersions: [{ ...workers[0], versionId: null }],
+        namespaceIds: [],
+        attachments: [],
+        secretWorkerNames: [],
+        undeployedWorkerNames: ["savia-preview"],
+      };
+    const result = await retireCloudRuntime(
+      { accountId, environment: "preview", workers },
+      snapshot,
+      { deleteData: false },
+      {
+        directory,
+        client: {
+          readSnapshot: async () => snapshot,
+          inspectReferences: async () => [],
+          api: async () => assert.fail("queried script endpoint"),
+        },
+        runWrangler: async () => assert.fail("published code"),
+        sleep: async () => {},
+      },
+    );
+    assert.deepEqual(result.deletedWorkers, ["savia-preview"]);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});

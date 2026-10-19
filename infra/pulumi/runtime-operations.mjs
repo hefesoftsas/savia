@@ -1,10 +1,12 @@
-import { mkdtemp } from "node:fs/promises";
+import { mkdtemp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRuntimeCloudClient } from "./runtime-cloud.mjs";
 import { bootstrapRuntimeWorkers } from "./runtime-bootstrap.mjs";
+import { assertRuntimeBindings } from "./runtime-bindings.mjs";
 import { verifyRuntimeArtifact } from "./runtime-publisher.mjs";
+import { warmupStandardRuntime } from "./runtime-warmup.mjs";
 import { createStandardPublisher } from "./runtime-publisher-standard.mjs";
 import { createBranchPublisher } from "./runtime-publisher-prepared-branch.mjs";
 import { publishRegistryRuntime } from "./runtime-publisher-registry.mjs";
@@ -45,17 +47,27 @@ export function createRuntimeOperations(
   const mutationGate = () => {
     if (
       inputs.environment === "production" &&
-      env.PRODUCTION_OPERATIONS_ENABLED !== "true"
+      (env.PRODUCTION_OPERATIONS_ENABLED !== "true" ||
+        env.GITHUB_REF !== "refs/heads/main")
     )
       throw new Error("Production operations are disabled");
     if (env.CLOUDFLARE_ACCOUNT_ID !== inputs.accountId)
       throw new Error("Runtime execution account mismatch");
   };
   return {
-    readSnapshot: () => client.readSnapshot(),
+    readSnapshot: () =>
+      client.readSnapshot({ allowUndeployed: inputs.mode === "adopt" }),
     verifyArtifact: async () => {
       mutationGate();
       const manifest = await verifyRuntimeArtifact(inputs);
+      const configs = await Promise.all(
+        manifest.configs.map(async (file) =>
+          JSON.parse(
+            await readFile(join(inputs.artifactDirectory, file), "utf8"),
+          ),
+        ),
+      );
+      assertRuntimeBindings(inputs, configs);
       if (environment.kind === "application")
         publisher = await createStandardPublisher(inputs, {
           env,
@@ -68,11 +80,64 @@ export function createRuntimeOperations(
     },
     bootstrap: async () => {
       mutationGate();
+      let retained = false,
+        paused = false;
+      if (environment.kind === "application") {
+        const observation = await client.readSnapshot({
+          allowUndeployed: true,
+        });
+        paused = !!observation.maintenanceWorkerNames?.length;
+        for (const worker of observation.workerVersions.filter(
+          (row) => row.versionId !== null,
+        )) {
+          const settings = await client.api(
+            `/workers/scripts/${worker.name}/settings`,
+          );
+          retained ||=
+            settings.bindings?.some(
+              (binding) =>
+                binding.type === "plain_text" &&
+                ["SAVIA_RUNTIME_RETIRED", "SAVIA_RUNTIME_WARMUP"].includes(
+                  binding.name,
+                ) &&
+                binding.text === "true",
+            ) ?? false;
+        }
+      }
       bootstrap = await bootstrapRuntimeWorkers(inputs, {
         client,
         directory: await work(),
         runWrangler,
       });
+      if (environment.kind === "application") {
+        const fresh = bootstrap.createdWorkers.length === inputs.workers.length;
+        if (bootstrap.createdWorkers.length && !fresh && !retained)
+          throw new Error(
+            "Partial standard bootstrap requires explicit lifecycle reconciliation before publication",
+          );
+        if (fresh || retained)
+          await warmupStandardRuntime(inputs, {
+            client,
+            env,
+            root,
+            directory: join(await work(), "warmup"),
+            run,
+            runWrangler,
+            createdWorkers: bootstrap.createdWorkers,
+            fresh,
+          });
+        publisher = await createStandardPublisher(inputs, {
+          env: {
+            ...env,
+            SAVIA_FLOWS_RUNTIME_STATE:
+              fresh || retained || paused ? "maintenance" : "active",
+          },
+          root,
+          recoveryDirectory: join(await work(), "recovery"),
+          run,
+          runWrangler,
+        });
+      }
       return bootstrap;
     },
     publish: async () => {

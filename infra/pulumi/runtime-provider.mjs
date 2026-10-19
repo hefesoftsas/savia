@@ -16,6 +16,7 @@ const keys = [
   "artifactDirectory",
   "adoptionManifest",
   "deleteData",
+  "bootstrapProof",
 ];
 const outputKeys = [
   "retentionWorkerNames",

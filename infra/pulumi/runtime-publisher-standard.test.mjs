@@ -14,6 +14,7 @@ test("standard commands preserve coordinator, backup, migration and publication 
     environment: "preview",
     provisionedFlows: true,
     desiredFlows: true,
+    flowsPolicyGeneration: 100,
     configs: {
       backupCoordinator: "/f/coordinator.json",
       api: "/f/api.json",
@@ -86,6 +87,7 @@ test("the concrete standard publisher uses existing helpers and never places sec
       SAVIA_DEPLOY_ENVIRONMENT: "preview",
       SAVIA_FLOWS_PROVISIONED: "false",
       SAVIA_DOMAIN_D1_ID: "domain-id",
+      SAVIA_BACKUP_KEY: "a".repeat(64),
     };
     for (const key of [
       "BETTER_AUTH_SECRET",
@@ -102,6 +104,7 @@ test("the concrete standard publisher uses existing helpers and never places sec
       env,
       root,
       recoveryDirectory: join(root, "recovery"),
+      encrypt: async () => {},
       run: async (binary, args, options) =>
         calls.push({ binary, args, input: options.input }),
       runWrangler: async (args, options) =>
@@ -109,12 +112,17 @@ test("the concrete standard publisher uses existing helpers and never places sec
     };
     const publisher = await createStandardPublisher(inputs, deps);
     await publisher.publish();
-    assert.equal(calls[0].binary, "node");
-    assert.ok(calls[0].args.includes("--migrations-dir"));
-    assert.equal(
-      calls[0].args[0].endsWith("scripts/apply-d1-migrations.mjs"),
-      true,
+    const pause = calls.findIndex((row) =>
+      row.args.includes("SAVIA_MAINTENANCE:true"),
     );
+    const backup = calls.findIndex((row) =>
+      row.args[0]?.endsWith("infra/pulumi/backup.mjs"),
+    );
+    const migrate = calls.findIndex((row) =>
+      row.args[0]?.endsWith("scripts/apply-d1-migrations.mjs"),
+    );
+    assert.ok(pause >= 0 && backup > pause && migrate > backup);
+    assert.ok(calls[migrate].args.includes("--migrations-dir"));
     assert.equal(
       calls.some((row) => row.input?.includes("SECRET_CANARY")),
       true,
@@ -149,8 +157,12 @@ test("a first install skips existing-data capture but keeps the dependency order
     },
     recoveryDirectory: "/private/recovery",
   });
-  assert.deepEqual(plan.quiesce, []);
-  assert.deepEqual(plan.backup, []);
+  assert.deepEqual(
+    plan.quiesce.map((step) => step.worker),
+    ["api"],
+  );
+  assert.equal(plan.backup[0].script, "infra/pulumi/backup.mjs");
+  assert.equal(plan.backup[0].args.includes("--flows-snapshot"), false);
   assert.deepEqual(
     plan.deploy.map((step) => step.worker),
     ["api", "auth", "gateway"],
@@ -169,4 +181,54 @@ test("a first install skips existing-data capture but keeps the dependency order
       }),
     /preserve|Flows/,
   );
+});
+
+test("restoring retained maintenance hosts skips active-policy capture but still pauses and backs up all Flows data", () => {
+  const plan = standardReleaseCommands({
+    environment: "preview",
+    provisionedFlows: true,
+    desiredFlows: true,
+    flowsPolicyGeneration: 100,
+    runtimeState: "maintenance",
+    configs: {
+      api: "/f/api.json",
+      auth: "/f/auth.json",
+      gateway: "/f/gateway.json",
+      flows: "/f/flows.json",
+      backupCoordinator: "/f/coordinator.json",
+    },
+    recoveryDirectory: "/private/recovery",
+  });
+  assert.equal(
+    plan.quiesce.some((step) => step.kind === "capture"),
+    false,
+  );
+  assert.equal(
+    plan.quiesce.filter((step) => step.kind === "wrangler").length,
+    3,
+  );
+  assert.ok(
+    plan.backup.some((step) => step.script === "scripts/flows-maintenance.mjs"),
+  );
+  assert.ok(
+    plan.backup.some((step) => step.script === "infra/pulumi/backup.mjs"),
+  );
+});
+
+test("the backup pause consumes a lower generation than the one immutable final release", () => {
+  const plan = standardReleaseCommands({
+    environment: "preview",
+    provisionedFlows: true,
+    desiredFlows: true,
+    flowsPolicyGeneration: 100,
+    configs: {
+      api: "/f/api.json",
+      auth: "/f/auth.json",
+      gateway: "/f/gateway.json",
+      flows: "/f/flows.json",
+    },
+    recoveryDirectory: "/private/recovery",
+  });
+  const paused = plan.quiesce.find((step) => step.worker === "flows");
+  assert.ok(paused.args.includes("SAVIA_FLOWS_POLICY_GENERATION:99"));
 });

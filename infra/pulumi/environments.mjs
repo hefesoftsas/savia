@@ -64,6 +64,11 @@ export function resourcePolicy(environment, profile = {}) {
     add("d1", Object.values(names.databases));
     add("r2", [names.bucket]);
     parentRules.set("cron", new Set([names.workers.api]));
+    add("durableObject", [
+      `${names.workers.api}_RealtimeHub`,
+      `${names.workers.api}_WhatsappDispatcher`,
+    ]);
+    parentRules.set("durableObject", new Set([names.workers.api]));
   } else {
     const preview = environment === "preview";
     const names = resolveInfraNames({

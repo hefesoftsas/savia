@@ -17,13 +17,38 @@ function outside(root, path) {
     isAbsolute(difference)
   );
 }
+export function assertCredentialFreeConfig(config) {
+  const credential =
+    /(?:^|_)(?:SECRET|PASSWORD|API_KEY|ENCRYPTION_KEY|SIGNING_KEY|ACCESS_TOKEN|API_TOKEN|CREDENTIALS)$/i;
+  function inspect(value) {
+    if (!value || typeof value !== "object") return;
+    for (const [key, item] of Object.entries(value)) {
+      if (credential.test(key))
+        throw new Error("Immutable artifact cannot contain credential values");
+      inspect(item);
+    }
+  }
+  inspect(config.vars);
+  if (
+    config.env ||
+    config.api_token ||
+    config.api_key ||
+    (config.secrets &&
+      Object.keys(config.secrets).some((key) => key !== "required"))
+  )
+    throw new Error(
+      "Immutable artifact cannot contain credential or environment overrides",
+    );
+}
 function validateFrozenConfig(root, name, config) {
+  assertCredentialFreeConfig(config);
   if (config.build?.command || config.build?.cwd)
     throw new Error("Immutable artifacts cannot run a custom build");
   const paths = [
     config.main,
     config.assets?.directory,
     config.migrations_dir,
+    ...(config.d1_databases ?? []).map((binding) => binding.migrations_dir),
     ...Object.values(config.wasm_modules ?? {}),
     ...Object.values(config.text_blobs ?? {}),
     ...Object.values(config.data_blobs ?? {}),
