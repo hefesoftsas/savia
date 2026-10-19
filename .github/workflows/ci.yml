@@ -24,6 +24,8 @@ jobs:
       flows: ${{ steps.plan.outputs.flows }}
       plugins: ${{ steps.plan.outputs.plugins }}
       plugin_only: ${{ steps.plan.outputs.plugin_only }}
+      ci_kind: ${{ steps.plan.outputs.ci_kind }}
+      ci_flows: ${{ steps.plan.outputs.ci_flows }}
     steps:
       - name: Check out source history
         uses: actions/checkout@v4
@@ -56,10 +58,27 @@ jobs:
           trusted_script="$RUNNER_TEMP/preview-change-plan.mjs"
           if [[ -n "$BASE_SHA" ]] && git show "$BASE_SHA:scripts/preview-change-plan.mjs" > "$trusted_script" 2>/dev/null; then
             node "$trusted_script" --base "$BASE_SHA" --head "$HEAD_SHA" --output "$GITHUB_OUTPUT"
+            ci_output="$RUNNER_TEMP/preview-change-plan-ci-output"
+            rm -f "$ci_output"
+            touch "$ci_output"
+            if node "$trusted_script" --ci --base "$BASE_SHA" --head "$HEAD_SHA" --output "$ci_output" \
+              && [[ "$(grep -c '^ci_kind=' "$ci_output")" == 1 ]] \
+              && [[ "$(grep -c '^ci_flows=' "$ci_output")" == 1 ]] \
+              && { { grep -Fxq 'ci_kind=full' "$ci_output" && grep -Fxq 'ci_flows=true' "$ci_output"; } || { grep -Exq 'ci_kind=(infrastructure|plugin|none)' "$ci_output" && grep -Fxq 'ci_flows=false' "$ci_output"; }; }; then
+              cat "$ci_output" >> "$GITHUB_OUTPUT"
+            else
+              {
+                echo 'ci_kind=full'
+                echo 'ci_flows=true'
+                echo 'reasons=["Trusted base classifier lacks CI classification; running full CI."]'
+              } >> "$GITHUB_OUTPUT"
+            fi
           else
             {
               echo 'kind=platform'
               echo 'flows=true'
+              echo 'ci_kind=full'
+              echo 'ci_flows=true'
               echo 'plugins=[]'
               echo 'plugin_only=false'
               echo 'reasons=["Trusted classifier or usable base revision unavailable; running full CI."]'
@@ -121,7 +140,7 @@ jobs:
   admin:
     name: Admin unit tests (shard 1/6)
     needs: changes
-    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.kind == 'platform')
+    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full')
     timeout-minutes: 15
     runs-on: ubuntu-24.04
     env:
@@ -149,7 +168,7 @@ jobs:
 
   admin-2:
     needs: changes
-    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.kind == 'platform')
+    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full')
     name: Admin unit tests (shard 2/6)
     timeout-minutes: 15
     runs-on: ubuntu-24.04
@@ -178,7 +197,7 @@ jobs:
 
   admin-3:
     needs: changes
-    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.kind == 'platform')
+    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full')
     name: Admin unit tests (shard 3/6)
     timeout-minutes: 15
     runs-on: ubuntu-24.04
@@ -207,7 +226,7 @@ jobs:
 
   admin-4:
     needs: changes
-    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.kind == 'platform')
+    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full')
     name: Admin unit tests (shard 4/6)
     timeout-minutes: 15
     runs-on: ubuntu-24.04
@@ -236,7 +255,7 @@ jobs:
 
   admin-5:
     needs: changes
-    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.kind == 'platform')
+    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full')
     name: Admin unit tests (shard 5/6)
     timeout-minutes: 15
     runs-on: ubuntu-24.04
@@ -265,7 +284,7 @@ jobs:
 
   admin-6:
     needs: changes
-    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.kind == 'platform')
+    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full')
     name: Admin unit tests (shard 6/6)
     timeout-minutes: 15
     runs-on: ubuntu-24.04
@@ -294,7 +313,7 @@ jobs:
 
   api:
     needs: changes
-    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.kind == 'platform')
+    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full')
     name: API unit tests (shard 1/3)
     timeout-minutes: 15
     runs-on: ubuntu-24.04
@@ -323,7 +342,7 @@ jobs:
 
   api-2:
     needs: changes
-    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.kind == 'platform')
+    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full')
     name: API unit tests (shard 2/3)
     timeout-minutes: 15
     runs-on: ubuntu-24.04
@@ -352,7 +371,7 @@ jobs:
 
   api-3:
     needs: changes
-    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.kind == 'platform')
+    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full')
     name: API unit tests (shard 3/3)
     timeout-minutes: 15
     runs-on: ubuntu-24.04
@@ -381,7 +400,7 @@ jobs:
 
   workspace:
     needs: changes
-    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.kind == 'platform')
+    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full')
     name: Workspace unit tests (Core packages)
     timeout-minutes: 10
     runs-on: ubuntu-24.04
@@ -410,7 +429,7 @@ jobs:
 
   workspace-2:
     needs: changes
-    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.kind == 'platform')
+    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full')
     name: Workspace unit tests (Insurance solutions)
     timeout-minutes: 10
     runs-on: ubuntu-24.04
@@ -439,7 +458,7 @@ jobs:
 
   workspace-3:
     needs: changes
-    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.kind == 'platform')
+    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full')
     name: Workspace unit tests (Studio server 1/2)
     timeout-minutes: 10
     runs-on: ubuntu-24.04
@@ -468,7 +487,7 @@ jobs:
 
   workspace-4:
     needs: changes
-    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.kind == 'platform')
+    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full')
     name: Workspace unit tests (Studio server 2/2)
     timeout-minutes: 10
     runs-on: ubuntu-24.04
@@ -535,9 +554,13 @@ jobs:
       - name: Run contract tests
         run: pnpm run test:contracts
 
+      - name: Run offline Flows recovery contracts for infrastructure changes
+        if: needs.changes.outputs.ci_kind == 'infrastructure'
+        run: node --test --test-concurrency=1 scripts/flows-*.test.mjs scripts/flows-maintenance/*.test.mjs scripts/encrypt-flows-backup.test.mjs scripts/verify-flows-preview.test.mjs
+
   typecheck:
     needs: changes
-    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.kind == 'platform')
+    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full')
     name: Type-check (Core & Apps)
     timeout-minutes: 10
     runs-on: ubuntu-24.04
@@ -566,7 +589,7 @@ jobs:
 
   typecheck-2:
     needs: changes
-    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.kind == 'platform')
+    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full')
     name: Type-check (Insurance solutions)
     timeout-minutes: 10
     runs-on: ubuntu-24.04
@@ -596,7 +619,7 @@ jobs:
   flows:
     name: Flows runtime and preview readiness
     needs: changes
-    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.flows == 'true')
+    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.ci_flows == 'true')
     timeout-minutes: 25
     runs-on: ubuntu-24.04
     env:

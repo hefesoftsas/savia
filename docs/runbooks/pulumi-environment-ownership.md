@@ -18,6 +18,36 @@ There are no competing native attachment resources. D1/R2/KV/queues/Vectorize
 remain separately owned persistence resources. Secrets come from existing
 operation-time custody and never enter artifacts or dynamic provider inputs.
 
+## Local CLI preflight
+
+Run this before opening an infrastructure PR:
+
+```sh
+npm ci --prefix infra/pulumi --ignore-scripts
+pnpm infra:preflight
+```
+
+The preflight requires the pinned Pulumi CLI 3.268.0 on `PATH`; an explicit binary
+can be selected with `SAVIA_PULUMI_COMMAND=/absolute/path/to/pulumi`. CI installs
+that exact CLI through the existing infrastructure toolchain action.
+
+The real CLI initializes two disposable stacks on a private temporary file
+backend. It verifies empty checkpoint exports, a root-only saved plan/apply,
+recovery of last-applied configuration into a separate file, secret redaction,
+and transfer of a synthetic protected bucket checkpoint with unchanged identity
+and protection. It isolates the CLI home and environment, excludes cloud/backend
+credentials and login sessions, and removes the temporary backend on success or
+failure. Its local `up`, checkpoint import, and state move cannot operate on the
+configured remote backend. The synthetic bucket is never declared by a program
+or passed to a Cloudflare provider.
+
+This checks engine/configuration compatibility without Cloudflare access. Before
+a live operation, run the existing protected `ownership-audit` workflow against
+the exact reviewed `main` revision and inspect each target environment's actual
+plan. The local probe does not establish live permissions, native provider import
+readbacks, environment health, or absence of cloud drift. Preserve the existing
+account, production, saved-plan, workflow freeze, and private custody gates.
+
 ## Ordinary operations
 
 Run from the repository root using the matching existing backend credentials:

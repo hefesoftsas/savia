@@ -251,10 +251,88 @@ export function classifyChanges({ base, head, repo = process.cwd() } = {}) {
   ]);
 }
 
+/**
+ * Classify changes for CI without changing the release-facing classifier.
+ * Only Pulumi project files, with optional documentation, can use the
+ * infrastructure lane. Everything else keeps the existing plugin/docs
+ * behavior or runs full platform CI.
+ */
+export function classifyCiChanges({ base, head, repo = process.cwd() } = {}) {
+  if (repo && typeof repo === "object") repo = repo.repo ?? process.cwd();
+  const full = (reason) => ({
+    kind: "full",
+    flows: true,
+    plugins: [],
+    plugin_only: false,
+    reasons: [reason],
+  });
+  if (typeof base !== "string" || !base || typeof head !== "string" || !head) {
+    return full("A base or head revision was not supplied; running full CI.");
+  }
+
+  let paths;
+  try {
+    paths = git(
+      ["diff", "--name-only", "-z", "--no-renames", base, head, "--"],
+      repo,
+    )
+      .toString("utf8")
+      .split("\0")
+      .filter(Boolean);
+  } catch (error) {
+    return full(
+      `Could not read the git diff (${error instanceof Error ? error.message : String(error)}); running full CI.`,
+    );
+  }
+  if (paths.some((path) => path.includes("\ufffd"))) {
+    return full("A changed path is not valid UTF-8; running full CI.");
+  }
+  if (paths.length === 0) {
+    return {
+      kind: "none",
+      flows: false,
+      plugins: [],
+      plugin_only: false,
+      reasons: ["No files changed."],
+    };
+  }
+
+  const infraPaths = paths.filter((path) => path.startsWith("infra/pulumi/"));
+  const allowedInfrastructureChange =
+    infraPaths.length > 0 &&
+    paths.every(
+      (path) => path.startsWith("infra/pulumi/") || documentationPath(path),
+    );
+  if (allowedInfrastructureChange) {
+    return {
+      kind: "infrastructure",
+      flows: false,
+      plugins: [],
+      plugin_only: false,
+      reasons: ["Only Pulumi infrastructure and documentation files changed."],
+    };
+  }
+
+  const releasePlan = classifyChanges({ base, head, repo });
+  if (releasePlan.kind === "none") {
+    return { ...releasePlan, kind: "none" };
+  }
+  if (releasePlan.kind === "plugin") {
+    return { ...releasePlan, kind: "plugin" };
+  }
+  return full(
+    "Changes include application, shared, workflow, or unknown files; running full CI.",
+  );
+}
+
 function parseArguments(args) {
   const parsed = {};
   for (let index = 0; index < args.length; index += 1) {
     const flag = args[index];
+    if (flag === "--ci") {
+      parsed.ci = true;
+      continue;
+    }
     if (!["--base", "--head", "--output", "--repo"].includes(flag)) {
       throw new Error(`Unknown argument: ${flag}`);
     }
@@ -267,10 +345,10 @@ function parseArguments(args) {
   return parsed;
 }
 
-function writeOutput(outputPath, plan) {
+function writeOutput(outputPath, plan, ci = false) {
   const lines = [
-    `kind=${plan.kind}`,
-    `flows=${plan.flows}`,
+    `${ci ? "ci_kind" : "kind"}=${plan.kind}`,
+    `${ci ? "ci_flows" : "flows"}=${plan.flows}`,
     `plugins=${JSON.stringify(plan.plugins)}`,
     `plugin_only=${plan.plugin_only}`,
     `reasons=${JSON.stringify(plan.reasons)}`,
@@ -283,8 +361,8 @@ function writeOutput(outputPath, plan) {
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   try {
     const args = parseArguments(process.argv.slice(2));
-    const plan = classifyChanges(args);
-    writeOutput(args.output, plan);
+    const plan = args.ci ? classifyCiChanges(args) : classifyChanges(args);
+    writeOutput(args.output, plan, args.ci);
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error));
     process.exitCode = 1;

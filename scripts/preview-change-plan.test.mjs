@@ -1,10 +1,17 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import test from "node:test";
-import { classifyChanges } from "./preview-change-plan.mjs";
+import { classifyChanges, classifyCiChanges } from "./preview-change-plan.mjs";
 
 const manifest = (version = "1.0.0", extra = {}) => ({
   format: "savia.extension",
@@ -343,5 +350,207 @@ test("pure docs changes are none and malformed or unavailable git input is full 
   assert.equal(
     classifyChanges({ base: "", head, repo: f.repo }).kind,
     "platform",
+  );
+});
+
+test("CI classification isolates only infrastructure and documentation changes", (t) => {
+  const f = fixture(t);
+  f.put("infra/pulumi/project.ts", "export const value = 1;\n");
+  f.put("docs/guide.md", "Guide\n");
+  const base = f.commit("base");
+
+  const scenarios = [
+    ["infra/pulumi/project.ts", "export const value = 2;\n", "infrastructure"],
+    ["infra/pulumi/project.test.mjs", "// changed test\n", "infrastructure"],
+    ["docs/guide.md", "Updated guide\n", "none"],
+    ["apps/admin/src/page.tsx", "export const page = true;\n", "full"],
+    ["package.json", "{}\n", "full"],
+    ["pnpm-lock.yaml", "lockfileVersion: '9.0'\n", "full"],
+    ["packages/shared/src/index.ts", "export {};\n", "full"],
+    ["unknown/file.txt", "unknown\n", "full"],
+    [".github/workflows/ci.yml", "name: changed\n", "full"],
+    ["scripts/preview-change-plan.mjs", "// changed classifier\n", "full"],
+  ];
+
+  let scenarioBase = base;
+  for (const [path, content, expected] of scenarios) {
+    f.put(path, content);
+    const head = f.commit(`change ${path}`);
+    assert.equal(
+      classifyCiChanges({ base: scenarioBase, head, repo: f.repo }).kind,
+      expected,
+      `${path} should classify as ${expected}`,
+    );
+    scenarioBase = head;
+  }
+
+  f.put("infra/pulumi/project.ts", "export const value = 3;\n");
+  f.put("docs/guide.md", "Infra guide update\n");
+  let head = f.commit("infrastructure and docs");
+  assert.equal(
+    classifyCiChanges({ base: scenarioBase, head, repo: f.repo }).kind,
+    "infrastructure",
+  );
+
+  const mixedBase = head;
+  f.put("infra/pulumi/project.ts", "export const value = 4;\n");
+  f.put("apps/admin/src/page.tsx", "export const page = false;\n");
+  head = f.commit("mixed infrastructure and application");
+  assert.equal(
+    classifyCiChanges({ base: mixedBase, head, repo: f.repo }).kind,
+    "full",
+  );
+
+  const unavailable = classifyCiChanges({
+    base: "missing",
+    head,
+    repo: f.repo,
+  });
+  assert.equal(unavailable.kind, "full");
+  assert.equal(unavailable.flows, true);
+});
+
+test("the CI command-line mode emits separate outputs and leaves default classification intact", (t) => {
+  const f = fixture(t);
+  f.put("infra/pulumi/project.ts", "export const value = 1;\n");
+  const base = f.commit("base");
+  f.put("infra/pulumi/project.ts", "export const value = 2;\n");
+  const head = f.commit("infra update");
+
+  const script = fileURLToPath(
+    new URL("./preview-change-plan.mjs", import.meta.url),
+  );
+  const ciOutput = execFileSync(
+    process.execPath,
+    [script, "--ci", "--base", base, "--head", head, "--repo", f.repo],
+    { encoding: "utf8" },
+  );
+  assert.match(ciOutput, /^ci_kind=infrastructure$/m);
+  assert.match(ciOutput, /^ci_flows=false$/m);
+
+  const releaseOutput = execFileSync(
+    process.execPath,
+    [script, "--base", base, "--head", head, "--repo", f.repo],
+    { encoding: "utf8" },
+  );
+  assert.match(releaseOutput, /^kind=platform$/m);
+  assert.doesNotMatch(releaseOutput, /^ci_kind=/m);
+});
+
+test("the actual CI workflow falls back when trusted CI output is unsupported or inconsistent", (t) => {
+  const ci = readFileSync(
+    new URL("../.github/workflows/ci.yml", import.meta.url),
+    "utf8",
+  );
+  const step = ci.slice(
+    ci.indexOf("      - name: Classify changes with trusted base code"),
+    ci.indexOf("\n  plugin-validation:"),
+  );
+  const run = step.slice(
+    step.indexOf("        run: |\n") + "        run: |\n".length,
+  );
+  const workflowRunBlock = run
+    .split("\n")
+    .map((line) => (line.startsWith("          ") ? line.slice(10) : line))
+    .join("\n");
+  const scenarios = [
+    ["reject", null],
+    ["ignore", null],
+    ["partial", "ci_kind=infrastructure\n"],
+    ["malformed", "ci_kind=other\nci_flows=false\n"],
+    ["inconsistent", "ci_kind=full\nci_flows=false\n"],
+    ["valid-full", "ci_kind=full\nci_flows=true\n"],
+    ["valid-infrastructure", "ci_kind=infrastructure\nci_flows=false\n"],
+  ];
+
+  for (const [mode, ciOutput] of scenarios) {
+    const f = fixture(t);
+    f.put(
+      "scripts/preview-change-plan.mjs",
+      `import { appendFileSync } from "node:fs";\n` +
+        `if (process.argv.includes("--ci")) {\n` +
+        `  if (process.env.CI_MODE === "reject") process.exit(1);\n` +
+        `  if (process.env.CI_MODE === "ignore") process.exit(0);\n` +
+        `  const ciOutput = process.argv[process.argv.indexOf("--output") + 1];\n` +
+        `  appendFileSync(ciOutput, ${JSON.stringify(ciOutput ?? "")});\n` +
+        `} else {\n` +
+        `  const output = process.argv[process.argv.indexOf("--output") + 1];\n` +
+        `  appendFileSync(output, "kind=platform\\nflows=false\\nplugins=[]\\nplugin_only=false\\n");\n` +
+        `}\n`,
+    );
+    const base = f.commit("legacy classifier base");
+    f.put("apps/admin/src/page.tsx", "export const changed = true;\n");
+    const head = f.commit("application change");
+    const output = join(f.repo, "github-output");
+    const runnerTemp = join(f.repo, "runner-temp");
+    mkdirSync(runnerTemp);
+
+    execFileSync("bash", ["-c", workflowRunBlock], {
+      cwd: f.repo,
+      env: {
+        ...process.env,
+        CI_MODE: mode,
+        EVENT_NAME: "pull_request",
+        PR_BASE_SHA: base,
+        PUSH_BEFORE_SHA: "",
+        HEAD_SHA: head,
+        GITHUB_OUTPUT: output,
+        RUNNER_TEMP: runnerTemp,
+      },
+    });
+
+    const result = readFileSync(output, "utf8");
+    assert.match(result, /^kind=platform$/m, mode);
+    if (mode.startsWith("valid-")) {
+      assert.match(result, new RegExp(`^ci_kind=${mode.slice(6)}$`, "m"));
+      assert.match(result, /^ci_flows=(?:true|false)$/m);
+    } else {
+      assert.match(result, /^ci_kind=full$/m, mode);
+      assert.match(result, /^ci_flows=true$/m, mode);
+    }
+  }
+});
+
+test("the release-facing classifier keeps infrastructure classified as platform", (t) => {
+  const f = fixture(t);
+  f.put("infra/pulumi/project.ts", "export const value = 1;\n");
+  const base = f.commit("base");
+  f.put("infra/pulumi/project.ts", "export const value = 2;\n");
+  const head = f.commit("infra update");
+
+  assert.equal(classifyChanges({ base, head, repo: f.repo }).kind, "platform");
+  assert.equal(
+    classifyCiChanges({ base, head, repo: f.repo }).kind,
+    "infrastructure",
+  );
+});
+
+test("CI routes infrastructure contracts through the existing required gate", () => {
+  const workflow = readFileSync(
+    new URL("../.github/workflows/ci.yml", import.meta.url),
+    "utf8",
+  );
+  const contracts = workflow.slice(
+    workflow.indexOf("  contracts:"),
+    workflow.indexOf("  typecheck:"),
+  );
+
+  assert.match(workflow, /node "\$trusted_script" --ci --base/);
+  assert.match(workflow, /echo 'ci_kind=full'/);
+  assert.match(contracts, /needs:\n\s+- changes\n\s+- plugin-validation/);
+  assert.match(contracts, /run: pnpm run test:contracts/);
+  assert.match(
+    contracts,
+    /Run offline Flows recovery contracts for infrastructure changes/,
+  );
+  assert.match(
+    contracts,
+    /if: needs\.changes\.outputs\.ci_kind == 'infrastructure'/,
+  );
+  assert.match(contracts, /scripts\/flows-maintenance\/\*\.test\.mjs/);
+  assert.match(workflow, /ci_flows == 'true'/);
+  assert.doesNotMatch(
+    workflow,
+    /runs: pnpm run test:unit:workspace|typecheck:plugins && pnpm run typecheck:companion/,
   );
 });

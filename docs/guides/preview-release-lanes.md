@@ -18,7 +18,8 @@ CI executes the classifier from the trusted base revision, not the proposed PR
 code. Missing trusted code falls back to full checks. The existing **Contract
 tests** required check also guards classification and plugin validation failures,
 so skipped platform jobs cannot hide an invalid plugin build. Shared code,
-dependencies, infrastructure and uncertain changes still run Flows checks.
+dependencies and uncertain changes still run Flows source checks. Pure Pulumi
+changes use the infrastructure CI scope described below.
 
 Publication compares the tested commit with the last successful Preview release
 ancestor, rather than only its parent commit. Therefore an earlier failed
@@ -57,6 +58,29 @@ adjust the bound. Each object retains its expected size and content encoding.
 An error stops new downloads and waits for in-flight downloads before failing;
 no successful backup manifest is produced. Partial files may remain in a failed
 backup directory and are not evidence of a restorable snapshot.
+
+## Infrastructure CI scope
+
+CI uses an opt-in classifier separately from publication planning. Changes only
+under `infra/pulumi/`, with optional files under `docs/` or `documentation/`, skip
+application unit/typecheck jobs and Flows source verification/unit/typecheck jobs.
+Pulumi's PR workflow still runs every infrastructure helper test, all four program
+typechecks, and the real CLI preflight. The existing **Contract tests** required
+check retains the full repository contract suite and adds the Flows offline
+maintenance/recovery tests for this scope. Public source security checks remain
+active.
+
+Mixed application/infrastructure changes, shared code, dependencies, workflow or
+classifier changes, unknown paths, and unreadable revision ranges select full CI.
+The workflow executes the classifier from the trusted base. An older classifier
+without the CI option also selects full CI, allowing the first upgrade PR to be
+validated normally. A shorter CI selection does not change the release kind:
+infrastructure changes still require a platform publication through existing gates.
+
+Before submitting infrastructure changes, run `pnpm infra:preflight` with the
+repository-pinned Pulumi CLI and installed `infra/pulumi` dependencies. See the
+[ownership runbook](../runbooks/pulumi-environment-ownership.md#local-cli-preflight)
+for its isolation guarantees and the separate live read-only audit.
 
 ## Operations and measurements
 

@@ -60,8 +60,11 @@ jobs:
         with:
           node-version: 22
 
-      - name: Install locked infrastructure dependencies
-        run: npm ci --prefix infra/pulumi --ignore-scripts
+      - name: Install pinned infrastructure toolchain
+        uses: ./.github/actions/install-pulumi
+
+      - name: Verify real CLI behavior without cloud access
+        run: node --test infra/pulumi/cli-preflight.integration.mjs
 
       - name: Validate all infrastructure programs
         run: npm --prefix infra/pulumi run typecheck
