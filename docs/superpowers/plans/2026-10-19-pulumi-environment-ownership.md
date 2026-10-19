@@ -17,6 +17,7 @@
 - Preserve project names `savia-cloudflare`, `savia-branch-preview`, `savia-shared-registry`; add `savia-management/management`.
 - Keep the existing physical backend URL/bucket. Transfer ownership with `pulumi state move`, never duplicate import or `state rm`.
 - Shared and management resources remain protected. Application destruction retains data unless an explicit `--delete-data` choice accompanies the reviewed manifest.
+- A data-preserving retirement retains Durable Object host Workers in maintenance, preserving classes and namespace identities; remove only non-host Workers. An explicit data-deleting teardown may remove hosts too.
 - Native Workers never force deletion. No native Workflow/route/cron/consumer resource may compete with the Wrangler-owned runtime release.
 - Read credentials only at execution time from existing authorized custody. No credentials, decrypted checkpoints, business data or public release artifacts containing secrets in Git.
 - Adoption is read-only against Cloudflare. Any unsupported attachment, failed lifecycle proof or missing backend access blocks live migration.

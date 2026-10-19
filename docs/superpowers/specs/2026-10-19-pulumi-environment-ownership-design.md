@@ -8,12 +8,12 @@ resources by environment. They approved `preview`, `production`, `branch-*`,
 environment must preserve its versioned definition and the infrastructure needed
 to recreate it. This migration must preserve the running Preview application.
 
-Status: approved by the user on October 19, 2026; implementation started. The
-[disposable compatibility probe](2026-10-19-pulumi-runtime-probe.md) exposed a
-Durable Object retention conflict in the teardown design. Live ownership changes
-are blocked at that proof gate pending correction and verification. This document
-does not record a completed migration or authorize production deployment or
-further data deletion.
+Status: approved by the user on October 19, 2026; implementation started. After
+the [disposable compatibility probe](2026-10-19-pulumi-runtime-probe.md), the user
+approved retaining Durable Object host Workers in maintenance during a teardown
+that preserves data. Live ownership changes still require the corrected lifecycle
+proof. This document does not record a completed migration or authorize production
+deployment or further business-data deletion.
 
 ## Current evidence
 
@@ -166,6 +166,15 @@ When data is retained, its resources remain in the environment stack and only th
 runtime is retired; do not remove a nonempty stack. A subsequent release must
 recreate runtime identities without stale one-time imports and bind the same data
 resources.
+
+Durable Object host identities are data-bearing resources. A data-preserving
+teardown must retain those Workers and their namespace implementations in the
+same stack, with maintenance code, no public ingress, no schedules, no queue
+consumption and no outgoing application references. Their own namespace bindings
+and classes must remain intact; later releases reuse the same identities and
+namespaces. Only Workers without hosted namespaces are removed. An explicit
+data-deleting teardown may remove all Workers after dependency detachment. Native
+deletion always uses `force:false`.
 
 Existing release backup, quiescence, rollback and migration checks remain in
 force. Maintenance deployments are releases of the same managed Worker identity,

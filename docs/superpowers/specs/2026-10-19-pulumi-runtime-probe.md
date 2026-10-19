@@ -46,9 +46,21 @@ verify both the same namespace IDs and the original values. This must be proven
 alongside D1/R2/KV retention, dependency detachment, rollback and attachment
 cleanup before any live runtime adoption.
 
-This correction changes the original assumption that every runtime identity can
-be removed during a data-preserving teardown. The implementation plan remains at
-its compatibility gate until the corrected behavior is agreed and proven.
+The user approved this correction after the original probe. A subsequent isolated
+cycle (`savia-iac-fixture-oct19b`) wrote synthetic values to a Durable Object, D1,
+R2 and KV, retained the namespace host while removing other Workers, recreated the
+application and verified the original namespace ID and all four original values.
+It also verified a successful code update and an injected failed update followed
+by restoration of actual deployed versions. All resources from that cycle were
+cleaned up through Pulumi with `force:false`.
+
+The complete compatibility gate additionally requires the integrated dynamic
+resource and inert maintenance code. The integration probe exposed two runtime
+issues that unit type-checking alone did not detect: Node's ESM loader requires
+the explicit TypeScript extension, and Pulumi's serialized provider cannot retain
+a module-level `Set` instance. Both now have verified corrections; the provider
+serialization test evaluates the reconstructed provider, rather than checking its
+source text alone. The complete live-ownership gate is not yet declared passed.
 
 ## Evidence custody
 
