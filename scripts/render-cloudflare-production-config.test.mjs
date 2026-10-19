@@ -288,9 +288,6 @@ test("writes only the supported production workers and retains their runtime set
       { custom_domain: true, pattern: "savia.hefesoft.com" },
       { pattern: "savia.hefesoft.com/*", zone_name: "hefesoft.com" },
       { pattern: "*.savia.hefesoft.com/*", zone_name: "hefesoft.com" },
-      { custom_domain: true, pattern: "savia.app.hefesoft.com" },
-      { custom_domain: true, pattern: "savia-team.savia.app.hefesoft.com" },
-      { pattern: "*.savia.app.hefesoft.com/*", zone_name: "hefesoft.com" },
     ]);
     assert.equal(admin.assets.not_found_handling, "single-page-application");
   } finally {

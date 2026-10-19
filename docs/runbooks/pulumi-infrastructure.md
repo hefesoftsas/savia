@@ -46,13 +46,20 @@ Production declares `https://savia.hefesoft.com` as its public origin and
 `savia-preview.hefesoft.com`. Database IDs, buckets, deletion protection,
 Worker names, and secrets are unchanged.
 
-The gateway retains the former canonical Custom Domain, the existing
-`savia-team.savia.app.hefesoft.com` attachment, and a legacy wildcard Worker
-Route. Old GET/HEAD links redirect to the corresponding new host. Login and
-callback links restart authentication rather than replaying an old PKCE
-transaction. Legacy writes receive a migration error; API clients must switch
-origin and authorize again. Cookies stay scoped to `.savia.hefesoft.com`, never
-to `.hefesoft.com`.
+The gateway declares only the canonical Custom Domain, configured exact tenant
+Custom Domains, and the canonical and wildcard tenant Worker Routes under
+`savia.hefesoft.com`. It must not recreate attachments or routes for
+`savia.app.hefesoft.com`. Existing D1/R2 resources are shared production state,
+not a second deployment to destroy. Never run `pulumi destroy` for a hostname
+retirement.
+
+After verifying the new origin, remove the former canonical and tenant Custom
+Domain attachments and any legacy wildcard Worker Route from Cloudflare. Verify
+that the old hosts no longer serve Savia. Delete `savia-domain-transition` only
+after both new-host routes belong to `savia` and production checks pass. The
+release/restore scripts remain available for recovery during the cutover.
+Users and API clients must switch origin and authenticate again. Cookies stay
+scoped to `.savia.hefesoft.com`, never to `.hefesoft.com`.
 
 Before promotion, verify proxied DNS and valid TLS on both `savia.hefesoft.com`
 and `*.savia.hefesoft.com`. Worker Routes do not provision DNS or certificates.
@@ -71,7 +78,7 @@ clients reconcile callbacks/resources from the new auth variables while keeping
 their client IDs. Expect users to authenticate again.
 
 Verify canonical and tenant DNS, TLS, health, login, static assets, authenticated
-access, old-host deep links, and Preview isolation after rollout. Do not describe
+access, old-host retirement, and Preview isolation after rollout. Do not describe
 a code-only change as a completed live migration: provider callback registration
 and valid wildcard TLS are release prerequisites. Rollback requires the previous
 release and origin config, followed by renewed authentication.
