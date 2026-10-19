@@ -1,0 +1,35 @@
+name: savia-db-bridge-production
+services:
+  bridge:
+    image: ${DB_BRIDGE_IMAGE:?Set the tested image tag}
+    restart: unless-stopped
+    environment:
+      DB_BRIDGE_HOST: 0.0.0.0
+      DB_BRIDGE_SHARED_SECRET: ${DB_BRIDGE_SHARED_SECRET:?Set a unique production secret}
+      DB_BRIDGE_ALLOWED_HOSTS: ${DB_BRIDGE_ALLOWED_HOSTS-}
+    ports:
+      - "127.0.0.1:8792:8791"
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    healthcheck:
+      test:
+        [
+          CMD,
+          node,
+          -e,
+          "fetch('http://127.0.0.1:8791/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+  tunnel:
+    image: cloudflare/cloudflared:2026.9.0
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:?Set the dedicated production tunnel token}
+    depends_on:
+      bridge:
+        condition: service_healthy

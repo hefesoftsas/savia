@@ -2,7 +2,7 @@ name: Savia infrastructure
 description: Load an existing isolated Pulumi stack and render authoritative Worker manifests
 inputs:
   stack:
-    description: Preview stack name
+    description: preview or production
     required: true
 outputs:
   public-origin:
