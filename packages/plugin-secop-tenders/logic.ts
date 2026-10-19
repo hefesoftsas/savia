@@ -356,3 +356,14 @@ export function isTrackingConflict(error: unknown): boolean {
     code === "write_conflict"
   );
 }
+
+/** Removes only the local interest record; dossier documents live separately. */
+export async function removeInterest(api: PluginApi, record: Interest) {
+  if (typeof record._version !== "number")
+    throw new Error(
+      "This record has no version; reload it before removing it.",
+    );
+  await api.collections
+    .collection<Interest>(COLLECTION)
+    .remove(record.id, { version: record._version });
+}
