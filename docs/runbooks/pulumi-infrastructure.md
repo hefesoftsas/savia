@@ -85,6 +85,13 @@ Its source and Wrangler manifest are in `infra/pulumi/domain-transition.mjs` and
 secrets and uses temporary, noncached redirects. Authentication links restart at
 the active root and write requests are rejected rather than replayed.
 
+Before any production Worker mutation, the workflow captures the current
+versions of `savia-auth`, `savia-agencies`, and `savia` independently of Flows.
+On failure or cancellation it restores all three, including authentication,
+before restoring bridge routes. The private metadata contains version IDs and
+migration tags only; restore refuses account, Worker identity, or Durable Object
+lifecycle mismatches. No secrets or database contents are copied into it.
+
 The production workflow transfers only the two known new-host routes from this
 bridge to `savia` immediately before gateway deployment. The generated gateway
 manifest declares both routes, including the canonical path route, so the bridge

@@ -131,6 +131,13 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_STATE_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_STATE_SECRET_ACCESS_KEY }}
 
+      - name: Capture canonical domain Worker recovery state
+        id: capture_domain_recovery
+        run: node scripts/canonical-domain-recovery.mjs --capture "$RUNNER_TEMP/canonical-domain-recovery.json"
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
       - name: Capture production Worker recovery state
         id: capture_recovery
         if: env.SAVIA_FLOWS_PROVISIONED == 'true'
@@ -424,6 +431,13 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           SAVIA_AGENCIES_PAUSE_ATTEMPTED: ${{ steps.pause_agencies.outcome == 'success' || steps.pause_agencies.outcome == 'failure' || steps.pause_agencies.outcome == 'cancelled' }}
           SAVIA_FLOWS_PAUSE_ATTEMPTED: ${{ steps.pause_flows.outcome == 'success' || steps.pause_flows.outcome == 'failure' || steps.pause_flows.outcome == 'cancelled' }}
+
+      - name: Restore canonical domain Workers after failed rollout
+        if: ${{ always() && steps.capture_domain_recovery.outcome == 'success' && (failure() || cancelled()) }}
+        run: node scripts/canonical-domain-recovery.mjs --restore "$RUNNER_TEMP/canonical-domain-recovery.json"
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
 
       - name: Restore temporary domain bridge after failed rollout
         if: ${{ (failure() || cancelled()) && env.SAVIA_DOMAIN_TRANSITION_RELEASED == 'true' }}
