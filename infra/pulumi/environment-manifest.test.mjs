@@ -286,3 +286,42 @@ test("native identities cannot pretend to be Worker attachments or omit internal
     ),
   );
 });
+
+test("adoption may update only the selected stack's bookkeeping outputs", () => {
+  const manifest = {
+    accountId: "a".repeat(32),
+    environment: "preview",
+    project: "savia-cloudflare",
+    stack: "preview",
+    resources: [],
+  };
+  assert.equal(
+    assertAdoptionPlan(
+      {
+        steps: [
+          {
+            op: "update",
+            type: "pulumi:pulumi:Stack",
+            urn: "urn:pulumi:preview::savia-cloudflare::pulumi:pulumi:Stack::savia-cloudflare-preview",
+          },
+        ],
+      },
+      manifest,
+    ),
+    true,
+  );
+  assert.throws(() =>
+    assertAdoptionPlan(
+      {
+        steps: [
+          {
+            op: "update",
+            type: "pulumi:pulumi:Stack",
+            urn: "urn:pulumi:production::savia-cloudflare::pulumi:pulumi:Stack::savia-cloudflare-production",
+          },
+        ],
+      },
+      manifest,
+    ),
+  );
+});

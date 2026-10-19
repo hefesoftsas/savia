@@ -59,7 +59,7 @@ test("lists all R2 buckets through the paginated authenticated Cloudflare API", 
     token: "secret-token",
     fetchImpl: async (url, options) => {
       calls.push({ url, options });
-      const page = Number(new URL(url).searchParams.get("page"));
+      const page = new URL(url).searchParams.has("cursor") ? 2 : 1;
       return {
         ok: true,
         status: 200,
@@ -68,15 +68,18 @@ test("lists all R2 buckets through the paginated authenticated Cloudflare API", 
           result: {
             buckets: [{ name: page === 1 ? "bucket-one" : "bucket-two" }],
           },
-          result_info: { page, per_page: 1, total_pages: 2 },
+          result_info: {
+            total_count: 2,
+            ...(page === 1 ? { cursor: "second-page" } : {}),
+          },
         }),
       };
     },
   });
   assert.deepEqual(rows, [{ name: "bucket-one" }, { name: "bucket-two" }]);
   assert.equal(calls.length, 2);
-  assert.match(calls[0].url, /page=1/);
-  assert.match(calls[1].url, /page=2/);
+  assert.equal(new URL(calls[0].url).searchParams.has("cursor"), false);
+  assert.match(calls[1].url, /cursor=second-page/);
   assert.equal(calls[0].options.headers.authorization, "Bearer secret-token");
   await assert.rejects(
     listR2Buckets({
@@ -225,7 +228,7 @@ test("checks Cloudflare inventory before creating and adopting a remote branch s
         json: async () => ({
           success: true,
           result: { buckets: [{ name: names.bucket }] },
-          result_info: { page: 1, per_page: 1000, total_pages: 1 },
+          result_info: { total_count: 1 },
         }),
       };
     },
@@ -332,7 +335,7 @@ test("refuses an existing branch stack whose outputs name another branch before 
         json: async () => ({
           success: true,
           result: { buckets: [] },
-          result_info: { page: 1, per_page: 1000, total_pages: 1 },
+          result_info: { total_count: 0 },
         }),
       }),
     }),
@@ -426,7 +429,7 @@ test("refuses a destructive saved plan before the Pulumi up command", async () =
         json: async () => ({
           success: true,
           result: { buckets: [] },
-          result_info: { page: 1, per_page: 1000, total_pages: 1 },
+          result_info: { total_count: 0 },
         }),
       }),
     }),
@@ -500,10 +503,32 @@ test("allows an existing outputless branch stack only when its exported state ha
       json: async () => ({
         success: true,
         result: { buckets: [] },
-        result_info: { page: 1, per_page: 1000, total_pages: 1 },
+        result_info: { total_count: 0 },
       }),
     }),
   });
   assert.deepEqual(result.outputs, outputs);
   assert.ok(calls.some(([, args]) => args[0] === "up"));
+});
+
+test("R2 inventory supports the current cursor schema and total-count-only terminal page", async () => {
+  const urls = [];
+  const rows = await listR2Buckets({
+    accountId: TEST_ACCOUNT_ID,
+    token: "test",
+    fetchImpl: async (url) => {
+      urls.push(url);
+      const cursor = new URL(url).searchParams.get("cursor");
+      return Response.json({
+        success: true,
+        result: { buckets: [{ name: cursor ? "bucket-two" : "bucket-one" }] },
+        result_info: {
+          total_count: 2,
+          ...(!cursor ? { cursor: "next-cursor" } : {}),
+        },
+      });
+    },
+  });
+  assert.equal(rows.length, 2);
+  assert.equal(new URL(urls[1]).searchParams.get("cursor"), "next-cursor");
 });

@@ -340,19 +340,63 @@ API with its Flows binding. The default production configuration does not activa
 containers, external email, or Analytics Engine. Preview keeps its restricted
 node catalog, quotas, and private executor.
 
-## Destroy an environment
+## Operate one environment
+
+The lifecycle entrypoint uses an explicit environment identifier: `preview`,
+`production`, `branch-<normalized-slug>`, `shared`, or `management`. Grouping is
+recorded in Pulumi stacks and the environment inventory; Cloudflare does not
+provide a common folder for all these resource types. Management changes use the
+separate ownership-transfer procedure, and ordinary destruction rejects both
+management and shared resources.
+
+From the repository root, with the existing authorized backend credentials:
 
 ```sh
-node destroy.mjs --stack preview --dry-run
-node destroy.mjs --stack preview --apply
-# production refuses without both flags:
-node destroy.mjs --stack production --apply --i-understand-destroy-production
+node infra/pulumi/environment.mjs inventory --all
+node infra/pulumi/environment.mjs inventory --environment preview --out /secure/preview.json
+node infra/pulumi/environment.mjs adopt --environment preview --manifest /secure/preview.json --apply
+node infra/pulumi/environment.mjs plan --environment preview --artifact /secure/release --plan /secure/release-plan.json
+node infra/pulumi/environment.mjs apply --environment preview --artifact /secure/release --plan /secure/release-plan.json --apply
+node infra/pulumi/environment.mjs destroy --environment preview --manifest /secure/preview.json
+node infra/pulumi/environment.mjs destroy --environment preview --manifest /secure/preview.json --apply
+# Permanent data deletion is a separate, explicit choice:
+node infra/pulumi/environment.mjs destroy --environment preview --manifest /secure/preview.json --apply --delete-data
 ```
 
-Production resources are created with `protect: true`; `pulumi destroy`
-fails on them until protection is lifted. Preview application resources are unprotected
-and cheap to tear down; the protected state bucket is retained. Worker code is deleted by `wrangler delete` only
-via `scripts/preview-destroy.mjs`, not by these scripts.
+Generate a fresh reviewed inventory before destructive operations. A saved release
+plan binds the environment/account, resource manifest, current checkpoint,
+immutable artifact digests, source revision and Pulumi plan bytes. A changed
+checkpoint or substituted artifact requires a new plan. Adoption permits only
+matching physical imports and read-only bookkeeping, and clears one-time import
+inputs after successful registration. Repeating adoption does not republish code.
+
+An empty environment can explicitly provision persistence before its first
+immutable runtime artifact is prepared:
+
+```sh
+node infra/pulumi/environment.mjs plan --environment branch-feature-login --provision --apply
+```
+
+This operation refuses active or retained runtimes. It publishes no Worker code;
+prepare the release using its actual data-resource outputs, then use the ordinary
+plan/apply commands. It never initializes production while production operations
+are disabled.
+
+Destruction retains D1/R2/KV/Vectorize data by default, removes producers and
+public ingress, and keeps Durable Object and opaque-secret hosts in maintenance.
+Those identities retain namespaces and encryption-key custody for a later
+release. With `--delete-data`, the lifecycle first retires runtime, then applies
+a separate saved plan removing persistence. Only reviewed resource URNs are
+individually unprotected. Bucket emptying occurs after plan validation. The
+protected management backend, source definitions and empty checkpoint remain;
+there is no automatic stack removal. A failed stage leaves private checkpoint,
+configuration and plan evidence for inspection.
+
+Legacy `destroy.mjs --apply` and `preview-destroy.mjs --force` delegate to this
+lifecycle and now retain data. Add `--delete-data` only for permanent deletion.
+Production additionally retains its acknowledgment and reviewed-main/operations
+gates; it remains disabled. Independent `wrangler delete` is not the teardown
+path for managed environments.
 
 ## Backups (data, not just infra)
 

@@ -76,12 +76,17 @@ export function parseR2BucketList(value) {
 export async function listR2Buckets({ accountId, token, fetchImpl = fetch }) {
   assertAccountId(accountId);
   if (!token) throw new Error("CLOUDFLARE_API_TOKEN is required");
-  const buckets = [];
-  let page = 1;
-  let totalPages = 1;
-  do {
-    const url = `https://api.cloudflare.com/client/v4/accounts/${accountId}/r2/buckets?per_page=1000&page=${page}`;
-    const response = await fetchImpl(url, {
+  const buckets = [],
+    seenNames = new Set(),
+    seenCursors = new Set();
+  let cursor;
+  for (let page = 1; page <= 1000; page++) {
+    const url = new URL(
+      `https://api.cloudflare.com/client/v4/accounts/${accountId}/r2/buckets`,
+    );
+    url.searchParams.set("per_page", "1000");
+    if (cursor) url.searchParams.set("cursor", cursor);
+    const response = await fetchImpl(url.toString(), {
       headers: { authorization: `Bearer ${token}` },
     });
     let payload;
@@ -90,28 +95,30 @@ export async function listR2Buckets({ accountId, token, fetchImpl = fetch }) {
     } catch {
       throw new Error("Cloudflare R2 bucket list returned invalid JSON");
     }
-    if (response.ok !== true || payload?.success !== true) {
+    if (response.ok !== true || payload?.success !== true)
       throw new Error(`Cloudflare R2 bucket list failed (${response.status})`);
+    for (const bucket of parseR2BucketList(payload)) {
+      if (seenNames.has(bucket.name))
+        throw new Error("Repeated R2 bucket inventory identity");
+      seenNames.add(bucket.name);
+      buckets.push(bucket);
     }
-    buckets.push(...parseR2BucketList(payload));
-    const pageInfo = payload.result_info;
-    const pageCount = pageInfo?.total_pages;
+    const info = payload.result_info;
     if (
-      !pageInfo ||
-      !Number.isInteger(pageCount) ||
-      pageCount < 1 ||
-      pageCount < page ||
-      (pageInfo.page !== undefined && pageInfo.page !== page)
-    ) {
+      !info ||
+      !Number.isInteger(info.total_count) ||
+      info.total_count < 0 ||
+      (info.cursor !== undefined &&
+        (typeof info.cursor !== "string" || !info.cursor))
+    )
       throw new Error("Cloudflare R2 bucket pagination metadata is invalid");
-    }
-    totalPages = pageCount;
-    page++;
-    if (page > 1000) {
-      throw new Error("Cloudflare R2 bucket listing exceeded 1000 pages");
-    }
-  } while (page <= totalPages);
-  return buckets;
+    if (!info.cursor) return buckets;
+    if (seenCursors.has(info.cursor))
+      throw new Error("Repeated R2 pagination cursor");
+    cursor = info.cursor;
+    seenCursors.add(cursor);
+  }
+  throw new Error("Cloudflare R2 bucket listing exceeded 1000 pages");
 }
 
 export function branchStackConfig({ accountId, names, existing }) {

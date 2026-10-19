@@ -258,10 +258,21 @@ export function assertAdoptionPlan(plan, manifest) {
   if (!Array.isArray(plan?.steps))
     throw new Error("Detailed Pulumi plan steps are required");
   for (const step of plan.steps) {
+    if (
+      step.op === "update" &&
+      step.type === "pulumi:pulumi:Stack" &&
+      step.urn ===
+        `urn:pulumi:${manifest.stack}::${manifest.project}::pulumi:pulumi:Stack::${manifest.project}-${manifest.stack}`
+    )
+      continue;
     if (["same", "read", "refresh", "read-discard"].includes(step.op)) continue;
     if (
       step.op === "create" &&
-      ["pulumi:pulumi:Stack", "pulumi:providers:cloudflare"].includes(step.type)
+      [
+        "pulumi:pulumi:Stack",
+        "pulumi:providers:cloudflare",
+        "pulumi:providers:pulumi-nodejs",
+      ].includes(step.type)
     )
       continue;
     if (
@@ -271,6 +282,23 @@ export function assertAdoptionPlan(plan, manifest) {
       step.environment === manifest.environment &&
       step.accountId === manifest.accountId &&
       step.manifestHash === adoptionManifestHash(manifest)
+    )
+      continue;
+    if (
+      step.op === "create" &&
+      step.type === "savia:vectorize:Index" &&
+      step.adoptExisting === true &&
+      step.deleteData === false &&
+      step.accountId === manifest.accountId &&
+      step.environment === manifest.environment &&
+      step.dimensions === 1024 &&
+      step.metric === "cosine" &&
+      manifest.resources.some(
+        (row) =>
+          row.kind === "vectorize" &&
+          row.name === step.name &&
+          row.cloudId === step.cloudId,
+      )
     )
       continue;
     if (

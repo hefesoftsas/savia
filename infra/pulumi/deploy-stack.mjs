@@ -1,13 +1,5 @@
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { normalizeEnvironment } from "./naming.mjs";
-import { parseStackOutputs, assertDeploymentAccount } from "./outputs.mjs";
-
-const run = promisify(execFile);
 
 export function parseDeployArgs(argv) {
   const index = argv.indexOf("--stack");
@@ -55,70 +47,14 @@ export function assertSafePlan(plan) {
 }
 
 async function main() {
-  const { stack, apply } = parseDeployArgs(process.argv.slice(2));
-  assertBackendConfigured(process.env);
-  const cwd = fileURLToPath(new URL(".", import.meta.url));
-  const options = { cwd, env: process.env, maxBuffer: 32 * 1024 * 1024 };
-  await run(
-    "pulumi",
-    ["login", process.env.PULUMI_BACKEND_URL, "--non-interactive"],
-    options,
+  const { runLegacyInfrastructure } = await import("./environment-compat.mjs");
+  console.log(
+    JSON.stringify(
+      await runLegacyInfrastructure(process.argv.slice(2)),
+      null,
+      2,
+    ),
   );
-  // Never init a new stack against existing resources or fall back to manual IDs.
-  await run("pulumi", ["stack", "select", stack, "--non-interactive"], options);
-  const { stdout: current } = await run(
-    "pulumi",
-    ["stack", "output", "--stack", stack, "--json"],
-    options,
-  );
-  const outputs = parseStackOutputs(current);
-  if (outputs.resolvedEnvironment !== stack)
-    throw new Error("Stack and resolved environment disagree");
-  assertDeploymentAccount(outputs, process.env.CLOUDFLARE_ACCOUNT_ID);
-
-  const temporary = await mkdtemp(join(tmpdir(), "savia-infra-plan-"));
-  try {
-    const planFile = join(temporary, "plan.json");
-    const { stdout } = await run(
-      "pulumi",
-      [
-        "preview",
-        "--stack",
-        stack,
-        "--refresh",
-        "--non-interactive",
-        "--save-plan",
-        planFile,
-        "--json",
-      ],
-      options,
-    );
-    const plan = JSON.parse(stdout);
-    assertSafePlan(plan);
-    console.log(
-      `Infrastructure ${stack} plan: ${JSON.stringify(plan.changeSummary)}`,
-    );
-    if (apply) {
-      await run(
-        "pulumi",
-        [
-          "up",
-          "--stack",
-          stack,
-          "--plan",
-          planFile,
-          "--skip-preview",
-          "--yes",
-          "--non-interactive",
-          "--json",
-        ],
-        options,
-      );
-      console.log(`Applied the saved ${stack} infrastructure plan.`);
-    }
-  } finally {
-    await rm(temporary, { recursive: true, force: true });
-  }
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

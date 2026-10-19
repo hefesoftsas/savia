@@ -146,6 +146,13 @@ test("compiled application, branch and shared programs register exact runtime id
       config: { backendBuckets: ["savia-pulumi-state-preview"] },
       outputs: ["accountId", "backendBuckets", "protected"],
     });
+    cases.push({
+      ...cases[0],
+      stack: "preview",
+      deleted: true,
+      names: [],
+      config: { ...cases[0].config, environmentDeleted: true },
+    });
     // previewNames uses suffix rather than a separate slug field.
     cases[1].config.branchSlug = "feat-secop-tender-tracke";
     for (const example of cases) {
@@ -211,7 +218,7 @@ process.stdout.write(JSON.stringify({resources,values}));`,
         output.resources.filter(
           (row) => row.type === "pulumi-nodejs:dynamic/runtime:RuntimeRelease",
         ).length,
-        example.stack === "management" ? 0 : 1,
+        example.stack === "management" || example.deleted ? 0 : 1,
       );
       assert.equal(
         output.resources.some((row) =>
@@ -224,7 +231,16 @@ process.stdout.write(JSON.stringify({resources,values}));`,
         example.stack === "management",
       );
       if (example.stack !== "management") {
-        assert.equal(output.values.runtimeStatus, "adopted");
+        assert.equal(
+          output.values.runtimeStatus,
+          example.deleted ? "deleted" : "adopted",
+        );
+        if (example.deleted)
+          assert.equal(
+            output.resources.filter((row) => !row.type.startsWith("pulumi:"))
+              .length,
+            0,
+          );
         assert.equal(
           output.values.environmentInventory.resources.filter(
             (row) => row.kind === "worker",
