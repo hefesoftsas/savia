@@ -4,6 +4,7 @@
   "license": "SEE LICENSE IN LICENSE",
   "packageManager": "pnpm@11.24.0",
   "scripts": {
+    "infra:preflight": "node --test infra/pulumi/cli-preflight.integration.mjs",
     "test:e2e:mcp": "node scripts/mcp-e2e.mjs",
     "test:e2e:mcp:runner": "node --test scripts/mcp-e2e.test.mjs",
     "dev": "sh scripts/dev-local.sh",
