@@ -17,7 +17,37 @@ const keys = [
   "adoptionManifest",
   "deleteData",
 ];
+const outputKeys = [
+  "retentionWorkerNames",
+  "status",
+  "workerVersions",
+  "namespaceIds",
+  "attachments",
+  "runtimeId",
+  "releaseDigest",
+  "__provider",
+  "__meta",
+];
+function assertFields(props) {
+  if (
+    Object.keys(props).some(
+      (key) => !keys.includes(key) && !outputKeys.includes(key),
+    )
+  )
+    throw new Error("Invalid runtime input fields");
+}
+function containsUnknown(value) {
+  // Pulumi's RPC unknown sentinel. Only check/preview may defer validation;
+  // create/update/read still require fully resolved and validated identities.
+  if (value === "04da6b54-80e4-46f7-96ec-b56ff0331ba9") return true;
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    Object.values(value).some(containsUnknown)
+  );
+}
 function inputsOf(props) {
+  assertFields(props);
   const result = Object.fromEntries(
     keys
       .filter((key) => props[key] !== undefined && props[key] !== null)
@@ -31,7 +61,8 @@ export function makeRuntimeProvider(makeDependencies) {
   return {
     async check(_olds, news) {
       try {
-        inputsOf(news);
+        assertFields(news);
+        if (!containsUnknown(news)) inputsOf(news);
         return { inputs: news };
       } catch (error) {
         return {

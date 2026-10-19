@@ -180,3 +180,134 @@ test("refresh reports observed drift instead of retaining a successful release s
   assert.equal(refreshed.status, "maintenance");
   assert.equal(refreshed.workerVersions[0].versionId, "unexpected-version");
 });
+
+test("first publication may allocate namespaces only for explicitly bootstrapped Workers", async () => {
+  let current = snapshot;
+  const first = {
+    ...inputs,
+    mode: "release",
+    artifactDigest: "c".repeat(64),
+    configDigest: "d".repeat(64),
+    artifactDirectory: "/private/artifact",
+  };
+  const after = {
+    ...snapshot,
+    workerVersions: [{ ...worker, versionId: "published" }],
+    namespaceIds: [
+      {
+        workerName: worker.name,
+        className: "Store",
+        namespaceId: "e".repeat(32),
+      },
+    ],
+  };
+  const operations = {
+    verifyArtifact: async () => {},
+    bootstrap: async () => ({ createdWorkers: [worker.name] }),
+    readSnapshot: async () => current,
+    publish: async () => {
+      current = after;
+    },
+    recover: async () => {
+      current = snapshot;
+    },
+    pause: async () => {},
+  };
+  assert.equal((await releaseRuntime({}, first, operations)).status, "ready");
+  current = snapshot;
+  operations.bootstrap = async () => ({ createdWorkers: [] });
+  await assert.rejects(releaseRuntime({}, first, operations), /namespace/);
+});
+
+test("RPC object-key reordering cannot create identity changes or false maintenance status", async () => {
+  const reordered = {
+    ...inputs,
+    workers: [{ cloudId: worker.cloudId, name: worker.name }],
+  };
+  assert.deepEqual(diffRuntimeInputs(inputs, reordered), {
+    changes: false,
+    replaces: [],
+  });
+  const previous = {
+    ...snapshot,
+    status: "ready",
+    workerVersions: [
+      { cloudId: worker.cloudId, versionId: "v1", name: worker.name },
+    ],
+  };
+  assert.equal((await readRuntime(inputs, previous, deps)).status, "ready");
+});
+
+test("a reviewed additive namespace declaration preserves existing identities", async () => {
+  let current = {
+    ...snapshot,
+    namespaceIds: [
+      {
+        workerName: worker.name,
+        className: "Existing",
+        namespaceId: "e".repeat(32),
+      },
+    ],
+  };
+  const before = current;
+  const operations = {
+    verifyArtifact: async () => ({
+      declaredNamespaces: [{ workerName: worker.name, className: "Added" }],
+    }),
+    readSnapshot: async () => current,
+    publish: async () => {
+      current = {
+        ...current,
+        namespaceIds: [
+          ...current.namespaceIds,
+          {
+            workerName: worker.name,
+            className: "Added",
+            namespaceId: "f".repeat(32),
+          },
+        ],
+      };
+    },
+    recover: async () => {
+      current = before;
+    },
+    pause: async () => {},
+  };
+  const release = {
+    ...inputs,
+    mode: "release",
+    artifactDigest: "c".repeat(64),
+    configDigest: "d".repeat(64),
+    artifactDirectory: "/private/artifact",
+  };
+  assert.equal((await releaseRuntime({}, release, operations)).status, "ready");
+});
+
+test("failed emergency pause preserves the publication and recovery errors", async () => {
+  const release = {
+    ...inputs,
+    mode: "release",
+    artifactDigest: "c".repeat(64),
+    configDigest: "d".repeat(64),
+    artifactDirectory: "/private/artifact",
+  };
+  await assert.rejects(
+    releaseRuntime({}, release, {
+      readSnapshot: async () => snapshot,
+      verifyArtifact: async () => {},
+      publish: async () => {
+        throw new Error("publication failure");
+      },
+      recover: async () => {
+        throw new Error("recovery failure");
+      },
+      pause: async () => {
+        throw new Error("pause failure");
+      },
+    }),
+    (error) =>
+      error instanceof AggregateError &&
+      error.errors.length === 3 &&
+      /pause failed/i.test(error.message),
+  );
+});

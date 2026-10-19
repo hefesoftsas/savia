@@ -6,6 +6,7 @@
  */
 import { readdir, readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
+import { resolve, join } from "node:path";
 
 const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
 const databaseId = process.env.CLOUDFLARE_DATABASE_ID;
@@ -23,9 +24,17 @@ if (
   process.exit(1);
 }
 
-const migrationsDir = fileURLToPath(
-  new URL("../packages/db/migrations/", import.meta.url),
-);
+const migrationsFlag = process.argv.indexOf("--migrations-dir");
+if (
+  migrationsFlag >= 0 &&
+  (!process.argv[migrationsFlag + 1] ||
+    process.argv[migrationsFlag + 1].startsWith("--"))
+)
+  throw new Error("--migrations-dir requires a directory");
+const migrationsDir =
+  migrationsFlag >= 0
+    ? resolve(process.argv[migrationsFlag + 1])
+    : fileURLToPath(new URL("../packages/db/migrations/", import.meta.url));
 const endpoint = `https://api.cloudflare.com/client/v4/accounts/${accountId}/d1/database/${databaseId}/query`;
 
 async function query(sql) {
@@ -65,7 +74,7 @@ if (dryRun) {
   let total = 0;
   for (const file of files) {
     const statements = splitStatements(
-      await readFile(migrationsDir + file, "utf8"),
+      await readFile(join(migrationsDir, file), "utf8"),
     );
     total += statements.length;
   }
@@ -91,7 +100,7 @@ let pending = 0;
 for (const file of files) {
   if (applied.has(file)) continue;
   const statements = splitStatements(
-    await readFile(migrationsDir + file, "utf8"),
+    await readFile(join(migrationsDir, file), "utf8"),
   );
   const escaped = file.replaceAll("'", "''");
   // One transactional D1 batch preserves complete trigger bodies and prevents

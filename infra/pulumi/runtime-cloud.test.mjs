@@ -43,6 +43,7 @@ test("cloud snapshots verify native identity and exclude binding values", async 
   });
   const snapshot = await client.readSnapshot();
   assert.equal(snapshot.workerVersions[0].versionId, "v1");
+  assert.deepEqual(snapshot.secretWorkerNames, ["savia-preview"]);
   assert.equal(JSON.stringify(snapshot).includes("DO_NOT_SERIALIZE"), false);
   assert.equal(snapshot.attachments[0].kind, "cron");
   responses[`/workers/workers/${cloudId}`].name = "alien";
@@ -165,4 +166,78 @@ test("reference audit finds outside callers through cross-script Durable Object 
   assert.equal(references.length, 2);
   assert.equal(references[0].caller, "other-product");
   assert.equal(JSON.stringify(references).includes("SECRET_CANARY"), false);
+});
+
+test("rate limiting honors Retry-After without retrying authentication failures", async () => {
+  const sleeps = [];
+  let attempts = 0;
+  const options = {
+    env: { CLOUDFLARE_API_TOKEN: "credential" },
+    sleep: async (ms) => sleeps.push(ms),
+    fetcher: async () => {
+      attempts++;
+      return attempts === 1
+        ? Response.json(
+            { success: false },
+            { status: 429, headers: { "retry-after": "2" } },
+          )
+        : Response.json({ success: true, result: [] });
+    },
+  };
+  const client = createRuntimeCloudClient(
+    { accountId: "a".repeat(32), workers: [] },
+    options,
+  );
+  assert.deepEqual(await client.api("/queues"), []);
+  assert.deepEqual(sleeps, [2000]);
+  let unauthorized = 0;
+  const failed = createRuntimeCloudClient(
+    { accountId: "a".repeat(32), workers: [] },
+    {
+      ...options,
+      fetcher: async () => {
+        unauthorized++;
+        return Response.json({ success: false }, { status: 401 });
+      },
+    },
+  );
+  await assert.rejects(failed.api("/queues"), /401/);
+  assert.equal(unauthorized, 1);
+});
+
+test("route mutations verify zone custody before sending a write", async () => {
+  const accountId = "a".repeat(32),
+    zoneId = "c".repeat(32),
+    calls = [];
+  let owner = "d".repeat(32);
+  const client = createRuntimeCloudClient(
+    { accountId, workers: [] },
+    {
+      env: { CLOUDFLARE_API_TOKEN: "canary", CLOUDFLARE_ZONE_ID: zoneId },
+      fetcher: async (url, options) => {
+        calls.push({ url, method: options.method });
+        return Response.json({
+          success: true,
+          result:
+            new URL(url).pathname === `/client/v4/zones/${zoneId}`
+              ? { account: { id: owner }, name: "hefesoft.com" }
+              : [],
+        });
+      },
+    },
+  );
+  await assert.rejects(
+    client.zoneApi("/workers/routes/owned", { method: "DELETE" }),
+    /account mismatch/,
+  );
+  assert.equal(
+    calls.some((row) => row.method === "DELETE"),
+    false,
+  );
+  owner = accountId;
+  await client.zoneApi("/workers/routes/owned", { method: "DELETE" });
+  assert.equal(
+    calls.at(-1).url,
+    `https://api.cloudflare.com/client/v4/zones/${zoneId}/workers/routes/owned`,
+  );
 });

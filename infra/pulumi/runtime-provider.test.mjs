@@ -14,9 +14,19 @@ test("serialized provider code never captures execution-time credentials", async
       readSnapshot: async () => {
         if (!process.env.SAVIA_SERIALIZATION_TEST_TOKEN)
           throw new Error("Missing execution-time credential");
-        return { workerVersions: inputs.workers.map((w) => ({ ...w, versionId: "v1" })), namespaceIds: [], attachments: [] };
+        return {
+          workerVersions: inputs.workers.map((w) => ({
+            ...w,
+            versionId: "v1",
+          })),
+          namespaceIds: [],
+          attachments: [],
+        };
       },
-      verifyArtifact: async () => {}, publish: async () => {}, recover: async () => {}, pause: async () => {},
+      verifyArtifact: async () => {},
+      publish: async () => {},
+      recover: async () => {},
+      pause: async () => {},
     }));
     const serialized = await pulumi.runtime.serializeFunction(() => provider);
     assert.equal(serialized.text.includes(canary), false);
@@ -42,7 +52,13 @@ test("serialized provider code never captures execution-time credentials", async
     };
     assert.equal((await restored.check({}, identity)).failures, undefined);
     const created = await restored.create(identity);
-    const updated = await restored.update(created.id, created.outs, { ...identity, mode: "release", artifactDigest: "c".repeat(64), configDigest: "d".repeat(64), artifactDirectory: "/private/unit-artifact" });
+    const updated = await restored.update(created.id, created.outs, {
+      ...identity,
+      mode: "release",
+      artifactDigest: "c".repeat(64),
+      configDigest: "d".repeat(64),
+      artifactDirectory: "/private/unit-artifact",
+    });
     assert.equal(updated.outs.status, "ready");
     assert.equal(JSON.stringify(updated).includes(canary), false);
   } finally {
@@ -95,4 +111,24 @@ test("provider refresh is read-only and delete runs explicit runtime retirement"
   await provider.delete(created.id, created.outs);
   assert.deepEqual(calls, ["read", "read", "retire"]);
   assert.equal(JSON.stringify(created.outs).includes("serialized"), false);
+});
+
+test("preview accepts unresolved native IDs, while execution and unknown input fields stay strict", async () => {
+  const unknown = pulumi.runtime.unknownValue;
+  const provider = makeRuntimeProvider(() => {
+    throw new Error("No API may run during check");
+  });
+  const unresolved = {
+    accountId: "a".repeat(32),
+    environment: "preview",
+    workers: [{ name: "savia-preview", cloudId: unknown }],
+    mode: "adopt",
+    adoptionManifest: unknown,
+  };
+  assert.equal((await provider.check({}, unresolved)).failures, undefined);
+  await assert.rejects(provider.create(unresolved), /identity/);
+  assert.ok(
+    (await provider.check({}, { ...unresolved, apiToken: "SECRET_CANARY" }))
+      .failures,
+  );
 });

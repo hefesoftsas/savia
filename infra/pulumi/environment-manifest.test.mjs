@@ -33,6 +33,32 @@ function validate(m, checkpoints = []) {
     checkpoints,
   });
 }
+
+test("retention metadata may name only Workers present in the same manifest", () => {
+  const good = {
+    ...manifest(),
+    profile: { retentionWorkerNames: ["savia-preview"] },
+  };
+  assert.deepEqual(validate(good).profile.retentionWorkerNames, [
+    "savia-preview",
+  ]);
+  assert.throws(
+    () =>
+      validate({
+        ...good,
+        profile: { retentionWorkerNames: ["savia-auth-preview"] },
+      }),
+    /retention|Retained/,
+  );
+  assert.throws(
+    () =>
+      validate({
+        ...good,
+        profile: { retentionWorkerNames: ["other-product"] },
+      }),
+    /retention|Retained/,
+  );
+});
 test("environment resolution never defaults and preserves project boundaries", () => {
   assert.throws(() => resolveEnvironment(undefined));
   assert.throws(() => resolveEnvironment("qa"));

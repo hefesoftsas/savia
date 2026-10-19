@@ -19,10 +19,11 @@ export interface RuntimeInputs {
 }
 
 export class RuntimeRelease extends pulumi.dynamic.Resource {
-  readonly status!: pulumi.Output<string>;
-  readonly workerVersions!: pulumi.Output<object[]>;
-  readonly namespaceIds!: pulumi.Output<object[]>;
-  readonly attachments!: pulumi.Output<object[]>;
+  declare readonly status: pulumi.Output<string>;
+  declare readonly workerVersions: pulumi.Output<object[]>;
+  declare readonly namespaceIds: pulumi.Output<object[]>;
+  declare readonly attachments: pulumi.Output<object[]>;
+  declare readonly retentionWorkerNames: pulumi.Output<string[]>;
   constructor(
     name: string,
     inputs: RuntimeInputs,
@@ -38,6 +39,7 @@ export class RuntimeRelease extends pulumi.dynamic.Resource {
         workerVersions: undefined,
         namespaceIds: undefined,
         attachments: undefined,
+        retentionWorkerNames: undefined,
         runtimeId: undefined,
         releaseDigest: undefined,
       },

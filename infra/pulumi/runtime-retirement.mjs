@@ -1,6 +1,12 @@
 // Cloud deletion belongs to native resources. This module removes runtime
 // attachments first and leaves namespace hosts alive when retaining data.
-export function planRuntimeRetirement(manifest, { deleteData = false } = {}) {
+export function planRuntimeRetirement(
+  manifest,
+  {
+    deleteData = false,
+    retainWorkers = manifest.profile?.retentionWorkerNames ?? [],
+  } = {},
+) {
   if (typeof deleteData !== "boolean")
     throw new Error("deleteData must be boolean");
   if (["shared", "management"].includes(manifest.environment))
@@ -14,11 +20,21 @@ export function planRuntimeRetirement(manifest, { deleteData = false } = {}) {
   const namespaces = manifest.resources.filter(
     (r) => r.kind === "durableObject",
   );
+  if (
+    !Array.isArray(retainWorkers) ||
+    retainWorkers.some((name) => !workers.includes(name))
+  )
+    throw new Error("A retained Worker is outside the environment");
   if (namespaces.some((r) => !workers.includes(r.parentWorker)))
     throw new Error("Namespace host is absent from manifest");
   const retainedWorkers = deleteData
     ? []
-    : [...new Set(namespaces.map((r) => r.parentWorker))].sort();
+    : [
+        ...new Set([
+          ...namespaces.map((r) => r.parentWorker),
+          ...retainWorkers,
+        ]),
+      ].sort();
   return Object.freeze({
     accountId: manifest.accountId,
     environment: manifest.environment,
@@ -34,10 +50,17 @@ export function planRuntimeRetirement(manifest, { deleteData = false } = {}) {
 
 export async function retireRuntime(
   state,
-  { manifest, deleteData = false },
+  {
+    manifest,
+    deleteData = false,
+    retainWorkers = [
+      ...(state.retentionWorkerNames ?? []),
+      ...(manifest.profile?.retentionWorkerNames ?? []),
+    ],
+  },
   deps,
 ) {
-  const plan = planRuntimeRetirement(manifest, { deleteData });
+  const plan = planRuntimeRetirement(manifest, { deleteData, retainWorkers });
   const names = new Set([...plan.retainedWorkers, ...plan.deletedWorkers]);
   const references = await deps.inspectReferences(plan);
   if (

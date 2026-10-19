@@ -55,6 +55,7 @@ function validProfile(profile, policy) {
       "searchEnabled",
       "tenantSubdomains",
       "databaseNames",
+      "retentionWorkerNames",
     ]),
     "profile",
   );
@@ -74,6 +75,17 @@ function validProfile(profile, policy) {
       new Set(["auth", "domain"]),
       "database names",
     );
+  if (
+    profile.retentionWorkerNames !== undefined &&
+    (!Array.isArray(profile.retentionWorkerNames) ||
+      new Set(profile.retentionWorkerNames).size !==
+        profile.retentionWorkerNames.length ||
+      profile.retentionWorkerNames.some(
+        (name) =>
+          typeof name !== "string" || !policy.rules.get("worker")?.has(name),
+      ))
+  )
+    throw new Error("Invalid retention Worker profile");
 }
 function validId(row) {
   if (typeof row.cloudId !== "string" || !row.cloudId) return false;
@@ -205,6 +217,8 @@ export function validateAdoptionManifest(
   const workerNames = new Set(
     manifest.resources.filter((r) => r.kind === "worker").map((r) => r.name),
   );
+  if (profile.retentionWorkerNames?.some((name) => !workerNames.has(name)))
+    throw new Error("Retained Worker is absent from the manifest");
   for (const row of manifest.resources) {
     if (row.parentWorker && !workerNames.has(row.parentWorker))
       throw new Error(

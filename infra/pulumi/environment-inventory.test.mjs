@@ -73,6 +73,33 @@ test("production absence is reported without initializing a stack", async () => 
   assert.equal(r.status, "defined-not-deployed");
   assert.equal(r.resources.length, 0);
 });
+
+test("inventory records opaque-secret hosts as Worker names without retaining secret values", async () => {
+  const result = await inventory("preview", [
+    {
+      ...row("savia-preview"),
+      hasOpaqueSecrets: true,
+      secretValue: "SECRET_CANARY",
+    },
+  ]);
+  assert.deepEqual(result.profile.retentionWorkerNames, ["savia-preview"]);
+  assert.equal(JSON.stringify(result).includes("SECRET_CANARY"), false);
+});
+
+test("an unrecognized attachment on an owned Worker cannot silently disappear", async () => {
+  await assert.rejects(
+    inventory("preview", [
+      row("savia-preview"),
+      {
+        kind: "domain",
+        name: "unexpected.hefesoft.com",
+        cloudId: "d".repeat(40),
+        parentWorker: "savia-preview",
+      },
+    ]),
+    /attachment|profile/,
+  );
+});
 test("inventories preserve IDs and annotate owning checkpoints", async () => {
   const r = await inventory(
     "preview",

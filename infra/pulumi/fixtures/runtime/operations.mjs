@@ -9,6 +9,7 @@ import {
 } from "../../runtime-maintenance.mjs";
 import { retireRuntime } from "../../runtime-retirement.mjs";
 import { verifyRuntimeArtifact } from "../../runtime-publisher.mjs";
+import { bootstrapRuntimeWorkers } from "../../runtime-bootstrap.mjs";
 
 const exec = promisify(execFile);
 export function makeFixtureOperations(inputs) {
@@ -58,6 +59,37 @@ export function makeFixtureOperations(inputs) {
   }
   return {
     readSnapshot: () => client.readSnapshot(),
+    bootstrap: async () => {
+      const result = await bootstrapRuntimeWorkers(inputs, {
+        client,
+        directory: cwd,
+        runWrangler: async (args, options) =>
+          exec(process.env.SAVIA_FIXTURE_WRANGLER, args, {
+            ...options,
+            env: process.env,
+            maxBuffer: 8 * 1024 * 1024,
+            timeout: 120_000,
+          }),
+      });
+      if (result.createdWorkers.length && !process.env.SAVIA_FIXTURE_ACCESS)
+        throw new Error("Missing fixture execution credential");
+      for (const name of result.createdWorkers) {
+        const file = join(cwd, `${name}.bootstrap.json`);
+        const command = exec(
+          process.env.SAVIA_FIXTURE_WRANGLER,
+          ["secret", "put", "FIXTURE_ACCESS", "--config", file],
+          {
+            cwd,
+            env: process.env,
+            maxBuffer: 8 * 1024 * 1024,
+            timeout: 120_000,
+          },
+        );
+        command.child.stdin.end(process.env.SAVIA_FIXTURE_ACCESS);
+        await command;
+      }
+      return result;
+    },
     verifyArtifact: () => verifyRuntimeArtifact(inputs),
     publish: async () => {
       const artifact = await verifyRuntimeArtifact(inputs);
@@ -109,6 +141,23 @@ export function makeFixtureOperations(inputs) {
     },
     retire: async (state, options) => {
       const snapshot = await client.readSnapshot();
+      // This probe owns and retains the one synthetic access key externally.
+      // Real environment retirement must retain opaque secret hosts by default.
+      if (!process.env.SAVIA_FIXTURE_ACCESS)
+        throw new Error("Fixture key custody is unavailable");
+      for (const worker of inputs.workers) {
+        const settings = await client.api(
+          `/workers/scripts/${worker.name}/settings`,
+        );
+        if (
+          settings.bindings?.some(
+            (binding) =>
+              binding.type === "secret_text" &&
+              binding.name !== "FIXTURE_ACCESS",
+          )
+        )
+          throw new Error("Unexpected opaque fixture secret");
+      }
       const resources = [
         ...inputs.workers.map((w) => ({ kind: "worker", ...w })),
         ...snapshot.namespaceIds.map((r) => ({
@@ -125,7 +174,7 @@ export function makeFixtureOperations(inputs) {
       };
       return retireRuntime(
         state,
-        { ...options, manifest },
+        { ...options, manifest, retainWorkers: [] },
         {
           inspectReferences: () => client.inspectReferences(manifest),
           stopProducers: async () => {

@@ -109,3 +109,30 @@ test("shared and management are excluded from application retirement", () => {
       /protected/,
     );
 });
+
+test("opaque encryption-key hosts survive data-preserving retirement", () => {
+  const withKeyHost = {
+    ...manifest,
+    resources: [
+      ...manifest.resources,
+      {
+        kind: "worker",
+        name: "savia-request-preview",
+        cloudId: "f".repeat(32),
+      },
+    ],
+  };
+  const plan = planRuntimeRetirement(withKeyHost, {
+    retainWorkers: ["savia-request-preview"],
+  });
+  assert.deepEqual(plan.retainedWorkers, [
+    "savia-agencies-preview",
+    "savia-request-preview",
+  ]);
+  assert.deepEqual(plan.deletedWorkers, ["savia-preview"]);
+  assert.throws(
+    () =>
+      planRuntimeRetirement(withKeyHost, { retainWorkers: ["other-product"] }),
+    /retained|outside/,
+  );
+});

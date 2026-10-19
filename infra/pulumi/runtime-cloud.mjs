@@ -2,7 +2,11 @@
 // explicitly selected identity metadata below may leave this module as state.
 export function createRuntimeCloudClient(
   inputs,
-  { env = process.env, fetcher = globalThis.fetch } = {},
+  {
+    env = process.env,
+    fetcher = globalThis.fetch,
+    sleep = (ms) => new Promise((done) => setTimeout(done, ms)),
+  } = {},
 ) {
   const { accountId, workers } = inputs;
   if (
@@ -13,11 +17,18 @@ export function createRuntimeCloudClient(
   if (!env.CLOUDFLARE_API_TOKEN)
     throw new Error("Cloudflare execution-time credential required");
   const token = env.CLOUDFLARE_API_TOKEN;
-  async function request(path, { method = "GET", body } = {}) {
+  async function request(
+    path,
+    { method = "GET", body } = {},
+    attempt = 0,
+    global = false,
+  ) {
     if (!path.startsWith("/") || path.includes(".."))
       throw new Error("Invalid Cloudflare path");
+    if (global && !/^\/zones(?:\?|\/|$)/.test(path))
+      throw new Error("Only zone-scoped global API calls are supported");
     const response = await fetcher(
-      `https://api.cloudflare.com/client/v4/accounts/${accountId}${path}`,
+      `https://api.cloudflare.com/client/v4${global ? "" : `/accounts/${accountId}`}${path}`,
       {
         method,
         headers: {
@@ -28,23 +39,46 @@ export function createRuntimeCloudClient(
         signal: AbortSignal.timeout(30_000),
       },
     );
+    if (response.status === 429 && attempt < 3) {
+      const header = response.headers.get("retry-after");
+      const seconds = header === null ? 2 ** attempt : Number(header);
+      if (!Number.isFinite(seconds) || seconds < 0 || seconds > 300)
+        throw new Error("Cloudflare rate limit requires a later retry");
+      await response.body?.cancel();
+      for (
+        let remaining = Math.max(1000, Math.ceil(seconds * 1000));
+        remaining > 0;
+        remaining -= 30_000
+      )
+        await sleep(Math.min(remaining, 30_000));
+      return request(path, { method, body }, attempt + 1, global);
+    }
     let payload;
     try {
       payload = await response.json();
     } catch {
-      throw new Error(`Cloudflare request failed (${response.status})`);
+      throw new Error(
+        `Cloudflare ${method} ${path} failed (${response.status})`,
+      );
     }
     if (!response.ok || payload?.success !== true)
-      throw new Error(`Cloudflare request failed (${response.status})`);
+      throw new Error(
+        `Cloudflare ${method} ${path} failed (${response.status})`,
+      );
     return payload;
   }
   const api = async (path, options) => (await request(path, options)).result;
-  async function list(path) {
+  const globalApi = async (path, options) =>
+    (await request(path, options, 0, true)).result;
+  async function list(path, global = false) {
     const all = [],
       seen = new Set();
     for (let page = 1; page <= 10000; page++) {
       const payload = await request(
         `${path}${path.includes("?") ? "&" : "?"}per_page=100&page=${page}`,
+        {},
+        0,
+        global,
       );
       if (!Array.isArray(payload.result))
         throw new Error("Unexpected Cloudflare list response");
@@ -70,6 +104,28 @@ export function createRuntimeCloudClient(
     }
     throw new Error("Cloudflare pagination limit exceeded");
   }
+  const zoneId = env.CLOUDFLARE_ZONE_ID ?? "b3255bc65c2bc8cb8edf33a34e08b255";
+  async function zoneApi(path, options) {
+    if (!/^[a-f\d]{32}$/.test(zoneId))
+      throw new Error("Invalid deployment zone identity");
+    const zone = await globalApi(`/zones/${zoneId}`);
+    if (zone.account?.id !== accountId || zone.name !== "hefesoft.com")
+      throw new Error("Deployment zone account mismatch");
+    return globalApi(`/zones/${zoneId}${path}`, options);
+  }
+  async function readRoutes() {
+    const routes = await zoneApi("/workers/routes");
+    if (!Array.isArray(routes))
+      throw new Error("Unexpected Worker route inventory");
+    return routes
+      .filter((route) => workers.some((worker) => worker.name === route.script))
+      .map((route) => ({
+        kind: "route",
+        name: route.pattern,
+        cloudId: route.id,
+        parentWorker: route.script,
+      }));
+  }
   async function readSnapshot() {
     const names = new Set(workers.map((w) => w.name));
     const namespaceIds = (await list("/workers/durable_objects/namespaces"))
@@ -79,6 +135,7 @@ export function createRuntimeCloudClient(
         className: r.class,
         namespaceId: r.id,
       }));
+    const secretWorkerNames = [];
     const workerVersions = [],
       attachments = [];
     for (const worker of workers) {
@@ -97,7 +154,9 @@ export function createRuntimeCloudClient(
       workerVersions.push({ ...worker, versionId: versions[0].version_id });
       // Settings can contain secrets and variables. Inspect them in memory only;
       // never spread the response into a return value or error message.
-      await api(`${path}/settings`);
+      const settings = await api(`${path}/settings`);
+      if (settings.bindings?.some((binding) => binding.type === "secret_text"))
+        secretWorkerNames.push(worker.name);
       const schedule = await api(`${path}/schedules`);
       for (const row of schedule.schedules ?? [])
         attachments.push({
@@ -136,7 +195,12 @@ export function createRuntimeCloudClient(
             parentWorker,
           });
       }
-    return { workerVersions, namespaceIds, attachments };
+    if (
+      ["preview", "production"].includes(inputs.environment) ||
+      inputs.environment?.startsWith("branch-")
+    )
+      attachments.push(...(await readRoutes()));
+    return { workerVersions, namespaceIds, attachments, secretWorkerNames };
   }
   async function inspectReferences(manifest) {
     const names = new Set(
@@ -148,6 +212,10 @@ export function createRuntimeCloudClient(
         .map((r) => [r.cloudId, r.parentWorker]),
     );
     const references = [];
+    const dataTargets = new Map();
+    for (const row of manifest.resources)
+      for (const id of [row.cloudId, row.name])
+        dataTargets.set(`${row.kind}:${id}`, row.name);
     for (const worker of await list("/workers/workers")) {
       const settings = await api(`/workers/scripts/${worker.name}/settings`);
       for (const binding of settings.bindings ?? []) {
@@ -158,11 +226,22 @@ export function createRuntimeCloudClient(
           target =
             namespaces.get(binding.namespace_id) ??
             (names.has(binding.script_name) ? binding.script_name : undefined);
+        const dataBindings = {
+          d1: ["d1", binding.id],
+          r2_bucket: ["r2", binding.bucket_name],
+          kv_namespace: ["kv", binding.namespace_id],
+          queue: ["queue", binding.queue_id ?? binding.queue_name],
+          vectorize: ["vectorize", binding.index_name],
+        };
+        if (dataBindings[binding.type]) {
+          const [kind, id] = dataBindings[binding.type];
+          target = dataTargets.get(`${kind}:${id}`);
+        }
         if (target)
           references.push({ caller: worker.name, target, kind: binding.type });
       }
     }
     return references;
   }
-  return { api, list, readSnapshot, inspectReferences };
+  return { api, list, readSnapshot, inspectReferences, zoneApi, readRoutes };
 }

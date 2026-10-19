@@ -17,11 +17,17 @@ import { fileURLToPath } from "node:url";
 import { validateFixturePrefix } from "../../verify-runtime-lifecycle.mjs";
 import { adoptRuntime } from "../../runtime-release.mjs";
 import { prepareRuntimeArtifact } from "../../runtime-publisher.mjs";
+import { createRuntimeCloudClient } from "../../runtime-cloud.mjs";
 import { maintenanceModule } from "../../runtime-maintenance.mjs";
 
 const exec = promisify(execFile);
-const [rootArg, prefixArg] = process.argv.slice(2);
-if (!rootArg || !prefixArg || process.argv.length !== 4)
+const [rootArg, prefixArg, mode] = process.argv.slice(2);
+if (
+  !rootArg ||
+  !prefixArg ||
+  process.argv.length > 5 ||
+  (mode !== undefined && mode !== "--cold-only")
+)
   throw new Error(
     "Usage: node probe.mjs <new-private-directory> <savia-iac-fixture-run>",
   );
@@ -42,6 +48,7 @@ for (const file of [
   "runtime-retirement.mjs",
   "runtime-maintenance.mjs",
   "runtime-publisher.mjs",
+  "runtime-bootstrap.mjs",
 ])
   await cp(join(infra, file), join(root, file));
 await symlink(
@@ -64,6 +71,7 @@ await writeFile(
   { mode: 0o600 },
 );
 const access = randomBytes(32).toString("hex");
+env.SAVIA_FIXTURE_ACCESS = access;
 const pulumi = process.env.PULUMI_BIN ?? "pulumi";
 const wrangler = fileURLToPath(
   new URL("../../../../apps/api/node_modules/.bin/wrangler", import.meta.url),
@@ -77,7 +85,7 @@ async function run(binary, args, input) {
       cwd,
       env,
       maxBuffer: 16 * 1024 * 1024,
-      timeout: 180_000,
+      timeout: binary === pulumi ? 20 * 60_000 : 180_000,
     });
     if (input !== undefined) pending.child.stdin.end(input);
     const result = await pending;
@@ -98,30 +106,14 @@ const p = (...args) => run(pulumi, [...args, "--non-interactive"]);
 const config = (key, value) =>
   p("config", "set", key, String(value), "--stack", "fixture");
 const up = () => p("up", "--stack", "fixture", "--yes", "--skip-preview");
-async function api(path, method = "GET", body) {
-  const response = await fetch(
-    `https://api.cloudflare.com/client/v4/accounts/${accountId}${path}`,
-    {
-      method,
-      headers: {
-        Authorization: `Bearer ${env.CLOUDFLARE_API_TOKEN}`,
-        ...(body ? { "Content-Type": "application/json" } : {}),
-      },
-      body: body ? JSON.stringify(body) : undefined,
-      signal: AbortSignal.timeout(30_000),
-    },
-  );
-  const result = await response.json();
-  if (!response.ok || !result.success)
-    throw new Error(`Fixture API ${method} ${path} failed: ${response.status}`);
-  return result.result;
-}
+const cloud = createRuntimeCloudClient({ accountId, workers: [] }, { env });
+const api = (path, method = "GET", body) => cloud.api(path, { method, body });
 const path = (role) => `/workers/scripts/${prefix}-${role}`;
 let data;
 let workers;
 const configFiles = {};
 const secretIdentities = new Set();
-async function deploy(
+function workerSettings(
   role,
   {
     release = "baseline",
@@ -138,16 +130,7 @@ async function deploy(
     preview_urls: false,
     vars: { RELEASE: release, RETIRED: String(maintenance || placeholder) },
   };
-  if (maintenance) {
-    settings.main = "maintenance.mjs";
-    await writeFile(
-      join(cwd, "maintenance.mjs"),
-      maintenanceModule({
-        durableObjectClasses: ["FixtureStore"],
-        workflowClasses: ["FixtureWorkflow"],
-      }),
-    );
-  }
+  if (maintenance) settings.main = "maintenance.mjs";
   if (role === "coordinator" && !placeholder) {
     settings.durable_objects = {
       bindings: [{ name: "STORE", class_name: "FixtureStore" }],
@@ -200,6 +183,19 @@ async function deploy(
         run_worker_first: true,
       };
   }
+  return settings;
+}
+async function deploy(role, options = {}) {
+  const settings = workerSettings(role, options);
+  const { maintenance = false, placeholder = false } = options;
+  if (maintenance)
+    await writeFile(
+      join(cwd, "maintenance.mjs"),
+      maintenanceModule({
+        durableObjectClasses: ["FixtureStore"],
+        workflowClasses: ["FixtureWorkflow"],
+      }),
+    );
   const file = `${role}.wrangler.json`;
   await writeFile(join(cwd, file), JSON.stringify(settings));
   await run(wrangler, ["deploy", "--config", file]);
@@ -268,137 +264,213 @@ try {
     await p("stack", "output", "--json", "--stack", "fixture"),
   ));
   console.log("Fixture identities and isolated data created.");
-  // Native identities may not yet be callable. Always bootstrap private 503
-  // placeholders before publishing callers to break service-binding cycles.
-  for (const role of ["gateway", "api", "auth", "coordinator"])
-    await deploy(role, { placeholder: true });
-  await mkdir(join(cwd, "assets"));
-  await writeFile(join(cwd, "assets/index.html"), "Synthetic asset");
-  for (const role of ["coordinator", "api", "auth", "gateway"])
-    await deploy(role);
-  const subdomain = await api("/workers/subdomain");
-  origin = `https://${prefix}-gateway.${subdomain.subdomain}.workers.dev/fixture`;
-  await values("PUT");
-  const original = await values();
-  for (const value of [
-    original.durableObject.value,
-    original.d1,
-    original.r2,
-    original.kv,
-  ])
-    assert.equal(value, "synthetic-retained-value");
-  const inputs = {
-    accountId,
-    environment: prefix,
-    workers,
-    mode: "adopt",
-    adoptionManifest: {
-      accountId,
-      environment: prefix,
-      resources: workers.map((w) => ({ kind: "worker", ...w })),
-    },
-  };
-  const deps = { readSnapshot: snapshot };
-  const before = await snapshot(inputs);
-  const adopted = await adoptRuntime(inputs, deps);
-  assert.deepEqual(adopted.workerVersions, before.workerVersions);
-  assert.deepEqual(adopted.namespaceIds, before.namespaceIds);
-  await config("adoptRuntime", true);
-  await up();
-  await p("preview", "--stack", "fixture", "--refresh", "--expect-no-changes");
-  evidence.adoption = "read-only versions and namespace identities preserved";
-  console.log("Read-only adoption and unchanged native refresh verified.");
-  const adoptedOutput = JSON.parse(
-    await p("stack", "output", "--json", "--stack", "fixture"),
-  ).runtime;
-  async function artifact(marker, injectFailure) {
-    const bundle = join(root, `source-${marker}`);
+  if (mode === "--cold-only") {
+    await mkdir(join(cwd, "assets"));
+    await writeFile(join(cwd, "assets/index.html"), "Synthetic asset");
+    const bundle = join(root, "cold-source");
     await mkdir(bundle);
     await cp(join(cwd, "worker.mjs"), join(bundle, "worker.mjs"));
     await cp(join(cwd, "assets"), join(bundle, "assets"), { recursive: true });
     await writeFile(
       join(bundle, "release-behavior.json"),
-      JSON.stringify({ injectFailure }),
+      JSON.stringify({ injectFailure: false }),
     );
-    const configs = Object.fromEntries(
-      Object.entries(configFiles).map(([role, settings]) => [
-        `${role}.json`,
-        { ...settings, vars: { ...settings.vars, RELEASE: marker } },
-      ]),
-    );
-    return prepareRuntimeArtifact({
+    const configs = {};
+    for (const role of ["coordinator", "api", "auth", "gateway"]) {
+      const settings = workerSettings(role, {
+        release: "first-managed-install",
+      });
+      configs[`${role}.json`] = settings;
+      await writeFile(
+        join(cwd, `${role}.wrangler.json`),
+        JSON.stringify(settings),
+      );
+    }
+    const artifact = await prepareRuntimeArtifact({
       environment: prefix,
       release: { directory: bundle, configs },
-      destination: join(root, `artifact-${marker}`),
+      destination: join(root, "cold-artifact"),
     });
-  }
-  async function selectArtifact(prepared) {
     for (const field of ["artifactDigest", "configDigest", "artifactDirectory"])
-      await config(field, prepared[field]);
+      await config(field, artifact[field]);
     await config("runtimeMode", "release");
+    await config("adoptRuntime", true);
+    await up();
+    const result = JSON.parse(
+      await p("stack", "output", "--json", "--stack", "fixture"),
+    );
+    assert.equal(result.runtime.status, "ready");
+    assert.equal(result.runtime.namespaceIds.length, 1);
+    const subdomain = await api("/workers/subdomain");
+    origin = `https://${prefix}-gateway.${subdomain.subdomain}.workers.dev/fixture`;
+    await values("PUT");
+    const stored = await values("GET", "first-managed-install");
+    for (const value of [
+      stored.durableObject.value,
+      stored.d1,
+      stored.r2,
+      stored.kv,
+    ])
+      assert.equal(value, "synthetic-retained-value");
+    evidence.firstInstall =
+      "managed create bootstrapped cold identities, published cyclic services and allocated namespace with persisted data";
+    console.log("Cold managed first installation verified.");
+  } else {
+    // Native identities may not yet be callable. Always bootstrap private 503
+    // placeholders before publishing callers to break service-binding cycles.
+    for (const role of ["gateway", "api", "auth", "coordinator"])
+      await deploy(role, { placeholder: true });
+    await mkdir(join(cwd, "assets"));
+    await writeFile(join(cwd, "assets/index.html"), "Synthetic asset");
+    for (const role of ["coordinator", "api", "auth", "gateway"])
+      await deploy(role);
+    const subdomain = await api("/workers/subdomain");
+    origin = `https://${prefix}-gateway.${subdomain.subdomain}.workers.dev/fixture`;
+    await values("PUT");
+    const original = await values();
+    for (const value of [
+      original.durableObject.value,
+      original.d1,
+      original.r2,
+      original.kv,
+    ])
+      assert.equal(value, "synthetic-retained-value");
+    const inputs = {
+      accountId,
+      environment: prefix,
+      workers,
+      mode: "adopt",
+      adoptionManifest: {
+        accountId,
+        environment: prefix,
+        resources: workers.map((w) => ({ kind: "worker", ...w })),
+      },
+    };
+    const deps = { readSnapshot: snapshot };
+    const before = await snapshot(inputs);
+    const adopted = await adoptRuntime(inputs, deps);
+    assert.deepEqual(adopted.workerVersions, before.workerVersions);
+    assert.deepEqual(adopted.namespaceIds, before.namespaceIds);
+    await config("adoptRuntime", true);
+    await up();
+    await p(
+      "preview",
+      "--stack",
+      "fixture",
+      "--refresh",
+      "--expect-no-changes",
+    );
+    evidence.adoption = "read-only versions and namespace identities preserved";
+    console.log("Read-only adoption and unchanged native refresh verified.");
+    const adoptedOutput = JSON.parse(
+      await p("stack", "output", "--json", "--stack", "fixture"),
+    ).runtime;
+    async function artifact(marker, injectFailure) {
+      const bundle = join(root, `source-${marker}`);
+      await mkdir(bundle);
+      await cp(join(cwd, "worker.mjs"), join(bundle, "worker.mjs"));
+      await cp(join(cwd, "assets"), join(bundle, "assets"), {
+        recursive: true,
+      });
+      await writeFile(
+        join(bundle, "release-behavior.json"),
+        JSON.stringify({ injectFailure }),
+      );
+      const configs = Object.fromEntries(
+        Object.entries(configFiles).map(([role, settings]) => [
+          `${role}.json`,
+          { ...settings, vars: { ...settings.vars, RELEASE: marker } },
+        ]),
+      );
+      return prepareRuntimeArtifact({
+        environment: prefix,
+        release: { directory: bundle, configs },
+        destination: join(root, `artifact-${marker}`),
+      });
+    }
+    async function selectArtifact(prepared) {
+      for (const field of [
+        "artifactDigest",
+        "configDigest",
+        "artifactDirectory",
+      ])
+        await config(field, prepared[field]);
+      await config("runtimeMode", "release");
+    }
+    const successfulArtifact = await artifact("updated", false);
+    await selectArtifact(successfulArtifact);
+    await up();
+    const updatedOutput = JSON.parse(
+      await p("stack", "output", "--json", "--stack", "fixture"),
+    ).runtime;
+    assert.equal(updatedOutput.id, adoptedOutput.id);
+    assert.equal(updatedOutput.status, "ready");
+    assert.deepEqual(updatedOutput.namespaceIds, adoptedOutput.namespaceIds);
+    assert.equal((await values("GET", "updated")).release, "updated");
+    const stable = await snapshot(inputs);
+    const failingArtifact = await artifact("bad", true);
+    await selectArtifact(failingArtifact);
+    await assert.rejects(up(), /Fixture command .*failed/);
+    const failureLog = await readFile(
+      join(root, `${sequence}-command.private.log`),
+      "utf8",
+    );
+    assert.match(failureLog, /Injected managed publication failure/);
+    assert.deepEqual(
+      (await snapshot(inputs)).workerVersions,
+      stable.workerVersions,
+    );
+    assert.equal((await values("GET", "updated")).release, "updated");
+    await selectArtifact(successfulArtifact);
+    await p(
+      "preview",
+      "--stack",
+      "fixture",
+      "--refresh",
+      "--expect-no-changes",
+    );
+    evidence.updateAndRecovery =
+      "managed Pulumi update preserved runtime ID; failed update restored actual versions";
+    await config("retired", true);
+    await up();
+    const retained = JSON.parse(
+      await p("stack", "output", "--json", "--stack", "fixture"),
+    );
+    assert.equal(retained.workers.length, 1);
+    assert.equal(
+      retained.workers[0].cloudId,
+      workers.find((w) => w.name.endsWith("-coordinator")).cloudId,
+    );
+    assert.deepEqual(retained.data, data);
+    await config("adoptRuntime", false);
+    await config("retired", false);
+    await up();
+    ({ workers } = JSON.parse(
+      await p("stack", "output", "--json", "--stack", "fixture"),
+    ));
+    for (const role of ["gateway", "api", "auth"])
+      await deploy(role, { placeholder: true });
+    for (const role of ["coordinator", "api", "auth", "gateway"])
+      await deploy(role, { release: "recreated" });
+    await config("runtimeMode", "adopt");
+    await config("adoptRuntime", true);
+    await up();
+    const after = await values();
+    for (const value of [
+      after.durableObject.value,
+      after.d1,
+      after.r2,
+      after.kv,
+    ])
+      assert.equal(value, "synthetic-retained-value");
+    assert.deepEqual(
+      (await snapshot({ ...inputs, workers })).namespaceIds,
+      stable.namespaceIds,
+    );
+    evidence.retainedData =
+      "DO namespace and value, D1, R2 and KV values survived retirement/recreation";
+    console.log("Data-preserving retirement and recreation verified.");
   }
-  const successfulArtifact = await artifact("updated", false);
-  await selectArtifact(successfulArtifact);
-  await up();
-  const updatedOutput = JSON.parse(
-    await p("stack", "output", "--json", "--stack", "fixture"),
-  ).runtime;
-  assert.equal(updatedOutput.id, adoptedOutput.id);
-  assert.equal(updatedOutput.status, "ready");
-  assert.deepEqual(updatedOutput.namespaceIds, adoptedOutput.namespaceIds);
-  assert.equal((await values("GET", "updated")).release, "updated");
-  const stable = await snapshot(inputs);
-  const failingArtifact = await artifact("bad", true);
-  await selectArtifact(failingArtifact);
-  await assert.rejects(up(), /Fixture command .*failed/);
-  const failureLog = await readFile(
-    join(root, `${sequence}-command.private.log`),
-    "utf8",
-  );
-  assert.match(failureLog, /Injected managed publication failure/);
-  assert.deepEqual(
-    (await snapshot(inputs)).workerVersions,
-    stable.workerVersions,
-  );
-  assert.equal((await values("GET", "updated")).release, "updated");
-  await selectArtifact(successfulArtifact);
-  await p("preview", "--stack", "fixture", "--refresh", "--expect-no-changes");
-  evidence.updateAndRecovery =
-    "managed Pulumi update preserved runtime ID; failed update restored actual versions";
-  await config("retired", true);
-  await up();
-  const retained = JSON.parse(
-    await p("stack", "output", "--json", "--stack", "fixture"),
-  );
-  assert.equal(retained.workers.length, 1);
-  assert.equal(
-    retained.workers[0].cloudId,
-    workers.find((w) => w.name.endsWith("-coordinator")).cloudId,
-  );
-  assert.deepEqual(retained.data, data);
-  await config("adoptRuntime", false);
-  await config("retired", false);
-  await up();
-  ({ workers } = JSON.parse(
-    await p("stack", "output", "--json", "--stack", "fixture"),
-  ));
-  for (const role of ["gateway", "api", "auth"])
-    await deploy(role, { placeholder: true });
-  for (const role of ["coordinator", "api", "auth", "gateway"])
-    await deploy(role, { release: "recreated" });
-  await config("runtimeMode", "adopt");
-  await config("adoptRuntime", true);
-  await up();
-  const after = await values();
-  for (const value of [after.durableObject.value, after.d1, after.r2, after.kv])
-    assert.equal(value, "synthetic-retained-value");
-  assert.deepEqual(
-    (await snapshot({ ...inputs, workers })).namespaceIds,
-    stable.namespaceIds,
-  );
-  evidence.retainedData =
-    "DO namespace and value, D1, R2 and KV values survived retirement/recreation";
-  console.log("Data-preserving retirement and recreation verified.");
 } finally {
   // All cleanup is restricted to this operation's exact resources.
   if (initialized) {

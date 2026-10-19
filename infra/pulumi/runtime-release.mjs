@@ -93,6 +93,7 @@ export function validateRuntimeInputs(inputs) {
         "searchEnabled",
         "tenantSubdomains",
         "databaseNames",
+        "retentionWorkerNames",
       ];
       if (
         Object.keys(manifest.profile).some((key) => !profileKeys.includes(key))
@@ -100,7 +101,11 @@ export function validateRuntimeInputs(inputs) {
         throw new Error("Invalid adoption manifest fields");
       for (const [key, value] of Object.entries(manifest.profile)) {
         if (
-          ["enabledWorkers", "tenantSubdomains"].includes(key) &&
+          [
+            "enabledWorkers",
+            "tenantSubdomains",
+            "retentionWorkerNames",
+          ].includes(key) &&
           (!Array.isArray(value) ||
             value.some((item) => typeof item !== "string"))
         )
@@ -164,7 +169,9 @@ const identity = (x) =>
   JSON.stringify([
     x.accountId,
     x.environment,
-    [...x.workers].sort((a, b) => a.name.localeCompare(b.name)),
+    [...x.workers]
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map(({ name, cloudId }) => [name, cloudId]),
   ]);
 const digest = async (x) => {
   // Resolve native modules inside the operation so Pulumi's closure serializer
@@ -235,13 +242,33 @@ function cleanSnapshot(snapshot, inputs) {
       throw new Error("Foreign runtime attachment");
     return clean;
   });
-  return { workerVersions, namespaceIds, attachments };
+  const secretWorkerNames = snapshot.secretWorkerNames ?? [];
+  if (
+    !Array.isArray(secretWorkerNames) ||
+    secretWorkerNames.some(
+      (name) =>
+        typeof name !== "string" ||
+        !inputs.workers.some((worker) => worker.name === name),
+    )
+  )
+    throw new Error("Invalid secret host metadata");
+  const retentionWorkerNames = [
+    ...new Set([
+      ...secretWorkerNames,
+      ...namespaceIds.map((row) => row.workerName),
+    ]),
+  ].sort();
+  return { workerVersions, namespaceIds, attachments, retentionWorkerNames };
 }
 const sorted = (rows) =>
   JSON.stringify(
-    [...rows].sort((a, b) =>
-      JSON.stringify(a).localeCompare(JSON.stringify(b)),
-    ),
+    rows
+      .map((row) =>
+        Object.fromEntries(
+          Object.entries(row).sort(([a], [b]) => a.localeCompare(b)),
+        ),
+      )
+      .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))),
   );
 export async function readRuntime(inputs, previous, deps) {
   validateRuntimeInputs(inputs);
@@ -279,12 +306,41 @@ export async function releaseRuntime(previous, inputs, deps) {
   validateRuntimeInputs(inputs);
   if (inputs.mode !== "release")
     throw new Error("Explicit release mode required");
-  await deps.verifyArtifact(inputs);
+  const verified = await deps.verifyArtifact(inputs);
+  const bootstrap = deps.bootstrap
+    ? await deps.bootstrap(inputs)
+    : { createdWorkers: [] };
+  if (
+    !Array.isArray(bootstrap.createdWorkers) ||
+    bootstrap.createdWorkers.some(
+      (name) => !inputs.workers.some((worker) => worker.name === name),
+    )
+  )
+    throw new Error("Invalid bootstrap Worker identities");
   const before = await readRuntime(inputs, previous, deps);
   try {
     await deps.publish(inputs, before);
     const after = await readRuntime(inputs, previous, deps);
-    if (sorted(before.namespaceIds) !== sorted(after.namespaceIds))
+    const key = (row) => `${row.workerName}/${row.className}`;
+    const oldNamespaces = new Map(
+      before.namespaceIds.map((row) => [key(row), row.namespaceId]),
+    );
+    const newNamespaces = new Map(
+      after.namespaceIds.map((row) => [key(row), row.namespaceId]),
+    );
+    if (
+      before.namespaceIds.some(
+        (row) => newNamespaces.get(key(row)) !== row.namespaceId,
+      ) ||
+      after.namespaceIds.some(
+        (row) =>
+          !oldNamespaces.has(key(row)) &&
+          !bootstrap.createdWorkers.includes(row.workerName) &&
+          !verified?.declaredNamespaces?.some(
+            (declared) => key(declared) === key(row),
+          ),
+      )
+    )
       throw new Error("Publication changed namespace identities");
     return { ...after, status: "ready", releaseDigest: await digest(inputs) };
   } catch (publicationError) {
@@ -297,7 +353,14 @@ export async function releaseRuntime(previous, inputs, deps) {
       )
         throw new Error("Recovered versions or namespaces differ");
     } catch (recoveryError) {
-      await deps.pause(inputs);
+      try {
+        await deps.pause(inputs);
+      } catch (pauseError) {
+        throw new AggregateError(
+          [publicationError, recoveryError, pauseError],
+          "Runtime publication failed with incomplete recovery; emergency pause failed",
+        );
+      }
       throw new AggregateError(
         [publicationError, recoveryError],
         "Runtime publication failed with incomplete recovery; environment paused",

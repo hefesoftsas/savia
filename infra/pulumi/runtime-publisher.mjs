@@ -7,7 +7,37 @@ import {
   realpath,
   writeFile,
 } from "node:fs/promises";
-import { resolve, relative, join, isAbsolute } from "node:path";
+import { resolve, relative, join, isAbsolute, dirname, sep } from "node:path";
+
+function outside(root, path) {
+  const difference = relative(root, path);
+  return (
+    difference === ".." ||
+    difference.startsWith(`..${sep}`) ||
+    isAbsolute(difference)
+  );
+}
+function validateFrozenConfig(root, name, config) {
+  if (config.build?.command || config.build?.cwd)
+    throw new Error("Immutable artifacts cannot run a custom build");
+  const paths = [
+    config.main,
+    config.assets?.directory,
+    config.migrations_dir,
+    ...Object.values(config.wasm_modules ?? {}),
+    ...Object.values(config.text_blobs ?? {}),
+    ...Object.values(config.data_blobs ?? {}),
+  ].filter((value) => value !== undefined);
+  for (const path of paths) {
+    if (
+      typeof path !== "string" ||
+      isAbsolute(path) ||
+      path.includes("\\") ||
+      outside(root, resolve(root, dirname(name), path))
+    )
+      throw new Error("Config references a path outside the frozen artifact");
+  }
+}
 
 async function fileInventory(root, current = root) {
   const entries = [];
@@ -15,6 +45,14 @@ async function fileInventory(root, current = root) {
     (a, b) => a.name.localeCompare(b.name),
   )) {
     const path = join(current, item.name);
+    if (
+      /^(\.env(?:\..*)?|\.dev\.vars(?:\..*)?|secrets|.*\.private(?:\..*)?)$/.test(
+        item.name,
+      )
+    )
+      throw new Error(
+        "Private credential files cannot enter a release artifact",
+      );
     if (item.isSymbolicLink() || (!item.isFile() && !item.isDirectory()))
       throw new Error(
         "Artifacts may contain only regular files and directories",
@@ -41,12 +79,12 @@ export async function prepareRuntimeArtifact({
 }) {
   const source = await realpath(release.directory);
   const target = resolve(destination);
-  if (target === source || !relative(source, target).startsWith(".."))
+  if (target === source || !outside(source, target))
     throw new Error("Artifact destination must be outside source");
   const configs = Object.entries(release.configs ?? {}).sort(([a], [b]) =>
     a.localeCompare(b),
   );
-  for (const [name] of configs)
+  for (const [name, config] of configs) {
     if (
       isAbsolute(name) ||
       name.includes("..") ||
@@ -54,6 +92,8 @@ export async function prepareRuntimeArtifact({
       !/^[a-zA-Z0-9/_-]+\.json$/.test(name)
     )
       throw new Error("Invalid config path");
+    validateFrozenConfig(target, name, config);
+  }
   await fileInventory(source);
   await mkdir(target, { mode: 0o700 });
   for (const name of await readdir(source)) {
@@ -98,7 +138,9 @@ export async function verifyRuntimeArtifact(inputs) {
       name.includes("\\")
     )
       throw new Error("Invalid config path");
-    configs.push([name, JSON.parse(await readFile(join(root, name), "utf8"))]);
+    const config = JSON.parse(await readFile(join(root, name), "utf8"));
+    validateFrozenConfig(root, name, config);
+    configs.push([name, config]);
   }
   if (
     manifest.environment !== inputs.environment ||
@@ -106,7 +148,26 @@ export async function verifyRuntimeArtifact(inputs) {
     hash(configs) !== inputs.configDigest
   )
     throw new Error("Immutable artifact digest mismatch");
-  return manifest;
+  const declaredNamespaces = [];
+  for (const [, config] of configs) {
+    for (const migration of config.migrations ?? []) {
+      if (
+        migration.deleted_classes?.length ||
+        migration.transferred_classes?.length
+      )
+        throw new Error(
+          "Destructive namespace migrations or transfers require a separate reviewed data operation",
+        );
+    }
+    for (const binding of config.durable_objects?.bindings ?? []) {
+      if (!binding.script_name || binding.script_name === config.name)
+        declaredNamespaces.push({
+          workerName: config.name,
+          className: binding.class_name,
+        });
+    }
+  }
+  return { ...manifest, declaredNamespaces };
 }
 export async function publishRuntime(inputs, operations) {
   for (const name of [

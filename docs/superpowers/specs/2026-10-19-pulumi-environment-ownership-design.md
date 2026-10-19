@@ -176,6 +176,15 @@ namespaces. Only Workers without hosted namespaces are removed. An explicit
 data-deleting teardown may remove all Workers after dependency detachment. Native
 deletion always uses `force:false`.
 
+Workers with opaque runtime secrets are data-bearing too: deleting them can lose
+encryption keys needed by retained D1/R2 data, particularly in branch environments
+whose keys were generated only at first publication. Retain these Workers in the
+same inert maintenance state unless recovery custody has been explicitly verified.
+Inventory records only the names of affected Workers, never secret values.
+Worker identities are protected by default; retirement may unprotect only the
+reviewed names that have no retained namespaces or opaque keys. This is a
+conservative implementation of the approved data-retention requirement.
+
 Existing release backup, quiescence, rollback and migration checks remain in
 force. Maintenance deployments are releases of the same managed Worker identity,
 not additional owners of that resource. CI must call the environment entrypoint

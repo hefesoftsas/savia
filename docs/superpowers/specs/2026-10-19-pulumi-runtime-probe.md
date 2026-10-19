@@ -60,7 +60,28 @@ issues that unit type-checking alone did not detect: Node's ESM loader requires
 the explicit TypeScript extension, and Pulumi's serialized provider cannot retain
 a module-level `Set` instance. Both now have verified corrections; the provider
 serialization test evaluates the reconstructed provider, rather than checking its
-source text alone. The complete live-ownership gate is not yet declared passed.
+source text alone. The corrected integrated lifecycle gate subsequently passed with
+`savia-iac-fixture-oct19i`: actual dynamic-resource read-only adoption, unchanged
+refresh, in-place digest-triggered publication, injected failed-update recovery,
+and data-preserving retirement/recreation retained the same namespace ID and
+synthetic DO/D1/R2/KV values. Cleanup removed all temporary resources and the
+local stack. A separate cold installation (`savia-iac-fixture-oct19j`) also passed:
+undeployed native identities received private placeholders before cyclic service
+and cross-script Durable Object bindings were published. No production or Preview
+release was performed.
+
+These runs additionally caught native crypto closure serialization, TypeScript
+class-field initialization overwriting Pulumi outputs, RPC object-key ordering,
+and workers.dev propagation issues. Regression tests execute the reconstructed
+provider and compiled resource, and retries remain bounded. An expired OAuth
+session caused an earlier run to fail; it was renewed through existing Wrangler
+custody and that run was fully cleaned before retrying. HTTP401 is never retried,
+and HTTP429 honors the server's Retry-After header.
+
+Opaque secrets require extra retention: unless recoverable external custody is
+verified, their Worker identities remain in maintenance too. The fixture's sole
+synthetic access key was held externally and explicitly checked before teardown.
+Only secret-bearing Worker names enter the runtime inventory.
 
 ## Evidence custody
 

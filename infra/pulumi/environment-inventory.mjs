@@ -46,6 +46,12 @@ export async function inventoryEnvironment({
   if (!Array.isArray(rows)) throw new Error("Invalid cloud resource inventory");
   const owners = checkpointOwners(checkpoints, accountId);
   const resources = [];
+  const ownWorkers = new Set(
+    rows
+      .filter((row) => row.kind === "worker" && policy.matches(row))
+      .map((row) => row.name),
+  );
+  const retentionWorkerNames = new Set();
   const unknownResources = [];
   for (const row of rows) {
     if (row.accountId !== undefined && row.accountId !== accountId)
@@ -53,8 +59,17 @@ export async function inventoryEnvironment({
     const clean = sanitizeInventoryResource(row);
     clean.ownerStack =
       owners.get(`${row.kind}:${row.cloudId}`) ?? clean.ownerStack;
-    if (policy.matches(clean)) resources.push(clean);
-    else if (
+    if (policy.matches(clean)) {
+      resources.push(clean);
+      if (row.kind === "worker" && row.hasOpaqueSecrets === true)
+        retentionWorkerNames.add(row.name);
+      if (row.kind === "durableObject")
+        retentionWorkerNames.add(row.parentWorker);
+    } else if (clean.parentWorker && ownWorkers.has(clean.parentWorker)) {
+      throw new Error(
+        "An owned runtime attachment is outside the defined profile",
+      );
+    } else if (
       typeof row.name === "string" &&
       row.name.startsWith("savia") &&
       !["preview", "production", "shared", "management"].some((id) =>
@@ -65,6 +80,7 @@ export async function inventoryEnvironment({
   }
   const actualProfile = {
     ...profile,
+    retentionWorkerNames: [...retentionWorkerNames].sort(),
     enabledWorkers: resources
       .filter((r) => r.kind === "worker")
       .map((r) => r.name)
