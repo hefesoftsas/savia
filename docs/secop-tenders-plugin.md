@@ -367,6 +367,8 @@ failures. No catalog is silently replaced with the currently loaded results.
 
 ## Compact filter layout
 
+Search precedes Clear in both visual and keyboard order.
+
 Version 1.8.2 keeps multi-select fields at a stable height. Closed controls show
 the selected values in one truncated line and a count for multiple selections;
 opening the control exposes searchable options and removable selection chips.

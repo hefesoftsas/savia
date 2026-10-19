@@ -1242,6 +1242,14 @@ function Screen({ savia }: { savia: PluginApi }) {
             <p className="secop-filter-hint">{t.suggestionsHint}</p>
             <div className="secop-search-actions">
               <button
+                className="secop-primary"
+                type="button"
+                onClick={submitSearch}
+                disabled={connectionRequired || (searchLoading && !searchPage)}
+              >
+                {searchLoading && !searchPage ? t.loading : t.run}
+              </button>
+              <button
                 type="button"
                 className="secop-text-button"
                 onClick={() => {
@@ -1251,14 +1259,6 @@ function Screen({ savia }: { savia: PluginApi }) {
                 }}
               >
                 {t.clearSearch}
-              </button>
-              <button
-                className="secop-primary"
-                type="button"
-                onClick={submitSearch}
-                disabled={connectionRequired || (searchLoading && !searchPage)}
-              >
-                {searchLoading && !searchPage ? t.loading : t.run}
               </button>
             </div>
           </form>

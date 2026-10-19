@@ -539,9 +539,6 @@
   margin-top: 0;
   max-width: none;
 }
-.secop-search-actions .secop-primary {
-  order: -1;
-}
 .secop-app {
   padding-bottom: 6rem;
 }
