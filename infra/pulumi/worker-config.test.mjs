@@ -4,7 +4,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { flowsWorkerConfig } from "./flows-worker-config.mjs";
-import { renderProductionConfigs } from "./worker-config.mjs";
+import {
+  renderProductionConfigs,
+  validateTenantSubdomains,
+} from "./worker-config.mjs";
 
 const preview = {
   deploymentEnvironment: "preview",
@@ -17,7 +20,7 @@ const production = {
   deploymentEnvironment: "production",
   authD1Id: "auth-id",
   domainD1Id: "domain-id",
-  publicOrigin: "https://savia.app.hefesoft.com",
+  publicOrigin: "https://savia.hefesoft.com",
   documentsBucket: "savia-documents",
 };
 const flows = {
@@ -46,9 +49,12 @@ const productionFlows = {
     inboxes: "savia-flows-inboxes",
   },
 };
-const readConfig = async (root, app) =>
+const readConfig = async (root, app, environment = "preview") =>
   JSON.parse(
-    await readFile(join(root, "apps", app, "wrangler.preview.jsonc"), "utf8"),
+    await readFile(
+      join(root, "apps", app, `wrangler.${environment}.jsonc`),
+      "utf8",
+    ),
   );
 
 test("preview preserves canonical and wildcard tenant gateway routes", async () => {
@@ -72,9 +78,14 @@ test("preview preserves canonical and wildcard tenant gateway routes", async () 
         "utf8",
       ),
     );
-    assert.deepEqual(productionGateway.routes, [
-      { custom_domain: true, pattern: "savia.app.hefesoft.com" },
-    ]);
+    assert.equal(productionGateway.name, "savia");
+    assert.equal(productionGateway.vars.CANONICAL_HOST, "savia.hefesoft.com");
+    assert.equal(
+      productionGateway.routes.some((route) =>
+        route.pattern.includes("savia-preview"),
+      ),
+      false,
+    );
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -245,6 +256,80 @@ test("production manifests bind the adopted D1 names from stack outputs", async 
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test("production gateway preserves configured tenant domains alongside migration wildcard routes", async () => {
+  const root = await mkdtemp(join(tmpdir(), "savia-iac-tenant-domains-"));
+  try {
+    await renderProductionConfigs({
+      ...production,
+      tenantSubdomains: ["tenant-home", "acme-team"],
+      outputRoot: root,
+    });
+    const gateway = await readConfig(root, "admin", "production");
+    assert.deepEqual(gateway.routes, [
+      { custom_domain: true, pattern: "savia.hefesoft.com" },
+      { custom_domain: true, pattern: "tenant-home.savia.hefesoft.com" },
+      { custom_domain: true, pattern: "acme-team.savia.hefesoft.com" },
+      { pattern: "savia.hefesoft.com/*", zone_name: "hefesoft.com" },
+      { pattern: "*.savia.hefesoft.com/*", zone_name: "hefesoft.com" },
+      { custom_domain: true, pattern: "savia.app.hefesoft.com" },
+      { custom_domain: true, pattern: "savia-team.savia.app.hefesoft.com" },
+      { custom_domain: true, pattern: "tenant-home.savia.app.hefesoft.com" },
+      { custom_domain: true, pattern: "acme-team.savia.app.hefesoft.com" },
+      { pattern: "*.savia.app.hefesoft.com/*", zone_name: "hefesoft.com" },
+    ]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("tenant subdomains reject reserved labels, wildcards, duplicates, and preview use", async () => {
+  const root = await mkdtemp(join(tmpdir(), "savia-iac-tenant-domains-"));
+  try {
+    for (const tenantSubdomains of [
+      ["api"],
+      ["*.savia.app.hefesoft.com"],
+      ["acme", "acme"],
+      ["acme", "ACME"],
+      "acme",
+    ]) {
+      await assert.rejects(
+        renderProductionConfigs({
+          ...production,
+          tenantSubdomains,
+          outputRoot: root,
+        }),
+        /tenant subdomain/i,
+      );
+    }
+    await assert.rejects(
+      renderProductionConfigs({
+        ...preview,
+        tenantSubdomains: ["tenant-home"],
+        outputRoot: root,
+      }),
+      /preview.*tenant subdomain/i,
+    );
+    await renderProductionConfigs({ ...preview, outputRoot: root });
+    const gateway = await readConfig(root, "admin");
+    assert.deepEqual(gateway.routes, [
+      { custom_domain: true, pattern: "savia-preview.hefesoft.com" },
+    ]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("exports tenant-subdomain validation for Pulumi stack outputs", () => {
+  assert.deepEqual(validateTenantSubdomains(["Tenant-Home"], "production"), [
+    "tenant-home",
+  ]);
+  assert.throws(() => validateTenantSubdomains(["api"], "production"));
+  assert.throws(() =>
+    validateTenantSubdomains(["*.example.test"], "production"),
+  );
+  assert.throws(() => validateTenantSubdomains(["tenant-home"], "preview"));
 });
 
 test("preview rejects production Flows resources before generating manifests", async () => {

@@ -427,7 +427,7 @@ it("allows own tenant administrators through the real API shell without exposing
     },
   });
   const publicResponse = await anonymous.request(
-    "https://" + t.slug + ".savia.app.hefesoft.com/api/public/tenant-branding",
+    "https://" + t.slug + ".savia.hefesoft.com/api/public/tenant-branding",
   );
   expect(publicResponse.status).toBe(200);
   expect(((await publicResponse.json()) as any).data.displayName).toBe(

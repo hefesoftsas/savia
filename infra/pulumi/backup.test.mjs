@@ -384,7 +384,7 @@ describe("pulumi backup", () => {
     const names = resolveInfraNames({
       environment: "production",
       documentsBucket: "savia-documents",
-      publicOrigin: "https://savia.app.hefesoft.com",
+      publicOrigin: "https://savia.hefesoft.com",
       authDatabaseName: databases.auth.name,
       domainDatabaseName: databases.domain.name,
     });
@@ -394,7 +394,7 @@ describe("pulumi backup", () => {
       domainD1Id: databases.domain.id,
       documentsBucketName: "savia-documents",
       resolvedEnvironment: "production",
-      resolvedPublicOrigin: "https://savia.app.hefesoft.com",
+      resolvedPublicOrigin: "https://savia.hefesoft.com",
       workerNames: names.workers,
       databaseNames: names.databases,
       plannedFlowsResourceNames: names.flows,

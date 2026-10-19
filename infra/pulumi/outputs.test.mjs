@@ -96,6 +96,52 @@ describe("pulumi stack outputs", () => {
     assert.equal(parsed.documentsBucketName, "savia-documents-preview");
     assert.equal(parsed.backupBucketName, null);
     assert.equal(parsed.backupRetentionDays, null);
+    assert.deepEqual(parsed.tenantSubdomains, []);
+    assert.equal(
+      renderEnvFromOutputs(parsed, "/repo").SAVIA_TENANT_SUBDOMAINS,
+      "[]",
+    );
+  });
+
+  it("validates and exports explicit production tenant subdomains", () => {
+    const productionNames = resolveInfraNames({
+      environment: "production",
+      documentsBucket: "savia-documents",
+      publicOrigin: "https://savia.app.hefesoft.com",
+    });
+    const production = {
+      ...OUTPUTS,
+      documentsBucketName: productionNames.bucket,
+      resolvedEnvironment: "production",
+      resolvedPublicOrigin: productionNames.publicOrigin,
+      workerNames: productionNames.workers,
+      databaseNames: productionNames.databases,
+      plannedFlowsResourceNames: productionNames.flows,
+      tenantSubdomains: ["tenant-home", "acme-team"],
+    };
+    const parsed = parseStackOutputs(JSON.stringify(production));
+    assert.deepEqual(parsed.tenantSubdomains, ["tenant-home", "acme-team"]);
+    assert.equal(
+      renderEnvFromOutputs(parsed, "/repo").SAVIA_TENANT_SUBDOMAINS,
+      '["tenant-home","acme-team"]',
+    );
+    for (const tenantSubdomains of [
+      ["api"],
+      ["*.savia.app.hefesoft.com"],
+      ["tenant-home", "tenant-home"],
+      "tenant-home",
+    ]) {
+      assert.throws(() =>
+        parseStackOutputs(JSON.stringify({ ...production, tenantSubdomains })),
+      );
+    }
+    assert.throws(
+      () =>
+        parseStackOutputs(
+          JSON.stringify({ ...OUTPUTS, tenantSubdomains: ["tenant-home"] }),
+        ),
+      /preview.*tenant subdomain/i,
+    );
   });
 
   it("accepts legacy outputs without a backup bucket and renders disabled vars", () => {
@@ -114,7 +160,7 @@ describe("pulumi stack outputs", () => {
     const names = resolveInfraNames({
       environment: "production",
       documentsBucket: "savia-documents",
-      publicOrigin: "https://savia.app.hefesoft.com",
+      publicOrigin: "https://savia.hefesoft.com",
     });
     const production = {
       ...OUTPUTS,
@@ -158,7 +204,7 @@ describe("pulumi stack outputs", () => {
     const adoptedNames = resolveInfraNames({
       environment: "production",
       documentsBucket: "savia-documents",
-      publicOrigin: "https://savia.app.hefesoft.com",
+      publicOrigin: "https://savia.hefesoft.com",
       authDatabaseName: "savia-auth-local-canonical-20260913-v2",
       domainDatabaseName: "savia-agencies-local-canonical-20260913-v2",
     });

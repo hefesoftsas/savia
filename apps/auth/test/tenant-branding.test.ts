@@ -150,7 +150,7 @@ describe("tenant identity on OAuth surfaces", () => {
 
   it.each([
     "localhost:8080",
-    "savia.app.hefesoft.com",
+    "savia.hefesoft.com",
     "savia-preview.hefesoft.com",
   ])("keeps platform login local on %s", async (host) => {
     const html = await oauthPageResponse(
@@ -163,7 +163,7 @@ describe("tenant identity on OAuth surfaces", () => {
     expect(html).not.toContain('data-oauth-form="sso-discover"');
   });
 
-  it.each(["acme.savia.app.hefesoft.com", "acme.savia-preview.hefesoft.com"])(
+  it.each(["acme.savia.hefesoft.com", "acme.savia-preview.hefesoft.com"])(
     "retains optional federated access on tenant host %s",
     async (host) => {
       const html = await oauthPageResponse(

@@ -47,7 +47,7 @@ describe("tenantHostGuard", () => {
     });
 
     const response = await app.request(
-      "https://merkaseguros.savia.app.hefesoft.com/v1/identity/me",
+      "https://merkaseguros.savia.hefesoft.com/v1/identity/me",
     );
     expect(response.status).toBe(200);
   });
@@ -58,7 +58,7 @@ describe("tenantHostGuard", () => {
     });
 
     const response = await app.request(
-      "https://other-agency.savia.app.hefesoft.com/v1/identity/me",
+      "https://other-agency.savia.hefesoft.com/v1/identity/me",
     );
     expect(response.status).toBe(403);
     const body = (await response.json()) as {
@@ -66,7 +66,7 @@ describe("tenantHostGuard", () => {
       expectedHost?: string;
     };
     expect(body.error.code).toBe("TENANT_HOST_MISMATCH");
-    expect(body.expectedHost).toBe("merkaseguros.savia.app.hefesoft.com");
+    expect(body.expectedHost).toBe("merkaseguros.savia.hefesoft.com");
   });
 
   it("blocks access with 403 when tenant slug is passed via x-savia-tenant-slug header", async () => {
@@ -85,7 +85,7 @@ describe("tenantHostGuard", () => {
       expectedHost?: string;
     };
     expect(body.error.code).toBe("TENANT_HOST_MISMATCH");
-    expect(body.expectedHost).toBe("merkaseguros.savia.app.hefesoft.com");
+    expect(body.expectedHost).toBe("merkaseguros.savia.hefesoft.com");
   });
 
   it("rejects conflicting host and tenant header for recording-scoped OAuth users even when they belong to both", async () => {
@@ -116,7 +116,7 @@ describe("tenantHostGuard", () => {
     });
 
     const response = await app.request(
-      "https://other-agency.savia.app.hefesoft.com/v1/identity/me",
+      "https://other-agency.savia.hefesoft.com/v1/identity/me",
       { headers: { "x-savia-tenant-slug": "merkaseguros" } },
     );
     expect(response.status).toBe(403);
@@ -131,7 +131,7 @@ describe("tenantHostGuard", () => {
     });
 
     const response = await app.request(
-      "https://other-agency.savia.app.hefesoft.com/v1/identity/me",
+      "https://other-agency.savia.hefesoft.com/v1/identity/me",
     );
     expect(response.status).toBe(200);
   });
@@ -142,7 +142,7 @@ describe("tenantHostGuard", () => {
     });
 
     const response = await app.request(
-      "https://savia.app.hefesoft.com/v1/identity/me",
+      "https://savia.hefesoft.com/v1/identity/me",
     );
     expect(response.status).toBe(200);
   });
@@ -155,7 +155,7 @@ describe("GET /v1/tenants/current", () => {
     });
 
     const response = await app.request(
-      "https://savia.app.hefesoft.com/v1/tenants/current",
+      "https://savia.hefesoft.com/v1/tenants/current",
     );
     expect(response.status).toBe(200);
     const body = (await response.json()) as { data: Record<string, unknown> };
@@ -174,7 +174,7 @@ describe("GET /v1/tenants/current", () => {
     });
 
     const response = await app.request(
-      "https://merkaseguros.savia.app.hefesoft.com/v1/tenants/current",
+      "https://merkaseguros.savia.hefesoft.com/v1/tenants/current",
     );
     expect(response.status).toBe(200);
     const body = (await response.json()) as { data: Record<string, unknown> };
@@ -193,7 +193,7 @@ describe("GET /v1/tenants/current", () => {
     });
 
     const response = await app.request(
-      "https://non-existent.savia.app.hefesoft.com/v1/tenants/current",
+      "https://non-existent.savia.hefesoft.com/v1/tenants/current",
     );
     expect(response.status).toBe(404);
   });
@@ -239,7 +239,7 @@ it("rejects a key on a foreign hostname even with its own tenant header", async 
     },
   });
   const response = await app.request(
-    "https://other-agency.savia.app.hefesoft.com/v1/identity/me",
+    "https://other-agency.savia.hefesoft.com/v1/identity/me",
     { headers: { "x-savia-tenant-slug": "merkaseguros" } },
   );
   expect(response.status).toBe(403);
