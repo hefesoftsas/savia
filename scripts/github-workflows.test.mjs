@@ -280,3 +280,23 @@ test("production promotion still requires the full verified Preview job", async 
   assert.match(production, /Deploy preview/);
   assert.doesNotMatch(production, /Publish changed Preview plugins/);
 });
+
+test("manual previews validate trusted source before executing repository code", async () => {
+  const preview = await workflow("preview-environment.yml");
+  assert.match(
+    preview,
+    /github\.event_name == 'workflow_dispatch' && github\.ref == 'refs\/heads\/main'/,
+  );
+  const guard = preview.indexOf("name: Validate trusted preview source");
+  const setup = preview.indexOf("name: Set up pnpm");
+  assert.ok(guard > 0 && setup > guard);
+  const checkout = preview.slice(0, guard);
+  assert.match(checkout, /ref: \$\{\{ github\.sha \}\}/);
+  assert.match(checkout, /fetch-depth: 0/);
+  assert.match(checkout, /persist-credentials: false/);
+  assert.doesNotMatch(checkout, /ref: \$\{\{ inputs\.branch \}\}/);
+  assert.doesNotMatch(
+    preview,
+    /run:[\s\S]*?\$\{\{ inputs\.(?:branch|confirm) \}\}/,
+  );
+});
