@@ -1,6 +1,9 @@
 import { DurableObject } from "cloudflare:workers";
 import { processWhatsappEventBatch, type RuntimeEnvironment } from "../runtime";
-import { guardStorageEnvironment } from "../../../../packages/backup-gate/index.mjs";
+import {
+  guardStorageEnvironment,
+  runWithBackupGateRequest,
+} from "../../../../packages/backup-gate/index.mjs";
 import {
   nextWhatsappWake,
   usesWhatsappEvents,
@@ -18,6 +21,16 @@ export class WhatsappDispatcher extends DurableObject<RuntimeEnvironment> {
   }
 
   async fetch(request: Request): Promise<Response> {
+    return runWithBackupGateRequest(
+      {
+        writer: "api.whatsapp_dispatcher.fetch",
+        executionContext: this.ctx,
+      },
+      () => this.#handleFetch(request),
+    );
+  }
+
+  async #handleFetch(request: Request): Promise<Response> {
     if (this.env.SAVIA_MAINTENANCE === "true")
       return new Response("Savia is in maintenance", { status: 503 });
     if (request.method !== "POST" || new URL(request.url).pathname !== "/wake")
@@ -57,6 +70,16 @@ export class WhatsappDispatcher extends DurableObject<RuntimeEnvironment> {
   }
 
   async alarm(): Promise<void> {
+    return runWithBackupGateRequest(
+      {
+        writer: "api.whatsapp_dispatcher.alarm",
+        executionContext: this.ctx,
+      },
+      () => this.#handleAlarm(),
+    );
+  }
+
+  async #handleAlarm(): Promise<void> {
     if (this.env.SAVIA_MAINTENANCE === "true") {
       await this.ctx.storage.setAlarm(Date.now() + 60000);
       return;

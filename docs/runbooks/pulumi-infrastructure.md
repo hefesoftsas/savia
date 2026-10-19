@@ -418,12 +418,18 @@ concurrent requests can throw Cloudflare's "Cannot perform I/O on behalf of a
 different request" error, including during login, which performs guarded D1 work.
 Each admission, release and retry obtains its own stub without disabling the
 barrier or changing its idempotent permit.
-Each writer registers the complete guarded operation, including permit release,
-with its request's `waitUntil` context so a client disconnect does not by itself
-cancel cleanup. This platform extension is bounded to 30 seconds; a permit that
-cannot be confirmed settled remains fail-closed and must be investigated using
-the permit's safe writer/request/storage provenance and structured operation
-logs. The logs contain no SQL, object keys, request URLs, headers, or storage
+HTTP writers register the complete guarded operation, including permit release,
+with the invocation's `waitUntil` context so a client disconnect does not by
+itself cancel cleanup. HTTP background work is bounded to 30 seconds after the
+response or disconnect. Scheduled writers use their own invocation context and
+the [scheduled execution limit](https://developers.cloudflare.com/workers/runtime-apis/handlers/scheduled/).
+WhatsApp dispatcher fetches and alarms establish their own writer/request
+provenance because each is a separate Durable Object invocation. Alarm work is
+awaited directly and follows the [Durable Object lifecycle](https://developers.cloudflare.com/durable-objects/api/state/),
+rather than the HTTP background-work limit. A permit that cannot be
+confirmed settled remains fail-closed and must be investigated using the
+permit's safe writer/request/storage provenance and structured operation logs.
+The logs contain no SQL, object keys, request URLs, headers, or storage
 arguments. Provenance is optional when reading older permits, which retain their
 original permit and creation-time fields.
 Auth cold starts must replace the SQLite notification triggers atomically in one

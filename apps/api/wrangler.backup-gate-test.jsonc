@@ -3,11 +3,19 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-08-31",
   "compatibility_flags": ["global_fetch_strictly_public", "nodejs_als"],
+  "vars": { "WHATSAPP_PROCESSING_MODE": "events" },
   "durable_objects": {
-    "bindings": [{ "name": "BACKUP_GATE", "class_name": "BackupCoordinator" }],
+    "bindings": [
+      { "name": "BACKUP_GATE", "class_name": "BackupCoordinator" },
+      {
+        "name": "WHATSAPP_DISPATCHER",
+        "class_name": "WhatsappDispatcher",
+      },
+    ],
   },
   "migrations": [
     { "tag": "gate-test-v1", "new_sqlite_classes": ["BackupCoordinator"] },
+    { "tag": "gate-test-v2", "new_sqlite_classes": ["WhatsappDispatcher"] },
   ],
   "d1_databases": [
     {
