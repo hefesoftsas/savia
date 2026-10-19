@@ -13,6 +13,7 @@ import { publishRegistryRuntime } from "./runtime-publisher-registry.mjs";
 import { retireCloudRuntime } from "./runtime-retirement-cloud.mjs";
 import { resolveEnvironment } from "./environments.mjs";
 import { execFileWithInput } from "./runtime-publisher-branch.mjs";
+import { runWithCommandDiagnostics } from "./command-diagnostics.mjs";
 
 // This module is loaded at execution time. Configured clients, environments,
 // subprocesses and private recovery paths never enter a serialized provider.
@@ -22,21 +23,37 @@ export function createRuntimeOperations(
     env = process.env,
     root = fileURLToPath(new URL("../../", import.meta.url)),
     client = createRuntimeCloudClient(inputs, { env }),
-    run = async (executable, args, options) => {
-      try {
-        return await execFileWithInput(executable, args, options);
-      } catch {
-        throw new Error(`Runtime helper failed: ${executable}`);
-      }
-    },
-    runWrangler = (args, options = {}) =>
-      run(join(root, "apps/api/node_modules/.bin/wrangler"), args, {
-        ...options,
-        env: options.env ?? env,
-      }),
+    run: execute = async (executable, args, options) =>
+      execFileWithInput(executable, args, options),
+    runWrangler: executeWrangler,
   } = {},
 ) {
   const environment = resolveEnvironment(inputs.environment);
+  const run = (executable, args, options) =>
+      runWithCommandDiagnostics({
+        execute,
+        executable,
+        args,
+        options,
+        directory: env.SAVIA_RUNTIME_OPERATION_DIRECTORY,
+        operation: "runtime-helper",
+        publicError: `Runtime helper failed: ${String(executable).split(/[\\/]/).at(-1)}`,
+      }),
+    wranglerPath = join(root, "apps/api/node_modules/.bin/wrangler"),
+    runWrangler = (args, options = {}) =>
+      runWithCommandDiagnostics({
+        execute: executeWrangler
+          ? () => executeWrangler(args, options)
+          : execute,
+        executable: wranglerPath,
+        args,
+        options: executeWrangler
+          ? options
+          : { ...options, env: options.env ?? env },
+        directory: env.SAVIA_RUNTIME_OPERATION_DIRECTORY,
+        operation: "wrangler",
+        publicError: "Runtime helper failed: wrangler",
+      });
   let directory,
     publisher,
     bootstrap = { createdWorkers: [] };

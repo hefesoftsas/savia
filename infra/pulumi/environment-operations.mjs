@@ -40,6 +40,7 @@ import { planRuntimeRetirement } from "./runtime-retirement.mjs";
 import { emptyBucketForDestroy } from "./destroy.mjs";
 import { createRuntimeCloudClient } from "./runtime-cloud.mjs";
 import { execFileWithInput } from "./runtime-publisher-branch.mjs";
+import { preserveCommandFailure } from "./command-diagnostics.mjs";
 import {
   previewNames,
   slugifyBranch,
@@ -319,13 +320,8 @@ export function retirementRows(
 
 export function createEnvironmentDependencies({
   env = process.env,
-  run = async (binary, args, options) => {
-    try {
-      return await execFileWithInput(binary, args, options);
-    } catch {
-      throw new Error(`Environment command failed: ${binary} ${args[0]}`);
-    }
-  },
+  run = async (binary, args, options) =>
+    execFileWithInput(binary, args, options),
   cloud = listEnvironmentCloudResources,
   catalog = readStateCatalog,
   configuration = ({ descriptor }) =>
@@ -466,7 +462,13 @@ export function createEnvironmentDependencies({
       return result;
     } catch (error) {
       await recordCommand({ ...entry, status: "failed" });
-      throw error;
+      await preserveCommandFailure({
+        directory: env.SAVIA_RUNTIME_OPERATION_DIRECTORY,
+        executable: "pulumi",
+        operation: entry.operation.join(" "),
+        error,
+      });
+      throw new Error(`Environment command failed: pulumi ${args[0]}`);
     }
   };
   const setConfig = async (descriptor, key, value) =>
