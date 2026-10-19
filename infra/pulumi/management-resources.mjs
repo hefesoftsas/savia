@@ -16,17 +16,23 @@ export function managementBucketDefinitions({ accountId, backendBuckets }) {
 }
 export function settledCheckpoint(checkpoint) {
   const deployment = checkpoint?.deployment;
-  if (!Array.isArray(deployment?.resources))
+  const resources =
+    deployment?.resources === undefined &&
+    checkpoint?.version === 3 &&
+    deployment?.manifest &&
+    typeof deployment.manifest === "object" &&
+    !Array.isArray(deployment.manifest)
+      ? []
+      : deployment?.resources;
+  if (!Array.isArray(resources))
     throw new Error("Readable checkpoint resources are required");
   if (
     (deployment.pending_operations ?? checkpoint.pendingOperations ?? [])
       .length ||
-    deployment.resources.some(
-      (row) => row.delete || row.deleted || row.pendingReplacement,
-    )
+    resources.some((row) => row.delete || row.deleted || row.pendingReplacement)
   )
     throw new Error("Checkpoint has pending operations or replacements");
-  return deployment.resources;
+  return resources;
 }
 export function validateManagementOutputs(value, { accountId, backendUrl }) {
   assertAccountId(accountId);

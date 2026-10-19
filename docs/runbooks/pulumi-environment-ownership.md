@@ -136,3 +136,9 @@ The migration freeze skips workflows already manually disabled: GitHub rejects
 a repeated disable request with HTTP 403. It disables only currently active
 mutators, then rechecks every workflow state and in-flight run before touching
 Pulumi state. Unexpected workflow states stop the operation.
+
+Pulumi 3.268 exports a newly initialized stack with a version-3 deployment
+manifest and no `resources` property. This is an empty readable checkpoint,
+not management protection evidence. Audits and backend transfer accept that
+shape without rewriting the exported checkpoint; pending operations and
+malformed resource lists still stop the operation.

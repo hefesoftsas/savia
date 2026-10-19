@@ -432,3 +432,45 @@ test("data deletion validates its saved plan before emptying an approved bucket"
     }
   }
 });
+
+test("inventory reads an initialized empty management export without treating it as protected custody", async () => {
+  const { createEnvironmentDependencies } =
+    await import("./environment-operations.mjs");
+  const { normalizeCheckpoint } = await import("./environment-state.mjs");
+  const { stateBackendUrl } = await import("./naming.mjs");
+  const accountId = "a".repeat(32),
+    backendUrl = stateBackendUrl(accountId, "savia-pulumi-state-preview");
+  const cp = normalizeCheckpoint({
+    qualifiedStack: "organization/savia-management/management",
+    backendUrl,
+    accountId,
+    stateExport: { version: 3, deployment: { manifest: {}, metadata: {} } },
+  });
+  const deps = createEnvironmentDependencies({
+    env: {
+      CLOUDFLARE_ACCOUNT_ID: accountId,
+      PULUMI_BACKEND_URL: backendUrl,
+      PULUMI_CONFIG_PASSPHRASE: "test-only",
+      AWS_ACCESS_KEY_ID: "test-only",
+      AWS_SECRET_ACCESS_KEY: "test-only",
+    },
+    cloud: async () => [
+      {
+        kind: "r2",
+        name: "savia-pulumi-state-preview",
+        cloudId: "savia-pulumi-state-preview",
+        accountId,
+      },
+    ],
+    catalog: async () => [cp],
+    run: async () => assert.fail("inventory must not run commands"),
+  });
+  const result = await deps.inventory("management");
+  assert.equal(result.resources.length, 1);
+  await assert.rejects(
+    deps.context(
+      (await import("./environments.mjs")).resolveEnvironment("preview"),
+    ),
+    /account|protection/,
+  );
+});

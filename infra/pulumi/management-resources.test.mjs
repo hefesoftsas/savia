@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   managementBucketDefinitions,
   validateManagementOutputs,
+  settledCheckpoint,
 } from "./management-resources.mjs";
 import { stateBackendUrl } from "./naming.mjs";
 const accountId = "a".repeat(32),
@@ -86,4 +87,34 @@ test("application backend protection requires independent settled management sta
       }),
     /backend|account/i,
   );
+});
+
+// Pulumi 3.268.0 omits resources when exporting a newly initialized stack.
+test("an omitted resource list in a version-3 empty export is readable but grants no management proof", () => {
+  const empty = { version: 3, deployment: { manifest: {}, metadata: {} } };
+  assert.deepEqual(settledCheckpoint(empty), []);
+  assert.equal(Object.hasOwn(empty.deployment, "resources"), false);
+  assert.throws(() =>
+    validateManagementOutputs(
+      { ...management, checkpoint: empty },
+      { accountId, backendUrl: stateBackendUrl(accountId, bucket) },
+    ),
+  );
+  assert.throws(
+    () =>
+      settledCheckpoint({
+        ...empty,
+        deployment: { ...empty.deployment, pending_operations: [{}] },
+      }),
+    /pending/,
+  );
+  for (const value of [
+    null,
+    {},
+    { version: 3 },
+    { deployment: {} },
+    { version: 3, deployment: { manifest: {}, resources: null } },
+    { version: 3, deployment: { manifest: {}, resources: {} } },
+  ])
+    assert.throws(() => settledCheckpoint(value), /Readable/);
 });
