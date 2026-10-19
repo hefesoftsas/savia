@@ -77,13 +77,22 @@ export function resourcePolicy(environment, profile = {}) {
       publicOrigin: preview
         ? "https://savia-preview.hefesoft.com"
         : "https://savia.hefesoft.com",
-      ...(profile.databaseNames
+      ...(!preview && profile.databaseNames
         ? {
             authDatabaseName: profile.databaseNames.auth,
             domainDatabaseName: profile.databaseNames.domain,
           }
         : {}),
     });
+    if (
+      preview &&
+      profile.databaseNames &&
+      (Object.keys(profile.databaseNames).length !== 2 ||
+        Object.entries(names.databases).some(
+          ([role, name]) => profile.databaseNames[role] !== name,
+        ))
+    )
+      throw new Error("Preview database profile must match isolated names");
     add("worker", Object.values(names.workers));
     add("worker", [
       preview ? "savia-backup-coordinator-preview" : "savia-backup-coordinator",

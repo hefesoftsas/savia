@@ -179,7 +179,10 @@ export function validateAdoptionManifest(
         `Resource identity is outside environment: ${row.kind}/${row.name}`,
       );
     const key = `${row.kind}:${row.cloudId}`,
-      name = `${row.kind}:${row.name}`;
+      name =
+        row.kind === "cron"
+          ? `${row.kind}:${row.parentWorker}:${row.name}`
+          : `${row.kind}:${row.name}`;
     if (identities.has(key) || names.has(name))
       throw new Error("Duplicate resource identity");
     identities.add(key);

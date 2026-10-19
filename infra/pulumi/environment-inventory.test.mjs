@@ -166,3 +166,32 @@ test("all pages are read and malformed or repeated pagination is rejected", asyn
     /pagination|page/i,
   );
 });
+
+test("Preview checkpoint database outputs are observed names, not production overrides", async () => {
+  const databaseNames = {
+    auth: "savia-auth-preview",
+    domain: "savia-agencies-preview",
+  };
+  const resources = Object.values(databaseNames).map((name, index) => ({
+    kind: "d1",
+    name,
+    cloudId: `123e4567-e89b-42d3-a456-42661417400${index}`,
+    accountId,
+  }));
+  const result = await inventory("preview", resources, [], { databaseNames });
+  assert.deepEqual(result.profile.databaseNames, databaseNames);
+  assert.deepEqual(
+    result.resources.map((row) => row.name).sort(),
+    Object.values(databaseNames).sort(),
+  );
+  for (const invalid of [
+    { ...databaseNames, auth: "savia-auth" },
+    { ...databaseNames, domain: "savia-agencies" },
+    { auth: databaseNames.domain, domain: databaseNames.auth },
+  ]) {
+    await assert.rejects(
+      inventory("preview", resources, [], { databaseNames: invalid }),
+      /Preview database profile/,
+    );
+  }
+});
