@@ -36,7 +36,7 @@ describe("tenant-home discovery", () => {
     const environment = envWith({ slug: "acme" });
     const response = await tenantHomeResponse(
       new Request(
-        "https://savia.app.hefesoft.com/api/auth/tenant-home?email=User@Example.com",
+        "https://savia.hefesoft.com/api/auth/tenant-home?email=User@Example.com",
       ),
       environment,
       adapterWith({ emailTenantId: 42, role: "user" }),
@@ -54,13 +54,13 @@ describe("tenant-home discovery", () => {
         .calls[0][0].url,
     );
     expect(calledUrl).toContain("/_internal/tenants/42/home?host=");
-    expect(calledUrl).toContain("savia.app.hefesoft.com");
+    expect(calledUrl).toContain("savia.hefesoft.com");
   });
 
   it("forwards the current tenant context when already on a tenant host", async () => {
     const response = await tenantHomeResponse(
       new Request(
-        "https://acme.savia.app.hefesoft.com/api/auth/tenant-home?email=user@example.com",
+        "https://acme.savia.hefesoft.com/api/auth/tenant-home?email=user@example.com",
       ),
       envWith({ slug: "acme", currentSlug: "acme", currentTenantId: 42 }),
       adapterWith({ emailTenantId: 42, role: "user" }),
@@ -77,7 +77,7 @@ describe("tenant-home discovery", () => {
   it("returns not found for unknown or platform admin emails", async () => {
     const missing = await tenantHomeResponse(
       new Request(
-        "https://savia.app.hefesoft.com/api/auth/tenant-home?email=nobody@example.com",
+        "https://savia.hefesoft.com/api/auth/tenant-home?email=nobody@example.com",
       ),
       envWith({ slug: "acme" }),
       adapterWith(null),
@@ -86,7 +86,7 @@ describe("tenant-home discovery", () => {
 
     const admin = await tenantHomeResponse(
       new Request(
-        "https://savia.app.hefesoft.com/api/auth/tenant-home?email=admin@example.com",
+        "https://savia.hefesoft.com/api/auth/tenant-home?email=admin@example.com",
       ),
       envWith({ slug: "acme" }),
       adapterWith({ emailTenantId: 42, role: "admin" }),
@@ -95,7 +95,7 @@ describe("tenant-home discovery", () => {
 
     const noTenant = await tenantHomeResponse(
       new Request(
-        "https://savia.app.hefesoft.com/api/auth/tenant-home?email=user@example.com",
+        "https://savia.hefesoft.com/api/auth/tenant-home?email=user@example.com",
       ),
       envWith({ slug: "acme" }),
       adapterWith({ emailTenantId: null, role: "user" }),
@@ -106,7 +106,7 @@ describe("tenant-home discovery", () => {
   it("fails closed on invalid email or inactive tenant", async () => {
     const invalid = await tenantHomeResponse(
       new Request(
-        "https://savia.app.hefesoft.com/api/auth/tenant-home?email=not-an-email",
+        "https://savia.hefesoft.com/api/auth/tenant-home?email=not-an-email",
       ),
       envWith({ slug: "acme" }),
       adapterWith({ emailTenantId: 42, role: "user" }),
@@ -115,7 +115,7 @@ describe("tenant-home discovery", () => {
 
     const inactive = await tenantHomeResponse(
       new Request(
-        "https://savia.app.hefesoft.com/api/auth/tenant-home?email=user@example.com",
+        "https://savia.hefesoft.com/api/auth/tenant-home?email=user@example.com",
       ),
       envWith(null),
       adapterWith({ emailTenantId: 42, role: "user" }),

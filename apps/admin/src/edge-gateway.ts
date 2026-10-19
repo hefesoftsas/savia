@@ -6,6 +6,7 @@ import {
 import {
   DEFAULT_CANONICAL_HOST,
   normalizeCanonicalHost,
+  normalizeTenantSlug,
   parseTenantSlugFromHostname,
 } from "@savia/tenant-host/tenant-host";
 import { companionDownloadsResponse } from "./companion-downloads-catalog";
@@ -18,11 +19,65 @@ export type GatewayEnv = {
   OFFICE_RUNTIME?: OfficeAssetBucket;
   API: GatewayFetcher;
   ASSETS: GatewayFetcher;
-  /** Overrides the canonical host (default: savia.app.hefesoft.com). */
+  /** Overrides the canonical host (default: savia.hefesoft.com). */
   CANONICAL_HOST?: string;
 };
 
 const FLOWS_UI_PATH = "/flows-ui";
+const LEGACY_PRODUCTION_HOST = "savia.app.hefesoft.com";
+
+type LegacyHostResolution =
+  | { kind: "not-legacy" }
+  | { kind: "invalid" }
+  | { kind: "mapped"; hostname: string };
+
+function legacyProductionHost(hostname: string): LegacyHostResolution {
+  const host = hostname.trim().toLowerCase().replace(/\.$/, "");
+  if (
+    host !== LEGACY_PRODUCTION_HOST &&
+    !host.endsWith(`.${LEGACY_PRODUCTION_HOST}`)
+  )
+    return { kind: "not-legacy" };
+  if (host === LEGACY_PRODUCTION_HOST)
+    return { kind: "mapped", hostname: DEFAULT_CANONICAL_HOST };
+
+  const slug = parseTenantSlugFromHostname(host, LEGACY_PRODUCTION_HOST);
+  const normalizedSlug = normalizeTenantSlug(slug);
+  if (!normalizedSlug) return { kind: "invalid" };
+  return {
+    kind: "mapped",
+    hostname: `${normalizedSlug}.${DEFAULT_CANONICAL_HOST}`,
+  };
+}
+
+function legacyHostResponse(request: Request, hostname: string): Response {
+  const url = new URL(request.url);
+  const oauthCallback =
+    url.pathname === "/auth/callback" ||
+    url.pathname === "/api/auth" ||
+    url.pathname.startsWith("/api/auth/");
+
+  if (request.method !== "GET" && request.method !== "HEAD") {
+    return Response.json(
+      { error: { code: "LEGACY_HOST_MIGRATED" } },
+      { status: 409, headers: { "cache-control": "no-store" } },
+    );
+  }
+
+  const destination = new URL(`https://${hostname}/`);
+  if (!oauthCallback) {
+    destination.pathname = url.pathname;
+    destination.search = url.search;
+  }
+  return new Response(null, {
+    status: 308,
+    headers: {
+      "cache-control": "no-store",
+      location: destination.toString(),
+      "referrer-policy": "no-referrer",
+    },
+  });
+}
 
 /** Keep the embedded editor's runtime and its deep links on the child shell. */
 export function isFlowsUiPath(pathname: string): boolean {
@@ -190,6 +245,17 @@ export async function gatewayFetch(
   request: Request,
   env: GatewayEnv,
 ): Promise<Response> {
+  if (canonicalHostFromEnv(env) === DEFAULT_CANONICAL_HOST) {
+    const legacy = legacyProductionHost(new URL(request.url).hostname);
+    if (legacy.kind === "invalid")
+      return new Response("Not found", {
+        status: 404,
+        headers: { "cache-control": "no-store" },
+      });
+    if (legacy.kind === "mapped")
+      return legacyHostResponse(request, legacy.hostname);
+  }
+
   const pathname = new URL(request.url).pathname;
   if (isFlowsUiPath(pathname)) return flowsAssetResponse(request, env.ASSETS);
   if (pathname === "/companion-downloads.json")

@@ -548,7 +548,7 @@ describe("Savia Better Auth worker", () => {
 
   it("serves tenant-branded login surface when accessed via tenant subdomain", async () => {
     const login = await authRequest(
-      "https://merkaseguros.savia.app.hefesoft.com/api/auth/login?client_id=scalar&sig=signed",
+      "https://merkaseguros.savia.hefesoft.com/api/auth/login?client_id=scalar&sig=signed",
     );
     expect(login.headers.get("content-type")).toContain("text/html");
     const html = await login.text();
@@ -1129,7 +1129,7 @@ describe("Savia Better Auth worker", () => {
     const response = await authWorker.fetch(
       new Request("http://127.0.0.1:8787/api/auth/ok", {
         headers: {
-          origin: "https://merkaseguros.savia.app.hefesoft.com",
+          origin: "https://merkaseguros.savia.hefesoft.com",
         },
       }),
       env,

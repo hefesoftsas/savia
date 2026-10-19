@@ -150,7 +150,7 @@ describe("Companion API boundaries", () => {
     expect(
       (
         await instance.request(
-          "https://other.savia.app.hefesoft.com/v1/companion/recordings",
+          "https://other.savia.hefesoft.com/v1/companion/recordings",
           {
             headers: {
               "x-savia-tenant-id": "101",

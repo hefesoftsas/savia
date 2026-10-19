@@ -1,10 +1,18 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
+import {
+  access,
+  mkdtemp,
+  mkdir,
+  readFile,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   parseBackupArgs,
+  createBackup,
   buildD1ExportCommand,
   buildR2SyncCommand,
   buildR2ObjectGetCommand,
@@ -19,6 +27,7 @@ import {
   hashBackupFiles,
   downloadR2Objects,
 } from "./backup.mjs";
+import { resolveInfraNames } from "./naming.mjs";
 
 describe("pulumi backup", () => {
   it("parses args and requires --apply to write", () => {
@@ -155,6 +164,32 @@ describe("pulumi backup", () => {
         String(object.size),
       );
     }
+  });
+
+  it("defaults verified per-object downloads to the isolated S3 downloader", async () => {
+    const destDir = await mkdtemp(join(tmpdir(), "backup-r2-default-s3-"));
+    let factoryCalls = 0;
+    const calls = [];
+    await downloadR2Objects({
+      objects: [{ key: "one.bin", size: 3, etag: "tag" }],
+      destDir,
+      bucket: "savia-documents",
+      accountId: "08a0d36f8b0357684f83e4bfeb6628b6",
+      token: "existing-token",
+      createDownloader({ accountId, token }) {
+        factoryCalls++;
+        assert.equal(accountId, "08a0d36f8b0357684f83e4bfeb6628b6");
+        assert.equal(token, "existing-token");
+        return async (request) => {
+          calls.push(request);
+          await writeFile(request.destFile, "one");
+        };
+      },
+    });
+    assert.equal(factoryCalls, 1);
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].expectedEtag, "tag");
+    assert.equal(await readFile(join(destDir, "one.bin"), "utf8"), "one");
   });
 
   it("stops scheduling after an API object download fails and awaits active downloads", async () => {
@@ -312,7 +347,7 @@ describe("pulumi backup", () => {
     assert.match(hashes["d1/flows.sql"], /^[a-f0-9]{64}$/);
   });
 
-  it("requires explicit quiescence for fallback and disables it for production", () => {
+  it("requires explicit preview quiescence and verified production consistency", () => {
     assert.throws(
       () => assertSafeTableDumpFallback("preview", null),
       /confirm-quiescent/,
@@ -322,8 +357,276 @@ describe("pulumi backup", () => {
     );
     assert.throws(
       () => assertSafeTableDumpFallback("production", "production"),
-      /production.*disabled/i,
+      /verified recovery boundary/i,
     );
+    assert.doesNotThrow(() =>
+      assertSafeTableDumpFallback("production", null, true),
+    );
+  });
+
+  it("uses restore-supported schema dumps for both production D1 databases", async () => {
+    const root = await mkdtemp(
+      join(tmpdir(), "backup-production-schema-dump-"),
+    );
+    const accountId = "a".repeat(32);
+    const databases = {
+      auth: {
+        name: "savia-auth-local-canonical-20260913-v2",
+        id: "11111111-1111-4111-8111-111111111111",
+        table: "auth_records",
+      },
+      domain: {
+        name: "savia-agencies-local-canonical-20260913-v2",
+        id: "22222222-2222-4222-8222-222222222222",
+        table: "domain_records",
+      },
+    };
+    const names = resolveInfraNames({
+      environment: "production",
+      documentsBucket: "savia-documents",
+      publicOrigin: "https://savia.hefesoft.com",
+      authDatabaseName: databases.auth.name,
+      domainDatabaseName: databases.domain.name,
+    });
+    const outputs = {
+      cloudflareAccountId: accountId,
+      authD1Id: databases.auth.id,
+      domainD1Id: databases.domain.id,
+      documentsBucketName: "savia-documents",
+      resolvedEnvironment: "production",
+      resolvedPublicOrigin: "https://savia.hefesoft.com",
+      workerNames: names.workers,
+      databaseNames: names.databases,
+      plannedFlowsResourceNames: names.flows,
+      flowsEnabled: false,
+      flowsExecutionEnabled: false,
+      flowsResources: null,
+    };
+    const commands = [];
+    let r2ListCalls = 0;
+    let authChangedAfterFinalR2 = false;
+    const fetchImpl = async (url, init = {}) => {
+      const path = new URL(url).pathname;
+      if (path.includes("/r2/buckets/")) {
+        r2ListCalls++;
+        if (r2ListCalls === 3) authChangedAfterFinalR2 = true;
+        return Response.json({
+          success: true,
+          result: [],
+          result_info: { is_truncated: false },
+        });
+      }
+      const match = /\/database\/([^/]+)(?:\/(.*))?$/.exec(path);
+      assert.ok(match, `unexpected Cloudflare URL: ${url}`);
+      const [, uuid, endpoint] = match;
+      const db = Object.values(databases).find((value) => value.id === uuid);
+      assert.ok(db, `unexpected D1 database ${uuid}`);
+      if (!endpoint) {
+        return Response.json({
+          success: true,
+          result: { uuid, name: db.name },
+        });
+      }
+      if (endpoint === "time_travel/bookmark") {
+        return Response.json({
+          success: true,
+          result: {
+            uuid,
+            name: db.name,
+            bookmark: `bookmark-${uuid}${authChangedAfterFinalR2 && db === databases.auth ? "-changed" : ""}`,
+          },
+        });
+      }
+      assert.equal(endpoint, "query");
+      const { sql } = JSON.parse(init.body);
+      let results = [];
+      if (sql.includes("type='table' AND substr(name,1,7) != 'sqlite_'")) {
+        results = [{ name: db.table }];
+      } else if (sql.includes("sql LIKE '%USING fts5%'")) {
+        results = [];
+      } else if (sql.includes("SELECT name, sql FROM sqlite_master")) {
+        results = [
+          {
+            name: db.table,
+            sql: `CREATE TABLE "${db.table}" ("id" INTEGER PRIMARY KEY)`,
+          },
+        ];
+      } else if (
+        sql.includes("SELECT type, name, sql, tbl_name FROM sqlite_master")
+      ) {
+        results = [];
+      } else if (sql.startsWith("PRAGMA table_info")) {
+        results = [{ name: "id" }];
+      } else if (sql.startsWith("SELECT COUNT(*)")) {
+        results = [{ c: 1 }];
+      } else if (sql.startsWith('SELECT "id" FROM')) {
+        results = sql.includes("OFFSET 0") ? [{ id: 1 }] : [];
+      } else if (sql.includes("name = 'sqlite_sequence'")) {
+        results = [];
+      }
+      return Response.json({
+        success: true,
+        result: [{ success: true, results }],
+      });
+    };
+
+    const plan = {
+      stack: "production",
+      dryRun: false,
+      skipR2: true,
+      outDir: join(root, "capture"),
+      confirmQuiescent: null,
+      flowsSnapshot: null,
+      r2Concurrency: 4,
+    };
+    const dependencies = {
+      env: {
+        CLOUDFLARE_ACCOUNT_ID: accountId,
+        CLOUDFLARE_API_TOKEN: "token",
+      },
+      fetchImpl,
+      run: async (command, args) => {
+        commands.push([command, args]);
+        assert.equal(
+          command,
+          "pulumi",
+          "production must not use Wrangler export",
+        );
+        return { stdout: JSON.stringify(outputs), stderr: "" };
+      },
+    };
+    let monitorStarts = 0;
+    let monitorStopped = false;
+    try {
+      const manifest = await createBackup(plan, {
+        ...dependencies,
+        startMonitor(boundary, options) {
+          monitorStarts++;
+          assert.equal(boundary.d1[databases.auth.name].id, databases.auth.id);
+          assert.equal(options.token, "token");
+          return async () => {
+            if (monitorStopped) return;
+            monitorStopped = true;
+            await assert.rejects(access(join(plan.outDir, "manifest.json")), {
+              code: "ENOENT",
+            });
+          };
+        },
+      });
+      assert.equal(monitorStarts, 1);
+      assert.equal(monitorStopped, true);
+
+      assert.deepEqual(manifest.d1Methods, {
+        [databases.auth.name]: "schema-dump",
+        [databases.domain.name]: "schema-dump",
+      });
+      assert.equal(commands.length, 1);
+      for (const db of Object.values(databases)) {
+        const sql = await readFile(
+          join(root, "capture", "d1", `${db.name}.sql`),
+          "utf8",
+        );
+        assert.match(sql, new RegExp(`CREATE TABLE \\"${db.table}\\"`));
+        assert.match(sql, new RegExp(`INSERT INTO \\"${db.table}\\"`));
+      }
+
+      const failedPlan = { ...plan, outDir: join(root, "failed-monitor") };
+      await assert.rejects(
+        createBackup(failedPlan, {
+          ...dependencies,
+          startMonitor: () => async () => {
+            throw new Error("Bookmark monitor failed");
+          },
+        }),
+        /Bookmark monitor failed/,
+      );
+      await assert.rejects(access(join(failedPlan.outDir, "manifest.json")), {
+        code: "ENOENT",
+      });
+
+      let failedCaptureStopped = false;
+      const failedCapturePlan = { ...plan, outDir: join(root, "failed-query") };
+      await assert.rejects(
+        createBackup(failedCapturePlan, {
+          ...dependencies,
+          fetchImpl: async (url, init) => {
+            if (String(url).endsWith("/query"))
+              throw new Error("D1 transport failed");
+            return fetchImpl(url, init);
+          },
+          startMonitor: () => async () => {
+            failedCaptureStopped = true;
+          },
+        }),
+        /D1 transport failed/,
+      );
+      assert.equal(failedCaptureStopped, true);
+      await assert.rejects(
+        access(join(failedCapturePlan.outDir, "manifest.json")),
+        { code: "ENOENT" },
+      );
+
+      const previewNames = resolveInfraNames({
+        environment: "preview",
+        documentsBucket: "savia-documents-preview",
+        publicOrigin: "https://savia-preview.hefesoft.com",
+      });
+      const previewOutputs = {
+        ...outputs,
+        resolvedEnvironment: "preview",
+        resolvedPublicOrigin: "https://savia-preview.hefesoft.com",
+        workerNames: previewNames.workers,
+        databaseNames: previewNames.databases,
+        documentsBucketName: previewNames.bucket,
+        plannedFlowsResourceNames: previewNames.flows,
+      };
+      const previewManifest = await createBackup(
+        { ...plan, stack: "preview", outDir: join(root, "preview") },
+        {
+          ...dependencies,
+          fetchImpl: async () => {
+            throw new Error("Preview native export must not query D1 metadata");
+          },
+          startMonitor: () => {
+            throw new Error("Preview must not start the production monitor");
+          },
+          run: async (command, args) => {
+            if (command === "pulumi")
+              return { stdout: JSON.stringify(previewOutputs), stderr: "" };
+            const outputIndex = args.indexOf("--output");
+            assert.notEqual(outputIndex, -1);
+            await writeFile(
+              args[outputIndex + 1],
+              "CREATE TABLE preview_records (id INTEGER PRIMARY KEY);\n",
+            );
+            return { stdout: "", stderr: "" };
+          },
+        },
+      );
+      assert.deepEqual(Object.values(previewManifest.d1Methods), [
+        "export",
+        "export",
+      ]);
+
+      const finalR2DriftPlan = {
+        ...plan,
+        skipR2: false,
+        outDir: join(root, "final-r2-drift"),
+      };
+      await assert.rejects(
+        createBackup(finalR2DriftPlan, dependencies),
+        (error) =>
+          error.code === "RECOVERY_CONSISTENCY_DRIFT" &&
+          error.message.includes(databases.auth.name),
+      );
+      assert.equal(r2ListCalls, 3);
+      await assert.rejects(
+        access(join(finalR2DriftPlan.outDir, "manifest.json")),
+        { code: "ENOENT" },
+      );
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 
   it("keeps manifest paths relative to the backup directory", () => {

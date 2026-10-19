@@ -18,7 +18,7 @@ The Jira connection needs permission to read issues and user display names (`rea
 
 ### Hosted environment configuration
 
-Nango has separate `jira` and `linear` integrations in `dev` and `prod`, backed by separate **Savia Dev** and **Savia Prod** OAuth applications. Jira also requests `offline_access` for token renewal. Both environments use the registered callback `https://nango.cloud.hefesoft.com/oauth/callback`; the application homepage is `https://savia.app.hefesoft.com/`. Local, preview, and tenant subdomains open Nango Connect from their current origin and do not need their own provider callback entries.
+Nango has separate `jira` and `linear` integrations in `dev` and `prod`, backed by separate **Savia Dev** and **Savia Prod** OAuth applications. Jira also requests `offline_access` for token renewal. Both environments use the registered callback `https://nango.cloud.hefesoft.com/oauth/callback`; the application homepage is `https://savia.hefesoft.com/`. Local, preview, and tenant subdomains open Nango Connect from their current origin and do not need their own provider callback entries.
 
 Use the development Nango API key for local and preview backends, and the production key only for production. Keys remain backend secrets. The Cloudflare configuration renderer enables `NANGO_LINEAR_INTEGRATION_ID=linear`; the GitHub environment must supply its matching `NANGO_API_KEY` before deployment. Jira remains disabled by default: set that environment's `NANGO_JIRA_INTEGRATION_ID` variable to `jira` only when its OAuth app and reporting setup are ready.
 

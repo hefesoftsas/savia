@@ -5,7 +5,11 @@ import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { PREVIEW_PUBLIC_ORIGIN } from "../infra/pulumi/naming.mjs";
+import {
+  DEFAULT_PUBLIC_ORIGIN,
+  PREVIEW_PUBLIC_ORIGIN,
+  normalizeEnvironment,
+} from "../infra/pulumi/naming.mjs";
 
 const API_PATH = "/api/public/savia-flows/maintenance";
 const HEALTH_PATH = "/__session/health";
@@ -31,22 +35,28 @@ async function reserveLocalPort() {
   return address.port;
 }
 
-function validatePreviewCredentials(env) {
-  if (env.SAVIA_DEPLOY_ENVIRONMENT !== "preview") {
-    throw new Error("Private Flows maintenance transport is preview-only");
+function validateTransportCredentials(env) {
+  let environment;
+  try {
+    environment = normalizeEnvironment(env.SAVIA_DEPLOY_ENVIRONMENT);
+  } catch {
+    throw new Error("Flows maintenance transport environment is invalid");
   }
   if (!/^[a-f\d]{32}$/i.test(env.CLOUDFLARE_ACCOUNT_ID ?? "")) {
-    throw new Error("A valid preview CLOUDFLARE_ACCOUNT_ID is required");
+    throw new Error(`A valid ${environment} CLOUDFLARE_ACCOUNT_ID is required`);
   }
   if (
     typeof env.CLOUDFLARE_API_TOKEN !== "string" ||
     !env.CLOUDFLARE_API_TOKEN
   ) {
-    throw new Error("CLOUDFLARE_API_TOKEN is required for preview maintenance");
+    throw new Error(
+      `CLOUDFLARE_API_TOKEN is required for ${environment} maintenance`,
+    );
   }
+  return environment;
 }
 
-function createSessionConfig(token) {
+function createSessionConfig(token, environment) {
   return {
     name: "savia-flows-maintenance-session",
     main: CONFIG_MAIN,
@@ -54,7 +64,15 @@ function createSessionConfig(token) {
     workers_dev: false,
     preview_urls: false,
     vars: { SESSION_TOKEN: token },
-    services: [{ binding: "SAVIA_HOST", service: "savia-agencies-preview" }],
+    services: [
+      {
+        binding: "SAVIA_HOST",
+        service:
+          environment === "preview"
+            ? "savia-agencies-preview"
+            : "savia-agencies",
+      },
+    ],
   };
 }
 
@@ -102,8 +120,8 @@ async function stopChild(child) {
   }
 }
 
-/** Start a private, ephemeral Wrangler session for the preview maintenance API. */
-export async function startPreviewMaintenanceTransport({
+/** Start a private, ephemeral Wrangler session for the selected maintenance API. */
+export async function startFlowsMaintenanceTransport({
   env = process.env,
   fetchImpl = fetch,
   spawnImpl = spawn,
@@ -115,7 +133,9 @@ export async function startPreviewMaintenanceTransport({
     new Promise((resolvePromise) => setTimeout(resolvePromise, milliseconds)),
   now = () => Date.now(),
 } = {}) {
-  validatePreviewCredentials(env);
+  const environment = validateTransportCredentials(env);
+  const publicOrigin =
+    environment === "preview" ? PREVIEW_PUBLIC_ORIGIN : DEFAULT_PUBLIC_ORIGIN;
   const token = randomBytes(32).toString("base64url");
   const port = await reservePort();
   const sessionDir = await createTempDir(
@@ -126,11 +146,15 @@ export async function startPreviewMaintenanceTransport({
   let child;
   let closed = false;
   try {
-    await writeConfig(configPath, JSON.stringify(createSessionConfig(token)), {
-      encoding: "utf8",
-      mode: 0o600,
-      flag: "wx",
-    });
+    await writeConfig(
+      configPath,
+      JSON.stringify(createSessionConfig(token, environment)),
+      {
+        encoding: "utf8",
+        mode: 0o600,
+        flag: "wx",
+      },
+    );
     await chmod(configPath, 0o600);
     child = spawnImpl(
       "pnpm",
@@ -193,7 +217,7 @@ export async function startPreviewMaintenanceTransport({
       async fetchImpl(url, init = {}) {
         const target = new URL(url);
         if (
-          target.origin !== PREVIEW_PUBLIC_ORIGIN ||
+          target.origin !== publicOrigin ||
           target.pathname !== API_PATH ||
           target.search !== "" ||
           target.hash !== ""
@@ -226,4 +250,12 @@ export async function startPreviewMaintenanceTransport({
     }
     throw error;
   }
+}
+
+export async function startPreviewMaintenanceTransport(options = {}) {
+  const env = options.env ?? process.env;
+  if (env.SAVIA_DEPLOY_ENVIRONMENT !== "preview") {
+    throw new Error("Private Flows maintenance transport is preview-only");
+  }
+  return startFlowsMaintenanceTransport(options);
 }

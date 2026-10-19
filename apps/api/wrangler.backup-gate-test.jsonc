@@ -1,0 +1,20 @@
+{
+  "name": "savia-backup-gate-test",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-31",
+  "compatibility_flags": ["global_fetch_strictly_public"],
+  "durable_objects": {
+    "bindings": [{ "name": "BACKUP_GATE", "class_name": "BackupCoordinator" }],
+  },
+  "migrations": [
+    { "tag": "gate-test-v1", "new_sqlite_classes": ["BackupCoordinator"] },
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "backup-gate-test",
+      "database_id": "local",
+    },
+  ],
+  "r2_buckets": [{ "binding": "DOCUMENTS", "bucket_name": "backup-gate-test" }],
+}

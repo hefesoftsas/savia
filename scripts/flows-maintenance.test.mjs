@@ -20,9 +20,9 @@ const ENV = {
 };
 
 const completeManifest = {
-  version: 2,
+  version: 3,
   coverage: {
-    version: 2,
+    version: 3,
     kinds: [
       "database",
       "mailbox",
@@ -30,6 +30,13 @@ const completeManifest = {
       "agent-runner",
       "email-agent-runner",
     ],
+    storage: {
+      database: ["sqlite"],
+      mailbox: ["sqlite"],
+      "workflow-agent": ["sqlite", "kv"],
+      "agent-runner": ["sqlite"],
+      "email-agent-runner": ["kv"],
+    },
   },
   id: "550e8400-e29b-41d4-a716-446655440000",
   createdAt: "2026-10-12T12:00:00.000Z",
@@ -166,7 +173,7 @@ describe("Flows maintenance CLI", () => {
       `${ORIGIN}/path`,
       `${ORIGIN}?tenant=one`,
       "https://user:password@savia-preview.hefesoft.com",
-      "https://savia.app.hefesoft.com",
+      "https://savia.hefesoft.com",
     ]) {
       assert.throws(() =>
         validateMaintenanceEnvironment({ ...ENV, SAVIA_PUBLIC_ORIGIN: value }),
@@ -410,7 +417,7 @@ describe("Flows maintenance CLI", () => {
     );
     const snapshotFile = join(directory, "snapshot.json");
     const started = {
-      version: 2,
+      version: 3,
       coverage: completeManifest.coverage,
       id: completeManifest.id,
       createdAt: completeManifest.createdAt,
@@ -458,7 +465,7 @@ describe("Flows maintenance CLI", () => {
     let activeRequests = 0;
     let maxActiveRequests = 0;
     const startManifest = {
-      version: 2,
+      version: 3,
       coverage: completeManifest.coverage,
       id: completeManifest.id,
       createdAt: completeManifest.createdAt,

@@ -37,7 +37,14 @@ export function buildFlowsSecretUploads(environment, values) {
   ];
 }
 
-export function validateFlowsPreviewSettings(settings, executionEnabled) {
+export function validateFlowsWorkerSettings(
+  settings,
+  executionEnabled,
+  environment = "preview",
+) {
+  if (!["preview", "production"].includes(environment))
+    throw new Error("Invalid Flows worker environment");
+  const suffix = environment === "preview" ? "-preview" : "";
   if (!Array.isArray(settings.bindings))
     throw new Error("Worker bindings missing");
   const bindings = settings.bindings;
@@ -81,14 +88,14 @@ export function validateFlowsPreviewSettings(settings, executionEnabled) {
       Number(actual) <= 0 ||
       Number(actual) > limit
     )
-      throw new Error(`Invalid preview quota ${name}`);
+      throw new Error(`Invalid ${environment} quota ${name}`);
   }
   if (
     !bindings.some(
       (binding) =>
         binding.name === "CODE_EXECUTOR" &&
         binding.type === "service" &&
-        binding.service === "savia-hook-executor-preview" &&
+        binding.service === `savia-hook-executor${suffix}` &&
         binding.entrypoint === "FlowsExecutor",
     )
   )
@@ -98,8 +105,12 @@ export function validateFlowsPreviewSettings(settings, executionEnabled) {
       (binding) =>
         binding.name === "SAVIA_HOST" &&
         binding.type === "service" &&
-        binding.service === "savia-agencies-preview",
+        binding.service === `savia-agencies${suffix}`,
     )
   )
     throw new Error("Missing private Savia host binding");
+}
+
+export function validateFlowsPreviewSettings(settings, executionEnabled) {
+  return validateFlowsWorkerSettings(settings, executionEnabled, "preview");
 }

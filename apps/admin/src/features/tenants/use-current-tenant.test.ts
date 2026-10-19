@@ -42,7 +42,7 @@ describe("formatSlugToDisplayName", () => {
 describe("useCurrentTenant", () => {
   it("returns canonical platform tenant info when on canonical hostname", () => {
     const { result } = renderHook(() =>
-      useCurrentTenant({ hostname: "savia.app.hefesoft.com" }),
+      useCurrentTenant({ hostname: "savia.hefesoft.com" }),
     );
 
     expect(result.current).toEqual({
@@ -70,7 +70,7 @@ describe("useCurrentTenant", () => {
 
   it("returns dedicated tenant info with fallback name when on tenant subdomain", () => {
     const { result } = renderHook(() =>
-      useCurrentTenant({ hostname: "merkaseguros.savia.app.hefesoft.com" }),
+      useCurrentTenant({ hostname: "merkaseguros.savia.hefesoft.com" }),
     );
 
     expect(result.current.isDedicated).toBe(true);
@@ -100,7 +100,7 @@ describe("useCurrentTenant", () => {
       vi.fn().mockResolvedValue(response),
     );
     const wrapper = servicesWrapper(services);
-    const options = { hostname: "merka.savia.app.hefesoft.com" };
+    const options = { hostname: "merka.savia.hefesoft.com" };
     const first = renderHook(() => useCurrentTenant(options), { wrapper });
     const second = renderHook(() => useCurrentTenant(options), { wrapper });
 
@@ -120,14 +120,14 @@ describe("useCurrentTenant", () => {
     const { rerender } = renderHook(
       ({ hostname }) => useCurrentTenant({ hostname }),
       {
-        initialProps: { hostname: "merka.savia.app.hefesoft.com" },
+        initialProps: { hostname: "merka.savia.hefesoft.com" },
         wrapper: servicesWrapper(services),
       },
     );
     await waitFor(() => expect(get).toHaveBeenCalledTimes(1));
 
-    rerender({ hostname: "merka.savia.app.hefesoft.com" });
-    rerender({ hostname: "merka.savia.app.hefesoft.com" });
+    rerender({ hostname: "merka.savia.hefesoft.com" });
+    rerender({ hostname: "merka.savia.hefesoft.com" });
 
     expect(get).toHaveBeenCalledTimes(1);
   });
@@ -145,13 +145,13 @@ describe("useCurrentTenant", () => {
     const { result, rerender } = renderHook(
       ({ hostname }) => useCurrentTenant({ hostname }),
       {
-        initialProps: { hostname: "old.savia.app.hefesoft.com" },
+        initialProps: { hostname: "old.savia.hefesoft.com" },
         wrapper: servicesWrapper(services),
       },
     );
     await waitFor(() => expect(get).toHaveBeenCalledTimes(1));
 
-    rerender({ hostname: "new.savia.app.hefesoft.com" });
+    rerender({ hostname: "new.savia.hefesoft.com" });
     await waitFor(() => expect(get).toHaveBeenCalledTimes(2));
     await act(async () => {
       pending[1]?.({
@@ -181,7 +181,7 @@ describe("useCurrentTenant", () => {
       ),
     );
     const { result } = renderHook(
-      () => useCurrentTenant({ hostname: "merka.savia.app.hefesoft.com" }),
+      () => useCurrentTenant({ hostname: "merka.savia.hefesoft.com" }),
       { wrapper: servicesWrapper(services) },
     );
     await waitFor(() => expect(get).toHaveBeenCalledTimes(1));
@@ -209,7 +209,7 @@ describe("useCurrentTenant", () => {
   it("does not request a tenant on the platform host", () => {
     const { get, services } = createServices();
     const { result } = renderHook(
-      () => useCurrentTenant({ hostname: "savia.app.hefesoft.com" }),
+      () => useCurrentTenant({ hostname: "savia.hefesoft.com" }),
       { wrapper: servicesWrapper(services) },
     );
 
@@ -220,7 +220,7 @@ describe("useCurrentTenant", () => {
 
   it("keeps standalone tenant identity available when services are absent", () => {
     const { result } = renderHook(() =>
-      useCurrentTenant({ hostname: "merka.savia.app.hefesoft.com" }),
+      useCurrentTenant({ hostname: "merka.savia.hefesoft.com" }),
     );
 
     expect(result.current.name).toBe("Merka");
@@ -233,7 +233,7 @@ describe("useCurrentTenant", () => {
       vi.fn().mockRejectedValue(new Error("private upstream details")),
     );
     const { result } = renderHook(
-      () => useCurrentTenant({ hostname: "merka.savia.app.hefesoft.com" }),
+      () => useCurrentTenant({ hostname: "merka.savia.hefesoft.com" }),
       { wrapper: servicesWrapper(services) },
     );
 
@@ -263,7 +263,7 @@ describe("useCurrentTenant", () => {
       }),
     );
     const { result } = renderHook(
-      () => useCurrentTenant({ hostname: "merka.savia.app.hefesoft.com" }),
+      () => useCurrentTenant({ hostname: "merka.savia.hefesoft.com" }),
       { wrapper: servicesWrapper(services) },
     );
 

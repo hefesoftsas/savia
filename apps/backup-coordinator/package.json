@@ -1,0 +1,8 @@
+{
+  "name": "@savia/backup-coordinator",
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "wrangler": "^4.127.1"
+  }
+}

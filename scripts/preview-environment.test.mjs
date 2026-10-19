@@ -1,4 +1,5 @@
 import { workerConfig } from "./preview-deploy.mjs";
+import { isAlreadyGone, workerOrder } from "./preview-destroy.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 
@@ -32,12 +33,95 @@ test("derives preview resource names with a shared suffix", () => {
   assert.equal(names.workers.api, "savia-agencies-preview-login-form");
   assert.equal(names.workers.gateway, "savia-preview-login-form");
   assert.equal(
+    names.workers.connectorGateway,
+    "savia-connectors-preview-login-form",
+  );
+  assert.equal(
     names.workers.hookExecutor,
     "savia-hook-executor-preview-login-form",
   );
   assert.equal(names.databases.domain, "savia-agencies-preview-login-form");
   assert.equal(names.databases.auth, "savia-auth-preview-login-form");
   assert.equal(names.bucket, "savia-documents-preview-login-form");
+});
+
+test("adds connector gateway, isolated limits, durable objects, and office bindings to preview workers", () => {
+  const names = previewNames("worker-parity");
+  const ids = { auth: "auth-id", domain: "domain-id" };
+  const origin = "https://savia-preview-worker-parity.workers.dev";
+  const api = workerConfig("api", names, ids, origin);
+  const otherBranchApi = workerConfig(
+    "api",
+    previewNames("worker-parity-other"),
+    ids,
+    origin,
+  );
+  const connectorGateway = workerConfig("connectorGateway", names, ids, origin);
+  const gateway = workerConfig("gateway", names, ids, origin);
+
+  assert.deepEqual(api.services, [
+    { binding: "AUTH", service: names.workers.auth },
+    { binding: "MCP", service: names.workers.mcp },
+    { binding: "SAVIA_REQUEST", service: names.workers.request },
+    { binding: "CONNECTOR_GATEWAY", service: names.workers.connectorGateway },
+  ]);
+  assert.deepEqual(api.durable_objects.bindings, [
+    { name: "REALTIME_HUB", class_name: "RealtimeHub" },
+    { name: "WHATSAPP_DISPATCHER", class_name: "WhatsappDispatcher" },
+  ]);
+  assert.deepEqual(api.migrations, [
+    { tag: "v1", new_sqlite_classes: ["RealtimeHub"] },
+    { tag: "v2", new_sqlite_classes: ["WhatsappDispatcher"] },
+  ]);
+  assert.deepEqual(
+    api.ratelimits.map(({ name, simple }) => [name, simple]),
+    [
+      ["PUBLIC_FORMS_RATE_LIMITER", { limit: 30, period: 60 }],
+      ["REALTIME_RATE_LIMITER", { limit: 30, period: 60 }],
+    ],
+  );
+  assert.ok(
+    api.ratelimits.every(
+      ({ namespace_id }) =>
+        typeof namespace_id === "string" && /^\d+$/.test(namespace_id),
+    ),
+  );
+  assert.notEqual(
+    api.ratelimits[0].namespace_id,
+    api.ratelimits[1].namespace_id,
+  );
+  assert.notDeepEqual(
+    api.ratelimits.map(({ namespace_id }) => namespace_id),
+    otherBranchApi.ratelimits.map(({ namespace_id }) => namespace_id),
+  );
+  assert.notEqual(api.ratelimits[0].namespace_id, "879102");
+  assert.notEqual(api.ratelimits[1].namespace_id, "879101");
+  assert.equal(connectorGateway.name, names.workers.connectorGateway);
+  assert.equal(
+    connectorGateway.main.endsWith("apps/connector-gateway/src/index.ts"),
+    true,
+  );
+  assert.equal(connectorGateway.workers_dev, false);
+  assert.equal(connectorGateway.preview_urls, false);
+  assert.deepEqual(connectorGateway.services, [
+    { binding: "SAVIA_REQUEST", service: names.workers.request },
+  ]);
+  assert.deepEqual(connectorGateway.d1_databases, [
+    {
+      binding: "DB",
+      database_name: names.databases.domain,
+      database_id: ids.domain,
+    },
+  ]);
+  assert.ok(gateway.assets.run_worker_first.includes("/register"));
+  assert.ok(gateway.assets.run_worker_first.includes("/public/forms"));
+  assert.ok(gateway.assets.run_worker_first.includes("/public/forms/*"));
+  assert.ok(gateway.assets.run_worker_first.includes("/office"));
+  assert.ok(gateway.assets.run_worker_first.includes("/office/*"));
+  assert.deepEqual(gateway.r2_buckets, [
+    { binding: "OFFICE_RUNTIME", bucket_name: names.bucket },
+  ]);
+  assert.deepEqual(gateway.routes, undefined);
 });
 
 test("destroy guard only allows its own preview resources", () => {
@@ -53,6 +137,26 @@ test("destroy guard only allows its own preview resources", () => {
   ]) {
     assert.throws(() => assertDestroyTarget(name, "login-form"), /Refusing/);
   }
+});
+
+test("deletes connector gateway and tolerates an older preview without it", () => {
+  const names = previewNames("pre-connector-gateway");
+  assert.deepEqual(workerOrder(names), [
+    names.workers.gateway,
+    names.workers.api,
+    names.workers.connectorGateway,
+    names.workers.mcp,
+    names.workers.request,
+    names.workers.hookExecutor,
+    names.workers.auth,
+  ]);
+  assert.equal(
+    isAlreadyGone(
+      Object.assign(new Error("Worker not found (404)"), { status: 404 }),
+    ),
+    true,
+  );
+  assert.equal(isAlreadyGone(new Error("permission denied")), false);
 });
 
 test("finds database uuids across wrangler output shapes", () => {

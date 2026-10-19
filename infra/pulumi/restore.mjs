@@ -1,10 +1,11 @@
 // Restore a stack from a backup manifest written by backup.mjs.
 // Flow for disaster recovery:
 //   1. pulumi up recreates empty D1 databases + R2 bucket (idempotent).
-//   2. D1 SQL exports are loaded back with wrangler d1 execute --file.
+//   2. Schema dumps verify empty D1 targets by UUID; D1 SQL files are loaded
+//      back with wrangler d1 execute --file.
 //   3. R2 objects are restored object-by-object with their captured metadata.
-// Afterwards run scripts/apply-d1-migrations.mjs to catch up with any
-// migrations newer than the backup, then redeploy workers via CI.
+// Table dumps apply migrations first; schema dumps preserve the source schema
+// and skip migrations until compatibility is validated separately.
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
@@ -13,6 +14,7 @@ import { join, relative, sep, dirname, resolve, isAbsolute } from "node:path";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 import { buildR2ObjectPutCommand } from "./backup.mjs";
+import { r2InventoryHash } from "./recovery-consistency.mjs";
 import { createMaintenanceClient } from "../../scripts/flows-maintenance.mjs";
 import {
   validateFlowsSnapshotManifest,
@@ -28,6 +30,8 @@ import {
 } from "./naming.mjs";
 
 const execFileAsync = promisify(execFile);
+const D1_DATABASE_UUID =
+  /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 
 export function parseRestoreArgs(argv) {
   const manifest = flagValue(argv, "--manifest");
@@ -52,9 +56,10 @@ export function parseRestoreArgs(argv) {
   return { manifest, dryRun, skipInfra, skipMigrations, confirm };
 }
 
-// Table dumps carry data but no schema: migrations must create tables,
-// triggers, and the FTS5 definition before the dump is loaded (and the
-// FTS5 index rebuilds via triggers on INSERT).
+// Migrations recreate the current schema first. The table dump then creates
+// any retired plain tables before replaying rows and adds their explicit
+// indexes, triggers, and views after replay. FTS5 is rebuilt by the current
+// schema's migration triggers as content rows are inserted.
 export function needsMigrations(manifest) {
   return Object.values(manifest?.d1Methods ?? {}).includes("table-dump");
 }
@@ -203,13 +208,41 @@ function validateD1Manifest(manifest, flowsDatabaseName = null) {
       databaseNames,
       flowsDatabaseName,
     );
-    if (method !== "export" && method !== "table-dump") {
+    if (
+      method !== "export" &&
+      method !== "table-dump" &&
+      method !== "schema-dump"
+    ) {
       throw new Error(`Unsupported D1 method for ${key}: ${method}`);
     }
     if (method === "table-dump" && databaseName === databaseNames.auth) {
       throw new Error(
         "Auth D1 table-dump restore is unsupported because its schema migrations cannot be reconstructed safely",
       );
+    }
+    if (
+      ["table-dump", "schema-dump"].includes(method) &&
+      manifest.stack === "production"
+    ) {
+      const proof = manifest.recoveryConsistency;
+      const outputs = manifest.pulumiOutputs;
+      const id =
+        databaseName === databaseNames.auth
+          ? outputs.authD1Id
+          : databaseName === databaseNames.domain
+            ? outputs.domainD1Id
+            : outputs.flowsResources?.databaseId;
+      if (
+        proof?.version !== 1 ||
+        proof.accountId !== outputs.cloudflareAccountId ||
+        proof.d1?.[databaseName]?.id !== id ||
+        typeof proof.d1?.[databaseName]?.bookmark !== "string" ||
+        !/^[a-zA-Z0-9_-]{1,512}$/.test(proof.d1[databaseName].bookmark)
+      ) {
+        throw new Error(
+          "Production table/schema-dump restore requires a matching consistency proof",
+        );
+      }
     }
   }
 }
@@ -288,6 +321,12 @@ export function validateManifest(manifest, confirm, runtimeAccountId) {
     environment: manifest.stack,
     documentsBucket: outputs.documentsBucketName,
     publicOrigin: outputs.resolvedPublicOrigin,
+    ...(manifest.stack === "production"
+      ? {
+          authDatabaseName: outputs.databaseNames?.auth,
+          domainDatabaseName: outputs.databaseNames?.domain,
+        }
+      : {}),
   });
   if (
     outputs.databaseNames?.auth !== expectedNames.databases.auth ||
@@ -414,6 +453,43 @@ export function validateManifest(manifest, confirm, runtimeAccountId) {
     }
   }
   validateD1Manifest(manifest, flowsDatabaseName);
+  if (manifest.recoveryConsistency) {
+    const proof = manifest.recoveryConsistency;
+    const databaseIds = {
+      [outputs.databaseNames.auth]: outputs.authD1Id,
+      [outputs.databaseNames.domain]: outputs.domainD1Id,
+      ...(flowsDatabaseName
+        ? { [flowsDatabaseName]: outputs.flowsResources.databaseId }
+        : {}),
+    };
+    const names = Object.keys(manifest.d1).map((key) =>
+      resolveD1DatabaseName(key, outputs.databaseNames, flowsDatabaseName),
+    );
+    const buckets = [manifest.r2, ...Object.values(manifest.r2Buckets ?? {})]
+      .filter(Boolean)
+      .map((entry) => entry.bucket)
+      .sort();
+    if (
+      proof.version !== 1 ||
+      proof.accountId !== outputs.cloudflareAccountId ||
+      !isRecord(proof.d1) ||
+      !isRecord(proof.r2) ||
+      JSON.stringify(Object.keys(proof.d1).sort()) !==
+        JSON.stringify(names.sort()) ||
+      JSON.stringify(Object.keys(proof.r2).sort()) !==
+        JSON.stringify(buckets) ||
+      names.some(
+        (name) =>
+          proof.d1[name]?.id !== databaseIds[name] ||
+          !/^[a-zA-Z0-9_-]{1,512}$/.test(proof.d1[name]?.bookmark ?? ""),
+      ) ||
+      buckets.some((bucket) => !/^[a-f0-9]{64}$/.test(proof.r2[bucket] ?? ""))
+    ) {
+      throw new Error(
+        "Recovery consistency proof does not cover the captured databases and buckets",
+      );
+    }
+  }
   return manifest;
 }
 
@@ -463,6 +539,23 @@ export async function verifyManifestIntegrity(manifest, manifestFile) {
     for await (const chunk of createReadStream(fullPath)) hash.update(chunk);
     if (hash.digest("hex") !== expected) {
       throw new Error(`Backup integrity check failed for ${path}`);
+    }
+  }
+  if (manifest.recoveryConsistency) {
+    for (const bucket of [
+      manifest.r2,
+      ...Object.values(manifest.r2Buckets ?? {}),
+    ].filter(Boolean)) {
+      const sidecar = await readSidecar(
+        resolveManifestPath(manifestFile, bucket.metadataFile),
+      );
+      if (
+        r2InventoryHash(Object.values(sidecar)) !==
+        manifest.recoveryConsistency.r2?.[bucket.bucket]
+      )
+        throw new Error(
+          `R2 inventory does not match its recovery proof: ${bucket.bucket}`,
+        );
     }
   }
 }
@@ -549,6 +642,85 @@ export function buildD1ExecuteCommand(dbName, sqlFile) {
       sqlFile,
     ],
   ];
+}
+
+export function resolveD1DatabaseId(name, outputs, flowsDatabaseName = null) {
+  const databaseNames = outputs?.databaseNames;
+  if (!databaseNames || typeof name !== "string") {
+    throw new Error(
+      "Cannot resolve D1 ID without authoritative database names",
+    );
+  }
+  if (name === databaseNames.auth) return outputs.authD1Id;
+  if (name === databaseNames.domain) return outputs.domainD1Id;
+  if (flowsDatabaseName && name === flowsDatabaseName) {
+    return outputs.flowsResources?.databaseId;
+  }
+  throw new Error(`Unknown D1 database name for schema dump: ${name}`);
+}
+
+export async function preflightSchemaDumpTargets({
+  accountId,
+  token,
+  targets,
+  fetchImpl = fetch,
+}) {
+  if (
+    !accountId ||
+    !token ||
+    !isRecord(targets) ||
+    !Object.keys(targets).length
+  ) {
+    throw new Error(
+      "Schema-dump restore requires an account, API token, and target database IDs",
+    );
+  }
+  assertAccountId(accountId);
+  for (const [name, id] of Object.entries(targets)) {
+    if (typeof id !== "string" || !D1_DATABASE_UUID.test(id)) {
+      throw new Error(
+        `Schema-dump target ${name} has no valid authoritative D1 UUID`,
+      );
+    }
+  }
+  for (const [name, id] of Object.entries(targets)) {
+    const response = await fetchImpl(
+      `https://api.cloudflare.com/client/v4/accounts/${accountId}/d1/database/${id}/query`,
+      {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${token}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          sql: "SELECT type, name FROM sqlite_master WHERE substr(name,1,7) != 'sqlite_' AND name != '_cf_KV' ORDER BY type, name",
+        }),
+        signal: AbortSignal.timeout(30_000),
+      },
+    );
+    const payload = await response.json();
+    if (
+      response.ok !== true ||
+      payload.success !== true ||
+      payload.result?.[0]?.success !== true
+    ) {
+      throw new Error(
+        `Could not verify schema-dump target ${name} is empty (HTTP ${response.status})`,
+      );
+    }
+    const objects = payload.result[0].results;
+    if (!Array.isArray(objects)) {
+      throw new Error(
+        `Could not verify schema-dump target ${name} is empty: D1 returned no schema inventory`,
+      );
+    }
+    if (objects.length !== 0) {
+      throw new Error(
+        `Refusing schema-dump restore: target D1 ${name} is not empty`,
+      );
+    }
+  }
+  return true;
 }
 
 // aws s3 sync <dir> s3://<bucket> --endpoint-url https://<account>.r2.cloudflarestorage.com
@@ -712,6 +884,9 @@ async function main() {
   const tableDumpDatabases = Object.entries(manifest.d1Methods ?? {})
     .filter(([, method]) => method === "table-dump")
     .map(([key]) => resolveD1DatabaseName(key, d1Names, flowsDatabaseName));
+  const schemaDumpDatabases = Object.entries(manifest.d1Methods ?? {})
+    .filter(([, method]) => method === "schema-dump")
+    .map(([key]) => resolveD1DatabaseName(key, d1Names, flowsDatabaseName));
   const restoreDomainSchema = tableDumpDatabases.includes(d1Names.domain);
   const restoreFlowsSchema =
     flowsDatabaseName !== null &&
@@ -751,22 +926,37 @@ async function main() {
   // worker is paused, in maintenance mode, and has drained all active runs.
   await assertFlowsRestoreMaintenance(manifest);
 
-  let restoreDomainD1Id = manifest.pulumiOutputs.domainD1Id;
+  let restoreOutputs = manifest.pulumiOutputs;
   if (!plan.skipInfra) {
-    const liveOutputs = await runPulumiUpForRestore({
+    restoreOutputs = await runPulumiUpForRestore({
       stack: manifest.stack,
       accountId: manifest.pulumiOutputs.cloudflareAccountId,
       expectedOutputs: manifest.pulumiOutputs,
       cwd: pulumiCwd,
     });
-    restoreDomainD1Id = liveOutputs.domainD1Id;
+  }
+  const schemaDumpTargets = Object.fromEntries(
+    schemaDumpDatabases.map((name) => [
+      name,
+      resolveD1DatabaseId(name, restoreOutputs, flowsDatabaseName),
+    ]),
+  );
+  if (schemaDumpDatabases.length > 0) {
+    await preflightSchemaDumpTargets({
+      accountId,
+      token: process.env.CLOUDFLARE_API_TOKEN,
+      targets: schemaDumpTargets,
+    });
+    console.log(
+      `Verified empty schema-dump D1 targets by UUID: ${Object.keys(schemaDumpTargets).join(", ")}`,
+    );
   }
   if (!plan.skipMigrations && restoreDomainSchema) {
     await execFileAsync("node", ["scripts/apply-d1-migrations.mjs"], {
       cwd: repoRoot,
       env: {
         ...process.env,
-        CLOUDFLARE_DATABASE_ID: restoreDomainD1Id,
+        CLOUDFLARE_DATABASE_ID: restoreOutputs.domainD1Id,
       },
     });
     console.log("Applied domain D1 migrations before loading table dumps");
@@ -780,8 +970,13 @@ async function main() {
     console.log("Applied Flows D1 migrations before loading table dumps");
   }
   for (const [dbName, sqlFile] of Object.entries(resolvedD1Files)) {
+    const targetName = resolveD1DatabaseName(
+      dbName,
+      dbNames,
+      flowsDatabaseName,
+    );
     const [command, args] = buildD1ExecuteCommand(
-      resolveD1DatabaseName(dbName, dbNames, flowsDatabaseName),
+      resolveD1DatabaseId(targetName, restoreOutputs, flowsDatabaseName),
       sqlFile,
     );
     await execFileAsync(command, args, { cwd: repoRoot });
@@ -802,7 +997,9 @@ async function main() {
     console.log("D1 and R2 restore finished.");
   }
   console.log(
-    "Next: verify recovered persistence, apply any outstanding migrations, then redeploy the paused workers via CI.",
+    schemaDumpDatabases.length > 0
+      ? "Next: verify the recovered schema and persistence; apply future migrations only after separate compatibility validation, then redeploy the paused workers via CI."
+      : "Next: verify recovered persistence, apply any outstanding migrations, then redeploy the paused workers via CI.",
   );
 }
 

@@ -36,6 +36,7 @@ services:
       - apps_admin_modules:/workspace/apps/admin/node_modules
       - apps_api_modules:/workspace/apps/api/node_modules
       - apps_auth_modules:/workspace/apps/auth/node_modules
+      - apps_backup_coordinator_modules:/workspace/apps/backup-coordinator/node_modules
       - apps_companion_modules:/workspace/apps/companion/node_modules
       - apps_connector_gateway_modules:/workspace/apps/connector-gateway/node_modules
       - apps_db_bridge_modules:/workspace/apps/db-bridge/node_modules
@@ -145,6 +146,7 @@ volumes:
   apps_admin_modules:
   apps_api_modules:
   apps_auth_modules:
+  apps_backup_coordinator_modules:
   apps_companion_modules:
   apps_connector_gateway_modules:
   apps_db_bridge_modules:

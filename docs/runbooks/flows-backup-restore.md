@@ -64,17 +64,36 @@ someone replacing both payloads and their hashes.
 
 The stack must remain paused until the exports finish. A coherent backup needs
 the D1 export, R2 inventory, and runtime page inventory to describe the same
-quiescent state. Table-dump fallback also requires the explicit confirmation
-and is disabled for production.
+quiescent state. Preview table-dump fallback requires explicit quiescence confirmation.
+Production schema-bearing dumps additionally require unchanged live Time Travel bookmarks
+and the complete backup boundary described in
+[pulumi-infrastructure.md](pulumi-infrastructure.md#backups-data-not-just-infra).
+Concurrent writes invalidate the capture even if an operator supplied
+`--confirm-quiescent production`; that flag alone cannot establish consistency.
+Production release and daily archives use `SAVIA_BACKUP_KEY`; the legacy preview
+encryption command also accepts `SAVIA_FLOWS_BACKUP_KEY`. Preserve both stable
+keys independently of the archives. Daily CI does not publish code to pause a
+running Flows service: arrange a maintenance window first. Production deploys
+perform the explicit pause/snapshot sequence before their backup.
 
-Runtime snapshot version 2 declares coverage for all five Durable Object kinds:
-DatabaseDO and MailboxDO SQL, WorkflowAgent generation/editor SQL, AgentRunner
-run/state SQL, and EmailAgentRunner typed KV. The logical-name registry preserves
-agent targets after a workflow definition is deleted. Version-1 runtime
-snapshots are rejected because they cannot establish this coverage. This is
-separate from the outer D1/R2 archive manifest, which retains its version-1
-compatibility. The preview inventory is capped at 1,000 entries and every encoded
-page at 512 KiB; exceeding either cap fails backup before migrations.
+Runtime snapshot version 3 declares the storage coverage of all five Durable
+Object kinds: DatabaseDO and MailboxDO SQLite, WorkflowAgent SQLite **and typed
+KV**, AgentRunner SQLite, and EmailAgentRunner typed KV. WorkflowAgent pages
+export SQL first, then bounded KV pages (128 keys maximum); restore enforces
+segment order and commits each page with its replay checkpoint atomically.
+Schema inventory uses exact internal-name prefixes so similarly named user tables
+are retained. Replaying an applied page checks its checkpoint before attempting
+any storage changes. The maintenance-route integration test verifies SQL and KV
+segments, index/trigger restoration, AUTOINCREMENT sequence, and page replay.
+This includes execution buffers, form state, and submission/deduplication keys
+that SQL-only snapshots omitted. The logical-name registry preserves agent targets
+after a workflow definition is deleted. Runtime versions 1 and 2 are rejected
+because they cannot establish complete coverage. The producer and maintenance
+client must be promoted together before taking new Flows snapshots. This is
+separate from the outer D1/R2 archive manifest, which stays version 2 and retains
+its documented version-1 compatibility. The preview inventory is capped at 1,000
+entries and every encoded page at 512 KiB; exceeding either cap fails backup
+before migrations.
 
 Each generated Worker manifest carries a policy generation. Re-render before
 each deployment: a newer generation may deliberately resume execution, while
@@ -199,23 +218,25 @@ Worker or public route. The session and temporary files are removed after
 success or failure. Dry runs remain offline; production is not reachable
 through this preview helper.
 
-The API-token R2 fallback downloads stored bytes through raw HTTPS streaming,
-without automatically decompressing `Content-Encoding: br` or `gzip`. It
-requests the object's stored encoding, or `identity` for unencoded objects,
-to prevent Cloudflare from applying a different compression during transfer. It
-accepts valid HTTP coding tokens and coding lists, including their original case.
-It checks every size and removes partial files on failure. Downloads and Wrangler
-restores URL-encode each object-key segment while keeping the original key in
-the manifest and filesystem.
-This preserves literal percent escapes, spaces, Unicode, and URL delimiters
-(e.g. a key containing `tenant%3A12` is sent as `tenant%253A12`). The S3
-transport receives the original key because its SDK handles URL encoding.
+The token-authenticated R2 reader downloads stored bytes through conditional S3
+`GetObject`, without decompressing `Content-Encoding: br` or `gzip`. It derives
+equivalent S3 authentication in memory from the existing Cloudflare token after
+verifying its identity; no token or permission is created. Each read pins the
+listed ETag with `If-Match`, validates the returned ETag and byte size, and removes
+partial files on failure. The SDK receives the original object key and handles
+URL encoding, preserving literal percent escapes, spaces, Unicode and URL
+delimiters. Wrangler restores encode each object-key segment separately.
 
-Preview selects the raw API fallback with `SAVIA_BACKUP_R2_FORCE_API=true`;
+Preview selects the verified token-authenticated path with `SAVIA_BACKUP_R2_FORCE_API=true`;
 the former `SAVIA_BACKUP_R2_FORCE_WRANGLER` selector remains a compatibility
 alias for bypassing S3 credentials. No additional bucket credentials or
 service activation is required.
 
-Each raw download has a five-minute inactivity timeout that resets as bytes
-arrive. The preview deployment job retains its 40-minute overall deadline;
+Each S3 download uses a 30-second connection timeout and five-minute socket read
+inactivity timeout. The preview deployment job retains its 40-minute overall deadline;
 slow but progressing objects are not aborted by a per-object wall-clock timer.
+
+Workflow-agent restores accept an otherwise empty target containing only
+PartyServer's nonempty `__ps_name` bootstrap identity. That platform key is
+excluded from KV exports and rejected in restore pages; the target keeps its own
+identity. Any other pre-existing KV data still causes refusal before replay.

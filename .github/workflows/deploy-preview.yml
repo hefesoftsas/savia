@@ -155,6 +155,15 @@ jobs:
 
       # Existing deployments are paused before copying data. First provisioning
       # has no existing Flows state and skips these stages entirely.
+      - name: Deploy savia backup coordinator
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy --config wrangler.preview.jsonc
+          workingDirectory: apps/backup-coordinator
+          wranglerVersion: 4.127.1
+
       - name: Pause Savia writes for persistence backup
         id: pause_agencies
         if: env.SAVIA_FLOWS_PROVISIONED == 'true'
@@ -282,15 +291,6 @@ jobs:
           SAVIA_MICROSOFT_CLIENT_ID: ${{ secrets.SAVIA_MICROSOFT_CLIENT_ID }}
           SAVIA_MICROSOFT_CLIENT_SECRET: ${{ secrets.SAVIA_MICROSOFT_CLIENT_SECRET }}
 
-      - name: Deploy savia-auth
-        uses: cloudflare/wrangler-action@v4
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: deploy --config wrangler.preview.jsonc
-          workingDirectory: apps/auth
-          wranglerVersion: 4.127.1
-
       - name: Deploy private Savia FastMCP
         uses: cloudflare/wrangler-action@v4
         with:
@@ -336,6 +336,24 @@ jobs:
           workingDirectory: apps/flows/api
           wranglerVersion: 4.127.1
 
+      - name: Deploy savia-agencies
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy --config wrangler.preview.jsonc
+          workingDirectory: apps/api
+          wranglerVersion: 4.127.1
+
+      - name: Deploy savia-auth
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy --config wrangler.preview.jsonc
+          workingDirectory: apps/auth
+          wranglerVersion: 4.127.1
+
       - name: Deploy private Savia request
         uses: cloudflare/wrangler-action@v4
         with:
@@ -352,15 +370,6 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: deploy --config wrangler.preview.jsonc
           workingDirectory: apps/connector-gateway
-          wranglerVersion: 4.127.1
-
-      - name: Deploy savia-agencies
-        uses: cloudflare/wrangler-action@v4
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: deploy --config wrangler.preview.jsonc
-          workingDirectory: apps/api
           wranglerVersion: 4.127.1
 
       - name: Build isolated plugin editor assets

@@ -1,6 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import * as stackOutputs from "./outputs.mjs";
+import { resolveInfraNames } from "./naming.mjs";
 const { parseStackOutputs, renderEnvFromOutputs } = stackOutputs;
 
 const OUTPUTS = {
@@ -93,6 +94,152 @@ describe("pulumi stack outputs", () => {
   it("parses and validates required outputs", () => {
     const parsed = parseStackOutputs(JSON.stringify(OUTPUTS));
     assert.equal(parsed.documentsBucketName, "savia-documents-preview");
+    assert.equal(parsed.backupBucketName, null);
+    assert.equal(parsed.backupRetentionDays, null);
+    assert.deepEqual(parsed.tenantSubdomains, []);
+    assert.equal(
+      renderEnvFromOutputs(parsed, "/repo").SAVIA_TENANT_SUBDOMAINS,
+      "[]",
+    );
+  });
+
+  it("validates and exports explicit production tenant subdomains", () => {
+    const productionNames = resolveInfraNames({
+      environment: "production",
+      documentsBucket: "savia-documents",
+      publicOrigin: "https://savia.app.hefesoft.com",
+    });
+    const production = {
+      ...OUTPUTS,
+      documentsBucketName: productionNames.bucket,
+      resolvedEnvironment: "production",
+      resolvedPublicOrigin: productionNames.publicOrigin,
+      workerNames: productionNames.workers,
+      databaseNames: productionNames.databases,
+      plannedFlowsResourceNames: productionNames.flows,
+      tenantSubdomains: ["tenant-home", "acme-team"],
+    };
+    const parsed = parseStackOutputs(JSON.stringify(production));
+    assert.deepEqual(parsed.tenantSubdomains, ["tenant-home", "acme-team"]);
+    assert.equal(
+      renderEnvFromOutputs(parsed, "/repo").SAVIA_TENANT_SUBDOMAINS,
+      '["tenant-home","acme-team"]',
+    );
+    for (const tenantSubdomains of [
+      ["api"],
+      ["*.savia.app.hefesoft.com"],
+      ["tenant-home", "tenant-home"],
+      "tenant-home",
+    ]) {
+      assert.throws(() =>
+        parseStackOutputs(JSON.stringify({ ...production, tenantSubdomains })),
+      );
+    }
+    assert.throws(
+      () =>
+        parseStackOutputs(
+          JSON.stringify({ ...OUTPUTS, tenantSubdomains: ["tenant-home"] }),
+        ),
+      /preview.*tenant subdomain/i,
+    );
+  });
+
+  it("accepts legacy outputs without a backup bucket and renders disabled vars", () => {
+    const legacy = { ...OUTPUTS };
+    delete legacy.backupBucketName;
+    delete legacy.backupRetentionDays;
+    const parsed = parseStackOutputs(JSON.stringify(legacy));
+    const env = renderEnvFromOutputs(parsed, "/repo");
+    assert.equal(parsed.backupBucketName, null);
+    assert.equal(parsed.backupRetentionDays, null);
+    assert.equal(env.SAVIA_BACKUP_BUCKET, "");
+    assert.equal(env.SAVIA_BACKUP_RETENTION_DAYS, "");
+  });
+
+  it("validates and renders the opt-in production backup bucket and retention", () => {
+    const names = resolveInfraNames({
+      environment: "production",
+      documentsBucket: "savia-documents",
+      publicOrigin: "https://savia.hefesoft.com",
+    });
+    const production = {
+      ...OUTPUTS,
+      documentsBucketName: names.bucket,
+      resolvedEnvironment: "production",
+      resolvedPublicOrigin: names.publicOrigin,
+      workerNames: names.workers,
+      databaseNames: names.databases,
+      plannedFlowsResourceNames: names.flows,
+      backupBucketName: "savia-production-backups",
+      backupRetentionDays: 30,
+    };
+    const parsed = parseStackOutputs(JSON.stringify(production));
+    const env = renderEnvFromOutputs(parsed, "/repo");
+    assert.equal(parsed.backupBucketName, "savia-production-backups");
+    assert.equal(parsed.backupRetentionDays, 30);
+    assert.equal(env.SAVIA_BACKUP_BUCKET, "savia-production-backups");
+    assert.equal(env.SAVIA_BACKUP_RETENTION_DAYS, "30");
+
+    for (const invalid of [
+      { ...production, backupBucketName: "savia-documents" },
+      { ...production, backupBucketName: "savia-production-backups-preview" },
+      { ...production, backupRetentionDays: 29 },
+      { ...production, backupRetentionDays: null },
+      { ...production, backupBucketName: null },
+    ]) {
+      assert.throws(() => parseStackOutputs(JSON.stringify(invalid)));
+    }
+    assert.throws(() =>
+      parseStackOutputs(
+        JSON.stringify({
+          ...OUTPUTS,
+          backupBucketName: "savia-production-backups",
+          backupRetentionDays: 30,
+        }),
+      ),
+    );
+  });
+
+  it("accepts validated adopted production D1 names and exports them to rendering", () => {
+    const adoptedNames = resolveInfraNames({
+      environment: "production",
+      documentsBucket: "savia-documents",
+      publicOrigin: "https://savia.hefesoft.com",
+      authDatabaseName: "savia-auth-local-canonical-20260913-v2",
+      domainDatabaseName: "savia-agencies-local-canonical-20260913-v2",
+    });
+    const production = {
+      ...OUTPUTS,
+      documentsBucketName: adoptedNames.bucket,
+      resolvedEnvironment: "production",
+      resolvedPublicOrigin: adoptedNames.publicOrigin,
+      workerNames: adoptedNames.workers,
+      databaseNames: adoptedNames.databases,
+      plannedFlowsResourceNames: adoptedNames.flows,
+    };
+    const parsed = parseStackOutputs(JSON.stringify(production));
+    const env = renderEnvFromOutputs(parsed, "/repo");
+    assert.equal(
+      env.SAVIA_AUTH_D1_NAME,
+      "savia-auth-local-canonical-20260913-v2",
+    );
+    assert.equal(
+      env.SAVIA_DOMAIN_D1_NAME,
+      "savia-agencies-local-canonical-20260913-v2",
+    );
+    assert.throws(
+      () =>
+        parseStackOutputs(
+          JSON.stringify({
+            ...production,
+            databaseNames: {
+              auth: "savia-auth-preview",
+              domain: "savia-agencies-local-canonical-20260913-v2",
+            },
+          }),
+        ),
+      /preview database/i,
+    );
   });
 
   it("rejects invalid JSON and missing keys", () => {

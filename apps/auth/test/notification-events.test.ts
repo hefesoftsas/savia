@@ -41,6 +41,83 @@ describe("auth notice source events", () => {
     await env.AUTH_DB.prepare(`DELETE FROM "user" WHERE id=?`).bind("u1").run();
   });
 
+  it("allows concurrent cold starts to install notice triggers", async () => {
+    await env.AUTH_DB.prepare(
+      `INSERT INTO auth_notice_events(id,subject,kind,created_at,expires_at,request_id)
+       VALUES (?,?,?,?,?,?)`,
+    )
+      .bind(
+        "concurrent-existing",
+        "existing",
+        "email-verified",
+        123,
+        null,
+        null,
+      )
+      .run();
+    await env.AUTH_DB.prepare(
+      "DROP TRIGGER IF EXISTS auth_notice_email_verified",
+    ).run();
+    await env.AUTH_DB.prepare(
+      "DROP TRIGGER IF EXISTS auth_notice_two_factor",
+    ).run();
+
+    const results = await Promise.allSettled(
+      Array.from({ length: 8 }, () => ensureAuthNoticeSchema(env.AUTH_DB)),
+    );
+
+    try {
+      expect(results.filter((result) => result.status === "rejected")).toEqual(
+        [],
+      );
+      const preserved = await readAuthNoticeEvents(env.AUTH_DB, null, 10);
+      expect(
+        preserved.some((event) => event.id === "concurrent-existing"),
+      ).toBe(true);
+      await env.AUTH_DB.prepare(
+        `INSERT INTO "user"(id,name,email,emailVerified,image,createdAt,updatedAt,role,twoFactorEnabled)
+         VALUES (?,?,?,?,?,?,?,?,?)`,
+      )
+        .bind(
+          "concurrent-u1",
+          "Test",
+          "concurrent@example.test",
+          0,
+          null,
+          "2026-09-20",
+          "2026-09-20",
+          "user",
+          0,
+        )
+        .run();
+      await env.AUTH_DB.prepare(
+        `UPDATE "user" SET emailVerified=1,twoFactorEnabled=1 WHERE id=?`,
+      )
+        .bind("concurrent-u1")
+        .run();
+      const events = await readAuthNoticeEvents(env.AUTH_DB, null, 10);
+      const concurrentEvents = events.filter(
+        (event) => event.subject === "concurrent-u1",
+      );
+      expect(concurrentEvents).toHaveLength(2);
+      expect(concurrentEvents.map((event) => event.kind).sort()).toEqual([
+        "email-verified",
+        "two-factor-enabled",
+      ]);
+      await env.AUTH_DB.prepare(`DELETE FROM "user" WHERE id=?`)
+        .bind("concurrent-u1")
+        .run();
+    } finally {
+      await env.AUTH_DB.prepare(`DELETE FROM auth_notice_events WHERE id=?`)
+        .bind("concurrent-existing")
+        .run();
+      await env.AUTH_DB.prepare(`DELETE FROM "user" WHERE id=?`)
+        .bind("concurrent-u1")
+        .run();
+      await ensureAuthNoticeSchema(env.AUTH_DB);
+    }
+  });
+
   it("rejects unauthenticated bridge access", async () => {
     const denied = await authWorker.fetch(
       new Request("https://savia-auth.internal/_internal/notification-events/read?limit=10"),

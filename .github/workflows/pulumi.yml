@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - infra/pulumi/**
+      - packages/tenant-host/**
       - .github/actions/**
       - .github/workflows/pulumi.yml
   workflow_dispatch:
@@ -24,6 +25,21 @@ permissions:
   contents: read
 
 jobs:
+  runtime-compatibility:
+    name: Pulumi minimum Node.js runtime
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up minimum supported Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.0.0
+
+      - name: Validate dependency-free output and worker rendering
+        run: node --test infra/pulumi/outputs.test.mjs infra/pulumi/worker-config.test.mjs
+
   unit:
     name: Pulumi unit tests
     runs-on: ubuntu-24.04
@@ -47,7 +63,7 @@ jobs:
 
   preview:
     name: Pulumi preview
-    needs: unit
+    needs: [unit, runtime-compatibility]
     if: ${{ github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-24.04
     concurrency:

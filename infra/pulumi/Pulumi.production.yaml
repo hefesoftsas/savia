@@ -1,8 +1,17 @@
 config:
-  cloudflare:apiToken:
-    fn::secret:
-      ciphertext: ZAQAAAAAAA== # replace with `pulumi config set --secret cloudflare:apiToken`
-  savia-cloudflare:accountId: REPLACE_WITH_ACCOUNT_ID
+  # Adopted production account and existing D1 database names. The state
+  # backend is adopted; review the saved plan before applying changes.
+  # Supply the provider token through CLOUDFLARE_API_TOKEN or encrypted config.
+  savia-cloudflare:accountId: 08a0d36f8b0357684f83e4bfeb6628b6
   savia-cloudflare:environment: production
-  savia-cloudflare:publicOrigin: https://savia.app.hefesoft.com
+  savia-cloudflare:publicOrigin: https://savia.hefesoft.com
+  savia-cloudflare:tenantSubdomains:
+    - savia-team
   savia-cloudflare:documentsBucket: savia-documents
+  savia-cloudflare:authDatabaseName: savia-auth-local-canonical-20260913-v2
+  savia-cloudflare:domainDatabaseName: savia-agencies-local-canonical-20260913-v2
+  savia-cloudflare:stateBucket: savia-pulumi-state
+  savia-cloudflare:backupBucket: savia-production-backups
+  savia-cloudflare:flowsEnabled: "false"
+  savia-cloudflare:flowsExecutionEnabled: "false"
+encryptionsalt: v1:fDSS20NCH60=:v1:8ItBuX966nkME5rI:GWjrCv4OCVypa6kmK1sJK4Ix9GmXyQ==

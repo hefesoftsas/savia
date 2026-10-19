@@ -15,7 +15,7 @@ async function fixture(failMail = false, failFinalize = false) {
   );
   const environment = {
     ...env,
-    SAVIA_API_RESOURCE: "https://savia.app.hefesoft.com",
+    SAVIA_API_RESOURCE: "https://savia.hefesoft.com",
     SAVIA_INTERNAL_BRIDGE_KEY: "email-test",
     SAVIA_IDENTITY: { fetch: finalize },
   };
@@ -61,7 +61,7 @@ async function fixture(failMail = false, failFinalize = false) {
     origin: "http://team.127.0.0.1:8787",
   };
   // Use an allowed tenant host, distinct from the canonical host.
-  body.origin = "https://team.savia.app.hefesoft.com";
+  body.origin = "https://team.savia.hefesoft.com";
   const context = await createBetterAuth(environment).$context;
   return {
     tenantId,
@@ -244,7 +244,7 @@ it("exposes registration only for a ready trusted tenant login", async () => {
     "x-savia-tenant-email-id": String(f.tenantId),
     "x-savia-registration-ready": "true",
   };
-  const path = "https://team.savia.app.hefesoft.com/api/auth/login";
+  const path = "https://team.savia.hefesoft.com/api/auth/login";
   expect(
     await (await f.handler.fetch(new Request(path, { headers }))).text(),
   ).toContain('href="/register"');

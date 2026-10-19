@@ -8,6 +8,12 @@ import { fileURLToPath } from "node:url";
 export function buildSecretUploads(environment, values) {
   if (!["production", "preview"].includes(environment))
     throw new Error("Unsupported deployment environment");
+  if (
+    environment === "production" &&
+    (typeof values.SAVIA_BACKUP_CONTROL_SECRET !== "string" ||
+      values.SAVIA_BACKUP_CONTROL_SECRET.length < 32)
+  )
+    throw new Error("SAVIA_BACKUP_CONTROL_SECRET is required for production");
   const whatsappAppSecret = values.WHATSAPP_META_APP_SECRET?.trim();
   const whatsappVerifyToken = values.WHATSAPP_WEBHOOK_VERIFY_TOKEN?.trim();
   if (Boolean(whatsappAppSecret) !== Boolean(whatsappVerifyToken))
@@ -126,6 +132,8 @@ export function buildSecretUploads(environment, values) {
         return [key, resolved[source]];
       }),
     );
+    if (app === "api" && values.SAVIA_BACKUP_CONTROL_SECRET)
+      secrets.SAVIA_BACKUP_CONTROL_SECRET = values.SAVIA_BACKUP_CONTROL_SECRET;
     if (app === "api" && values.PLUGIN_REGISTRY_TENANTS)
       secrets.PLUGIN_REGISTRY_TENANTS = values.PLUGIN_REGISTRY_TENANTS;
     if (app === "api")
