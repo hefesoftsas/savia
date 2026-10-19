@@ -39,3 +39,21 @@ test("branch operations preserve trusted lifecycle tooling, selected source evid
   assert.doesNotMatch(manual, /checkout --detach/);
   assert.match(quick, /ref: main/);
 });
+
+test("reviewed PR assets are downloaded by the producing job's immutable artifact ID", async () => {
+  const source = await workflow("preview-quickjs");
+  assert.match(
+    source,
+    /artifact_id: \$\{\{ steps\.upload_assets\.outputs\.artifact-id \}\}/,
+  );
+  assert.match(
+    source,
+    /artifact-ids: \$\{\{ needs\.build\.outputs\.artifact_id \}\}/,
+  );
+  assert.match(source, /run-id: \$\{\{ github\.run_id \}\}/);
+  const download = source.slice(
+    source.indexOf("uses: actions/download-artifact@v4"),
+    source.indexOf("- uses: ./.github/actions/install-pulumi"),
+  );
+  assert.doesNotMatch(download, /\n\s+name: reviewed-quickjs-admin-assets/);
+});

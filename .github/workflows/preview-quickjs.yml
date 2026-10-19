@@ -19,6 +19,8 @@ jobs:
         github.event.pull_request.base.ref == 'main' &&
         github.event.label.name == 'quickjs-preview' }}
     name: Build reviewed QuickJS assets without deployment credentials
+    outputs:
+      artifact_id: ${{ steps.upload_assets.outputs.artifact-id }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -35,6 +37,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @savia/admin run build
       - uses: actions/upload-artifact@v4
+        id: upload_assets
         with:
           name: reviewed-quickjs-admin-assets
           path: apps/admin/dist
@@ -92,7 +95,10 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
-          name: reviewed-quickjs-admin-assets
+          artifact-ids: ${{ needs.build.outputs.artifact_id }}
+          repository: ${{ github.repository }}
+          run-id: ${{ github.run_id }}
+          merge-multiple: true
           path: ${{ env.SAVIA_RELEASE_SOURCE_ROOT }}/apps/admin/dist
 
       - uses: ./.github/actions/install-pulumi
