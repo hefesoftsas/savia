@@ -126,3 +126,35 @@ test("managed preview publication receives credentials for private authenticated
   ])
     assert.ok(apply.includes(key + ": ${{ secrets." + key + " }}"), key);
 });
+
+test("accepted standard runtime transactions defer cancellation until Pulumi finishes or recovers", async () => {
+  for (const file of ["deploy-preview", "deploy-cloudflare"]) {
+    const pipeline = await readFile(
+      new URL(`../.github/workflows/${file}.yml`, import.meta.url),
+      "utf8",
+    );
+    const deploy = pipeline.split("\n  deploy:\n")[1];
+    assert.ok(deploy, file);
+    assert.match(deploy.split("    steps:")[0], /always\(\)/);
+    const plan = deploy
+      .split("- name: Review the saved managed runtime plan")[1]
+      .split("- name:")[0];
+    assert.match(plan, /id: runtime_plan/);
+    assert.match(plan, /if: \$\{\{ success\(\) && !cancelled\(\) \}\}/);
+    const preparation = deploy
+      .split("- name: Prepare one immutable runtime release")[1]
+      .split("- name:")[0];
+    assert.match(preparation, /if: \$\{\{ success\(\) && !cancelled\(\) \}\}/);
+    const apply = deploy
+      .split("- name: Apply the exact managed runtime plan")[1]
+      .split("- name:")[0];
+    assert.match(
+      apply,
+      /if: \$\{\{ always\(\) && !failure\(\) && steps\.runtime_plan\.outcome == 'success' \}\}/,
+    );
+    const content = deploy
+      .split("- name: Deploy release plugin ZIPs to all workspaces")[1]
+      .split("- name:")[0];
+    assert.match(content, /if: \$\{\{ success\(\) && !cancelled\(\) \}\}/);
+  }
+});

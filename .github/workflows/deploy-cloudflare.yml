@@ -45,7 +45,7 @@ jobs:
 
   deploy:
     needs: verify
-    if: ${{ vars.PRODUCTION_OPERATIONS_ENABLED == 'true' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && needs.verify.result == 'success' }}
+    if: ${{ vars.PRODUCTION_OPERATIONS_ENABLED == 'true' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && needs.verify.result == 'success' && always() }}
     name: Deploy production
     runs-on: ubuntu-24.04
     environment: production
@@ -54,11 +54,13 @@ jobs:
       SAVIA_BACKUP_ENVIRONMENT: production
     steps:
       - name: Check out source
+        if: ${{ success() && !cancelled() }}
         uses: actions/checkout@v4
         with:
           ref: ${{ github.sha }}
 
       - name: Reject superseded deployments
+        if: ${{ success() && !cancelled() }}
         shell: bash
         run: |
           approved_sha="$(git rev-parse HEAD)"
@@ -69,20 +71,24 @@ jobs:
           fi
 
       - name: Set up pnpm
+        if: ${{ success() && !cancelled() }}
         uses: pnpm/action-setup@v4
         with:
           version: 11.24.0
 
       - name: Set up Node.js
+        if: ${{ success() && !cancelled() }}
         uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: pnpm
 
       - name: Install dependencies
+        if: ${{ success() && !cancelled() }}
         run: pnpm install --frozen-lockfile
 
       - name: Load infrastructure stack outputs
+        if: ${{ success() && !cancelled() }}
         id: infrastructure
         uses: ./.github/actions/pulumi-infrastructure
         with:
@@ -102,6 +108,7 @@ jobs:
           OPENROUTER_MODEL: ${{ vars.OPENROUTER_MODEL }}
 
       - name: Run the production readiness preflight before any mutation
+        if: ${{ success() && !cancelled() }}
         run: node infra/pulumi/production-preflight.mjs
         env:
           PULUMI_BACKEND_URL: ${{ secrets.PULUMI_BACKEND_URL }}
@@ -118,6 +125,7 @@ jobs:
           SAVIA_FLOWS_FORM_SIGNING_KEY: ${{ secrets.SAVIA_FLOWS_FORM_SIGNING_KEY }}
 
       - name: Validate planned production Flows settings and secrets
+        if: ${{ success() && !cancelled() }}
         run: node infra/pulumi/flows-preflight.mjs --stack production
         env:
           SAVIA_FLOWS_PROVISIONED: ${{ env.SAVIA_FLOWS_PROVISIONED }}
@@ -132,6 +140,7 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_STATE_SECRET_ACCESS_KEY }}
 
       - name: Prepare one immutable runtime release
+        if: ${{ success() && !cancelled() }}
         run: node infra/pulumi/prepare-release.mjs --environment production --out "$RUNNER_TEMP/savia-release"
         env:
           PULUMI_BACKEND_URL: ${{ secrets.PULUMI_BACKEND_URL }}
@@ -150,6 +159,8 @@ jobs:
           NODE_OPTIONS: "--max-old-space-size=1536"
 
       - name: Review the saved managed runtime plan
+        if: ${{ success() && !cancelled() }}
+        id: runtime_plan
         run: node infra/pulumi/environment.mjs plan --environment production --artifact "$RUNNER_TEMP/savia-release" --plan "$RUNNER_TEMP/savia-release-plan.json"
         env:
           PULUMI_BACKEND_URL: ${{ secrets.PULUMI_BACKEND_URL }}
@@ -202,6 +213,7 @@ jobs:
 
       - name: Apply the exact managed runtime plan
         id: managed_runtime
+        if: ${{ always() && !failure() && steps.runtime_plan.outcome == 'success' }}
         run: node infra/pulumi/environment.mjs apply --environment production --artifact "$RUNNER_TEMP/savia-release" --plan "$RUNNER_TEMP/savia-release-plan.json" --apply
         env:
           PULUMI_BACKEND_URL: ${{ secrets.PULUMI_BACKEND_URL }}
@@ -253,6 +265,7 @@ jobs:
           PRODUCTION_OPERATIONS_ENABLED: ${{ vars.PRODUCTION_OPERATIONS_ENABLED }}
 
       - name: Deploy release plugin ZIPs to all workspaces
+        if: ${{ success() && !cancelled() }}
         run: node scripts/deploy-store-plugins.mjs
         env:
           SAVIA_DEPLOY_ENVIRONMENT: production

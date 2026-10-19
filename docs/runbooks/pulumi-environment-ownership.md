@@ -57,6 +57,16 @@ Provider recovery handles publication failures; CI never starts a competing
 restore. Flows policy refresh observes persisted pauses after recovery. An
 intentionally execution-disabled profile remains valid.
 
+Standard Preview/production deployment jobs defer normal GitHub cancellation
+once their exact runtime plan has succeeded: the guarded apply step finishes
+publication or provider recovery before stopping. Cancellation before or during
+planning skips application. This uses GitHub's documented
+[job and step cancellation conditions](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-cancellation),
+with all production, trigger and dependency gates preserved. Force cancellation,
+runner loss and job timeout can still interrupt a transaction; retain private
+recovery evidence and reconcile the checkpoint and live versions before retrying.
+An interrupted transaction must not be treated as a verified release.
+
 Branch commands retain trusted lifecycle tooling and renderers from `main`.
 Selected code is pinned separately. Labeled PR asset builds run in a separate
 job without deployment secrets, and the deployment job uses the resulting
