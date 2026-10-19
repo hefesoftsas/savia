@@ -13,6 +13,11 @@ on:
         type: choice
         options: [deploy, destroy]
         default: deploy
+      delete_data:
+        description: "Permanently delete branch persistence when destroying"
+        required: false
+        type: boolean
+        default: false
       confirm:
         description: "For destroy: repeat the branch name to confirm"
         required: false
@@ -66,7 +71,9 @@ jobs:
                 echo "::error::Preview source must already belong to the trusted main history."
                 exit 1
               fi
-              git -c core.hooksPath=/dev/null checkout --detach "$target_sha"
+              git -c core.hooksPath=/dev/null worktree add --detach "$RUNNER_TEMP/savia-release-source" "$target_sha"
+              echo "SAVIA_RELEASE_SOURCE_ROOT=$RUNNER_TEMP/savia-release-source" >> "$GITHUB_ENV"
+              echo "SAVIA_RELEASE_SOURCE_SHA=$target_sha" >> "$GITHUB_ENV"
               ;;
             destroy)
               # Keep trusted main tooling; cleanup also works after branch deletion.
@@ -91,6 +98,16 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Install selected source dependencies without deployment credentials
+        if: ${{ inputs.action == 'deploy' }}
+        working-directory: ${{ env.SAVIA_RELEASE_SOURCE_ROOT }}
+        run: pnpm install --frozen-lockfile
+
+      - name: Build selected source assets without deployment credentials
+        if: ${{ inputs.action == 'deploy' }}
+        working-directory: ${{ env.SAVIA_RELEASE_SOURCE_ROOT }}
+        run: pnpm --filter @savia/admin run build
+
       - uses: ./.github/actions/install-pulumi
 
       - name: Refuse unconfirmed destroy
@@ -103,6 +120,7 @@ jobs:
         if: ${{ inputs.action == 'deploy' }}
         run: node scripts/preview-deploy.mjs --branch "$PREVIEW_BRANCH"
         env:
+          SAVIA_RELEASE_ASSETS_PREBUILT: "true"
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           PULUMI_BACKEND_URL: ${{ secrets.PULUMI_BACKEND_URL }}
@@ -112,8 +130,12 @@ jobs:
 
       - name: Destroy preview environment
         if: ${{ inputs.action == 'destroy' && inputs.confirm == inputs.branch }}
-        run: node scripts/preview-destroy.mjs --branch "$PREVIEW_BRANCH" --force
+        run: |
+          args=(--branch "$PREVIEW_BRANCH" --force)
+          if [ "$DELETE_DATA" = true ]; then args+=(--delete-data); fi
+          node scripts/preview-destroy.mjs "${args[@]}"
         env:
+          DELETE_DATA: ${{ inputs.delete_data }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           PULUMI_BACKEND_URL: ${{ secrets.PULUMI_BACKEND_URL }}

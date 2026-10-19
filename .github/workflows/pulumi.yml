@@ -18,8 +18,16 @@ on:
       operation:
         description: Preview or apply the saved infrastructure plan
         type: choice
-        options: [preview, apply]
+        options: [preview, apply, ownership-audit, ownership-migrate]
         default: preview
+      audit_run_id:
+        description: Successful ownership-audit run for this exact main commit (migration only)
+        required: false
+        type: string
+      original_workflows:
+        description: Reviewed JSON array of original mutating workflow IDs, paths and states (migration only)
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -64,7 +72,7 @@ jobs:
   preview:
     name: Pulumi preview
     needs: [unit, runtime-compatibility]
-    if: ${{ github.event_name == 'workflow_dispatch' && (inputs.stack == 'preview' || (inputs.stack == 'production' && vars.PRODUCTION_OPERATIONS_ENABLED == 'true' && github.ref == 'refs/heads/main')) }}
+    if: ${{ github.event_name == 'workflow_dispatch' && (inputs.operation == 'preview' || inputs.operation == 'apply') && (inputs.stack == 'preview' || (inputs.stack == 'production' && vars.PRODUCTION_OPERATIONS_ENABLED == 'true' && github.ref == 'refs/heads/main')) }}
     runs-on: ubuntu-24.04
     concurrency:
       group: savia-${{ inputs.stack }}
@@ -108,3 +116,95 @@ jobs:
           SAVIA_INFRA_STACK: ${{ inputs.stack }}
           SAVIA_INFRA_OPERATION: ${{ inputs.operation }}
         run: node infra/pulumi/deploy-stack.mjs --stack "$SAVIA_INFRA_STACK" "--$SAVIA_INFRA_OPERATION"
+
+  ownership:
+    name: Audit or migrate environment ownership
+    needs: [unit, runtime-compatibility]
+    if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && (inputs.operation == 'ownership-audit' || inputs.operation == 'ownership-migrate') && vars.PRODUCTION_OPERATIONS_ENABLED != 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    environment: preview
+    permissions:
+      contents: read
+      actions: write
+    concurrency:
+      group: savia-environment-ownership
+      cancel-in-progress: false
+    env:
+      PNPM_CONFIG_STRICT_DEP_BUILDS: "false"
+      GH_TOKEN: ${{ github.token }}
+      PRODUCTION_OPERATIONS_ENABLED: ${{ vars.PRODUCTION_OPERATIONS_ENABLED }}
+      PULUMI_BACKEND_URL: ${{ secrets.PULUMI_BACKEND_URL }}
+      PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.R2_STATE_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_STATE_SECRET_ACCESS_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.24.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - uses: ./.github/actions/install-pulumi
+      - name: Audit actual metadata and readable checkpoints
+        if: ${{ inputs.operation == 'ownership-audit' }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/savia-ownership"
+          export TMPDIR="$RUNNER_TEMP/savia-ownership"
+          node infra/pulumi/environment-ownership.mjs audit --out "$RUNNER_TEMP/savia-ownership/audit"
+      - name: Preserve reviewed metadata without checkpoint bodies
+        if: ${{ inputs.operation == 'ownership-audit' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: environment-ownership-audit
+          path: ${{ runner.temp }}/savia-ownership/audit/audit.json
+          retention-days: 7
+      - name: Verify the exact successful audit revision
+        if: ${{ inputs.operation == 'ownership-migrate' }}
+        env:
+          AUDIT_RUN_ID: ${{ inputs.audit_run_id }}
+        run: |
+          set -euo pipefail
+          [[ "$AUDIT_RUN_ID" =~ ^[0-9]+$ ]]
+          workflow_id="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/pulumi.yml" --jq .id)"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$AUDIT_RUN_ID" > "$RUNNER_TEMP/ownership-audit-run.json"
+          node --input-type=module - "$workflow_id" <<'NODE'
+          import {readFileSync} from 'node:fs';
+          const run=JSON.parse(readFileSync(process.env.RUNNER_TEMP+'/ownership-audit-run.json','utf8'));
+          if(run.head_sha!==process.env.GITHUB_SHA||run.head_branch!=='main'||run.event!=='workflow_dispatch'||run.conclusion!=='success'||String(run.workflow_id)!==process.argv[2])throw new Error('Audit must succeed for this exact main revision');
+          NODE
+          gh run download "$AUDIT_RUN_ID" --repo "$GITHUB_REPOSITORY" --name environment-ownership-audit --dir "$RUNNER_TEMP/reviewed-ownership"
+      - name: Move exact backend ownership and adopt without publication
+        if: ${{ inputs.operation == 'ownership-migrate' }}
+        env:
+          SAVIA_ORIGINAL_WORKFLOWS: ${{ inputs.original_workflows }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/savia-ownership"
+          export TMPDIR="$RUNNER_TEMP/savia-ownership"
+          node infra/pulumi/environment-ownership.mjs migrate --out "$RUNNER_TEMP/savia-ownership/migration" --reviewed "$RUNNER_TEMP/reviewed-ownership/audit.json"
+      - name: Encrypt private custody and recovery evidence
+        if: ${{ always() }}
+        env:
+          SAVIA_FLOWS_BACKUP_KEY: ${{ secrets.SAVIA_FLOWS_BACKUP_KEY }}
+        run: |
+          if [ -d "$RUNNER_TEMP/savia-ownership" ]; then
+            tar -czf "$RUNNER_TEMP/savia-ownership.tar.gz" -C "$RUNNER_TEMP" savia-ownership
+            node scripts/encrypt-flows-backup.mjs --action encrypt --input "$RUNNER_TEMP/savia-ownership.tar.gz" --output "$RUNNER_TEMP/savia-ownership.enc"
+            rm -f "$RUNNER_TEMP/savia-ownership.tar.gz"
+          fi
+      - name: Preserve encrypted private evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: environment-ownership-private
+          path: ${{ runner.temp }}/savia-ownership.enc
+          retention-days: 7
+          if-no-files-found: ignore

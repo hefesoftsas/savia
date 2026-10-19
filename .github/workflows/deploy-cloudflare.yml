@@ -45,7 +45,7 @@ jobs:
 
   deploy:
     needs: verify
-    if: ${{ vars.PRODUCTION_OPERATIONS_ENABLED == 'true' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && needs.verify.result == 'success' }}
+    if: ${{ vars.PRODUCTION_OPERATIONS_ENABLED == 'true' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && needs.verify.result == 'success' && always() }}
     name: Deploy production
     runs-on: ubuntu-24.04
     environment: production
@@ -54,11 +54,13 @@ jobs:
       SAVIA_BACKUP_ENVIRONMENT: production
     steps:
       - name: Check out source
+        if: ${{ success() && !cancelled() }}
         uses: actions/checkout@v4
         with:
           ref: ${{ github.sha }}
 
       - name: Reject superseded deployments
+        if: ${{ success() && !cancelled() }}
         shell: bash
         run: |
           approved_sha="$(git rev-parse HEAD)"
@@ -69,20 +71,24 @@ jobs:
           fi
 
       - name: Set up pnpm
+        if: ${{ success() && !cancelled() }}
         uses: pnpm/action-setup@v4
         with:
           version: 11.24.0
 
       - name: Set up Node.js
+        if: ${{ success() && !cancelled() }}
         uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: pnpm
 
       - name: Install dependencies
+        if: ${{ success() && !cancelled() }}
         run: pnpm install --frozen-lockfile
 
       - name: Load infrastructure stack outputs
+        if: ${{ success() && !cancelled() }}
         id: infrastructure
         uses: ./.github/actions/pulumi-infrastructure
         with:
@@ -102,6 +108,7 @@ jobs:
           OPENROUTER_MODEL: ${{ vars.OPENROUTER_MODEL }}
 
       - name: Run the production readiness preflight before any mutation
+        if: ${{ success() && !cancelled() }}
         run: node infra/pulumi/production-preflight.mjs
         env:
           PULUMI_BACKEND_URL: ${{ secrets.PULUMI_BACKEND_URL }}
@@ -118,6 +125,7 @@ jobs:
           SAVIA_FLOWS_FORM_SIGNING_KEY: ${{ secrets.SAVIA_FLOWS_FORM_SIGNING_KEY }}
 
       - name: Validate planned production Flows settings and secrets
+        if: ${{ success() && !cancelled() }}
         run: node infra/pulumi/flows-preflight.mjs --stack production
         env:
           SAVIA_FLOWS_PROVISIONED: ${{ env.SAVIA_FLOWS_PROVISIONED }}
@@ -131,111 +139,9 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_STATE_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_STATE_SECRET_ACCESS_KEY }}
 
-      - name: Capture canonical domain Worker recovery state
-        id: capture_domain_recovery
-        run: node scripts/canonical-domain-recovery.mjs --capture "$RUNNER_TEMP/canonical-domain-recovery.json"
-        env:
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-
-      - name: Capture production Worker recovery state
-        id: capture_recovery
-        if: env.SAVIA_FLOWS_PROVISIONED == 'true'
-        run: node scripts/flows-preview-recovery.mjs --action capture --environment production --metadata "$RUNNER_TEMP/flows-production-recovery.json" --apply
-        env:
-          SAVIA_DEPLOY_ENVIRONMENT: production
-          SAVIA_FLOWS_PROVISIONED: ${{ env.SAVIA_FLOWS_PROVISIONED }}
-          SAVIA_FLOWS_RESOURCES: ${{ env.SAVIA_FLOWS_RESOURCES }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-
-      - name: Deploy savia backup coordinator
-        uses: cloudflare/wrangler-action@v4
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: deploy --config wrangler.production.jsonc
-          workingDirectory: apps/backup-coordinator
-          wranglerVersion: 4.127.1
-
-      - name: Pause production Savia writes for persistence backup
-        id: pause_agencies
-        if: env.SAVIA_FLOWS_PROVISIONED == 'true'
-        uses: cloudflare/wrangler-action@v4
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: deploy --config wrangler.production.jsonc --var SAVIA_MAINTENANCE:true
-          workingDirectory: apps/api
-          wranglerVersion: 4.127.1
-
-      - name: Pause existing production Flows
-        id: pause_flows
-        if: env.SAVIA_FLOWS_PROVISIONED == 'true'
-        uses: cloudflare/wrangler-action@v4
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: deploy --config wrangler.production.jsonc --var SAVIA_FLOWS_EXECUTION_ENABLED:false --var SAVIA_FLOWS_MAINTENANCE:true
-          workingDirectory: apps/flows/api
-          wranglerVersion: 4.127.1
-
-      - name: Allow existing production requests to drain
-        if: env.SAVIA_FLOWS_PROVISIONED == 'true'
-        run: node --input-type=module -e 'await new Promise(resolve => setTimeout(resolve, 45000))'
-
-      - name: Snapshot production Flows Durable Object databases
-        if: env.SAVIA_FLOWS_PROVISIONED == 'true'
-        run: node scripts/flows-maintenance.mjs --action backup --snapshot-file "$RUNNER_TEMP/flows-snapshot.json" --apply
-        env:
-          SAVIA_DEPLOY_ENVIRONMENT: production
-          SAVIA_PUBLIC_ORIGIN: ${{ env.SAVIA_PUBLIC_ORIGIN }}
-          SAVIA_FLOWS_BRIDGE_SECRET: ${{ secrets.SAVIA_FLOWS_BRIDGE_SECRET }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-
-      - name: Capture production backup before apply
-        if: env.SAVIA_FLOWS_PROVISIONED != 'true'
-        run: node scripts/production-backup.mjs --artifact "$RUNNER_TEMP/flows-release-backup.enc" --work-root "$RUNNER_TEMP"
-        env:
-          PULUMI_BACKEND_URL: ${{ secrets.PULUMI_BACKEND_URL }}
-          PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
-          AWS_ACCESS_KEY_ID: ${{ secrets.R2_STATE_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_STATE_SECRET_ACCESS_KEY }}
-          SAVIA_BACKUP_R2_FORCE_API: "true"
-          SAVIA_BACKUP_KEY: ${{ secrets.SAVIA_BACKUP_KEY }}
-          SAVIA_BACKUP_CONTROL_SECRET: ${{ secrets.SAVIA_BACKUP_CONTROL_SECRET }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-
-      - name: Capture production backup with existing Flows snapshot
-        if: env.SAVIA_FLOWS_PROVISIONED == 'true'
-        run: node scripts/production-backup.mjs --artifact "$RUNNER_TEMP/flows-release-backup.enc" --work-root "$RUNNER_TEMP" --flows-snapshot "$RUNNER_TEMP/flows-snapshot.json"
-        env:
-          PULUMI_BACKEND_URL: ${{ secrets.PULUMI_BACKEND_URL }}
-          PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
-          AWS_ACCESS_KEY_ID: ${{ secrets.R2_STATE_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_STATE_SECRET_ACCESS_KEY }}
-          SAVIA_BACKUP_R2_FORCE_API: "true"
-          SAVIA_BACKUP_KEY: ${{ secrets.SAVIA_BACKUP_KEY }}
-          SAVIA_BACKUP_CONTROL_SECRET: ${{ secrets.SAVIA_BACKUP_CONTROL_SECRET }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-
-      - name: Retain and verify encrypted production recovery archive in private R2
-        run: node scripts/production-backup-r2.mjs --artifact "$RUNNER_TEMP/flows-release-backup.enc" --kind release
-        env:
-          SAVIA_DEPLOY_ENVIRONMENT: production
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          R2_BACKUP_ACCESS_KEY_ID: ${{ secrets.R2_BACKUP_ACCESS_KEY_ID }}
-          R2_BACKUP_SECRET_ACCESS_KEY: ${{ secrets.R2_BACKUP_SECRET_ACCESS_KEY }}
-
-      - name: Remove plaintext production backup material
-        if: always()
-        run: rm -rf "$RUNNER_TEMP/flows-release-backup.enc" "$RUNNER_TEMP/flows-release-backup" "$RUNNER_TEMP/flows-snapshot.json" "$RUNNER_TEMP/flows-release-backup.tar.gz"
-
-      - name: Apply infrastructure before Worker deployment
-        run: node infra/pulumi/deploy-stack.mjs --stack production --apply
+      - name: Prepare one immutable runtime release
+        if: ${{ success() && !cancelled() }}
+        run: node infra/pulumi/prepare-release.mjs --environment production --out "$RUNNER_TEMP/savia-release"
         env:
           PULUMI_BACKEND_URL: ${{ secrets.PULUMI_BACKEND_URL }}
           PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
@@ -243,28 +149,33 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_STATE_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_STATE_SECRET_ACCESS_KEY }}
-
-      - name: Render applied infrastructure outputs
-        run: node infra/pulumi/render-from-outputs.mjs --stack production
-        env:
-          PULUMI_BACKEND_URL: ${{ secrets.PULUMI_BACKEND_URL }}
-          PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          AWS_ACCESS_KEY_ID: ${{ secrets.R2_STATE_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_STATE_SECRET_ACCESS_KEY }}
-          OPENROUTER_MODEL: ${{ vars.OPENROUTER_MODEL }}
           NANGO_JIRA_INTEGRATION_ID: ${{ vars.NANGO_JIRA_INTEGRATION_ID }}
           NANGO_GITHUB_INTEGRATION_ID: ${{ vars.NANGO_GITHUB_INTEGRATION_ID }}
           NANGO_ZOOM_INTEGRATION_ID: ${{ vars.NANGO_ZOOM_INTEGRATION_ID }}
           NANGO_SLACK_INTEGRATION_ID: ${{ vars.NANGO_SLACK_INTEGRATION_ID }}
           NANGO_MICROSOFT_TEAMS_INTEGRATION_ID: ${{ vars.NANGO_MICROSOFT_TEAMS_INTEGRATION_ID }}
+          OPENROUTER_MODEL: ${{ vars.OPENROUTER_MODEL }}
+          PRODUCTION_OPERATIONS_ENABLED: ${{ vars.PRODUCTION_OPERATIONS_ENABLED }}
+          NODE_OPTIONS: "--max-old-space-size=1536"
 
-      - name: Upload secrets using explicit environment configuration
-        run: node scripts/upload-cloudflare-secrets.mjs
+      - name: Review the saved managed runtime plan
+        if: ${{ success() && !cancelled() }}
+        id: runtime_plan
+        run: node infra/pulumi/environment.mjs plan --environment production --artifact "$RUNNER_TEMP/savia-release" --plan "$RUNNER_TEMP/savia-release-plan.json"
         env:
-          SAVIA_DEPLOY_ENVIRONMENT: production
+          PULUMI_BACKEND_URL: ${{ secrets.PULUMI_BACKEND_URL }}
+          PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_STATE_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_STATE_SECRET_ACCESS_KEY }}
+          NANGO_JIRA_INTEGRATION_ID: ${{ vars.NANGO_JIRA_INTEGRATION_ID }}
+          NANGO_GITHUB_INTEGRATION_ID: ${{ vars.NANGO_GITHUB_INTEGRATION_ID }}
+          NANGO_ZOOM_INTEGRATION_ID: ${{ vars.NANGO_ZOOM_INTEGRATION_ID }}
+          NANGO_SLACK_INTEGRATION_ID: ${{ vars.NANGO_SLACK_INTEGRATION_ID }}
+          NANGO_MICROSOFT_TEAMS_INTEGRATION_ID: ${{ vars.NANGO_MICROSOFT_TEAMS_INTEGRATION_ID }}
+          OPENROUTER_MODEL: ${{ vars.OPENROUTER_MODEL }}
+          SAVIA_DEPLOY_ENVIRONMENT: production
           SAVIA_BACKUP_CONTROL_SECRET: ${{ secrets.SAVIA_BACKUP_CONTROL_SECRET }}
           BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
           SAVIA_MCP_SHARED_SECRET: ${{ secrets.SAVIA_MCP_SHARED_SECRET }}
@@ -275,7 +186,6 @@ jobs:
           PLUGIN_REGISTRY_TENANTS: ${{ secrets.PLUGIN_REGISTRY_TENANTS }}
           NANGO_API_KEY: ${{ secrets.NANGO_API_KEY }}
           NANGO_FALLBACK_API_KEY: ${{ secrets.NANGO_FALLBACK_API_KEY }}
-          NANGO_JIRA_INTEGRATION_ID: ${{ vars.NANGO_JIRA_INTEGRATION_ID }}
           NANGO_JIRA_REPORTING_CONNECTION_ID: ${{ secrets.NANGO_JIRA_REPORTING_CONNECTION_ID }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           WHATSAPP_META_APP_SECRET: ${{ secrets.WHATSAPP_META_APP_SECRET }}
@@ -293,154 +203,72 @@ jobs:
           SAVIA_GOOGLE_CLIENT_SECRET: ${{ secrets.SAVIA_GOOGLE_CLIENT_SECRET }}
           SAVIA_MICROSOFT_CLIENT_ID: ${{ secrets.SAVIA_MICROSOFT_CLIENT_ID }}
           SAVIA_MICROSOFT_CLIENT_SECRET: ${{ secrets.SAVIA_MICROSOFT_CLIENT_SECRET }}
+          SAVIA_BACKUP_KEY: ${{ secrets.SAVIA_BACKUP_KEY }}
+          SAVIA_FLOWS_BACKUP_KEY: ${{ secrets.SAVIA_FLOWS_BACKUP_KEY }}
+          SAVIA_BACKUP_R2_FORCE_API: "true"
+          R2_BACKUP_ACCESS_KEY_ID: ${{ secrets.R2_BACKUP_ACCESS_KEY_ID }}
+          R2_BACKUP_SECRET_ACCESS_KEY: ${{ secrets.R2_BACKUP_SECRET_ACCESS_KEY }}
+          SAVIA_RUNTIME_OPERATION_DIRECTORY: ${{ runner.temp }}/savia-runtime
+          PRODUCTION_OPERATIONS_ENABLED: ${{ vars.PRODUCTION_OPERATIONS_ENABLED }}
 
-      - name: Deploy private Savia FastMCP
-        uses: cloudflare/wrangler-action@v4
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: deploy --config wrangler.production.jsonc
-          workingDirectory: apps/mcp
-          wranglerVersion: 4.127.1
-
-      - name: Apply Savia domain migrations
-        run: node scripts/apply-d1-migrations.mjs
+      - name: Apply the exact managed runtime plan
+        id: managed_runtime
+        if: ${{ always() && !failure() && steps.runtime_plan.outcome == 'success' }}
+        run: node infra/pulumi/environment.mjs apply --environment production --artifact "$RUNNER_TEMP/savia-release" --plan "$RUNNER_TEMP/savia-release-plan.json" --apply
         env:
+          PULUMI_BACKEND_URL: ${{ secrets.PULUMI_BACKEND_URL }}
+          PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_DATABASE_ID: ${{ env.SAVIA_DOMAIN_D1_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-
-      - name: Deploy private QuickJS hook executor
-        uses: cloudflare/wrangler-action@v4
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: deploy --config wrangler.production.jsonc
-          workingDirectory: apps/hook-executor
-          wranglerVersion: 4.127.1
-
-      - name: Apply production Flows D1 migrations
-        if: env.SAVIA_FLOWS_PLANNED == 'true'
-        uses: cloudflare/wrangler-action@v4
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: d1 migrations apply savia-flows --remote --config wrangler.production.jsonc
-          workingDirectory: apps/flows/api
-          wranglerVersion: 4.127.1
-
-      - name: Deploy private Savia Flows
-        if: env.SAVIA_FLOWS_PLANNED == 'true'
-        uses: cloudflare/wrangler-action@v4
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: deploy --config wrangler.production.jsonc
-          workingDirectory: apps/flows/api
-          wranglerVersion: 4.127.1
-
-      - name: Deploy savia-agencies
-        uses: cloudflare/wrangler-action@v4
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: deploy --config wrangler.production.jsonc
-          workingDirectory: apps/api
-          wranglerVersion: 4.127.1
-
-      - name: Deploy savia-auth
-        uses: cloudflare/wrangler-action@v4
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: deploy --config wrangler.production.jsonc
-          workingDirectory: apps/auth
-          wranglerVersion: 4.127.1
-
-      - name: Deploy private Savia request
-        uses: cloudflare/wrangler-action@v4
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: deploy --config wrangler.production.jsonc
-          workingDirectory: apps/savia-request
-          wranglerVersion: 4.127.1
-
-      - name: Deploy private Savia connectors
-        uses: cloudflare/wrangler-action@v4
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: deploy --config wrangler.production.jsonc
-          workingDirectory: apps/connector-gateway
-          wranglerVersion: 4.127.1
-
-      - name: Verify production Flows private bindings and policy
-        run: node scripts/verify-flows-preview.mjs
-        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_STATE_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_STATE_SECRET_ACCESS_KEY }}
+          NANGO_JIRA_INTEGRATION_ID: ${{ vars.NANGO_JIRA_INTEGRATION_ID }}
+          NANGO_GITHUB_INTEGRATION_ID: ${{ vars.NANGO_GITHUB_INTEGRATION_ID }}
+          NANGO_ZOOM_INTEGRATION_ID: ${{ vars.NANGO_ZOOM_INTEGRATION_ID }}
+          NANGO_SLACK_INTEGRATION_ID: ${{ vars.NANGO_SLACK_INTEGRATION_ID }}
+          NANGO_MICROSOFT_TEAMS_INTEGRATION_ID: ${{ vars.NANGO_MICROSOFT_TEAMS_INTEGRATION_ID }}
+          OPENROUTER_MODEL: ${{ vars.OPENROUTER_MODEL }}
           SAVIA_DEPLOY_ENVIRONMENT: production
-          SAVIA_FLOWS_PROVISIONED: ${{ env.SAVIA_FLOWS_PLANNED }}
-          SAVIA_FLOWS_EXECUTION_ENABLED: ${{ env.SAVIA_FLOWS_PLANNED_EXECUTION_ENABLED }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-
-      - name: Build admin assets
-        run: pnpm --filter @savia/admin run build:assets
-        env:
-          NODE_OPTIONS: "--max-old-space-size=1536"
-
-      - name: Release temporary canonical domain bridge
-        run: node scripts/finalize-domain-transition.mjs
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-
-      - name: Deploy savia gateway
-        uses: cloudflare/wrangler-action@v4
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: --cwd ../admin deploy --config wrangler.production.jsonc
-          workingDirectory: apps/api
-          wranglerVersion: 4.127.1
+          SAVIA_BACKUP_CONTROL_SECRET: ${{ secrets.SAVIA_BACKUP_CONTROL_SECRET }}
+          BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
+          SAVIA_MCP_SHARED_SECRET: ${{ secrets.SAVIA_MCP_SHARED_SECRET }}
+          SAVIA_REQUEST_ENCRYPTION_KEY: ${{ secrets.SAVIA_REQUEST_ENCRYPTION_KEY }}
+          EXTENSION_CONNECTIONS_ENCRYPTION_KEY: ${{ secrets.EXTENSION_CONNECTIONS_ENCRYPTION_KEY }}
+          ASSISTANT_SETTINGS_ENCRYPTION_KEY: ${{ secrets.ASSISTANT_SETTINGS_ENCRYPTION_KEY }}
+          CRM_INTEGRATION_KEY: ${{ secrets.CRM_INTEGRATION_KEY }}
+          PLUGIN_REGISTRY_TENANTS: ${{ secrets.PLUGIN_REGISTRY_TENANTS }}
+          NANGO_API_KEY: ${{ secrets.NANGO_API_KEY }}
+          NANGO_FALLBACK_API_KEY: ${{ secrets.NANGO_FALLBACK_API_KEY }}
+          NANGO_JIRA_REPORTING_CONNECTION_ID: ${{ secrets.NANGO_JIRA_REPORTING_CONNECTION_ID }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          WHATSAPP_META_APP_SECRET: ${{ secrets.WHATSAPP_META_APP_SECRET }}
+          WHATSAPP_WEBHOOK_VERIFY_TOKEN: ${{ secrets.WHATSAPP_WEBHOOK_VERIFY_TOKEN }}
+          SAVIA_FLOWS_BRIDGE_SECRET: ${{ env.SAVIA_FLOWS_PLANNED == 'true' && secrets.SAVIA_FLOWS_BRIDGE_SECRET || '' }}
+          SAVIA_FLOWS_JWT_SECRET: ${{ env.SAVIA_FLOWS_PLANNED == 'true' && secrets.SAVIA_FLOWS_JWT_SECRET || '' }}
+          SAVIA_FLOWS_SECRET_MASTER_KEY: ${{ env.SAVIA_FLOWS_PLANNED == 'true' && secrets.SAVIA_FLOWS_SECRET_MASTER_KEY || '' }}
+          SAVIA_FLOWS_FORM_SIGNING_KEY: ${{ env.SAVIA_FLOWS_PLANNED == 'true' && secrets.SAVIA_FLOWS_FORM_SIGNING_KEY || '' }}
+          SQL_BRIDGE_URL: ${{ secrets.SQL_BRIDGE_URL }}
+          SQL_BRIDGE_SECRET: ${{ secrets.SQL_BRIDGE_SECRET }}
+          SAVIA_CHATGPT_CLIENT_ID: ${{ secrets.SAVIA_CHATGPT_CLIENT_ID }}
+          SAVIA_CHATGPT_CLIENT_SECRET: ${{ secrets.SAVIA_CHATGPT_CLIENT_SECRET }}
+          SAVIA_CHATGPT_TOKEN_AUTH_METHOD: ${{ vars.SAVIA_CHATGPT_TOKEN_AUTH_METHOD }}
+          SAVIA_GOOGLE_CLIENT_ID: ${{ secrets.SAVIA_GOOGLE_CLIENT_ID }}
+          SAVIA_GOOGLE_CLIENT_SECRET: ${{ secrets.SAVIA_GOOGLE_CLIENT_SECRET }}
+          SAVIA_MICROSOFT_CLIENT_ID: ${{ secrets.SAVIA_MICROSOFT_CLIENT_ID }}
+          SAVIA_MICROSOFT_CLIENT_SECRET: ${{ secrets.SAVIA_MICROSOFT_CLIENT_SECRET }}
+          SAVIA_BACKUP_KEY: ${{ secrets.SAVIA_BACKUP_KEY }}
+          SAVIA_FLOWS_BACKUP_KEY: ${{ secrets.SAVIA_FLOWS_BACKUP_KEY }}
+          SAVIA_BACKUP_R2_FORCE_API: "true"
+          R2_BACKUP_ACCESS_KEY_ID: ${{ secrets.R2_BACKUP_ACCESS_KEY_ID }}
+          R2_BACKUP_SECRET_ACCESS_KEY: ${{ secrets.R2_BACKUP_SECRET_ACCESS_KEY }}
+          SAVIA_RUNTIME_OPERATION_DIRECTORY: ${{ runner.temp }}/savia-runtime
+          PRODUCTION_OPERATIONS_ENABLED: ${{ vars.PRODUCTION_OPERATIONS_ENABLED }}
 
       - name: Deploy release plugin ZIPs to all workspaces
+        if: ${{ success() && !cancelled() }}
         run: node scripts/deploy-store-plugins.mjs
         env:
           SAVIA_DEPLOY_ENVIRONMENT: production
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_DATABASE_ID: ${{ env.SAVIA_DOMAIN_D1_ID }}
-
-      - name: Verify deployed gateway
-        uses: cloudflare/wrangler-action@v4
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: deployments status --name savia --config wrangler.production.jsonc
-          workingDirectory: apps/api
-          wranglerVersion: 4.127.1
-
-      - name: Restore production Worker deployments after a failed rollout
-        if: ${{ always() && env.SAVIA_FLOWS_PROVISIONED == 'true' && steps.capture_recovery.outcome == 'success' && (failure() || cancelled()) }}
-        run: node scripts/flows-preview-recovery.mjs --action restore --environment production --metadata "$RUNNER_TEMP/flows-production-recovery.json" --attempted-agencies "$SAVIA_AGENCIES_PAUSE_ATTEMPTED" --attempted-flows "$SAVIA_FLOWS_PAUSE_ATTEMPTED" --apply
-        env:
-          SAVIA_DEPLOY_ENVIRONMENT: production
-          SAVIA_FLOWS_PROVISIONED: ${{ env.SAVIA_FLOWS_PROVISIONED }}
-          SAVIA_FLOWS_RESOURCES: ${{ env.SAVIA_FLOWS_RESOURCES }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          SAVIA_AGENCIES_PAUSE_ATTEMPTED: ${{ steps.pause_agencies.outcome == 'success' || steps.pause_agencies.outcome == 'failure' || steps.pause_agencies.outcome == 'cancelled' }}
-          SAVIA_FLOWS_PAUSE_ATTEMPTED: ${{ steps.pause_flows.outcome == 'success' || steps.pause_flows.outcome == 'failure' || steps.pause_flows.outcome == 'cancelled' }}
-
-      - name: Restore canonical domain Workers after failed rollout
-        if: ${{ always() && steps.capture_domain_recovery.outcome == 'success' && (failure() || cancelled()) }}
-        run: node scripts/canonical-domain-recovery.mjs --restore "$RUNNER_TEMP/canonical-domain-recovery.json"
-        env:
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-
-      - name: Restore temporary domain bridge after failed rollout
-        if: ${{ (failure() || cancelled()) && env.SAVIA_DOMAIN_TRANSITION_RELEASED == 'true' }}
-        run: node scripts/finalize-domain-transition.mjs --restore
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

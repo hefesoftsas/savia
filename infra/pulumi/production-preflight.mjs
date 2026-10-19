@@ -5,6 +5,10 @@ import { fileURLToPath } from "node:url";
 import { assertBackendConfigured } from "./deploy-stack.mjs";
 import { parseStackOutputs, assertDeploymentAccount } from "./outputs.mjs";
 import { resolveInfraNames, stateBackendUrl } from "./naming.mjs";
+import {
+  managementBackendName,
+  validateManagementOutputs,
+} from "./management-resources.mjs";
 import { buildFlowsSecretUploads } from "../../scripts/flows-preview-policy.mjs";
 
 const exec = promisify(execFile);
@@ -50,8 +54,7 @@ function validateProductionConfig(config) {
     throw new Error(
       "Production documents bucket does not match the adopted stack",
     );
-  if (values.stateBucket !== "savia-pulumi-state")
-    throw new Error("Production state backend must use savia-pulumi-state");
+  managementBackendName(values.stateBucket);
   const names = resolveInfraNames({
     environment: "production",
     documentsBucket: values.documentsBucket,
@@ -128,11 +131,6 @@ function assertAdoptedResources(resources, outputs, accountId) {
       "documents",
       "cloudflare:index/r2Bucket:R2Bucket",
       { name: "savia-documents" },
-    ],
-    [
-      "state-backend",
-      "cloudflare:index/r2Bucket:R2Bucket",
-      { name: "savia-pulumi-state" },
     ],
   ];
   for (const [logicalName, type, fields] of expected) {
@@ -294,6 +292,7 @@ export function validateProductionReadiness({
   outputs,
   stackConfig,
   stateExport,
+  management,
   env = process.env,
 }) {
   const config = validateProductionConfig(stackConfig);
@@ -369,7 +368,21 @@ export function validateProductionReadiness({
       throw new Error(`Production ${name} is not a real D1 identifier`);
   }
   validateBackend(env, accountId, config.stateBucket);
+  validateManagementOutputs(management, {
+    accountId,
+    backendUrl: env.PULUMI_BACKEND_URL,
+  });
   const resources = assertProtectedState(stateExport);
+  if (
+    resources.some(
+      (row) =>
+        row.type === "cloudflare:index/r2Bucket:R2Bucket" &&
+        ["savia-pulumi-state-preview", "savia-pulumi-state"].includes(
+          row.outputs?.name,
+        ),
+    )
+  )
+    throw new Error("Application state must not own the management backend");
   assertAdoptedResources(resources, outputs, accountId);
   const currentFlows = outputs.flowsEnabled === true;
   if (
@@ -478,6 +491,22 @@ export function normalizeProductionConfig(raw) {
   return config;
 }
 
+export function resolveManagementStack(summaries, selected) {
+  if (!Array.isArray(summaries))
+    throw new Error("Readable management checkpoint inventory required");
+  const names = summaries
+    .map((row) => row.name)
+    .filter((name) =>
+      /^[\w.-]+\/savia-management\/management$/.test(name ?? ""),
+    );
+  if (
+    new Set(names).size !== names.length ||
+    (selected ? !names.includes(selected) : names.length !== 1)
+  )
+    throw new Error("One verified qualified management checkpoint is required");
+  return selected ?? names[0];
+}
+
 async function main() {
   const cwd = fileURLToPath(new URL(".", import.meta.url));
   assertBackendConfigured(process.env);
@@ -502,11 +531,34 @@ async function main() {
       exec("pulumi", ["stack", "export", "--stack", "production"], options),
       exec("pulumi", ["config", "--json", "--stack", "production"], options),
     ]);
+  const { stdout: managementStacks } = await exec(
+    "pulumi",
+    ["stack", "ls", "--all", "--json", "--fully-qualify-stack-names"],
+    options,
+  );
+  const managementStack = resolveManagementStack(
+    JSON.parse(managementStacks),
+    process.env.SAVIA_MANAGEMENT_STACK,
+  );
+  const [{ stdout: managementOutputs }, { stdout: managementCheckpoint }] =
+    await Promise.all([
+      exec(
+        "pulumi",
+        ["stack", "output", "--json", "--stack", managementStack],
+        options,
+      ),
+      exec("pulumi", ["stack", "export", "--stack", managementStack], options),
+    ]);
+  const management = {
+    ...JSON.parse(managementOutputs),
+    checkpoint: JSON.parse(managementCheckpoint),
+  };
   const outputs = parseStackOutputs(stdout);
   const envOutputs = validateProductionReadiness({
     outputs,
     stackConfig: normalizeProductionConfig(JSON.parse(configJson)),
     stateExport: JSON.parse(exported),
+    management,
     env: process.env,
   });
   if (process.env.GITHUB_ENV)

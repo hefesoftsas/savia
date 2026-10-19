@@ -1,5 +1,6 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as cloudflare from "@pulumi/cloudflare";
+import { registerConfiguredRuntime } from "../runtime-resources.ts";
 
 import {
   sharedRegistryBucketOptions,
@@ -38,3 +39,14 @@ export const registryWorkerManifest = pulumi
       bucketProtected: true,
     }),
   );
+
+const runtime = registerConfiguredRuntime(config, {
+  accountId,
+  environment: "shared",
+  dataDependencies: [bucket],
+  dataInventory: bucket.name.apply((name) => [
+    { kind: "r2", name, cloudId: name },
+  ]),
+});
+export const environmentInventory = runtime?.inventory ?? null;
+export const runtimeStatus = runtime?.status ?? "unmanaged";

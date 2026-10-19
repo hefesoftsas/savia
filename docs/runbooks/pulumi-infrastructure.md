@@ -28,6 +28,36 @@ protected, even for preview, and is excluded from application teardown.
 Secrets in checkpoint/configuration are encrypted with the stack passphrase.
 Do not pass `--show-secrets`, commit checkpoints, or expose the state bucket.
 
+## Environment ownership migration
+
+See [environment ownership](pulumi-environment-ownership.md) for the complete
+stack map, immutable release commands and controlled CI migration procedure.
+
+The environment ownership source defines `savia-management/management` as the
+sole owner of the existing protected `savia-pulumi-state-preview` bucket. This
+source change does not itself confirm that the live ownership transfer ran.
+Application programs preserve the backend name/URL outputs as references and
+require a public `managementProof` validated against the independent management
+checkpoint. Lifecycle operations must refresh that proof before each plan/apply.
+No data, credentials, bucket name or backend URL moves between cloud accounts.
+
+Switch source and state ownership only while all infrastructure-changing
+workflows are disabled and their in-flight runs have finished. First export both
+checkpoints and copy the encrypted stack configurations into a private directory.
+`planBackendOwnershipMove` validates exact qualified stacks, account, physical
+bucket identity, protection and settled checkpoints. `moveBackendOwnership`
+defaults to planning; applying requires a fresh verified freeze journal and moves
+only the one bucket through `pulumi state move`. It never imports the bucket a
+second time, removes state entries, recreates the backend, or initializes
+production. It verifies the resulting independent protection and fingerprints of
+all other cloud resources. On interruption, preserve its private journal and
+exports and inspect both checkpoints before any further mutation.
+
+The application destroy path cannot select `management`; protection of the
+backend no longer depends on excluding an application-owned bucket. Production
+preflight requires independently verified management custody. Keep production
+operations disabled throughout the Preview/branch/shared adoption.
+
 ## Preview tenant hostname routing
 
 The standard Preview gateway manifest declares both the canonical Custom Domain
@@ -313,19 +343,63 @@ API with its Flows binding. The default production configuration does not activa
 containers, external email, or Analytics Engine. Preview keeps its restricted
 node catalog, quotas, and private executor.
 
-## Destroy an environment
+## Operate one environment
+
+The lifecycle entrypoint uses an explicit environment identifier: `preview`,
+`production`, `branch-<normalized-slug>`, `shared`, or `management`. Grouping is
+recorded in Pulumi stacks and the environment inventory; Cloudflare does not
+provide a common folder for all these resource types. Management changes use the
+separate ownership-transfer procedure, and ordinary destruction rejects both
+management and shared resources.
+
+From the repository root, with the existing authorized backend credentials:
 
 ```sh
-node destroy.mjs --stack preview --dry-run
-node destroy.mjs --stack preview --apply
-# production refuses without both flags:
-node destroy.mjs --stack production --apply --i-understand-destroy-production
+node infra/pulumi/environment.mjs inventory --all
+node infra/pulumi/environment.mjs inventory --environment preview --out /secure/preview.json
+node infra/pulumi/environment.mjs adopt --environment preview --manifest /secure/preview.json --apply
+node infra/pulumi/environment.mjs plan --environment preview --artifact /secure/release --plan /secure/release-plan.json
+node infra/pulumi/environment.mjs apply --environment preview --artifact /secure/release --plan /secure/release-plan.json --apply
+node infra/pulumi/environment.mjs destroy --environment preview --manifest /secure/preview.json
+node infra/pulumi/environment.mjs destroy --environment preview --manifest /secure/preview.json --apply
+# Permanent data deletion is a separate, explicit choice:
+node infra/pulumi/environment.mjs destroy --environment preview --manifest /secure/preview.json --apply --delete-data
 ```
 
-Production resources are created with `protect: true`; `pulumi destroy`
-fails on them until protection is lifted. Preview application resources are unprotected
-and cheap to tear down; the protected state bucket is retained. Worker code is deleted by `wrangler delete` only
-via `scripts/preview-destroy.mjs`, not by these scripts.
+Generate a fresh reviewed inventory before destructive operations. A saved release
+plan binds the environment/account, resource manifest, current checkpoint,
+immutable artifact digests, source revision and Pulumi plan bytes. A changed
+checkpoint or substituted artifact requires a new plan. Adoption permits only
+matching physical imports and read-only bookkeeping, and clears one-time import
+inputs after successful registration. Repeating adoption does not republish code.
+
+An empty environment can explicitly provision persistence before its first
+immutable runtime artifact is prepared:
+
+```sh
+node infra/pulumi/environment.mjs plan --environment branch-feature-login --provision --apply
+```
+
+This operation refuses active or retained runtimes. It publishes no Worker code;
+prepare the release using its actual data-resource outputs, then use the ordinary
+plan/apply commands. It never initializes production while production operations
+are disabled.
+
+Destruction retains D1/R2/KV/Vectorize data by default, removes producers and
+public ingress, and keeps Durable Object and opaque-secret hosts in maintenance.
+Those identities retain namespaces and encryption-key custody for a later
+release. With `--delete-data`, the lifecycle first retires runtime, then applies
+a separate saved plan removing persistence. Only reviewed resource URNs are
+individually unprotected. Bucket emptying occurs after plan validation. The
+protected management backend, source definitions and empty checkpoint remain;
+there is no automatic stack removal. A failed stage leaves private checkpoint,
+configuration and plan evidence for inspection.
+
+Legacy `destroy.mjs --apply` and `preview-destroy.mjs --force` delegate to this
+lifecycle and now retain data. Add `--delete-data` only for permanent deletion.
+Production additionally retains its acknowledgment and reviewed-main/operations
+gates; it remains disabled. Independent `wrangler delete` is not the teardown
+path for managed environments.
 
 ## Backups (data, not just infra)
 
@@ -663,3 +737,19 @@ zero changes to cloud resources; its Worker was not republished. Production
 application state and production CI backend credentials still require separate
 adoption before promotion. No Flows, AI, browser, containers or email service was
 activated by this rollout.
+
+First standard installation uses a create-only persistence proof recorded by
+`plan --provision --apply`. Before initializing schemas, the runtime checks the
+exact data identities, empty D1/R2/KV storage, and absence of namespace data,
+attachments, or existing callers. It then starts authenticated maintenance
+endpoints while the gateway remains unavailable. The normal encrypted backup
+still precedes final publication. Retained environments start maintenance code
+without initializing or migrating their schemas before that backup. A partially
+initialized first installation fails closed and requires explicit reconciliation;
+retrying does not authorize overwriting existing schemas or changing keys.
+
+A refresh reports maintenance when a persisted Flows execution pause remains in
+D1. Intentional execution-disabled profiles remain valid. The temporary backup
+pause and final publication use distinct policy generations within one frozen
+artifact. Retirement evidence includes a private per-command journal with
+started/completed/failed statuses; config values and credentials are omitted.

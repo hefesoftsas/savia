@@ -62,53 +62,61 @@ test("an independent scheduled checker fails when no fresh encrypted backup is r
   assert.match(source, /node scripts\/check-production-backup-freshness\.mjs/);
 });
 
-test("release workflows create the dedicated shared namespace before deploying storage writers", async () => {
-  for (const name of ["deploy-cloudflare", "deploy-preview"]) {
-    const source = await readFile(
-      new URL(`../../.github/workflows/${name}.yml`, import.meta.url),
-      "utf8",
-    );
-    const owner = source.indexOf("- name: Deploy savia backup coordinator");
-    assert.ok(owner >= 0, `${name}: dedicated namespace owner is missing`);
-    const pause = source.indexOf(
-      name === "deploy-preview"
-        ? "- name: Pause Savia writes for persistence backup"
-        : "- name: Pause production Savia writes for persistence backup",
-    );
-    assert.ok(
-      pause >= 0 && owner < pause,
-      `${name}: the pause deployment already requires the coordinator namespace`,
-    );
-    for (const dependent of [
-      "Deploy savia-agencies",
-      "Deploy savia-auth",
-      "Deploy private Savia request",
-      "Deploy private Savia connectors",
-    ])
-      assert.ok(
-        owner < source.indexOf(`- name: ${dependent}`),
-        `${name}: ${dependent} needs the dedicated namespace first`,
-      );
+test("managed releases create the coordinator namespace before dependent storage writers", async () => {
+  const { standardReleaseCommands } =
+    await import("./runtime-publisher-standard.mjs");
+  for (const environment of ["preview", "production"]) {
+    const plan = standardReleaseCommands({
+      environment,
+      provisionedFlows: true,
+      desiredFlows: true,
+      flowsPolicyGeneration: 100,
+      configs: Object.fromEntries(
+        [
+          "backupCoordinator",
+          "api",
+          "flows",
+          "auth",
+          "gateway",
+          "request",
+          "connectors",
+        ].map((role) => [role, `/f/${role}.json`]),
+      ),
+      recoveryDirectory: "/private/recovery",
+    });
+    const workers = plan.quiesce
+      .filter((step) => step.kind === "wrangler")
+      .map((step) => step.worker);
+    assert.deepEqual(workers, ["backupCoordinator", "api", "flows"]);
+    assert.ok(plan.backup.length > 0);
+    assert.equal(plan.deploy.at(-1).worker, "gateway");
   }
 });
-
-test("production releases retain recovery copies in private R2 before applying infrastructure", async () => {
+test("production managed releases retain private R2 recovery before migration, without GitHub backup artifacts", async () => {
   const source = await readFile(
     new URL("../../.github/workflows/deploy-cloudflare.yml", import.meta.url),
     "utf8",
   );
   assert.doesNotMatch(source, /actions\/upload-artifact/);
-  const upload = source.indexOf(
-    "node scripts/production-backup-r2.mjs --artifact",
-  );
-  assert.ok(
-    upload >= 0 &&
-      upload <
-        source.indexOf(
-          "node infra/pulumi/deploy-stack.mjs --stack production --apply",
-        ),
-  );
-  assert.match(source, /--kind release/);
   assert.match(source, /R2_BACKUP_ACCESS_KEY_ID:/);
   assert.match(source, /R2_BACKUP_SECRET_ACCESS_KEY:/);
+  const { standardReleaseCommands } =
+    await import("./runtime-publisher-standard.mjs");
+  const plan = standardReleaseCommands({
+    environment: "production",
+    configs: {
+      api: "/f/api.json",
+      auth: "/f/auth.json",
+      gateway: "/f/gateway.json",
+    },
+    recoveryDirectory: "/private/recovery",
+  });
+  assert.deepEqual(
+    plan.backup
+      .filter((step) => step.kind === "node")
+      .map((step) => step.script),
+    ["scripts/production-backup.mjs", "scripts/production-backup-r2.mjs"],
+  );
+  assert.ok(plan.backup[1].args.includes("release"));
+  assert.equal(plan.backup.at(-1).kind, "remove-plaintext");
 });

@@ -11,7 +11,7 @@
     "backup": "node backup.mjs",
     "restore": "node restore.mjs",
     "destroy": "node destroy.mjs",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p branch-preview && tsc --noEmit -p shared-registry",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p branch-preview && tsc --noEmit -p shared-registry && tsc --noEmit -p management",
     "test": "node --test *.test.mjs"
   },
   "dependencies": {

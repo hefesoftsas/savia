@@ -1,19 +1,12 @@
-import { assertBackendConfigured } from "./deploy-stack.mjs";
 import {
   previewNames,
   slugifyBranch,
 } from "../../scripts/preview-environment.mjs";
-import { fileURLToPath } from "node:url";
 import { assertAccountId } from "./naming.mjs";
-import { assertSafePlan } from "./deploy-stack.mjs";
 import { assertDeploymentAccount } from "./outputs.mjs";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-
-const projectRoot = fileURLToPath(
-  new URL("./branch-preview/", import.meta.url),
-);
 
 export function branchStackName(slug) {
   const validated = slugifyBranch(slug);
@@ -76,12 +69,17 @@ export function parseR2BucketList(value) {
 export async function listR2Buckets({ accountId, token, fetchImpl = fetch }) {
   assertAccountId(accountId);
   if (!token) throw new Error("CLOUDFLARE_API_TOKEN is required");
-  const buckets = [];
-  let page = 1;
-  let totalPages = 1;
-  do {
-    const url = `https://api.cloudflare.com/client/v4/accounts/${accountId}/r2/buckets?per_page=1000&page=${page}`;
-    const response = await fetchImpl(url, {
+  const buckets = [],
+    seenNames = new Set(),
+    seenCursors = new Set();
+  let cursor;
+  for (let page = 1; page <= 1000; page++) {
+    const url = new URL(
+      `https://api.cloudflare.com/client/v4/accounts/${accountId}/r2/buckets`,
+    );
+    url.searchParams.set("per_page", "1000");
+    if (cursor) url.searchParams.set("cursor", cursor);
+    const response = await fetchImpl(url.toString(), {
       headers: { authorization: `Bearer ${token}` },
     });
     let payload;
@@ -90,28 +88,30 @@ export async function listR2Buckets({ accountId, token, fetchImpl = fetch }) {
     } catch {
       throw new Error("Cloudflare R2 bucket list returned invalid JSON");
     }
-    if (response.ok !== true || payload?.success !== true) {
+    if (response.ok !== true || payload?.success !== true)
       throw new Error(`Cloudflare R2 bucket list failed (${response.status})`);
+    for (const bucket of parseR2BucketList(payload)) {
+      if (seenNames.has(bucket.name))
+        throw new Error("Repeated R2 bucket inventory identity");
+      seenNames.add(bucket.name);
+      buckets.push(bucket);
     }
-    buckets.push(...parseR2BucketList(payload));
-    const pageInfo = payload.result_info;
-    const pageCount = pageInfo?.total_pages;
+    const info = payload.result_info;
     if (
-      !pageInfo ||
-      !Number.isInteger(pageCount) ||
-      pageCount < 1 ||
-      pageCount < page ||
-      (pageInfo.page !== undefined && pageInfo.page !== page)
-    ) {
+      !info ||
+      !Number.isInteger(info.total_count) ||
+      info.total_count < 0 ||
+      (info.cursor !== undefined &&
+        (typeof info.cursor !== "string" || !info.cursor))
+    )
       throw new Error("Cloudflare R2 bucket pagination metadata is invalid");
-    }
-    totalPages = pageCount;
-    page++;
-    if (page > 1000) {
-      throw new Error("Cloudflare R2 bucket listing exceeded 1000 pages");
-    }
-  } while (page <= totalPages);
-  return buckets;
+    if (!info.cursor) return buckets;
+    if (seenCursors.has(info.cursor))
+      throw new Error("Repeated R2 pagination cursor");
+    cursor = info.cursor;
+    seenCursors.add(cursor);
+  }
+  throw new Error("Cloudflare R2 bucket listing exceeded 1000 pages");
 }
 
 export function branchStackConfig({ accountId, names, existing }) {
@@ -156,221 +156,93 @@ export function validateBranchOutputs(outputs, slug, runtimeAccountId) {
   return outputs;
 }
 
-function stdoutOf(result) {
-  return typeof result === "string" ? result : (result?.stdout ?? "");
-}
-
-function assertEmptyBranchStack(stateText) {
-  const state = parseJson(stateText, "Pulumi state export");
-  if (!Array.isArray(state?.deployment?.resources)) {
-    throw new Error("Pulumi branch stack export has no resource list");
-  }
-  const managed = state.deployment.resources.filter(
-    (resource) =>
-      !["pulumi:pulumi:Stack", "pulumi:providers:cloudflare"].includes(
-        resource.type,
-      ),
-  );
-  if (managed.length > 0) {
-    throw new Error(
-      "Pulumi branch stack has resources but no validated outputs; refusing update",
-    );
-  }
-}
-
-function isMissingStack(error) {
-  return /no stack named|stack .* not found|no stack selected|does not exist/i.test(
-    String(error?.stderr ?? error?.stdout ?? error?.message ?? error),
-  );
-}
-
-export async function ensureBranchInfrastructure({
-  slug,
-  env,
-  run,
-  fetchImpl = fetch,
-}) {
-  const stack = branchStackName(slug);
-  assertBackendConfigured(env);
-  if (!env.CLOUDFLARE_ACCOUNT_ID || !env.CLOUDFLARE_API_TOKEN) {
-    throw new Error(
-      "CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN are required",
-    );
-  }
-  assertAccountId(env.CLOUDFLARE_ACCOUNT_ID);
-  const options = { cwd: projectRoot, env };
-  await run(
-    "pulumi",
-    ["login", env.PULUMI_BACKEND_URL, "--non-interactive"],
-    options,
-  );
-
-  // Read the real Cloudflare inventory before creating a stack. Existing
-  // exact-name resources are imported into this stack on its first update.
-  const [d1Output, buckets] = await Promise.all([
-    run(
-      "pnpm",
-      ["--filter", "@savia/api", "exec", "wrangler", "d1", "list", "--json"],
-      options,
-    ),
-    listR2Buckets({
-      accountId: env.CLOUDFLARE_ACCOUNT_ID,
-      token: env.CLOUDFLARE_API_TOKEN,
-      fetchImpl,
-    }),
-  ]);
-  const names = previewNames(slug);
-  const d1 = parseD1List(stdoutOf(d1Output));
-  const auth = d1.find((row) => row.name === names.databases.auth);
-  const domain = d1.find((row) => row.name === names.databases.domain);
-  const bucket = buckets.some((row) => row.name === names.bucket);
-  const config = branchStackConfig({
-    accountId: env.CLOUDFLARE_ACCOUNT_ID,
-    names,
-    existing: {
-      authD1Id: auth?.uuid,
-      domainD1Id: domain?.uuid,
-      bucket,
-    },
+async function lifecycleDependencies(options) {
+  if (options.dependencies) return options.dependencies;
+  const { createEnvironmentDependencies } =
+    await import("./environment-operations.mjs");
+  return createEnvironmentDependencies({
+    env: options.env,
+    ...(options.run ? { run: options.run } : {}),
   });
-
-  let initialized = false;
-  try {
-    await run(
-      "pulumi",
-      ["stack", "select", stack, "--non-interactive"],
-      options,
-    );
-  } catch (error) {
-    if (!isMissingStack(error)) throw error;
-    await run(
-      "pulumi",
-      [
-        "stack",
-        "init",
-        stack,
-        "--secrets-provider=passphrase",
-        "--non-interactive",
-      ],
-      options,
-    );
-    initialized = true;
+}
+async function branchOutputs(
+  deps,
+  descriptor,
+  slug,
+  accountId,
+  required = true,
+) {
+  const context = await deps.context(descriptor);
+  const outputs = context.checkpoint?.stateExport.deployment.resources.find(
+    (row) => row.type === "pulumi:pulumi:Stack",
+  )?.outputs;
+  if (!outputs || !Object.keys(outputs).length) {
+    if (required)
+      throw new Error(`No deployed stack named ${descriptor.stack}`);
+    return undefined;
   }
-
-  if (!initialized) {
-    const currentOutput = await run(
-      "pulumi",
-      ["stack", "output", "--stack", stack, "--json"],
-      options,
-    );
-    const outputs = parseJson(stdoutOf(currentOutput), "Pulumi output");
-    if (
-      outputs &&
-      typeof outputs === "object" &&
-      Object.keys(outputs).length === 0
-    ) {
-      const exported = await run(
-        "pulumi",
-        ["stack", "export", "--stack", stack],
-        options,
-      );
-      assertEmptyBranchStack(stdoutOf(exported));
-      initialized = true;
-    } else {
-      validateBranchOutputs(outputs, slug, env.CLOUDFLARE_ACCOUNT_ID);
-    }
-  }
-
-  for (const [key, value] of Object.entries(config)) {
-    await run(
-      "pulumi",
-      [
-        "config",
-        "set",
-        key,
-        String(value),
-        "--stack",
+  return validateBranchOutputs(outputs, slug, accountId);
+}
+export async function ensureBranchInfrastructure(options) {
+  const { slug, env } = options,
+    stack = branchStackName(slug);
+  assertAccountId(env.CLOUDFLARE_ACCOUNT_ID);
+  const deps = await lifecycleDependencies(options);
+  const { resolveEnvironment } = await import("./environments.mjs");
+  const { runEnvironmentOperation, parseEnvironmentArgs } =
+    await import("./environment.mjs");
+  const { inventoryManifest, writePrivateJson } =
+    await import("./environment-operations.mjs");
+  const descriptor = resolveEnvironment(stack);
+  await branchOutputs(deps, descriptor, slug, env.CLOUDFLARE_ACCOUNT_ID, false);
+  const inventory = await deps.inventory(stack);
+  if (inventory.resources.length) {
+    const directory = await mkdtemp(join(tmpdir(), "savia-branch-adoption-"));
+    const manifest = join(directory, "manifest.json");
+    await writePrivateJson(manifest, inventoryManifest(inventory));
+    await runEnvironmentOperation(
+      parseEnvironmentArgs([
+        "adopt",
+        "--environment",
         stack,
-        "--non-interactive",
-      ],
-      options,
+        "--manifest",
+        manifest,
+        "--apply",
+      ]),
+      deps,
     );
-  }
-  const planDirectory = await mkdtemp(join(tmpdir(), "savia-branch-plan-"));
-  try {
-    const planFile = join(planDirectory, "plan.json");
-    const preview = await run(
-      "pulumi",
-      [
-        "preview",
-        "--stack",
+  } else
+    await runEnvironmentOperation(
+      parseEnvironmentArgs([
+        "plan",
+        "--environment",
         stack,
-        "--refresh",
-        "--non-interactive",
-        "--save-plan",
-        planFile,
-        "--json",
-      ],
-      options,
+        "--provision",
+        "--apply",
+      ]),
+      deps,
     );
-    assertSafePlan(parseJson(stdoutOf(preview), "Pulumi preview"));
-    await run(
-      "pulumi",
-      [
-        "up",
-        "--stack",
-        stack,
-        "--plan",
-        planFile,
-        "--skip-preview",
-        "--yes",
-        "--non-interactive",
-        "--json",
-      ],
-      options,
-    );
-  } finally {
-    await rm(planDirectory, { recursive: true, force: true });
-  }
-  const output = await run(
-    "pulumi",
-    ["stack", "output", "--stack", stack, "--json"],
-    options,
-  );
   return {
     stack,
-    outputs: validateBranchOutputs(
-      parseJson(stdoutOf(output), "Pulumi output"),
+    outputs: await branchOutputs(
+      deps,
+      descriptor,
       slug,
       env.CLOUDFLARE_ACCOUNT_ID,
     ),
   };
 }
-
-export async function selectBranchInfrastructure({ slug, env, run }) {
-  const stack = branchStackName(slug);
-  assertBackendConfigured(env);
-  if (!env.CLOUDFLARE_ACCOUNT_ID || !env.CLOUDFLARE_API_TOKEN) {
-    throw new Error(
-      "CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN are required",
-    );
-  }
-  const options = { cwd: projectRoot, env };
-  await run(
-    "pulumi",
-    ["login", env.PULUMI_BACKEND_URL, "--non-interactive"],
-    options,
-  );
-  await run("pulumi", ["stack", "select", stack, "--non-interactive"], options);
-  const output = await run(
-    "pulumi",
-    ["stack", "output", "--stack", stack, "--json"],
-    options,
-  );
+export async function selectBranchInfrastructure(options) {
+  const { slug, env } = options,
+    stack = branchStackName(slug);
+  assertAccountId(env.CLOUDFLARE_ACCOUNT_ID);
+  const deps = await lifecycleDependencies(options);
+  const { resolveEnvironment } = await import("./environments.mjs");
   return {
     stack,
-    outputs: validateBranchOutputs(
-      parseJson(stdoutOf(output), "Pulumi output"),
+    outputs: await branchOutputs(
+      deps,
+      resolveEnvironment(stack),
       slug,
       env.CLOUDFLARE_ACCOUNT_ID,
     ),

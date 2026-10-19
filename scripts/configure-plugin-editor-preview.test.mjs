@@ -202,32 +202,33 @@ test("does not write the admin URL until readiness headers pass", async () => {
   }
 });
 
-test("preview workflow deploys the isolated runtime before enabling the admin build", () => {
+test("managed publication verifies the isolated editor before exposing the new gateway", async () => {
+  const { standardReleaseCommands } =
+    await import("../infra/pulumi/runtime-publisher-standard.mjs");
+  const plan = standardReleaseCommands({
+    environment: "preview",
+    configs: {
+      api: "/f/api.json",
+      auth: "/f/auth.json",
+      pluginEditor: "/f/editor.json",
+      gateway: "/f/gateway.json",
+    },
+    recoveryDirectory: "/private/recovery",
+  });
+  const editor = plan.deploy.findIndex(
+      (step) => step.worker === "pluginEditor",
+    ),
+    verify = plan.deploy.findIndex(
+      (step) => step.kind === "plugin-editor-verify",
+    ),
+    gateway = plan.deploy.findIndex((step) => step.worker === "gateway");
+  assert.ok(editor >= 0 && verify > editor && gateway > verify);
   const workflow = readFileSync(
     new URL("../.github/workflows/deploy-preview.yml", import.meta.url),
     "utf8",
   );
-  const runtimeBuild = workflow.indexOf(
-    "pnpm --filter @savia/admin run build:plugin-editor",
-  );
-  const runtimeDeploy = workflow.indexOf("id: plugin_editor");
-  const runtimeConfigure = workflow.indexOf(
-    "node scripts/configure-plugin-editor-preview.mjs",
-  );
-  const adminBuild = workflow.indexOf(
-    "pnpm --filter @savia/admin run build:assets",
-  );
-  assert.ok(
-    runtimeBuild >= 0 &&
-      runtimeDeploy > runtimeBuild &&
-      runtimeConfigure > runtimeDeploy &&
-      adminBuild > runtimeConfigure,
-  );
-  assert.match(workflow, /deployment-url/);
-  assert.match(
-    workflow,
-    /workingDirectory: apps\/api[\s\S]*?command: deploy --config \.\.\/plugin-editor-runtime\/wrangler\.preview\.jsonc/,
-  );
+  assert.match(workflow, /prepare-release\.mjs --environment preview/);
+  assert.match(workflow, /environment\.mjs apply --environment preview/);
 });
 
 test("preview runtime has only a static asset binding and no application secrets or API routes", () => {

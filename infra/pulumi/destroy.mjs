@@ -1,18 +1,8 @@
-// Guarded destroy for Pulumi-managed stacks (D1 + R2).
-// Style follows scripts/preview-destroy.mjs: --dry-run plans, execution
-// requires an explicit flag, and production additionally requires an
-// acknowledgement flag. R2 buckets must be empty before Cloudflare lets
-// Pulumi delete them, so destroy empties the bucket first (same approach
-// as the preview destroy script).
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
+// Compatibility helpers and guarded delegate to the environment lifecycle.
 import { fileURLToPath } from "node:url";
 import { normalizeEnvironment, stackProtection } from "./naming.mjs";
-import { parseStackOutputs } from "./outputs.mjs";
 import { listR2Objects } from "./backup.mjs";
 import { assertAccountId, assertSafeR2Key } from "./naming.mjs";
-
-const execFileAsync = promisify(execFile);
 
 export function parseDestroyArgs(argv) {
   const stack = flagValue(argv, "--stack");
@@ -98,15 +88,9 @@ export function r2BucketsForDestroy(outputs) {
   return buckets;
 }
 
-export function buildPulumiDestroyArgs(stack, hasStateBackend) {
-  const args = ["destroy", "--stack", stack, "--yes"];
-  if (hasStateBackend) {
-    args.push(
-      "--exclude",
-      `urn:pulumi:${stack}::savia-cloudflare::cloudflare:index/r2Bucket:R2Bucket::state-backend`,
-    );
-  }
-  return args;
+export function buildPulumiDestroyArgs(stack, _hasStateBackend) {
+  normalizeEnvironment(stack);
+  return ["destroy", "--stack", stack, "--yes"];
 }
 
 // R2 buckets cannot be deleted while they hold objects. Pulumi's destroy
@@ -153,50 +137,14 @@ export async function emptyBucketForDestroy({
   );
 }
 
-async function stackOutputs(pulumiCwd, stack) {
-  const { stdout } = await execFileAsync(
-    "pulumi",
-    ["stack", "output", "--json", "--stack", stack],
-    { cwd: pulumiCwd, maxBuffer: 32 * 1024 * 1024 },
-  );
-  return parseStackOutputs(stdout);
-}
-
 async function main() {
-  const plan = parseDestroyArgs(process.argv.slice(2));
-  const pulumiCwd = fileURLToPath(new URL(".", import.meta.url));
-  if (plan.dryRun) {
-    console.log(
-      `Would empty the documents and enabled Flows R2 buckets and run: pulumi destroy --stack ${plan.stack} --yes`,
-    );
-    console.log(
-      "Worker code, D1 data, and R2 objects are deleted by this operation. Restore from a backup first if needed.",
-    );
-    return;
-  }
-  const outputs = await stackOutputs(pulumiCwd, plan.stack);
-  assertStackMatches(outputs, plan);
-  if (!plan.skipEmptyBucket) {
-    const buckets = r2BucketsForDestroy(outputs);
-    const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
-    const token = process.env.CLOUDFLARE_API_TOKEN;
-    if (!accountId || !token) {
-      throw new Error(
-        "CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN are required to safely empty the R2 bucket",
-      );
-    }
-    for (const bucket of buckets) {
-      const removed = await emptyBucketForDestroy({ bucket, accountId, token });
-      console.log(`Emptied ${removed} object(s) from ${bucket}`);
-    }
-  }
-  await execFileAsync(
-    "pulumi",
-    buildPulumiDestroyArgs(plan.stack, Boolean(outputs.stateBackendBucketName)),
-    {
-      cwd: pulumiCwd,
-      stdio: "inherit",
-    },
+  const { runLegacyDestroy } = await import("./environment-compat.mjs");
+  console.log(
+    JSON.stringify(
+      await runLegacyDestroy("application", process.argv.slice(2)),
+      null,
+      2,
+    ),
   );
 }
 

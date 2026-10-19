@@ -67,35 +67,16 @@ test("production deployment is limited to main and has ordered Worker stages", a
     deploy,
     /runs-on: ubuntu-24\.04\n\s+environment: production\n\s+env:\n\s+PNPM_CONFIG_STRICT_DEP_BUILDS: "false"\n\s+SAVIA_BACKUP_ENVIRONMENT: production\n\s+steps:/,
   );
-  assert.match(deploy, /savia-auth/);
-  assert.match(deploy, /- name: Deploy private Savia FastMCP/);
-  assert.match(deploy, /workingDirectory: apps\/mcp/);
-  assert.match(deploy, /name: Deploy private QuickJS hook executor/);
-  assert.match(deploy, /workingDirectory: apps\/hook-executor/);
+  assert.match(deploy, /environment\.mjs apply --environment production/);
+  assert.match(deploy, /prepare-release\.mjs --environment production/);
   assert.match(deploy, /SAVIA_MCP_SHARED_SECRET/);
-  assert.match(
-    deploy,
-    /- name: Apply Savia domain migrations\n\s+run: node scripts\/apply-d1-migrations\.mjs/,
-  );
-  assert.match(deploy, /savia-agencies/);
-  assert.match(
-    deploy,
-    /- name: Deploy private Savia request[\s\S]*?workingDirectory: apps\/savia-request/,
-  );
-  assert.match(
-    deploy,
-    /Apply Savia domain migrations[\s\S]*?Deploy private QuickJS hook executor[\s\S]*?Deploy savia-agencies[\s\S]*?Deploy savia-auth[\s\S]*?Deploy private Savia request/,
-  );
-  assert.match(deploy, /upload-cloudflare-secrets\.mjs/);
-  assert.doesNotMatch(deploy, /\n\s+secrets:/);
   assert.match(deploy, /ASSISTANT_SETTINGS_ENCRYPTION_KEY/);
   assert.match(deploy, /NANGO_API_KEY/);
-  assert.match(deploy, /deployments status --name savia/);
-  assert.match(deploy, /CLOUDFLARE_API_TOKEN/);
   assert.match(deploy, /BETTER_AUTH_SECRET/);
-  assert.match(
+  assert.doesNotMatch(deploy, /\n\s+secrets:/);
+  assert.doesNotMatch(
     deploy,
-    /- name: Deploy savia gateway[\s\S]*?command: --cwd \.\.\/admin deploy --config wrangler\.production\.jsonc[\s\S]*?workingDirectory: apps\/api/,
+    /command:.*deploy --config|finalize-domain-transition/,
   );
   assert.doesNotMatch(deploy, /branches:\s*\["\*"\]/);
   assert.doesNotMatch(deploy, /curl[^\n]*savia\.app\.hefesoft\.com\/health/);
@@ -103,7 +84,7 @@ test("production deployment is limited to main and has ordered Worker stages", a
 
 test("QuickJS PR previews require an explicit label on same-repository main PRs", async () => {
   const preview = await workflow("preview-quickjs.yml");
-  assert.match(preview, /pull_request:/);
+  assert.match(preview, /pull_request_target:/);
   assert.match(preview, /branches: \[main\]/);
   assert.match(preview, /types: \[labeled\]/);
   assert.match(preview, /github\.event\.label\.name == 'quickjs-preview'/);
@@ -163,7 +144,7 @@ test("production operations fail closed behind an explicit repository variable",
   );
   assert.match(
     pulumi,
-    /if: \$\{\{ github\.event_name == 'workflow_dispatch' && \(inputs\.stack == 'preview' \|\| \(inputs\.stack == 'production' && vars\.PRODUCTION_OPERATIONS_ENABLED == 'true' && github\.ref == 'refs\/heads\/main'\)\) \}\}/,
+    /if: \$\{\{ github\.event_name == 'workflow_dispatch' && \(inputs\.operation == 'preview' \|\| inputs\.operation == 'apply'\) && \(inputs\.stack == 'preview' \|\| \(inputs\.stack == 'production' && vars\.PRODUCTION_OPERATIONS_ENABLED == 'true' && github\.ref == 'refs\/heads\/main'\)\) \}\}/,
   );
   assert.match(pulumi, /options: \[preview, production\]/);
 });
@@ -180,10 +161,10 @@ test("preview deploys only successful same-repository main CI and uses its own e
   assert.match(preview, /github\.event\.workflow_run\.head_branch == 'main'/);
   assert.match(preview, /name: preview/);
   assert.match(preview, /SAVIA_DEPLOY_ENVIRONMENT: preview/);
-  assert.match(preview, /upload-cloudflare-secrets\.mjs/);
-  assert.match(preview, /verify-preview-health\.mjs/);
+  assert.match(preview, /environment\.mjs apply --environment preview/);
+  assert.match(preview, /prepare-release\.mjs --environment preview/);
   assert.doesNotMatch(preview, /\n\s+secrets:/);
-  assert.match(preview, /wrangler\.preview\.jsonc/);
+  assert.doesNotMatch(preview, /command:.*deploy --config/);
   assert.match(preview, /git ls-remote --exit-code origin refs\/heads\/main/);
   assert.doesNotMatch(
     preview,
@@ -195,16 +176,11 @@ test("release plugins deploy to all workspaces using existing environment creden
   for (const name of ["deploy-cloudflare.yml", "deploy-preview.yml"]) {
     const source = await workflow(name);
     assert.ok(
-      source.indexOf("name: Deploy savia gateway") <
+      source.indexOf("name: Apply the exact managed runtime plan") <
         source.indexOf("run: node scripts/deploy-store-plugins.mjs"),
-    );
-    assert.ok(
-      source.indexOf("run: node scripts/deploy-store-plugins.mjs") <
-        source.indexOf("name: Verify deployed gateway"),
     );
     const step = source.slice(
       source.indexOf("name: Deploy release plugin ZIPs"),
-      source.indexOf("name: Verify deployed gateway"),
     );
     assert.match(step, /CLOUDFLARE_API_TOKEN/);
     assert.match(step, /CLOUDFLARE_DATABASE_ID.*env.SAVIA_DOMAIN_D1_ID/);
@@ -230,8 +206,8 @@ test("environment deployments forward the private registry tenant map", async ()
   for (const name of ["deploy-preview.yml", "deploy-cloudflare.yml"]) {
     const source = await workflow(name);
     const upload = source.slice(
-      source.indexOf("name: Upload secrets"),
-      source.indexOf("name: Deploy savia-auth"),
+      source.indexOf("name: Apply the exact managed runtime plan"),
+      source.indexOf("name: Deploy release plugin ZIPs"),
     );
     assert.match(
       upload,

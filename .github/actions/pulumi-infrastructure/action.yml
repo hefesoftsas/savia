@@ -1,5 +1,5 @@
 name: Savia infrastructure
-description: Load an existing isolated Pulumi stack and render authoritative Worker manifests
+description: Read existing environment outputs and render manifests for an immutable Pulumi runtime release
 inputs:
   stack:
     description: preview or production

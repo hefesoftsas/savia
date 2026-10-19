@@ -529,6 +529,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Install locked infrastructure dependencies
+        run: npm ci --prefix infra/pulumi --ignore-scripts
+
       - name: Run contract tests
         run: pnpm run test:contracts
 
@@ -615,6 +618,8 @@ jobs:
         env:
           NODE_OPTIONS: "--max-old-space-size=2048"
         run: pnpm run flows:typecheck && pnpm --filter @savia/hook-executor typecheck
+      - name: Install locked infrastructure dependencies
+        run: npm ci --prefix infra/pulumi --ignore-scripts
       - name: Verify infrastructure and recovery helpers offline
         run: node --test --test-concurrency=1 infra/pulumi/*.test.mjs scripts/flows-*.test.mjs scripts/flows-maintenance/*.test.mjs scripts/encrypt-flows-backup.test.mjs scripts/verify-flows-preview.test.mjs
 

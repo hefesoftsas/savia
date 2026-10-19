@@ -128,6 +128,8 @@ function runGuard(
     env: {
       ...process.env,
       GITHUB_SHA: initialSha ?? repo.trustedSha,
+      RUNNER_TEMP: repo.root,
+      GITHUB_ENV: path.join(repo.root, "github-env"),
       PREVIEW_BRANCH: branch,
       PREVIEW_ACTION: action,
       CLOUDFLARE_API_TOKEN: secret,
@@ -140,11 +142,14 @@ test("deploy accepts a trusted ancestor, pins its SHA, and disables checkout hoo
   const result = runGuard(repo, { branch: "preview/good" });
 
   assert.equal(result.status, 0, result.stderr || result.stdout);
-  assert.equal(git(repo.checkout, "rev-parse", "HEAD"), repo.ancestorSha);
-  assert.equal(git(repo.checkout, "rev-parse", "--abbrev-ref", "HEAD"), "HEAD");
-  assert.equal(
-    readFileSync(path.join(repo.checkout, "README.md"), "utf8"),
-    "base\n",
+  assert.equal(git(repo.checkout, "rev-parse", "HEAD"), repo.trustedSha);
+  const source = path.join(repo.root, "savia-release-source");
+  assert.equal(git(source, "rev-parse", "HEAD"), repo.ancestorSha);
+  assert.equal(git(source, "rev-parse", "--abbrev-ref", "HEAD"), "HEAD");
+  assert.equal(readFileSync(path.join(source, "README.md"), "utf8"), "base\n");
+  assert.match(
+    readFileSync(path.join(repo.root, "github-env"), "utf8"),
+    new RegExp(`SAVIA_RELEASE_SOURCE_SHA=${repo.ancestorSha}`),
   );
   assert.equal(existsSync(repo.hookMarker), false);
   assert.doesNotMatch(
