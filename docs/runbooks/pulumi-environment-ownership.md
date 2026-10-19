@@ -131,3 +131,8 @@ Source integration and live adoption are separate milestones. The existence of
 these definitions, unit tests or a merged PR is not evidence that live adoption
 has completed. Record actual run IDs and final inventory in a dated acceptance
 record after the operation succeeds.
+
+The migration freeze skips workflows already manually disabled: GitHub rejects
+a repeated disable request with HTTP 403. It disables only currently active
+mutators, then rechecks every workflow state and in-flight run before touching
+Pulumi state. Unexpected workflow states stop the operation.

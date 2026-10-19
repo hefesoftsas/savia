@@ -266,12 +266,18 @@ export async function migrateEnvironmentOwnership({
     }
     return true;
   };
-  for (const original of originals)
+  const currentWorkflows = await allWorkflows();
+  for (const original of originals) {
+    const current = currentWorkflows.find((row) => row.id === original.id);
+    if (current?.state === "disabled_manually") continue;
+    if (current?.state !== "active")
+      throw new Error("Unexpected workflow state before freeze");
     await gh([
       `repos/${env.GITHUB_REPOSITORY}/actions/workflows/${original.id}/disable`,
       "--method",
       "PUT",
     ]);
+  }
   if (!(await freeze()))
     throw new Error(
       "Mutating workflows remain active or have in-flight runs; preserve the freeze and reconcile before retrying",

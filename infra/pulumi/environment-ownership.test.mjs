@@ -61,62 +61,79 @@ test("post-move plans reject any cloud write, replacement, import or deletion", 
       /cloud resource mutation/,
     );
 });
-test("changed reviewed custody freezes workflows and stops before Pulumi mutation or restoration", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "savia-ownership-test-"));
-  await rm(directory, { recursive: true });
-  const calls = [],
-    env = {
-      GITHUB_REF: "refs/heads/main",
-      GITHUB_SHA: "a".repeat(40),
-      GITHUB_REPOSITORY: "hefesoftsas/savia",
-      GITHUB_RUN_ID: "12",
-      CLOUDFLARE_ACCOUNT_ID: "b".repeat(32),
-      PULUMI_BACKEND_URL: `s3://savia-pulumi-state-preview?endpoint=${"b".repeat(32)}.r2.cloudflarestorage.com&region=auto&s3ForcePathStyle=true`,
-    };
-  const { stateBackendUrl } = await import("./naming.mjs");
-  env.PULUMI_BACKEND_URL = stateBackendUrl(
-    env.CLOUDFLARE_ACCOUNT_ID,
-    "savia-pulumi-state-preview",
-  );
-  const run = async (binary, args) => {
-    calls.push({ binary, args });
-    assert.equal(binary, "gh");
-    let result = null;
-    if (args[1].includes("actions/workflows?"))
-      result = {
-        workflows: originals.map((row) => ({
-          ...row,
-          state: "disabled_manually",
-        })),
+for (const initiallyActive of [[], ["pulumi.yml"]])
+  test(`changed custody preserves an existing freeze with ${initiallyActive.length} active workflows`, async () => {
+    const directory = await mkdtemp(join(tmpdir(), "savia-ownership-test-"));
+    await rm(directory, { recursive: true });
+    const calls = [],
+      env = {
+        GITHUB_REF: "refs/heads/main",
+        GITHUB_SHA: "a".repeat(40),
+        GITHUB_REPOSITORY: "hefesoftsas/savia",
+        GITHUB_RUN_ID: "12",
+        CLOUDFLARE_ACCOUNT_ID: "b".repeat(32),
+        PULUMI_BACKEND_URL: `s3://savia-pulumi-state-preview?endpoint=${"b".repeat(32)}.r2.cloudflarestorage.com&region=auto&s3ForcePathStyle=true`,
       };
-    else if (args[1].endsWith("commits/main")) result = { sha: env.GITHUB_SHA };
-    else if (args[1].includes("/runs?")) result = { workflow_runs: [] };
-    return { stdout: JSON.stringify(result) };
-  };
-  try {
-    await assert.rejects(
-      migrateEnvironmentOwnership({
-        reviewed: { version: 2, unclassifiedSaviaResources: [] },
-        originalWorkflows: originals,
-        directory,
-        env,
-        run,
-        audit: async () => ({ result: { version: 2 }, checkpoints: [] }),
-      }),
-      /changed since the reviewed audit/,
+    const { stateBackendUrl } = await import("./naming.mjs");
+    env.PULUMI_BACKEND_URL = stateBackendUrl(
+      env.CLOUDFLARE_ACCOUNT_ID,
+      "savia-pulumi-state-preview",
     );
-    assert.equal(
-      calls.filter((call) => call.args[1].endsWith("/disable")).length,
-      9,
+    const states = new Map(
+      originals.map((row) => [
+        row.id,
+        initiallyActive.some((name) => row.path.endsWith(`/${name}`))
+          ? "active"
+          : "disabled_manually",
+      ]),
     );
-    assert.equal(
-      calls.some((call) => call.args[1].endsWith("/enable")),
-      false,
-    );
-  } finally {
-    await rm(directory, { recursive: true, force: true });
-  }
-});
+    const run = async (binary, args) => {
+      calls.push({ binary, args });
+      assert.equal(binary, "gh");
+      let result = null;
+      if (args[1].includes("actions/workflows?"))
+        result = {
+          workflows: originals.map((row) => ({
+            ...row,
+            state: states.get(row.id),
+          })),
+        };
+      else if (args[1].endsWith("/disable")) {
+        const id = Number(args[1].split("/").at(-2));
+        if (states.get(id) !== "active")
+          throw new Error(
+            "GitHub HTTP 403: Unable to disable a workflow that is not active",
+          );
+        states.set(id, "disabled_manually");
+      } else if (args[1].endsWith("commits/main"))
+        result = { sha: env.GITHUB_SHA };
+      else if (args[1].includes("/runs?")) result = { workflow_runs: [] };
+      return { stdout: JSON.stringify(result) };
+    };
+    try {
+      await assert.rejects(
+        migrateEnvironmentOwnership({
+          reviewed: { version: 2, unclassifiedSaviaResources: [] },
+          originalWorkflows: originals,
+          directory,
+          env,
+          run,
+          audit: async () => ({ result: { version: 2 }, checkpoints: [] }),
+        }),
+        /changed since the reviewed audit/,
+      );
+      assert.equal(
+        calls.filter((call) => call.args[1].endsWith("/disable")).length,
+        initiallyActive.length,
+      );
+      assert.equal(
+        calls.some((call) => call.args[1].endsWith("/enable")),
+        false,
+      );
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
 
 test("a reviewed audit with unclassified Savia resources stops before workflow or state mutations", async () => {
   await assert.rejects(
