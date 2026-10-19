@@ -8,20 +8,34 @@
 }
 .secop-autocomplete-control {
   display: flex;
+  align-items: center;
   min-width: 0;
+  min-height: 44px;
+  border: 1px solid var(--secop-line);
+  border-radius: 6px;
+  background: var(--secop-bg);
+}
+.secop-autocomplete-control:focus-within {
+  outline: 2px solid var(--secop-accent);
+  outline-offset: 2px;
 }
 .secop-app .secop-autocomplete-control input {
   width: 100%;
   min-width: 0;
-  border-top-right-radius: 0;
-  border-bottom-right-radius: 0;
+  flex: 1 1 0;
+  border: 0;
+  background: transparent;
+  text-overflow: ellipsis;
+  font-weight: 400;
+  outline: none;
 }
 .secop-app .secop-autocomplete-toggle {
   display: grid;
   flex: 0 0 2.7rem;
   place-items: center;
   min-height: 42px;
-  margin-left: -1px;
+  border: 0;
+  background: transparent;
   padding: 0.45rem;
   border-top-left-radius: 0;
   border-bottom-left-radius: 0;
@@ -31,20 +45,23 @@
   font-size: 0.9rem;
   line-height: 1;
 }
-.secop-autocomplete-listbox {
+.secop-autocomplete-popup {
   position: absolute;
   z-index: 20;
   top: calc(100% + 0.2rem);
   right: 0;
   left: 0;
-  max-height: min(18rem, 50vh);
-  margin: 0;
-  padding: 0.25rem;
-  overflow-y: auto;
   border: 1px solid var(--secop-line);
   border-radius: 6px;
   background: var(--secop-bg);
   box-shadow: 0 8px 24px rgb(23 38 36 / 14%);
+  overflow: hidden;
+}
+.secop-autocomplete-listbox {
+  max-height: min(18rem, 40vh);
+  margin: 0;
+  padding: 0.25rem;
+  overflow-y: auto;
   list-style: none;
   font-size: 0.82rem;
   font-weight: 400;
@@ -68,6 +85,8 @@
 }
 
 .secop-filter-selections {
+  padding: 0.5rem;
+  border-bottom: 1px solid var(--secop-line);
   max-height: 6.5rem;
   overflow-y: auto;
   display: flex;
@@ -121,4 +140,22 @@
 .secop-filter-limit {
   font-weight: 400;
   color: var(--secop-muted);
+}
+
+.secop-selection-count {
+  flex-shrink: 0;
+  padding: 0.05rem 0.4rem;
+  border-radius: 4px;
+  background: var(--secop-soft);
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+.secop-autocomplete-popup .secop-filter-limit {
+  display: block;
+  padding: 0.25rem 0.5rem;
+}
+@media (pointer: coarse) {
+  .secop-autocomplete-option {
+    min-height: 44px;
+  }
 }
