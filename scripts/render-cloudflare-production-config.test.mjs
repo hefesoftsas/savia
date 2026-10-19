@@ -446,6 +446,10 @@ test("preview isolates worker names, bindings, origins, storage and schedules", 
         assert.ok(conf.assets.run_worker_first.includes("/webhooks/whatsapp"));
         assert.deepEqual(conf.routes, [
           { custom_domain: true, pattern: "savia-preview.hefesoft.com" },
+          {
+            pattern: "*.savia-preview.hefesoft.com/*",
+            zone_name: "hefesoft.com",
+          },
         ]);
       }
     }

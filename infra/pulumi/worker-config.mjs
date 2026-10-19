@@ -525,6 +525,11 @@ export async function renderProductionConfigs({
     };
     configs.admin.routes = [
       { custom_domain: true, pattern: new URL(rendered.publicOrigin).hostname },
+      // Preserve the existing tenant route; Custom Domains cannot use wildcards.
+      {
+        pattern: `*.${new URL(rendered.publicOrigin).hostname}/*`,
+        zone_name: "hefesoft.com",
+      },
     ];
   }
   for (const app of ["api", "auth", "savia-request", "connector-gateway"])

@@ -57,6 +57,40 @@ const readConfig = async (root, app, environment = "preview") =>
     ),
   );
 
+test("preview preserves canonical and wildcard tenant gateway routes", async () => {
+  const root = await mkdtemp(join(tmpdir(), "savia-iac-tenant-routes-"));
+  try {
+    await renderProductionConfigs({ ...preview, outputRoot: root });
+    const gateway = await readConfig(root, "admin");
+    assert.equal(gateway.name, "savia-preview");
+    assert.equal(gateway.vars.CANONICAL_HOST, "savia-preview.hefesoft.com");
+    assert.deepEqual(gateway.routes, [
+      { custom_domain: true, pattern: "savia-preview.hefesoft.com" },
+      {
+        pattern: "*.savia-preview.hefesoft.com/*",
+        zone_name: "hefesoft.com",
+      },
+    ]);
+    await renderProductionConfigs({ ...production, outputRoot: root });
+    const productionGateway = JSON.parse(
+      await readFile(
+        join(root, "apps/admin/wrangler.production.jsonc"),
+        "utf8",
+      ),
+    );
+    assert.equal(productionGateway.name, "savia");
+    assert.equal(productionGateway.vars.CANONICAL_HOST, "savia.hefesoft.com");
+    assert.equal(
+      productionGateway.routes.some((route) =>
+        route.pattern.includes("savia-preview"),
+      ),
+      false,
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("preview generates the isolated plugin editor manifest from the infrastructure project", async () => {
   const root = await mkdtemp(join(tmpdir(), "savia-iac-editor-"));
   try {
@@ -281,6 +315,7 @@ test("tenant subdomains reject reserved labels, wildcards, duplicates, and previ
     const gateway = await readConfig(root, "admin");
     assert.deepEqual(gateway.routes, [
       { custom_domain: true, pattern: "savia-preview.hefesoft.com" },
+      { pattern: "*.savia-preview.hefesoft.com/*", zone_name: "hefesoft.com" },
     ]);
   } finally {
     await rm(root, { recursive: true, force: true });
