@@ -2,16 +2,11 @@ import {
   previewNames,
   slugifyBranch,
 } from "../../scripts/preview-environment.mjs";
-import { fileURLToPath } from "node:url";
 import { assertAccountId } from "./naming.mjs";
 import { assertDeploymentAccount } from "./outputs.mjs";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-
-const projectRoot = fileURLToPath(
-  new URL("./branch-preview/", import.meta.url),
-);
 
 export function branchStackName(slug) {
   const validated = slugifyBranch(slug);
@@ -159,34 +154,6 @@ export function validateBranchOutputs(outputs, slug, runtimeAccountId) {
   }
   assertDeploymentAccount(outputs, runtimeAccountId);
   return outputs;
-}
-
-function stdoutOf(result) {
-  return typeof result === "string" ? result : (result?.stdout ?? "");
-}
-
-function assertEmptyBranchStack(stateText) {
-  const state = parseJson(stateText, "Pulumi state export");
-  if (!Array.isArray(state?.deployment?.resources)) {
-    throw new Error("Pulumi branch stack export has no resource list");
-  }
-  const managed = state.deployment.resources.filter(
-    (resource) =>
-      !["pulumi:pulumi:Stack", "pulumi:providers:cloudflare"].includes(
-        resource.type,
-      ),
-  );
-  if (managed.length > 0) {
-    throw new Error(
-      "Pulumi branch stack has resources but no validated outputs; refusing update",
-    );
-  }
-}
-
-function isMissingStack(error) {
-  return /no stack named|stack .* not found|no stack selected|does not exist/i.test(
-    String(error?.stderr ?? error?.stdout ?? error?.message ?? error),
-  );
 }
 
 async function lifecycleDependencies(options) {

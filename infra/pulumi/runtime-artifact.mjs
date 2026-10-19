@@ -57,7 +57,7 @@ async function normalizeBuildMetadata(directory) {
 }
 
 export async function freezeRuntimeRelease(
-  { environment, configs, destination, domainMigrations },
+  { environment, configs, destination, domainMigrations, sourceRevision },
   {
     runWrangler = async (args) => {
       try {
@@ -97,6 +97,15 @@ export async function freezeRuntimeRelease(
   const staging = join(work, "payload");
   await mkdir(staging);
   try {
+    if (sourceRevision !== undefined) {
+      if (!/^[a-f\d]{40}$/.test(sourceRevision))
+        throw new Error("Exact source revision required");
+      await writeFile(
+        join(staging, "release-source.json"),
+        JSON.stringify({ version: 1, sourceRevision }),
+        { mode: 0o600 },
+      );
+    }
     const frozen = {};
     if (domainMigrations)
       await cp(domainMigrations, join(staging, "migrations"), {
@@ -124,6 +133,26 @@ export async function freezeRuntimeRelease(
       );
       if (entries.length !== 1)
         throw new Error("Worker compiler must produce one entry module");
+      const requiredExports = [
+        ...(config.durable_objects?.bindings ?? [])
+          .filter(
+            (binding) =>
+              !binding.script_name || binding.script_name === config.name,
+          )
+          .map((binding) => binding.class_name),
+        ...(config.workflows ?? [])
+          .filter(
+            (binding) =>
+              !binding.script_name || binding.script_name === config.name,
+          )
+          .map((binding) => binding.class_name),
+      ];
+      if (
+        requiredExports.some((name) => !entries[0][1].exports?.includes(name))
+      )
+        throw new Error(
+          "Worker bundle is missing a declared Durable Object or Workflow export",
+        );
       const entry = resolve(dirname(path), entries[0][0]);
       const main = relative(directory, entry);
       if (

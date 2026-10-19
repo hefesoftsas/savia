@@ -1,4 +1,4 @@
-import { mkdtemp, readFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -40,10 +40,19 @@ export function createRuntimeOperations(
   let directory,
     publisher,
     bootstrap = { createdWorkers: [] };
-  const work = async () =>
-    (directory ??= await mkdtemp(
+  const work = async () => {
+    if (directory) return directory;
+    if (env.SAVIA_RUNTIME_OPERATION_DIRECTORY) {
+      if (!env.SAVIA_RUNTIME_OPERATION_DIRECTORY.startsWith("/"))
+        throw new Error("Private operation directory must be absolute");
+      directory = env.SAVIA_RUNTIME_OPERATION_DIRECTORY;
+      await mkdir(directory, { recursive: true, mode: 0o700 });
+      return directory;
+    }
+    return (directory = await mkdtemp(
       join(tmpdir(), `savia-runtime-${inputs.environment}-`),
     ));
+  };
   const mutationGate = () => {
     if (
       inputs.environment === "production" &&
@@ -72,6 +81,7 @@ export function createRuntimeOperations(
         publisher = await createStandardPublisher(inputs, {
           env,
           root,
+          client,
           recoveryDirectory: join(await work(), "recovery"),
           run,
           runWrangler,
@@ -133,6 +143,7 @@ export function createRuntimeOperations(
               fresh || retained || paused ? "maintenance" : "active",
           },
           root,
+          client,
           recoveryDirectory: join(await work(), "recovery"),
           run,
           runWrangler,

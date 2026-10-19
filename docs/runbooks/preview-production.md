@@ -7,6 +7,14 @@ remain disabled until a separately authorized rebuild. See
 
 ## Delivery flow
 
+Runtime publication now goes through one saved Pulumi lifecycle plan and a frozen
+release artifact. Native Worker identities and persistence belong to their
+environment stack; `RuntimeRelease` owns code and attachments. Backup, pause,
+migration, ordered publication and recovery run inside that resource. CI keeps
+its trusted-main checks and emits promotion evidence only after verification.
+See [environment ownership](pulumi-environment-ownership.md) for the migration
+and commands. Source integration does not itself confirm live adoption.
+
 `main` push → Savia CI → Deploy Savia preview → manual production promotion.
 
 The workflow selects a compatible plugin-only lane or a complete platform
@@ -61,7 +69,7 @@ The Savia Request Worker shares the domain D1 database. Its global
 `installed_bundles` ledger is created by
 `packages/db/migrations/0075_savia_request_installed_bundles.sql`; the
 insurance package installer needs this table to prepare quote flows.
-Generated configuration stays ignored by Git. Secret uploads use
+Generated configuration stays ignored by Git. The runtime adapter builds secret uploads with
 `upload-cloudflare-secrets.mjs`, which validates every Worker name and passes an
 explicit environment config to `wrangler secret bulk`. Do not use the
 wrangler-action `secrets` input: it ignores the deploy command's `--config` and
@@ -126,7 +134,7 @@ newer integration records remain intact.
 
 If a released feature disappears after **Actualizar y recargar**:
 
-1. Compare the gateway's active version with **Verify deployed gateway** in the
+1. Compare the gateway's active version with **Apply the exact managed runtime plan** in the
    latest successful **Deploy Savia preview** run. Use the run's tested commit
    and version ID; a health check alone does not identify its frontend release.
 

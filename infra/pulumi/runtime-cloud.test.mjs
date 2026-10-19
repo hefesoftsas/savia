@@ -326,6 +326,16 @@ test("a persisted Flows pause is observed without changing data or exposing cont
     JSON.stringify(snapshot).includes("savia_flows_execution_control"),
     false,
   );
+  flags.push({
+    type: "plain_text",
+    name: "SAVIA_FLOWS_POLICY_GENERATION",
+    text: "101",
+  });
+  assert.deepEqual(
+    (await client.readSnapshot()).maintenanceWorkerNames,
+    [],
+    "a newer final generation supersedes the backup pause on admission",
+  );
   flags[0].text = "false";
   assert.deepEqual((await client.readSnapshot()).maintenanceWorkerNames, []);
 });

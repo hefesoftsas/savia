@@ -31,16 +31,15 @@ automatic operation performed by this change.
 1. Inventory Cloudflare again and confirm the desired production resource names
    are absent. If any exist, inspect ownership and import only those verified
    resources. Never treat the old deleted checkpoint as a current inventory.
-2. In an isolated private local Pulumi backend, initialize a new `production`
-   stack for `infra/pulumi`, retaining the desired production configuration and
-   using the securely held passphrase. Preview and shared registry stacks must
-   not be modified. Review the plan before creating the empty D1 databases,
-   documents and backup buckets, and protected `savia-pulumi-state` backend.
-3. Export the new checkpoint privately and migrate it into the newly provisioned
-   production R2 backend using the existing Pulumi backend migration procedure.
-   Verify a refreshed plan, deletion protection, account identity, outputs, and
-   new database IDs. The normal `deploy-stack.mjs` command intentionally selects
-   an existing stack and cannot bootstrap this empty environment.
+2. Verify the independent protected management checkpoint and existing readable
+   backend. Production must use that custody without creating or owning a state
+   bucket. Review the exact production persistence plan using
+   `environment.mjs plan --environment production --provision`; apply it only
+   under separately authorized production gates and reviewed `main`.
+3. Verify the empty persistence checkpoint, account, data IDs and create-only
+   bootstrap proof before preparing an immutable release. Do not reuse the
+   deleted production checkpoint or bootstrap through an application-owned
+   backend. Keep Preview and shared-registry state unchanged.
 4. Rehydrate the production application secrets from authorized private custody.
    Application secret copies were removed from GitHub and
    `production-backup` was deleted. Recreate the backup environment and its
@@ -50,14 +49,13 @@ automatic operation performed by this change.
    settings or break that deployment when configuring the application. Separate
    the application environment or migrate registry credentials in a reviewed
    change before enabling application deployment.
-5. Render manifests from the new stack outputs, apply D1 migrations, and
-   bootstrap the production Worker service targets and backup coordinator in
-   the dependency order documented in
-   [infrastructure recovery](pulumi-infrastructure.md). Use new namespaces and
-   production names only. The regular release workflow expects an initialized,
-   running environment and a successful pre-release backup; it is not a complete
-   first-install workflow. Keep public application routes disabled during this
-   bootstrap. Do not deploy the historical domain-transition redirect bridge.
+5. Prepare one immutable production artifact and reviewed lifecycle plan. The
+   standard first-install path verifies fresh empty persistence and starts
+   paused maintenance endpoints before capturing its mandatory encrypted backup.
+   Retained environments instead back up existing data before schema migration.
+   Partial initialization fails closed and requires explicit reconciliation.
+   Apply the saved plan through `environment.mjs`; do not deploy independent
+   Worker versions or the historical domain-transition redirect bridge.
 6. Verify the initialized environment, capture and restore-test a new encrypted
    backup, and run production preflight with the new outputs and credentials.
    Confirm successful Preview evidence for the intended release commit. Only

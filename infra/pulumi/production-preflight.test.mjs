@@ -920,3 +920,28 @@ test("production cannot treat its own checkpoint as proof of management backend 
     /management/i,
   );
 });
+
+test("management custody discovery uses one actual qualified checkpoint without an undeclared CI variable", async () => {
+  const { resolveManagementStack } = await import("./production-preflight.mjs");
+  const rows = [
+    { name: "organization/savia-cloudflare/production" },
+    { name: "organization/savia-management/management" },
+  ];
+  assert.equal(
+    resolveManagementStack(rows),
+    "organization/savia-management/management",
+  );
+  assert.throws(() => resolveManagementStack([]), /management checkpoint/);
+  assert.throws(
+    () =>
+      resolveManagementStack([
+        ...rows,
+        { name: "other/savia-management/management" },
+      ]),
+    /management checkpoint/,
+  );
+  assert.throws(
+    () => resolveManagementStack(rows, "other/savia-management/management"),
+    /management checkpoint/,
+  );
+});

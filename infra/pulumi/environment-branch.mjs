@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, writeFile, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve, relative, isAbsolute } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -49,6 +49,16 @@ export async function runBranchDeployment(
       !["--dry-run", "--skip-admin", "--enable-schedules"].includes(argv[index])
     )
       throw new Error("Unknown branch deployment option");
+  }
+  sourceRoot = resolve(sourceRoot);
+  if (!dry && sourceRoot !== root && !skipAdmin) {
+    if (
+      env.SAVIA_RELEASE_ASSETS_PREBUILT !== "true" ||
+      !(await stat(join(sourceRoot, "apps/admin/dist/index.html"))).isFile()
+    )
+      throw new Error(
+        "Selected source assets must be built before deployment credentials are exposed",
+      );
   }
   const directory = await mkdtemp(join(tmpdir(), `savia-branch-${slug}-`));
   let inventory, deps;
@@ -131,15 +141,47 @@ export async function runBranchDeployment(
       ? path
       : resolve(sourceRoot, local);
   };
+  const buildEnv = Object.fromEntries(
+    Object.entries(env).filter(([key]) =>
+      [
+        "PATH",
+        "HOME",
+        "TMPDIR",
+        "TMP",
+        "TEMP",
+        "CI",
+        "NODE_OPTIONS",
+        "PNPM_HOME",
+        "PNPM_CONFIG_STRICT_DEP_BUILDS",
+      ].includes(key),
+    ),
+  );
+  const sourceRevision = dry
+    ? undefined
+    : (
+        await run("git", ["rev-parse", "HEAD"], {
+          cwd: sourceRoot,
+          env: buildEnv,
+        })
+      ).stdout.trim();
+  if (
+    !dry &&
+    (!/^[a-f\d]{40}$/.test(sourceRevision) ||
+      (env.SAVIA_RELEASE_SOURCE_SHA &&
+        env.SAVIA_RELEASE_SOURCE_SHA !== sourceRevision))
+  )
+    throw new Error(
+      "Selected source revision differs from the approved branch commit",
+    );
   let assetsDir;
   if (kinds.includes("gateway")) {
     if (dry) {
       assetsDir = join(directory, "empty-assets");
       await mkdir(assetsDir);
-    } else
+    } else if (sourceRoot === root)
       await run("pnpm", ["--filter", "@savia/admin", "run", "build"], {
         cwd: sourceRoot,
-        env,
+        env: buildEnv,
       });
   }
   const configDir = join(directory, "configs");
@@ -176,6 +218,7 @@ export async function runBranchDeployment(
   const artifact = await freeze({
     environment,
     configs,
+    sourceRevision,
     destination: join(directory, "release"),
     domainMigrations: join(sourceRoot, "packages/db/migrations"),
   });

@@ -63,7 +63,7 @@ export async function warmupStandardRuntime(
         const results = await client.api(`/d1/database/${row.cloudId}/query`, {
           method: "POST",
           body: {
-            sql: "SELECT name FROM sqlite_schema WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%'",
+            sql: "SELECT name FROM sqlite_schema WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name <> '_cf_KV'",
           },
         });
         if (
@@ -121,7 +121,7 @@ export async function warmupStandardRuntime(
       );
   }
   const uploads = buildSecretUploads(inputs.environment, env);
-  for (const upload of uploads) {
+  for (const upload of bootstrap ? uploads : []) {
     const target = configs.find(({ config }) => config.name === upload.worker);
     if (!target) throw new Error("Warmup secret target is absent");
     await runWrangler(
@@ -138,13 +138,31 @@ export async function warmupStandardRuntime(
       },
     );
   }
-  await mkdir(directory, { recursive: true, mode: 0o700 });
   const suffix = inputs.environment === "preview" ? "-preview" : "";
-  for (const name of [
+  const warmupNames = [
     `savia-backup-coordinator${suffix}`,
     `savia-agencies${suffix}`,
     `savia-flows${suffix}`,
-  ]) {
+  ];
+  if (!bootstrap)
+    for (const { config } of configs.filter(({ config }) =>
+      warmupNames.includes(config.name),
+    )) {
+      const settings = await client.api(
+        `/workers/scripts/${config.name}/settings`,
+      );
+      const present = new Set(
+        (settings.bindings ?? [])
+          .filter((binding) => binding.type === "secret_text")
+          .map((binding) => binding.name),
+      );
+      if ((config.secrets?.required ?? []).some((name) => !present.has(name)))
+        throw new Error(
+          "Retained maintenance secret custody is incomplete; recover existing keys before publication",
+        );
+    }
+  await mkdir(directory, { recursive: true, mode: 0o700 });
+  for (const name of warmupNames) {
     const target = configs.find(({ config }) => config.name === name);
     if (!target) continue;
     const config = structuredClone(target.config),

@@ -30,6 +30,9 @@ Do not pass `--show-secrets`, commit checkpoints, or expose the state bucket.
 
 ## Environment ownership migration
 
+See [environment ownership](pulumi-environment-ownership.md) for the complete
+stack map, immutable release commands and controlled CI migration procedure.
+
 The environment ownership source defines `savia-management/management` as the
 sole owner of the existing protected `savia-pulumi-state-preview` bucket. This
 source change does not itself confirm that the live ownership transfer ran.

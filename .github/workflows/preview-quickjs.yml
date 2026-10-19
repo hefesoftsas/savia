@@ -1,7 +1,7 @@
 name: QuickJS hook labeled PR preview
 
 on:
-  pull_request:
+  pull_request_target:
     branches: [main]
     types: [labeled]
 
@@ -13,7 +13,35 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  build:
+    if: >-
+      ${{ github.event.pull_request.head.repo.full_name == github.repository &&
+        github.event.pull_request.base.ref == 'main' &&
+        github.event.label.name == 'quickjs-preview' }}
+    name: Build reviewed QuickJS assets without deployment credentials
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.24.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @savia/admin run build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: reviewed-quickjs-admin-assets
+          path: apps/admin/dist
+          retention-days: 1
+
   preview:
+    needs: build
     if: >-
       ${{ github.event.pull_request.head.repo.full_name == github.repository &&
         github.event.pull_request.base.ref == 'main' &&
@@ -28,10 +56,21 @@ jobs:
       PREVIEW_SHA: ${{ github.event.pull_request.head.sha }}
       PR_NUMBER: ${{ github.event.pull_request.number }}
     steps:
-      - name: Check out pull request source
+      - name: Check out trusted lifecycle tooling
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Pin the explicitly reviewed pull request source
+        env:
+          SOURCE_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          git fetch --no-tags --no-recurse-submodules origin "$SOURCE_SHA"
+          git -c core.hooksPath=/dev/null worktree add --detach "$RUNNER_TEMP/savia-release-source" "$SOURCE_SHA"
+          echo "SAVIA_RELEASE_SOURCE_ROOT=$RUNNER_TEMP/savia-release-source" >> "$GITHUB_ENV"
+          echo "SAVIA_RELEASE_SOURCE_SHA=$SOURCE_SHA" >> "$GITHUB_ENV"
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
@@ -47,11 +86,21 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Install selected source dependencies without deployment credentials
+        working-directory: ${{ env.SAVIA_RELEASE_SOURCE_ROOT }}
+        run: pnpm install --frozen-lockfile --ignore-scripts --ignore-pnpmfile
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: reviewed-quickjs-admin-assets
+          path: ${{ env.SAVIA_RELEASE_SOURCE_ROOT }}/apps/admin/dist
+
       - uses: ./.github/actions/install-pulumi
 
       - name: Deploy explicitly labeled QuickJS branch preview
         run: node scripts/preview-deploy.mjs --branch "$PREVIEW_BRANCH"
         env:
+          SAVIA_RELEASE_ASSETS_PREBUILT: "true"
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           PULUMI_BACKEND_URL: ${{ secrets.PULUMI_BACKEND_URL }}
@@ -67,6 +116,6 @@ jobs:
 
       - name: Record the deployed commit
         run: |
-          test "$(git rev-parse HEAD)" = "$PREVIEW_SHA"
+          test "$(git -C "$SAVIA_RELEASE_SOURCE_ROOT" rev-parse HEAD)" = "$PREVIEW_SHA"
           printf 'QuickJS preview for labeled pull request #%s deployed at %s.\n' \
             "$PR_NUMBER" "$PREVIEW_SHA"

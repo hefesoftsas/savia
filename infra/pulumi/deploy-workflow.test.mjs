@@ -1,14 +1,13 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-
 for (const [file, stack] of [
-  ["deploy-preview.yml", "preview"],
-  ["deploy-cloudflare.yml", "production"],
+  ["deploy-preview", "preview"],
+  ["deploy-cloudflare", "production"],
 ]) {
-  test(`${stack} deployment loads the imported IaC stack before publishing Workers`, async () => {
+  test(`${stack} loads validated outputs before one immutable managed publication`, async () => {
     const source = await readFile(
-      new URL(`../../.github/workflows/${file}`, import.meta.url),
+      new URL(`../../.github/workflows/${file}.yml`, import.meta.url),
       "utf8",
     );
     assert.match(source, /uses: \.\/\.github\/actions\/pulumi-infrastructure/);
@@ -25,98 +24,46 @@ for (const [file, stack] of [
       source,
       /vars\.SAVIA_(?:AUTH_D1_ID|DOMAIN_D1_ID|DOCUMENTS_BUCKET|PUBLIC_ORIGIN)/,
     );
-    const load = source.indexOf("- name: Load infrastructure stack outputs");
-    const apply = source.indexOf(
-      "- name: Apply infrastructure before Worker deployment",
+    const load = source.indexOf("name: Load infrastructure stack outputs"),
+      prepare = source.indexOf("name: Prepare one immutable runtime release"),
+      plan = source.indexOf("name: Review the saved managed runtime plan"),
+      apply = source.indexOf("name: Apply the exact managed runtime plan");
+    assert.ok(load >= 0 && prepare > load && plan > prepare && apply > plan);
+    const guard = source.indexOf(
+      stack === "preview"
+        ? "name: Verify isolated preview resources before any mutation"
+        : "name: Run the production readiness preflight before any mutation",
     );
-    const worker = source.indexOf("- name: Deploy savia-auth");
-    assert.ok(load >= 0 && apply > load && worker > apply);
-    if (stack === "preview") {
-      const verify = source.indexOf(
-        "- name: Verify isolated preview resources before any mutation",
-      );
-      assert.ok(verify > load && verify < apply);
-    }
-    if (stack === "production") {
+    assert.ok(guard > load && guard < prepare);
+    assert.match(
+      source,
+      new RegExp(
+        `environment\\.mjs apply --environment ${stack}.*--artifact.*--plan.*--apply`,
+      ),
+    );
+    assert.doesNotMatch(
+      source,
+      /command:.*deploy --config|flows-preview-recovery\.mjs --action restore|finalize-domain-transition/,
+    );
+    if (stack === "production")
       assert.match(
         source,
-        /if: \$\{\{ vars\.PRODUCTION_OPERATIONS_ENABLED == 'true' && github\.event_name == 'workflow_dispatch' && github\.ref == 'refs\/heads\/main'/,
+        /vars\.PRODUCTION_OPERATIONS_ENABLED == 'true'.*github\.ref == 'refs\/heads\/main'/,
       );
-      const preflight = source.indexOf(
-        "- name: Run the production readiness preflight before any mutation",
-      );
-      const backup = source.indexOf(
-        "- name: Capture production backup before apply",
-      );
-      const encrypted = source.indexOf(
-        "- name: Retain and verify encrypted production recovery archive in private R2",
-      );
-      const applyIndex = source.indexOf(
-        "- name: Apply infrastructure before Worker deployment",
-      );
-      const executor = source.indexOf(
-        "- name: Deploy private QuickJS hook executor",
-      );
-      const flows = source.indexOf("- name: Deploy private Savia Flows");
-      const api = source.indexOf("- name: Deploy savia-agencies");
-      const gatewayVerification = source.indexOf(
-        "- name: Verify deployed gateway",
-      );
-      const recovery = source.indexOf(
-        "- name: Restore production Worker deployments after a failed rollout",
-      );
-      assert.ok(
-        preflight > load &&
-          backup > preflight &&
-          encrypted > backup &&
-          applyIndex > encrypted,
-      );
-      assert.ok(executor > applyIndex && flows > executor && api > flows);
-      assert.ok(recovery > gatewayVerification);
-      assert.match(source, /node infra\/pulumi\/production-preflight\.mjs/);
-      assert.match(
-        source,
-        /node scripts\/flows-preview-recovery\.mjs --action capture --environment production/,
-      );
-      assert.match(source, /node scripts\/production-backup\.mjs --artifact/);
-      assert.equal(
-        (
-          source.match(
-            /SAVIA_BACKUP_CONTROL_SECRET: \$\{\{ secrets\.SAVIA_BACKUP_CONTROL_SECRET \}\}/g,
-          ) ?? []
-        ).length >= 3,
-        true,
-        "production API upload and both release backup modes need the control secret",
-      );
-      assert.doesNotMatch(
-        source,
-        /node infra\/pulumi\/backup\.mjs --stack production --apply/,
-      );
-      assert.match(source, /node scripts\/verify-flows-preview\.mjs/);
-      assert.match(
-        source,
-        /node scripts\/production-backup-r2\.mjs --artifact[^\n]*--kind release/,
-      );
-      assert.match(
-        source,
-        /- name: Remove plaintext production backup material[\s\S]*?if: always\(\)/,
-      );
-    }
     assert.match(
       source,
       /CLOUDFLARE_DATABASE_ID: \$\{\{ env\.SAVIA_DOMAIN_D1_ID \}\}/,
     );
   });
 }
-
-test("temporary previews and the shared registry use the central infrastructure toolchain", async () => {
+test("temporary previews and registry use the central infrastructure toolchain", async () => {
   for (const file of [
-    "preview-environment.yml",
-    "preview-quickjs.yml",
-    "deploy-plugin-registry.yml",
+    "preview-environment",
+    "preview-quickjs",
+    "deploy-plugin-registry",
   ]) {
     const source = await readFile(
-      new URL(`../../.github/workflows/${file}`, import.meta.url),
+      new URL(`../../.github/workflows/${file}.yml`, import.meta.url),
       "utf8",
     );
     assert.match(source, /uses: \.\/\.github\/actions\/install-pulumi/);
@@ -128,12 +75,13 @@ test("temporary previews and the shared registry use the central infrastructure 
       source,
       /AWS_SECRET_ACCESS_KEY: \$\{\{ secrets\.R2_STATE_SECRET_ACCESS_KEY \}\}/,
     );
-    if (file === "deploy-plugin-registry.yml") {
-      assert.match(source, /node infra\/pulumi\/shared-registry\/render\.mjs/);
+    if (file === "deploy-plugin-registry") {
+      assert.match(source, /environment\.mjs apply --environment shared/);
       assert.match(
         source,
-        /wrangler deploy --config wrangler\.production\.jsonc/,
+        /REGISTRY_CREDENTIALS: \$\{\{ secrets\.PLUGIN_REGISTRY_CREDENTIALS \}\}/,
       );
+      assert.doesNotMatch(source, /wrangler deploy|\.registry-secrets\.json/);
     }
   }
 });

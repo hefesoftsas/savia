@@ -491,6 +491,22 @@ export function normalizeProductionConfig(raw) {
   return config;
 }
 
+export function resolveManagementStack(summaries, selected) {
+  if (!Array.isArray(summaries))
+    throw new Error("Readable management checkpoint inventory required");
+  const names = summaries
+    .map((row) => row.name)
+    .filter((name) =>
+      /^[\w.-]+\/savia-management\/management$/.test(name ?? ""),
+    );
+  if (
+    new Set(names).size !== names.length ||
+    (selected ? !names.includes(selected) : names.length !== 1)
+  )
+    throw new Error("One verified qualified management checkpoint is required");
+  return selected ?? names[0];
+}
+
 async function main() {
   const cwd = fileURLToPath(new URL(".", import.meta.url));
   assertBackendConfigured(process.env);
@@ -515,9 +531,15 @@ async function main() {
       exec("pulumi", ["stack", "export", "--stack", "production"], options),
       exec("pulumi", ["config", "--json", "--stack", "production"], options),
     ]);
-  const managementStack = process.env.SAVIA_MANAGEMENT_STACK;
-  if (!/^[\w.-]+\/savia-management\/management$/.test(managementStack ?? ""))
-    throw new Error("Qualified management stack is required");
+  const { stdout: managementStacks } = await exec(
+    "pulumi",
+    ["stack", "ls", "--all", "--json", "--fully-qualify-stack-names"],
+    options,
+  );
+  const managementStack = resolveManagementStack(
+    JSON.parse(managementStacks),
+    process.env.SAVIA_MANAGEMENT_STACK,
+  );
   const [{ stdout: managementOutputs }, { stdout: managementCheckpoint }] =
     await Promise.all([
       exec(

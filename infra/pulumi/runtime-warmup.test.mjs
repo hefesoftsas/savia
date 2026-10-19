@@ -32,6 +32,13 @@ test("new standard schema initialization requires create-only custody and empty 
             {
               name,
               main: "worker.mjs",
+              ...(name === "savia-agencies-preview"
+                ? {
+                    secrets: {
+                      required: ["ASSISTANT_SETTINGS_ENCRYPTION_KEY"],
+                    },
+                  }
+                : {}),
               routes: [
                 { pattern: "savia-preview.hefesoft.com", custom_domain: true },
               ],
@@ -76,7 +83,8 @@ test("new standard schema initialization requires create-only custody and empty 
       "NANGO_API_KEY",
     ])
       env[key] = "CANARY_SECRET";
-    let existing = false;
+    let existing = false,
+      hasOpaque = true;
     const deps = {
       env,
       root: directory,
@@ -94,7 +102,18 @@ test("new standard schema initialization requires create-only custody and empty 
                   results: existing ? [{ name: "business" }] : [],
                 },
               ]
-            : [],
+            : path.endsWith("/settings")
+              ? {
+                  bindings: hasOpaque
+                    ? [
+                        {
+                          type: "secret_text",
+                          name: "ASSISTANT_SETTINGS_ENCRYPTION_KEY",
+                        },
+                      ]
+                    : [],
+                }
+              : [],
       },
       run: async (...args) => calls.push(args),
       runWrangler: async (args, options) =>
@@ -133,7 +152,19 @@ test("new standard schema initialization requires create-only custody and empty 
     assert.deepEqual(config.triggers.crons, []);
     calls.length = 0;
     existing = true;
+    hasOpaque = false;
+    await assert.rejects(
+      warmupStandardRuntime(inputs, { ...deps, fresh: false }),
+      /secret custody is incomplete/,
+    );
+    assert.equal(calls.length, 0);
+    hasOpaque = true;
     await warmupStandardRuntime(inputs, { ...deps, fresh: false });
+    assert.equal(
+      calls.some((row) => row[1][0] === "secret"),
+      false,
+      "retained opaque keys must never be overwritten before recovery backup",
+    );
     assert.equal(
       calls.some(([binary]) => binary === "node"),
       false,

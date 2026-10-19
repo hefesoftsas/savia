@@ -1,3 +1,4 @@
+import { configurePluginEditorPreview } from "../../scripts/configure-plugin-editor-preview.mjs";
 import { join, isAbsolute, dirname } from "node:path";
 import { mkdir, readFile, writeFile, rm, stat } from "node:fs/promises";
 import {
@@ -183,7 +184,11 @@ export function standardReleaseCommands({
     "pluginEditor",
     "gateway",
   ])
-    if (configs[kind]) deploy.push(wrangler(kind));
+    if (configs[kind]) {
+      deploy.push(wrangler(kind));
+      if (kind === "pluginEditor")
+        deploy.push({ kind: "plugin-editor-verify" });
+    }
   if (configs.gateway)
     verify.push({
       kind: "wrangler",
@@ -216,6 +221,7 @@ export async function createStandardPublisher(
   {
     env = process.env,
     root,
+    client,
     recoveryDirectory,
     run,
     runWrangler,
@@ -309,6 +315,14 @@ export async function createStandardPublisher(
       });
       await writeFile(step.metadataPath, JSON.stringify(canonical), {
         mode: 0o600,
+      });
+    } else if (step.kind === "plugin-editor-verify") {
+      const { subdomain } = await client.api("/workers/subdomain");
+      if (!/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(subdomain ?? ""))
+        throw new Error("Cannot verify the account plugin editor origin");
+      await configurePluginEditorPreview({
+        deploymentUrl: `https://savia-plugin-editor-preview.${subdomain}.workers.dev`,
+        githubEnvPath: join(recoveryDirectory, "plugin-editor-origin"),
       });
     } else if (step.kind === "drain") await sleep(step.milliseconds);
     else if (step.kind === "node")

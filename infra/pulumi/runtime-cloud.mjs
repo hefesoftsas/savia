@@ -213,7 +213,14 @@ export function createRuntimeCloudClient(
           );
           if (rows.some((row) => row.paused !== 0 && row.paused !== 1))
             throw new Error("Invalid Flows execution policy");
-          maintenance = rows.some((row) => row.paused === 1);
+          const generation = Number(flags.SAVIA_FLOWS_POLICY_GENERATION);
+          maintenance = rows.some(
+            (row) =>
+              row.paused === 1 &&
+              (!Number.isSafeInteger(generation) ||
+                generation < 1 ||
+                row.generation >= generation),
+          );
         }
       }
       if (maintenance) maintenanceWorkerNames.push(worker.name);
