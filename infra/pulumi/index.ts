@@ -1,5 +1,7 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as cloudflare from "@pulumi/cloudflare";
+import { registerConfiguredRuntime } from "./runtime-resources.ts";
+import { VectorizeIndex } from "./vectorize-resource.ts";
 import { validateTenantSubdomains } from "./worker-config.mjs";
 import {
   resolveInfraNames,
@@ -11,14 +13,8 @@ import {
   PRODUCTION_BACKUP_RETENTION_DAYS,
 } from "./naming.mjs";
 
-// Hybrid model (recommended by Cloudflare for Pulumi + Wrangler):
-// - Pulumi owns stateful resources: D1 databases + R2 bucket.
-// - Wrangler still owns Worker code deploys, bindings, migrations, assets.
-// This avoids Pulumi/Wrangler fighting over Worker scripts while giving
-// `pulumi preview` drift detection for data-plane resources.
-//
-// Vectorize bootstrap stays in vectorize.mjs and runs only when explicitly
-// requested. Standard deployments bind the existing index from stack outputs.
+// Pulumi owns persistence, Worker identities and the managed RuntimeRelease.
+// That release invokes Wrangler as the sole publisher of code and attachments.
 
 const config = new pulumi.Config();
 const accountId = assertAccountId(config.require("accountId"));
@@ -235,3 +231,80 @@ export const flowsResources = flows
 export const plannedFlowsResourceNames = names.flows;
 export const stateBackendBucketName = stateBackend?.name ?? null;
 export const stateBackendUrl = stateBackendUrlValue;
+
+// Ownership is enabled by a reviewed adoption plan. Existing persistence
+// logical names and parents stay unchanged during that bookkeeping operation.
+const search =
+  config.getBoolean("runtimeManaged") && names.vectorizeIndex
+    ? new VectorizeIndex(
+        "pages-search",
+        {
+          accountId,
+          environment: names.environment,
+          name: names.vectorizeIndex,
+          dimensions: 1024,
+          metric: "cosine",
+          adoptExisting: config.getBoolean("adoptSearchIndex") ?? true,
+          deleteData: config.getBoolean("deleteRuntimeData") ?? false,
+        },
+        { protect: true },
+      )
+    : undefined;
+const runtime = registerConfiguredRuntime(config, {
+  accountId,
+  environment: names.environment,
+  dataDependencies: [
+    authDb,
+    domainDb,
+    documents,
+    ...(flows ? Object.values(flows) : []),
+    ...(search ? [search] : []),
+    ...(productionBackups ? [productionBackups] : []),
+  ],
+  dataInventory: pulumi.output([
+    { kind: "d1", name: names.databases.auth, cloudId: authDb.id },
+    { kind: "d1", name: names.databases.domain, cloudId: domainDb.id },
+    { kind: "r2", name: names.bucket, cloudId: documents.name },
+    ...(search
+      ? [
+          {
+            kind: "vectorize",
+            name: names.vectorizeIndex!,
+            cloudId: names.vectorizeIndex!,
+          },
+        ]
+      : []),
+    ...(productionBackups
+      ? [
+          {
+            kind: "r2",
+            name: names.backupBucket!,
+            cloudId: productionBackups.name,
+          },
+        ]
+      : []),
+    ...(flows
+      ? [
+          {
+            kind: "d1",
+            name: names.flows.database,
+            cloudId: flows.database.id,
+          },
+          { kind: "kv", name: names.flows.kvNamespace, cloudId: flows.kv.id },
+          ...(["resources", "datasets", "inboxes"] as const).map((kind) => ({
+            kind: "r2",
+            name: names.flows.buckets[kind],
+            cloudId: flows[`${kind}Bucket`].name,
+          })),
+          { kind: "queue", name: names.flows.queue, cloudId: flows.queue.id },
+          {
+            kind: "queue",
+            name: names.flows.deadLetterQueue,
+            cloudId: flows.deadLetterQueue.id,
+          },
+        ]
+      : []),
+  ]),
+});
+export const environmentInventory = runtime?.inventory ?? null;
+export const runtimeStatus = runtime?.status ?? "unmanaged";

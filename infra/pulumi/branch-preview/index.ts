@@ -1,5 +1,6 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as cloudflare from "@pulumi/cloudflare";
+import { registerConfiguredRuntime } from "../runtime-resources.ts";
 import { assertAccountId } from "../naming.mjs";
 import { branchStackName } from "../branch-preview-resources.mjs";
 import { previewNames } from "../../../scripts/preview-environment.mjs";
@@ -103,3 +104,18 @@ export const domainDatabaseName = domainDatabase.name;
 export const documentsBucketName = documents.name;
 export const authD1Id = authDatabase.uuid;
 export const domainD1Id = domainDatabase.uuid;
+
+const runtime = registerConfiguredRuntime(config, {
+  accountId,
+  environment: expectedStack,
+  dataDependencies: [authDatabase, domainDatabase, documents],
+  dataInventory: pulumi
+    .all([authDatabase.uuid, domainDatabase.uuid, documents.name])
+    .apply(([auth, domain, bucket]) => [
+      { kind: "d1", name: names.databases.auth, cloudId: auth },
+      { kind: "d1", name: names.databases.domain, cloudId: domain },
+      { kind: "r2", name: names.bucket, cloudId: bucket },
+    ]),
+});
+export const environmentInventory = runtime?.inventory ?? null;
+export const runtimeStatus = runtime?.status ?? "unmanaged";
