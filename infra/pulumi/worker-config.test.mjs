@@ -315,6 +315,7 @@ test("tenant subdomains reject reserved labels, wildcards, duplicates, and previ
     const gateway = await readConfig(root, "admin");
     assert.deepEqual(gateway.routes, [
       { custom_domain: true, pattern: "savia-preview.hefesoft.com" },
+      { pattern: "*.savia-preview.hefesoft.com/*", zone_name: "hefesoft.com" },
     ]);
   } finally {
     await rm(root, { recursive: true, force: true });
