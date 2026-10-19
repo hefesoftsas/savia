@@ -19,7 +19,9 @@ and production Pulumi dispatch require the repository variable
 `PRODUCTION_OPERATIONS_ENABLED` to equal `true`. Keep it unset or false while
 production is stopped. The previously disabled GitHub workflows also remain
 disabled; restoring source is not an instruction to enable them. Preview dispatch
-does not require this production flag.
+does not require this production flag. Production Pulumi dispatch additionally
+requires `main`; enabling the flag does not allow branch-controlled production
+infrastructure updates.
 
 ## Future rebuild sequence
 

@@ -64,7 +64,7 @@ jobs:
   preview:
     name: Pulumi preview
     needs: [unit, runtime-compatibility]
-    if: ${{ github.event_name == 'workflow_dispatch' && (inputs.stack == 'preview' || (inputs.stack == 'production' && vars.PRODUCTION_OPERATIONS_ENABLED == 'true')) }}
+    if: ${{ github.event_name == 'workflow_dispatch' && (inputs.stack == 'preview' || (inputs.stack == 'production' && vars.PRODUCTION_OPERATIONS_ENABLED == 'true' && github.ref == 'refs/heads/main')) }}
     runs-on: ubuntu-24.04
     concurrency:
       group: savia-${{ inputs.stack }}

@@ -163,7 +163,7 @@ test("production operations fail closed behind an explicit repository variable",
   );
   assert.match(
     pulumi,
-    /if: \$\{\{ github\.event_name == 'workflow_dispatch' && \(inputs\.stack == 'preview' \|\| \(inputs\.stack == 'production' && vars\.PRODUCTION_OPERATIONS_ENABLED == 'true'\)\) \}\}/,
+    /if: \$\{\{ github\.event_name == 'workflow_dispatch' && \(inputs\.stack == 'preview' \|\| \(inputs\.stack == 'production' && vars\.PRODUCTION_OPERATIONS_ENABLED == 'true' && github\.ref == 'refs\/heads\/main'\)\) \}\}/,
   );
   assert.match(pulumi, /options: \[preview, production\]/);
 });
