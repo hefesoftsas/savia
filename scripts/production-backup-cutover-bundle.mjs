@@ -204,7 +204,7 @@ function entryModule(snapshot) {
 
 function guardSource({ mainModule, guardName, coreName, controlName }) {
   const importPath = `./${mainModule.split("/").map(encodeURIComponent).join("/")}`;
-  return `import { guardStorageEnvironment } from ${JSON.stringify(`./${coreName}`)};\nimport { backupCapability, handleBackupControl } from ${JSON.stringify(`./${controlName}`)};\nimport original from ${JSON.stringify(importPath)};\nexport * from ${JSON.stringify(importPath)};\nconst originalFetch = original?.fetch;\nif (typeof originalFetch !== "function") throw new Error("Captured Worker has no default fetch handler");\nconst wrapped = {\n  async fetch(request, env, ctx) {\n    const capability = backupCapability(request, env);\n    if (capability) return capability;\n    const control = await handleBackupControl(request, env);\n    if (control) return control;\n    const guardedEnv = guardStorageEnvironment(env);\n    return originalFetch.call(original, request, guardedEnv, ctx);\n  },\n  ...(typeof original?.scheduled === "function" ? {\n    async scheduled(controller, env, ctx) {\n      const guardedEnv = guardStorageEnvironment(env);\n      return original.scheduled.call(original, controller, guardedEnv, ctx);\n    },\n  } : {}),\n};\nexport default wrapped;\n// ${guardName}\n`;
+  return `import { guardStorageEnvironment, runWithBackupGateRequest } from ${JSON.stringify(`./${coreName}`)};\nimport { backupCapability, handleBackupControl } from ${JSON.stringify(`./${controlName}`)};\nimport original from ${JSON.stringify(importPath)};\nexport * from ${JSON.stringify(importPath)};\nconst originalFetch = original?.fetch;\nif (typeof originalFetch !== "function") throw new Error("Captured Worker has no default fetch handler");\nconst wrapped = {\n  async fetch(request, env, ctx) {\n    return runWithBackupGateRequest({ writer: "cutover.fetch", executionContext: ctx }, async () => {\n      const capability = backupCapability(request, env);\n      if (capability) return capability;\n      const control = await handleBackupControl(request, env);\n      if (control) return control;\n      const guardedEnv = guardStorageEnvironment(env);\n      return originalFetch.call(original, request, guardedEnv, ctx);\n    });\n  },\n  ...(typeof original?.scheduled === "function" ? {\n    async scheduled(controller, env, ctx) {\n      return runWithBackupGateRequest({ writer: "cutover.scheduled", executionContext: ctx }, async () => {\n        const guardedEnv = guardStorageEnvironment(env);\n        return original.scheduled.call(original, controller, guardedEnv, ctx);\n      });\n    },\n  } : {}),\n};\nexport default wrapped;\n// ${guardName}\n`;
 }
 
 function bindingText(name, text) {
@@ -306,6 +306,12 @@ export async function buildCutoverUpload({
   ]) {
     if (settings[key] !== undefined) metadata[key] = settings[key];
   }
+  const compatibilityFlags = Array.isArray(settings.compatibility_flags)
+    ? settings.compatibility_flags
+    : [];
+  metadata.compatibility_flags = compatibilityFlags.includes("nodejs_als")
+    ? compatibilityFlags
+    : [...compatibilityFlags, "nodejs_als"];
   metadata.main_module = guardName;
   metadata.bindings = bindings;
   const annotations = settings.annotations ?? {};

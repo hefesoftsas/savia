@@ -97,6 +97,7 @@ test("writes only the supported production workers and retains their runtime set
     const connectors = await config(outputRoot, "connector-gateway");
 
     assert.equal(auth.name, "savia-auth");
+    assert.ok(auth.compatibility_flags.includes("nodejs_compat"));
     assert.equal(auth.d1_databases[0].database_id, "auth-d1-id");
     assert.deepEqual(auth.services, [
       { binding: "SAVIA_IDENTITY", service: "savia-agencies" },
@@ -109,6 +110,10 @@ test("writes only the supported production workers and retains their runtime set
     assert.equal("BETTER_AUTH_SECRET" in auth.vars, false);
     assert.deepEqual(auth.secrets, { required: ["BETTER_AUTH_SECRET"] });
     assert.equal(api.name, "savia-agencies");
+    assert.deepEqual(api.compatibility_flags, [
+      "global_fetch_strictly_public",
+      "nodejs_als",
+    ]);
     assert.equal(api.d1_databases[0].database_id, "domain-d1-id");
     assert.equal(api.r2_buckets[0].bucket_name, "savia-documents");
     assert.deepEqual(api.services, [
@@ -189,6 +194,7 @@ test("writes only the supported production workers and retains their runtime set
       ),
     );
     assert.equal(coordinator.name, "savia-backup-coordinator");
+    assert.deepEqual(coordinator.compatibility_flags, ["nodejs_als"]);
     assert.equal(coordinator.main, "src/index.ts");
     assert.equal(coordinator.workers_dev, true);
     assert.equal(coordinator.preview_urls, false);
@@ -232,6 +238,7 @@ test("writes only the supported production workers and retains their runtime set
       required: ["SAVIA_MCP_SHARED_SECRET"],
     });
     assert.equal(providers.name, "savia-request");
+    assert.deepEqual(providers.compatibility_flags, ["nodejs_als"]);
     assert.equal(providers.main, "src/server/index.ts");
     assert.equal(providers.workers_dev, false);
     assert.equal("routes" in providers, false);
@@ -268,6 +275,7 @@ test("writes only the supported production workers and retains their runtime set
       "workers_dev",
     ]);
     assert.equal(connectors.name, "savia-connectors");
+    assert.deepEqual(connectors.compatibility_flags, ["nodejs_als"]);
     assert.equal(connectors.workers_dev, false);
     assert.equal(connectors.preview_urls, false);
     assert.equal("routes" in connectors, false);

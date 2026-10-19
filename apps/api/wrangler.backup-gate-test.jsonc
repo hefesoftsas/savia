@@ -2,7 +2,7 @@
   "name": "savia-backup-gate-test",
   "main": "src/index.ts",
   "compatibility_date": "2026-08-31",
-  "compatibility_flags": ["global_fetch_strictly_public"],
+  "compatibility_flags": ["global_fetch_strictly_public", "nodejs_als"],
   "durable_objects": {
     "bindings": [{ "name": "BACKUP_GATE", "class_name": "BackupCoordinator" }],
   },

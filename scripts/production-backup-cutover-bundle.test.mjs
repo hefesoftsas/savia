@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -29,7 +29,8 @@ function bundle(parts) {
 
 function tinyGateSources() {
   return {
-    index: `export function guardStorageEnvironment(env) { return { ...env, guarded: true }; }`,
+    index: `export function guardStorageEnvironment(env) { return { ...env, guarded: true }; }
+export function runWithBackupGateRequest(request, callback) { return callback(); }`,
     control: `export function backupCapability(request) { return new URL(request.url).pathname === "/capability" ? new Response("capability") : null; }
 export function handleBackupControl(request) { return new URL(request.url).pathname === "/control" ? new Response("control") : null; }`,
   };
@@ -257,7 +258,6 @@ test("buildCutoverUpload keeps source bytes and settings bindings while adding t
   );
   for (const key of [
     "compatibility_date",
-    "compatibility_flags",
     "placement",
     "usage_model",
     "logpush",
@@ -266,6 +266,10 @@ test("buildCutoverUpload keeps source bytes and settings bindings while adding t
   ]) {
     assert.deepEqual(metadata[key], settings[key]);
   }
+  assert.deepEqual(metadata.compatibility_flags, [
+    "nodejs_compat",
+    "nodejs_als",
+  ]);
   assert.equal(JSON.stringify(metadata).includes("should-not-copy"), false);
   assert.deepEqual(metadata.annotations, {
     "workers/tag": "production",
@@ -350,6 +354,141 @@ test("generated guard delegates requests, preserves original this, and wraps sch
       "control",
     );
   } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("generated cutover fetch and scheduled handlers track detached storage cleanup", async () => {
+  const root = await mkdtemp(join(tmpdir(), "cutover-lifecycle-"));
+  const source = `const receiver = { async fetch(request, env) { void env.DB.prepare("UPDATE records").run(); return Response.json({ ok: true }); }, async scheduled(controller, env) { void env.DB.prepare("UPDATE records").run(); return Response.json({ ok: true }); } }; export default receiver;`;
+  const gateCore = await readFile(
+    new URL("../packages/backup-gate/index.mjs", import.meta.url),
+    "utf8",
+  );
+  const gateControl = tinyGateSources().control;
+  const upload = await buildCutoverUpload({
+    snapshot: {
+      modules: [
+        {
+          name: "index.js",
+          type: "application/javascript+module",
+          bytes: Buffer.from(source),
+        },
+      ],
+      mainModule: "index.js",
+    },
+    settings: { bindings: [] },
+    workerName: "savia-agencies",
+    gateSources: { index: gateCore, control: gateControl },
+  });
+  const metadata = JSON.parse(await upload.get("metadata").text());
+  const entered = [];
+  const waitUntilPromises = [];
+  const waitUntilSettled = [];
+  const logs = [];
+  const previousInfo = console.info;
+  console.info = (line) => logs.push(JSON.parse(line));
+  let leaveCount = 0;
+  const leaveResolvers = [];
+  const leaveWaiters = [];
+  const waitForLeaveCount = (count) =>
+    leaveCount >= count
+      ? Promise.resolve()
+      : new Promise((resolve) => leaveWaiters.push({ count, resolve }));
+  try {
+    for (const [name, value] of upload.entries()) {
+      if (name === "metadata") continue;
+      await writeFile(join(root, name), Buffer.from(await value.arrayBuffer()));
+    }
+    const worker = await import(
+      `${new URL(`file://${join(root, metadata.main_module)}`).href}?test`
+    );
+    const environment = {
+      BACKUP_GATE: {
+        idFromName: (name) => name,
+        get: () => ({
+          fetch: async (request) => {
+            const path = new URL(request.url).pathname;
+            const body = await request.json();
+            if (path === "/enter") entered.push(body);
+            if (path === "/leave") {
+              leaveCount += 1;
+              for (const waiter of leaveWaiters.splice(0)) {
+                if (leaveCount >= waiter.count) waiter.resolve();
+                else leaveWaiters.push(waiter);
+              }
+              return new Promise((resolve) =>
+                leaveResolvers.push(() => resolve(Response.json({ ok: true }))),
+              );
+            }
+            return path === "/enter"
+              ? Response.json({ permit: body.permit })
+              : Response.json({ ok: true });
+          },
+        }),
+      },
+      DB: {
+        prepare: () => ({ run: async () => ({ success: true }) }),
+        batch: async () => [],
+        exec: async () => ({ count: 1 }),
+      },
+    };
+    const context = {
+      waitUntil: (promise) => {
+        waitUntilPromises.push(promise);
+        const state = { settled: false };
+        waitUntilSettled.push(state);
+        promise.then(() => {
+          state.settled = true;
+        });
+      },
+    };
+    const fetchResponse = await worker.default.fetch(
+      new Request("https://example.test/write"),
+      environment,
+      context,
+    );
+    assert.equal(fetchResponse.status, 200);
+    await waitForLeaveCount(1);
+    assert.equal(waitUntilPromises.length, 1);
+    await Promise.resolve();
+    assert.equal(waitUntilSettled[0].settled, false);
+    leaveResolvers.shift()();
+    await Promise.all(waitUntilPromises);
+    const scheduledResponse = await worker.default.scheduled(
+      { cron: "0 * * * *" },
+      environment,
+      context,
+    );
+    assert.equal(scheduledResponse.status, 200);
+    await waitForLeaveCount(2);
+    assert.equal(waitUntilPromises.length, 2);
+    await Promise.resolve();
+    assert.equal(waitUntilSettled[1].settled, false);
+    leaveResolvers.shift()();
+    await Promise.all(waitUntilPromises);
+    assert.deepEqual(
+      entered.map(({ provenance }) => [
+        provenance.writer,
+        provenance.binding,
+        provenance.method,
+      ]),
+      [
+        ["cutover.fetch", "DB", "run"],
+        ["cutover.scheduled", "DB", "run"],
+      ],
+    );
+    assert.ok(
+      entered.every(({ provenance }) =>
+        /^[0-9a-f-]{36}$/i.test(provenance.requestId),
+      ),
+    );
+    assert.equal(
+      logs.filter(({ phase }) => phase === "storage_settled").length,
+      2,
+    );
+  } finally {
+    console.info = previousInfo;
     await rm(root, { recursive: true, force: true });
   }
 });

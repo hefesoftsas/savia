@@ -1,4 +1,7 @@
-import { guardStorageEnvironment } from "../../../packages/backup-gate/index.mjs";
+import {
+  guardStorageEnvironment,
+  runWithBackupGateRequest,
+} from "../../../packages/backup-gate/index.mjs";
 import {
   backupCapability,
   handleBackupControl,
@@ -1184,10 +1187,19 @@ export default {
     environment: AuthWorkerEnvironment,
     executionContext: ExecutionContext,
   ) {
-    const control = await handleBackupControl(request, environment);
-    if (control) return control;
-    const capability = backupCapability(request, environment);
-    if (capability) return capability;
-    return fetchWithDefaultAuthHandler(request, environment, executionContext);
+    return runWithBackupGateRequest(
+      { writer: "auth.fetch", executionContext },
+      async () => {
+        const control = await handleBackupControl(request, environment);
+        if (control) return control;
+        const capability = backupCapability(request, environment);
+        if (capability) return capability;
+        return fetchWithDefaultAuthHandler(
+          request,
+          environment,
+          executionContext,
+        );
+      },
+    );
   },
 } satisfies ExportedHandler<AuthWorkerEnvironment>;

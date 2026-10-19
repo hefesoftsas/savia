@@ -418,6 +418,14 @@ concurrent requests can throw Cloudflare's "Cannot perform I/O on behalf of a
 different request" error, including during login, which performs guarded D1 work.
 Each admission, release and retry obtains its own stub without disabling the
 barrier or changing its idempotent permit.
+Each writer registers the complete guarded operation, including permit release,
+with its request's `waitUntil` context so a client disconnect does not by itself
+cancel cleanup. This platform extension is bounded to 30 seconds; a permit that
+cannot be confirmed settled remains fail-closed and must be investigated using
+the permit's safe writer/request/storage provenance and structured operation
+logs. The logs contain no SQL, object keys, request URLs, headers, or storage
+arguments. Provenance is optional when reading older permits, which retain their
+original permit and creation-time fields.
 Auth cold starts must replace the SQLite notification triggers atomically in one
 D1 batch transaction. Separate drop/create requests race across Worker isolates
 and can fail with "trigger already exists", even when each isolate caches its

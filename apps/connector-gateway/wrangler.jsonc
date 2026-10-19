@@ -2,6 +2,7 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "savia-connectors",
   "compatibility_date": "2026-08-31",
+  "compatibility_flags": ["nodejs_als"],
   "main": "src/index.ts",
   "workers_dev": false,
   "d1_databases": [

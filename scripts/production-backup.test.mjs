@@ -405,6 +405,21 @@ test("reports safe failure categories without exposing arbitrary error text", as
   }
 });
 
+test("reports a blocked drain without exposing arbitrary barrier error details", () => {
+  assert.equal(
+    classifyProductionBackupFailure(
+      new Error("Backup barrier drain timed out"),
+    ),
+    "Backup write barrier did not drain; investigate unresolved write permits before retrying.",
+  );
+  assert.equal(
+    classifyProductionBackupFailure(
+      new Error("Backup barrier drain timed out; secret=do-not-echo"),
+    ),
+    "Capture failed; details withheld to protect credentials.",
+  );
+});
+
 test("classifies Pulumi child command and invalid path or environment failures safely", async () => {
   const root = await mkdtemp(
     join(tmpdir(), "production-backup-classifications-"),

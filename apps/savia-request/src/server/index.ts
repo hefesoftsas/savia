@@ -5,7 +5,10 @@ import { validateRequestCachePolicy } from "./request-cache";
 import { openApi } from "./openapi";
 import { Hono } from "hono";
 import type { Env } from "./env";
-import { guardStorageEnvironment } from "../../../../packages/backup-gate/index.mjs";
+import {
+  guardStorageEnvironment,
+  runWithBackupGateRequest,
+} from "../../../../packages/backup-gate/index.mjs";
 import {
   backupCapability,
   handleBackupControl,
@@ -664,18 +667,22 @@ app.get("/api/openapi.json", async (c) =>
 );
 
 const appFetch = app.fetch.bind(app);
-app.fetch = async (request, environment, executionContext) => {
-  if (!environment) return appFetch(request, environment, executionContext);
-  const control = await handleBackupControl(request, environment);
-  if (control) return control;
-  const capability = backupCapability(request, environment);
-  if (capability) return capability;
-  return appFetch(
-    request,
-    guardStorageEnvironment(environment),
-    executionContext,
+app.fetch = async (request, environment, executionContext) =>
+  runWithBackupGateRequest(
+    { writer: "savia-request.fetch", executionContext },
+    async () => {
+      if (!environment) return appFetch(request, environment, executionContext);
+      const control = await handleBackupControl(request, environment);
+      if (control) return control;
+      const capability = backupCapability(request, environment);
+      if (capability) return capability;
+      return appFetch(
+        request,
+        guardStorageEnvironment(environment),
+        executionContext,
+      );
+    },
   );
-};
 
 app.onError((error, c) => {
   if (databaseConflict(error))

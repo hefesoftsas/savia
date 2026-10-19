@@ -1,7 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { AsyncLocalStorage } from "node:async_hooks";
-import { BackupCoordinator, guardStorageEnvironment } from "./index.mjs";
+import {
+  BackupCoordinator,
+  guardStorageEnvironment,
+  runWithBackupGateRequest,
+} from "./index.mjs";
 
 class MemoryStorage {
   values = new Map();
@@ -102,6 +106,135 @@ test("status optionally inspects outstanding permits without removing or expirin
     ).status,
     409,
   );
+});
+
+test("new permits record safe writer provenance while legacy permits stay readable", async () => {
+  const { coordinator, storage } = makeCoordinator();
+  const legacyPermit = crypto.randomUUID();
+  const attributedPermit = crypto.randomUUID();
+  await send(coordinator, "/enter", { permit: legacyPermit });
+  await send(coordinator, "/enter", {
+    permit: attributedPermit,
+    provenance: {
+      writer: "api.fetch",
+      requestId: crypto.randomUUID(),
+      storageKind: "d1",
+      binding: "DB",
+      method: "run",
+    },
+    sql: "must never be persisted",
+    rawUrl: "https://secret.invalid/private?token=secret",
+  });
+
+  const inspected = await send(coordinator, "/status", {
+    owner: "inspection",
+    includePermits: true,
+  });
+  const legacy = inspected.body.permits.find(
+    (item) => item.permit === legacyPermit,
+  );
+  const attributed = inspected.body.permits.find(
+    (item) => item.permit === attributedPermit,
+  );
+  assert.deepEqual(Object.keys(legacy).sort(), ["createdAt", "permit"]);
+  assert.deepEqual(attributed.provenance, {
+    writer: "api.fetch",
+    requestId: (await storage.get("backup-gate:v1")).permits[attributedPermit]
+      .provenance.requestId,
+    storageKind: "d1",
+    binding: "DB",
+    method: "run",
+  });
+  assert.equal(
+    JSON.stringify(await storage.get("backup-gate:v1")).includes("secret"),
+    false,
+  );
+});
+
+test("cached storage proxies register request-local provenance and operation lifetime", async () => {
+  const state = new MemoryStorage();
+  const { coordinator } = makeCoordinator(state);
+  const observed = [];
+  const namespace = {
+    idFromName: (name) => name,
+    get: () => ({
+      fetch: async (request) => {
+        const path = new URL(request.url).pathname;
+        const body = await request.json();
+        if (path === "/enter") observed.push(body.provenance);
+        return coordinator.fetch(
+          new Request(request.url, {
+            method: request.method,
+            headers: request.headers,
+            body: JSON.stringify(body),
+          }),
+        );
+      },
+    }),
+  };
+  const writeResolvers = [];
+  const db = {
+    prepare() {
+      return {
+        async run() {
+          await new Promise((resolve) => writeResolvers.push(resolve));
+          return { success: true };
+        },
+      };
+    },
+    async batch() {},
+    async exec() {},
+  };
+  const guarded = guardStorageEnvironment({ BACKUP_GATE: namespace, DB: db });
+  const heldStatement = guarded.DB.prepare("UPDATE t");
+  const operationLogs = [];
+  const previousInfo = console.info;
+  console.info = (line) => operationLogs.push(JSON.parse(line));
+  const waitUntilPromises = [];
+  const context = { waitUntil: (promise) => waitUntilPromises.push(promise) };
+  const first = runWithBackupGateRequest(
+    { writer: "api.fetch", executionContext: context },
+    () => heldStatement.run(),
+  );
+  await new Promise((resolve) => setImmediate(resolve));
+  const second = runWithBackupGateRequest(
+    { writer: "auth.fetch", executionContext: context },
+    () => heldStatement.run(),
+  );
+  await new Promise((resolve) => setImmediate(resolve));
+  for (const resolve of writeResolvers) resolve();
+  await Promise.all([first, second]);
+  assert.equal(waitUntilPromises.length, 2);
+  await Promise.all(waitUntilPromises);
+  console.info = previousInfo;
+  assert.deepEqual(
+    observed.map((entry) => [entry.writer, entry.binding, entry.method]),
+    [
+      ["api.fetch", "DB", "run"],
+      ["auth.fetch", "DB", "run"],
+    ],
+  );
+  assert.ok(
+    observed.every((entry) => /^[0-9a-f-]{36}$/i.test(entry.requestId)),
+  );
+  assert.notEqual(observed[0].requestId, observed[1].requestId);
+  assert.deepEqual(
+    operationLogs.map(({ phase, outcome }) => [phase, outcome]).sort(),
+    [
+      ["intent", "pending"],
+      ["intent", "pending"],
+      ["storage_settled", "fulfilled"],
+      ["storage_settled", "fulfilled"],
+    ].sort(),
+  );
+  assert.ok(
+    operationLogs.every(
+      (entry) =>
+        Object.keys(entry).sort().join(",") ===
+        "binding,event,method,outcome,permit,phase,requestId,storageKind,writer",
+    ),
+  );
+  assert.deepEqual((await state.get("backup-gate:v1")).permits, {});
 });
 
 test("acquire drains existing writers and blocks new writers until release", async () => {
@@ -401,7 +534,21 @@ test("failed storage operations still release their permit", async () => {
     BACKUP_GATE: { idFromName: (name) => name, get: () => coordinator },
     DB: db,
   });
-  await assert.rejects(guarded.DB.prepare("UPDATE t").run(), error);
+  const waitUntilPromises = [];
+  await assert.rejects(
+    runWithBackupGateRequest(
+      {
+        writer: "api.fetch",
+        executionContext: {
+          waitUntil: (promise) => waitUntilPromises.push(promise),
+        },
+      },
+      () => guarded.DB.prepare("UPDATE t").run(),
+    ),
+    error,
+  );
+  assert.equal(waitUntilPromises.length, 1);
+  await Promise.all(waitUntilPromises);
   assert.equal(calls.length, 2);
   assert.equal(calls[0], "enter");
   assert.match(calls[1], /^leave:[0-9a-f-]{36}$/i);

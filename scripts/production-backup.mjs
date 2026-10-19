@@ -57,6 +57,8 @@ export function classifyProductionBackupFailure(error) {
     );
   if (controller)
     return `Backup controller ${controller[1]} request failed (HTTP ${controller[2]}).`;
+  if (message === "Backup barrier drain timed out")
+    return "Backup write barrier did not drain; investigate unresolved write permits before retrying.";
 
   const d1Provider =
     /^D1 query failed \(([1-5]\d{2})\):/.exec(message) ??

@@ -29,4 +29,12 @@ export declare class BackupCoordinator {
 
 export declare function guardStorageEnvironment<T extends object>(env: T): T;
 
+export declare function runWithBackupGateRequest<T>(
+  request: {
+    writer: string;
+    executionContext?: { waitUntil(promise: Promise<unknown>): void };
+  },
+  callback: () => T,
+): T;
+
 export declare const BACKUP_GATE_OBJECT_NAME: "production-backup-v1";

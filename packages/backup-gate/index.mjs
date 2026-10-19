@@ -1,3 +1,5 @@
+import { AsyncLocalStorage } from "node:async_hooks";
+
 const STATE_KEY = "backup-gate:v1";
 const OBJECT_NAME = "production-backup-v1";
 const MIN_TTL_MS = 30_000;
@@ -8,6 +10,21 @@ const UUID_PATTERN =
   /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
 const MAX_GATE_ATTEMPTS = 3;
 const RETRY_DELAYS_MS = [50, 100];
+const REQUEST_CONTEXT = new AsyncLocalStorage();
+const STORAGE_METHODS = new Set([
+  "run",
+  "all",
+  "raw",
+  "first",
+  "batch",
+  "exec",
+  "put",
+  "delete",
+  "createMultipartUpload",
+  "uploadPart",
+  "complete",
+  "abort",
+]);
 
 function json(body, status = 200) {
   return Response.json(body, { status });
@@ -62,6 +79,23 @@ function validOwner(owner) {
 
 function validPermit(permit) {
   return typeof permit === "string" && UUID_PATTERN.test(permit);
+}
+
+function safeProvenance(value) {
+  if (!asObject(value)) return undefined;
+  const { writer, requestId, storageKind, binding, method } = value;
+  if (
+    typeof writer !== "string" ||
+    !/^[a-z][a-z0-9._-]{0,63}$/i.test(writer) ||
+    !validPermit(requestId) ||
+    !["d1", "r2"].includes(storageKind) ||
+    typeof binding !== "string" ||
+    !/^[A-Z][A-Z0-9_]{0,63}$/.test(binding) ||
+    !STORAGE_METHODS.has(method)
+  ) {
+    return undefined;
+  }
+  return { writer, requestId, storageKind, binding, method };
 }
 
 function validTtl(ttlMs) {
@@ -133,6 +167,9 @@ export class BackupCoordinator {
                 ([permit, entry]) => ({
                   permit,
                   createdAt: entry.createdAt,
+                  ...(safeProvenance(entry.provenance)
+                    ? { provenance: safeProvenance(entry.provenance) }
+                    : {}),
                 }),
               ),
             }
@@ -162,7 +199,12 @@ export class BackupCoordinator {
         await this.#write(current);
         return json({ error: "backup in progress" }, 503);
       }
-      current.permits[body.permit] = { createdAt: Date.now() };
+      current.permits[body.permit] = {
+        createdAt: Date.now(),
+        ...(safeProvenance(body.provenance)
+          ? { provenance: safeProvenance(body.provenance) }
+          : {}),
+      };
       await this.#write(current);
       return json({ permit: body.permit });
     }
@@ -243,10 +285,15 @@ function makeGateClient(namespace) {
   const id = namespace.idFromName(OBJECT_NAME);
   const client = {
     identity: null,
-    async enter(permit) {
+    async enter(permit, provenance) {
       if (!validPermit(permit))
         throw new Error("backup gate permit must be a UUID");
-      const response = await requestWithRetry("enter", { permit });
+      const response = await requestWithRetry("enter", {
+        permit,
+        ...(safeProvenance(provenance)
+          ? { provenance: safeProvenance(provenance) }
+          : {}),
+      });
       const payload = await response.json();
       if (payload?.permit !== permit) {
         throw new Error("backup gate returned an invalid permit");
@@ -305,29 +352,62 @@ function makeGateClient(namespace) {
   return client;
 }
 
-async function guardedWrite(gate, callback) {
+async function guardedWrite(gate, callback, operation) {
   const permit = crypto.randomUUID();
-  try {
-    await gate.enter(permit);
-  } catch (enterError) {
+  const request = REQUEST_CONTEXT.getStore();
+  const provenance = safeProvenance({
+    writer: request?.writer,
+    requestId: request?.requestId,
+    storageKind: operation?.storageKind,
+    binding: operation?.binding,
+    method: operation?.method,
+  });
+  const logOperation = (phase, outcome) => {
+    if (!provenance) return;
+    console.info(
+      JSON.stringify({
+        event: "backup_gate_operation",
+        phase,
+        outcome,
+        permit,
+        ...provenance,
+      }),
+    );
+  };
+  const complete = async () => {
+    logOperation("intent", "pending");
     try {
-      await gate.leave(permit);
-    } catch (leaveError) {
-      throw new AggregateError(
-        [enterError, leaveError],
-        "backup gate enter failed and its permit cleanup could not be confirmed",
-      );
+      await gate.enter(permit, provenance);
+    } catch (enterError) {
+      try {
+        await gate.leave(permit);
+      } catch (leaveError) {
+        throw new AggregateError(
+          [enterError, leaveError],
+          "backup gate enter failed and its permit cleanup could not be confirmed",
+        );
+      }
+      throw enterError;
     }
-    throw enterError;
+    try {
+      const result = await callback();
+      logOperation("storage_settled", "fulfilled");
+      return result;
+    } catch (error) {
+      logOperation("storage_settled", "rejected");
+      throw error;
+    } finally {
+      await gate.leave(permit);
+    }
+  };
+  const pending = complete();
+  if (request?.executionContext?.waitUntil) {
+    request.executionContext.waitUntil(pending.catch(() => undefined));
   }
-  try {
-    return await callback();
-  } finally {
-    await gate.leave(permit);
-  }
+  return pending;
 }
 
-function wrapD1(database, gate, proxies, originals) {
+function wrapD1(database, gate, proxies, originals, binding) {
   if (!database || typeof database !== "object") return database;
   if (proxies.has(database)) return proxies.get(database);
   const proxy = new Proxy(database, {
@@ -337,26 +417,40 @@ function wrapD1(database, gate, proxies, originals) {
 
       if (property === "prepare") {
         return (...args) =>
-          wrapStatement(value.apply(target, args), gate, proxies, originals);
+          wrapStatement(
+            value.apply(target, args),
+            gate,
+            proxies,
+            originals,
+            binding,
+          );
       }
       if (property === "batch") {
         return (statements, ...args) =>
-          guardedWrite(gate, () =>
-            value.apply(target, [
-              Array.isArray(statements)
-                ? statements.map(
-                    (statement) => originals.get(statement) ?? statement,
-                  )
-                : statements,
-              ...args,
-            ]),
+          guardedWrite(
+            gate,
+            () =>
+              value.apply(target, [
+                Array.isArray(statements)
+                  ? statements.map(
+                      (statement) => originals.get(statement) ?? statement,
+                    )
+                  : statements,
+                ...args,
+              ]),
+            { storageKind: "d1", binding, method: "batch" },
           );
       }
       if (property === "exec")
-        return (...args) => guardedWrite(gate, () => value.apply(target, args));
+        return (...args) =>
+          guardedWrite(gate, () => value.apply(target, args), {
+            storageKind: "d1",
+            binding,
+            method: "exec",
+          });
       if (property === "withSession") {
         return (...args) =>
-          wrapD1(value.apply(target, args), gate, proxies, originals);
+          wrapD1(value.apply(target, args), gate, proxies, originals, binding);
       }
       return value.bind(target);
     },
@@ -366,7 +460,7 @@ function wrapD1(database, gate, proxies, originals) {
   return proxy;
 }
 
-function wrapStatement(statement, gate, proxies, originals) {
+function wrapStatement(statement, gate, proxies, originals, binding) {
   if (!statement || typeof statement !== "object") return statement;
   if (proxies.has(statement)) return proxies.get(statement);
   const writes = new Set(["run", "all", "raw", "first"]);
@@ -376,10 +470,21 @@ function wrapStatement(statement, gate, proxies, originals) {
       if (typeof value !== "function") return value;
       if (property === "bind") {
         return (...args) =>
-          wrapStatement(value.apply(target, args), gate, proxies, originals);
+          wrapStatement(
+            value.apply(target, args),
+            gate,
+            proxies,
+            originals,
+            binding,
+          );
       }
       if (writes.has(property))
-        return (...args) => guardedWrite(gate, () => value.apply(target, args));
+        return (...args) =>
+          guardedWrite(gate, () => value.apply(target, args), {
+            storageKind: "d1",
+            binding,
+            method: property,
+          });
       return value.bind(target);
     },
   });
@@ -388,7 +493,7 @@ function wrapStatement(statement, gate, proxies, originals) {
   return proxy;
 }
 
-function wrapMultipart(upload, gate, proxies, originals) {
+function wrapMultipart(upload, gate, proxies, originals, binding) {
   if (!upload || typeof upload !== "object") return upload;
   if (proxies.has(upload)) return proxies.get(upload);
   const writes = new Set(["uploadPart", "complete", "abort"]);
@@ -397,7 +502,12 @@ function wrapMultipart(upload, gate, proxies, originals) {
       const value = Reflect.get(target, property, target);
       if (typeof value !== "function") return value;
       if (writes.has(property))
-        return (...args) => guardedWrite(gate, () => value.apply(target, args));
+        return (...args) =>
+          guardedWrite(gate, () => value.apply(target, args), {
+            storageKind: "r2",
+            binding,
+            method: property,
+          });
       return value.bind(target);
     },
   });
@@ -406,7 +516,7 @@ function wrapMultipart(upload, gate, proxies, originals) {
   return proxy;
 }
 
-function wrapR2(bucket, gate, proxies, originals) {
+function wrapR2(bucket, gate, proxies, originals, binding) {
   if (!bucket || typeof bucket !== "object") return bucket;
   if (proxies.has(bucket)) return proxies.get(bucket);
   const writes = new Set(["put", "delete"]);
@@ -415,21 +525,36 @@ function wrapR2(bucket, gate, proxies, originals) {
       const value = Reflect.get(target, property, target);
       if (typeof value !== "function") return value;
       if (writes.has(property))
-        return (...args) => guardedWrite(gate, () => value.apply(target, args));
+        return (...args) =>
+          guardedWrite(gate, () => value.apply(target, args), {
+            storageKind: "r2",
+            binding,
+            method: property,
+          });
       if (property === "createMultipartUpload") {
         return (...args) =>
-          guardedWrite(gate, async () =>
-            wrapMultipart(
-              await value.apply(target, args),
-              gate,
-              proxies,
-              originals,
-            ),
+          guardedWrite(
+            gate,
+            async () =>
+              wrapMultipart(
+                await value.apply(target, args),
+                gate,
+                proxies,
+                originals,
+                binding,
+              ),
+            { storageKind: "r2", binding, method: "createMultipartUpload" },
           );
       }
       if (property === "resumeMultipartUpload") {
         return (...args) =>
-          wrapMultipart(value.apply(target, args), gate, proxies, originals);
+          wrapMultipart(
+            value.apply(target, args),
+            gate,
+            proxies,
+            originals,
+            binding,
+          );
       }
       return value.bind(target);
     },
@@ -481,18 +606,33 @@ export function guardStorageEnvironment(env) {
         typeof value.batch === "function" &&
         typeof value.exec === "function"
       ) {
-        result = wrapD1(value, gate, proxies, originals);
+        result = wrapD1(value, gate, proxies, originals, property);
       } else if (
         typeof value.get === "function" &&
         typeof value.put === "function" &&
         typeof value.list === "function" &&
         typeof value.delete === "function"
       ) {
-        result = wrapR2(value, gate, proxies, originals);
+        result = wrapR2(value, gate, proxies, originals, property);
       }
       return result;
     },
   });
+}
+
+/** Run a writer invocation with request-local attribution and cleanup lifetime. */
+export function runWithBackupGateRequest(
+  { writer, executionContext },
+  callback,
+) {
+  return REQUEST_CONTEXT.run(
+    {
+      writer,
+      requestId: crypto.randomUUID(),
+      executionContext,
+    },
+    callback,
+  );
 }
 
 export const BACKUP_GATE_OBJECT_NAME = OBJECT_NAME;

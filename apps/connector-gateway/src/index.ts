@@ -1,6 +1,9 @@
 import { createConnectorApp } from "./app";
 import { runtimeReleaseCatalog } from "@savia/release-catalog/runtime";
-import { guardStorageEnvironment } from "../../../packages/backup-gate/index.mjs";
+import {
+  guardStorageEnvironment,
+  runWithBackupGateRequest,
+} from "../../../packages/backup-gate/index.mjs";
 import {
   backupCapability,
   handleBackupControl,
@@ -37,13 +40,19 @@ export default {
   async fetch(
     request: Request,
     environment: ConnectorEnvironment,
+    executionContext?: ExecutionContext,
   ): Promise<Response> {
-    const control = await handleBackupControl(request, environment);
-    if (control) return control;
-    const capability = backupCapability(request, environment);
-    if (capability) return capability;
-    return createRuntimeConnectorApp(
-      guardStorageEnvironment(environment),
-    ).fetch(request);
+    return runWithBackupGateRequest(
+      { writer: "connector-gateway.fetch", executionContext },
+      async () => {
+        const control = await handleBackupControl(request, environment);
+        if (control) return control;
+        const capability = backupCapability(request, environment);
+        if (capability) return capability;
+        return createRuntimeConnectorApp(
+          guardStorageEnvironment(environment),
+        ).fetch(request);
+      },
+    );
   },
 };
