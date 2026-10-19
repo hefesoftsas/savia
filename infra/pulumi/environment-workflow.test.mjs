@@ -57,3 +57,19 @@ test("reviewed PR assets are downloaded by the producing job's immutable artifac
   );
   assert.doesNotMatch(download, /\n\s+name: reviewed-quickjs-admin-assets/);
 });
+
+test("reviewed asset extraction cannot overwrite either checkout or local deployment actions", async () => {
+  const source = await workflow("preview-quickjs");
+  assert.match(
+    source,
+    /path: \$\{\{ runner\.temp \}\}\/reviewed-quickjs-assets/,
+  );
+  assert.match(
+    source,
+    /SAVIA_RELEASE_ASSETS_DIRECTORY: \$\{\{ runner\.temp \}\}\/reviewed-quickjs-assets/,
+  );
+  assert.doesNotMatch(
+    source,
+    /path: \$\{\{ env\.SAVIA_RELEASE_SOURCE_ROOT \}\}/,
+  );
+});

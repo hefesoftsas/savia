@@ -51,10 +51,14 @@ export async function runBranchDeployment(
       throw new Error("Unknown branch deployment option");
   }
   sourceRoot = resolve(sourceRoot);
+  const prebuiltAssets =
+    env.SAVIA_RELEASE_ASSETS_DIRECTORY ?? join(sourceRoot, "apps/admin/dist");
+  if (!isAbsolute(prebuiltAssets))
+    throw new Error("Prebuilt asset directory must be absolute");
   if (!dry && sourceRoot !== root && !skipAdmin) {
     if (
       env.SAVIA_RELEASE_ASSETS_PREBUILT !== "true" ||
-      !(await stat(join(sourceRoot, "apps/admin/dist/index.html"))).isFile()
+      !(await stat(join(prebuiltAssets, "index.html"))).isFile()
     )
       throw new Error(
         "Selected source assets must be built before deployment credentials are exposed",
@@ -173,12 +177,16 @@ export async function runBranchDeployment(
     throw new Error(
       "Selected source revision differs from the approved branch commit",
     );
-  let assetsDir;
+  let assetsDir =
+    env.SAVIA_RELEASE_ASSETS_PREBUILT === "true" ? prebuiltAssets : undefined;
   if (kinds.includes("gateway")) {
     if (dry) {
       assetsDir = join(directory, "empty-assets");
       await mkdir(assetsDir);
-    } else if (sourceRoot === root)
+    } else if (
+      sourceRoot === root &&
+      env.SAVIA_RELEASE_ASSETS_PREBUILT !== "true"
+    )
       await run("pnpm", ["--filter", "@savia/admin", "run", "build"], {
         cwd: sourceRoot,
         env: buildEnv,

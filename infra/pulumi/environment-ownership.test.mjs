@@ -96,7 +96,7 @@ test("changed reviewed custody freezes workflows and stops before Pulumi mutatio
   try {
     await assert.rejects(
       migrateEnvironmentOwnership({
-        reviewed: { version: 1 },
+        reviewed: { version: 2, unclassifiedSaviaResources: [] },
         originalWorkflows: originals,
         directory,
         env,
@@ -116,4 +116,45 @@ test("changed reviewed custody freezes workflows and stops before Pulumi mutatio
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
+});
+
+test("a reviewed audit with unclassified Savia resources stops before workflow or state mutations", async () => {
+  await assert.rejects(
+    migrateEnvironmentOwnership({
+      reviewed: {
+        version: 2,
+        unclassifiedSaviaResources: [
+          { kind: "d1", name: "savia-legacy", cloudId: "legacy" },
+        ],
+      },
+      originalWorkflows: originals,
+      directory: "/tmp/must-not-create-ownership",
+      env: {
+        GITHUB_REF: "refs/heads/main",
+        GITHUB_REPOSITORY: "hefesoftsas/savia",
+      },
+      run: async () => assert.fail("attempted mutation"),
+    }),
+    /Unclassified Savia/,
+  );
+});
+
+test("legacy audit evidence is rejected before creating operation custody or freezing workflows", async () => {
+  for (const reviewed of [
+    { version: 1 },
+    { version: 2 },
+    { version: 1, unclassifiedSaviaResources: [] },
+  ])
+    await assert.rejects(
+      migrateEnvironmentOwnership({
+        reviewed,
+        directory: "/tmp/must-not-create-legacy-audit",
+        env: {
+          GITHUB_REF: "refs/heads/main",
+          GITHUB_REPOSITORY: "hefesoftsas/savia",
+        },
+        run: async () => assert.fail("attempted workflow mutation"),
+      }),
+      /version-2 ownership audit/,
+    );
 });

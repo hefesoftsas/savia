@@ -19,6 +19,8 @@ jobs:
         github.event.pull_request.base.ref == 'main' &&
         github.event.label.name == 'quickjs-preview' }}
     name: Build reviewed QuickJS assets without deployment credentials
+    env:
+      PNPM_CONFIG_STRICT_DEP_BUILDS: "false"
     outputs:
       artifact_id: ${{ steps.upload_assets.outputs.artifact-id }}
     runs-on: ubuntu-24.04
@@ -99,7 +101,7 @@ jobs:
           repository: ${{ github.repository }}
           run-id: ${{ github.run_id }}
           merge-multiple: true
-          path: ${{ env.SAVIA_RELEASE_SOURCE_ROOT }}/apps/admin/dist
+          path: ${{ runner.temp }}/reviewed-quickjs-assets
 
       - uses: ./.github/actions/install-pulumi
 
@@ -107,6 +109,7 @@ jobs:
         run: node scripts/preview-deploy.mjs --branch "$PREVIEW_BRANCH"
         env:
           SAVIA_RELEASE_ASSETS_PREBUILT: "true"
+          SAVIA_RELEASE_ASSETS_DIRECTORY: ${{ runner.temp }}/reviewed-quickjs-assets
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           PULUMI_BACKEND_URL: ${{ secrets.PULUMI_BACKEND_URL }}

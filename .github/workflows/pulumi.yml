@@ -131,6 +131,7 @@ jobs:
       group: savia-environment-ownership
       cancel-in-progress: false
     env:
+      PNPM_CONFIG_STRICT_DEP_BUILDS: "false"
       GH_TOKEN: ${{ github.token }}
       PRODUCTION_OPERATIONS_ENABLED: ${{ vars.PRODUCTION_OPERATIONS_ENABLED }}
       PULUMI_BACKEND_URL: ${{ secrets.PULUMI_BACKEND_URL }}

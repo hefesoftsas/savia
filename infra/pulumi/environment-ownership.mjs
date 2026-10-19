@@ -146,8 +146,22 @@ export async function auditEnvironmentOwnership({
       fingerprint: ownershipFingerprint({ settings, subdomain }),
     });
   }
+  const accounted = new Set(
+    inventory.flatMap((item) =>
+      (item.resources ?? []).map((row) => `${row.kind}/${row.cloudId}`),
+    ),
+  );
+  const unclassifiedSaviaResources = rows
+    .filter(
+      (row) =>
+        row.name?.startsWith("savia") &&
+        !accounted.has(`${row.kind}/${row.cloudId}`) &&
+        !(row.kind === "r2" && row.name === "savia-pulumi-state-preview"),
+    )
+    .map(({ kind, name, cloudId }) => ({ kind, name, cloudId }));
   const result = {
-    version: 1,
+    version: 2,
+    unclassifiedSaviaResources,
     accountId: env.CLOUDFLARE_ACCOUNT_ID,
     backendUrl: env.PULUMI_BACKEND_URL,
     cloudFingerprint: ownershipFingerprint({ rows, metadata }),
@@ -188,6 +202,17 @@ export async function migrateEnvironmentOwnership({
     );
   if (!directory || !reviewed)
     throw new Error("Reviewed audit and private operation directory required");
+  if (
+    reviewed.version !== 2 ||
+    !Array.isArray(reviewed.unclassifiedSaviaResources)
+  )
+    throw new Error(
+      "Reviewed version-2 ownership audit is required before any workflow mutation",
+    );
+  if (reviewed.unclassifiedSaviaResources.length)
+    throw new Error(
+      "Unclassified Savia resources require reconciliation before ownership migration",
+    );
   const backend = stateBackendUrl(
     env.CLOUDFLARE_ACCOUNT_ID,
     "savia-pulumi-state-preview",
