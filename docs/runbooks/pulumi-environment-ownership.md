@@ -44,6 +44,9 @@ Preview inventory accepts checkpoint-exported database names only when they
 exactly match its isolated `savia-auth-preview` and `savia-agencies-preview`
 names. These outputs are observations, not production-only naming overrides;
 foreign or swapped names stop inventory before adoption.
+Cron expressions are identified within their owning Worker: API and Flows may
+use the same schedule, while repeated names on one Worker or repeated physical
+identities are rejected.
 
 For a separately authorized new environment, `plan --environment <id>
 --provision --apply` creates persistence first. Prepare the frozen release only

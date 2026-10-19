@@ -325,3 +325,40 @@ test("adoption may update only the selected stack's bookkeeping outputs", () => 
     ),
   );
 });
+
+test("cron names are unique per Worker while physical identities stay unique", () => {
+  const workers = [
+    worker("savia-agencies-preview"),
+    { ...worker("savia-flows-preview"), cloudId: "c".repeat(32) },
+  ];
+  const crons = workers.map((parent) => ({
+    kind: "cron",
+    name: "* * * * *",
+    cloudId: `${parent.name}/* * * * *`,
+    parentWorker: parent.name,
+  }));
+  const observed = manifest("preview", [...workers, ...crons]);
+  assert.equal(validate(observed).resources.length, 4);
+  assert.throws(
+    () =>
+      validate(
+        manifest("preview", [
+          ...workers,
+          ...crons,
+          { ...crons[0], cloudId: "d".repeat(32) },
+        ]),
+      ),
+    /Duplicate resource identity/,
+  );
+  assert.throws(
+    () =>
+      validate(
+        manifest("preview", [
+          ...workers,
+          crons[0],
+          { ...crons[1], cloudId: crons[0].cloudId },
+        ]),
+      ),
+    /Duplicate resource identity|outside environment/,
+  );
+});
