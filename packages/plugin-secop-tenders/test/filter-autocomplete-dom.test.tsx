@@ -85,6 +85,36 @@ afterEach(() => {
 });
 
 describe("FilterAutocomplete interaction", () => {
+  it("closes on an outside pointer even when focus does not move", () => {
+    mountAutocomplete();
+    act(() => getInput().focus());
+    expect(options()).toHaveLength(3);
+    act(() =>
+      document.body.dispatchEvent(
+        new MouseEvent("pointerdown", { bubbles: true }),
+      ),
+    );
+    expect(host.querySelector("[role=listbox]")).toBeNull();
+  });
+  it("closes on a non-focusing outside click and can reopen from the focused input", () => {
+    mountAutocomplete();
+    act(() => getInput().focus());
+    act(() => document.body.click());
+    expect(host.querySelector("[role=listbox]")).toBeNull();
+    act(() => getInput().click());
+    expect(options()).toHaveLength(3);
+  });
+  it("closes when the toggle is pressed a second time", () => {
+    mountAutocomplete();
+    const toggle = host.querySelector<HTMLButtonElement>(
+      ".secop-autocomplete-toggle",
+    )!;
+    act(() => toggle.click());
+    expect(options()).toHaveLength(3);
+    act(() => toggle.click());
+    expect(host.querySelector("[role=listbox]")).toBeNull();
+  });
+
   it("shows every option when toggled open with a selected value", () => {
     mountAutocomplete();
 
@@ -249,6 +279,13 @@ describe("multiple selections", () => {
     expect(host.querySelector(".secop-filter-chip")?.textContent).toBe(
       "Boyacá",
     );
+    act(() => key(getInput(), "Escape"));
+    expect(host.querySelector(".secop-autocomplete-popup")).toBeNull();
+    expect(getInput().value).toBe("Boyacá");
+    act(() => key(getInput(), "ArrowDown"));
+    expect(host.querySelector(".secop-filter-chip")?.textContent).toBe(
+      "Boyacá",
+    );
   });
   it("adds a typed value with Enter and preserves prior selections", () => {
     mountMultiple();
@@ -266,4 +303,79 @@ describe("multiple selections", () => {
     ).toEqual(["Bogotá", "Antioquia"]);
     expect(getInput().value).toBe("");
   });
+});
+
+it("keeps only the newly opened filter visible and retains both selections on outside dismissal", () => {
+  host = document.createElement("div");
+  document.body.append(host);
+  root = createRoot(host);
+  act(() =>
+    root.render(
+      <>
+        <FilterAutocomplete
+          multiple
+          id="first"
+          label="First filter"
+          value={["A"]}
+          onChange={() => {}}
+          options={["A", "B"]}
+        />
+        <FilterAutocomplete
+          multiple
+          id="second"
+          label="Second filter"
+          value={["B"]}
+          onChange={() => {}}
+          options={["A", "B"]}
+        />
+      </>,
+    ),
+  );
+  const toggles = host.querySelectorAll<HTMLButtonElement>(
+    ".secop-autocomplete-toggle",
+  );
+  act(() => toggles[0]!.click());
+  expect(host.querySelector("#first-listbox")).not.toBeNull();
+  act(() => toggles[1]!.click());
+  expect(host.querySelector("#first-listbox")).toBeNull();
+  expect(host.querySelector("#second-listbox")).not.toBeNull();
+  act(() => document.body.click());
+  expect(host.querySelectorAll("[role=listbox]")).toHaveLength(0);
+  expect(host.querySelector<HTMLInputElement>("#first")!.value).toBe("A");
+  expect(host.querySelector<HTMLInputElement>("#second")!.value).toBe("B");
+});
+it("Escape also dismisses a popup when a selected-chip button has focus", () => {
+  host = document.createElement("div");
+  document.body.append(host);
+  root = createRoot(host);
+  act(() =>
+    root.render(
+      <FilterAutocomplete
+        multiple
+        id="chips"
+        label="Chips"
+        value={["A"]}
+        onChange={() => {}}
+        options={["A", "B"]}
+      />,
+    ),
+  );
+  const input = getInput();
+  act(() => input.focus());
+  const remove = host.querySelector<HTMLButtonElement>(
+    ".secop-filter-chip button",
+  )!;
+  act(() => remove.focus());
+  act(() =>
+    remove.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "Escape",
+        bubbles: true,
+        cancelable: true,
+      }),
+    ),
+  );
+  expect(host.querySelector("[role=listbox]")).toBeNull();
+  expect(input.value).toBe("A");
+  expect(document.activeElement).toBe(input);
 });

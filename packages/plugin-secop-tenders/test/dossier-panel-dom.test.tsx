@@ -167,6 +167,43 @@ async function click(label: string) {
   await act(async () => button!.click());
 }
 describe("tender dossier flow", () => {
+  it("shows an honest empty inventory without claiming CAPTCHA blockage", async () => {
+    await mount();
+    await click("Documentos");
+    expect(host.textContent).toContain("Sin documentos en el expediente");
+    expect(host.textContent).not.toContain("Mostrando 0");
+    expect(host.textContent).not.toContain("CAPTCHA");
+    const publicDocuments = host.querySelector(
+      'button[aria-label="Documentos públicos y análisis anteriores por PDF"]',
+    );
+    expect(publicDocuments?.textContent).toBe("");
+    expect(
+      host.querySelector('button[aria-label="Guardar y preparar expediente"]')
+        ?.textContent,
+    ).toBe("");
+  });
+  it("shows extraction assistance only for blocked documents", async () => {
+    await mount(
+      true,
+      true,
+      [],
+      "es",
+      [],
+      [
+        {
+          id: "doc",
+          revision: 1,
+          updatedAt: 1,
+          value: { name: "Annex", state: "blocked" } as DossierDocument,
+        },
+      ],
+    );
+    await click("Documentos");
+    expect(host.textContent).toContain("Algunos archivos necesitan tu ayuda");
+    expect(host.textContent).toContain("Annex");
+    expect(host.textContent).not.toContain("Sin documentos en el expediente");
+  });
+
   it("starts with a clear preparation state without mistaking an absent dossier for an error", async () => {
     const { execute, create, api } = await mount();
     expect(host.textContent).toContain("Prepara el expediente completo");

@@ -364,3 +364,31 @@ Complete catalogs are cached independently from searches. Renewal runs in the
 SECOP service background; a compact retry icon appears beside an unavailable
 catalog. Existing selections and previously loaded options survive refresh
 failures. No catalog is silently replaced with the currently loaded results.
+
+## Compact filter layout
+
+Search precedes Clear in both visual and keyboard order.
+
+Version 1.8.2 keeps multi-select fields at a stable height. Closed controls show
+the selected values in one truncated line and a count for multiple selections;
+opening the control exposes searchable options and removable selection chips.
+Keyword and availability fields share a row when space permits. Search actions
+are grouped at the start of the form, clear of the floating assistant.
+
+Version 1.8.3 dismisses filter popups on an outside pointer, click or focus
+change, when focus leaves the plugin window, with Escape, or on a second toggle
+press. Opening another field closes the previous popup; selections are retained.
+
+## Removing saved interests
+
+Version 1.8.4 groups Documents, SECOP and Remove icons in one horizontal row
+for every saved interest. Remove first asks for confirmation, then deletes only
+the local tracking record and its notes through the native collection API with
+its current version. It does not delete the official tender or the SECOP dossier.
+Conflicts keep the record visible and require reviewing the latest version.
+The saved count and bookmark state update after success. Saving tracking remains
+available as a labelled Save icon at the start of each record footer.
+
+### Compact dossier navigation
+
+The dossier header uses labeled icon actions for preparation and status refresh, preserving the full tender title. Tabs stay in a single horizontally scrollable row on narrow screens. The Documents tab distinguishes an empty inventory from blocked document extraction; extraction assistance appears only when a document is actually blocked. Public documents remain available through the folder action beside the section heading.
