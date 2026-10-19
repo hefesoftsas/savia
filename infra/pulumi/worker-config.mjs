@@ -285,17 +285,6 @@ function gatewayConfig({
             ...routes,
             { pattern: `${hostname}/*`, zone_name: "hefesoft.com" },
             { pattern: `*.${hostname}/*`, zone_name: "hefesoft.com" },
-            { custom_domain: true, pattern: "savia.app.hefesoft.com" },
-            ...[...new Set(["savia-team", ...tenantSubdomains])].map(
-              (label) => ({
-                custom_domain: true,
-                pattern: `${label}.savia.app.hefesoft.com`,
-              }),
-            ),
-            {
-              pattern: "*.savia.app.hefesoft.com/*",
-              zone_name: "hefesoft.com",
-            },
           ]
         : routes,
 

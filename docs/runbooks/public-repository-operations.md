@@ -19,10 +19,13 @@ manual-only, requires successful preview for the same commit, revalidates CI,
 and waits for the protected production environment approval. Deployment secrets
 remain environment-scoped. See [preview and production operations](preview-production.md).
 
-The old repository workflows remain disabled. The standalone production data
-import workflow is disabled and additionally gated by
-`PRODUCTION_OPERATIONS_ENABLED=false`. This variable does not control manual
-application promotion.
+Production is currently stopped; its definitions and workflows are retained for
+a future rebuild. `PRODUCTION_OPERATIONS_ENABLED` is currently `false` and gates
+manual application promotion, production Pulumi dispatch, backup/freshness jobs,
+and the standalone production data import. Previously disabled workflows must
+also be explicitly re-enabled before use. See
+[production rebuild](production-rebuild.md); restoring source does not recreate
+the deleted environment or its data.
 
 Historical private branches and tags must not be pushed to the public repository.
 External notification webhooks were not duplicated during migration.

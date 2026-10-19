@@ -258,7 +258,7 @@ test("production manifests bind the adopted D1 names from stack outputs", async 
   }
 });
 
-test("production gateway preserves configured tenant domains alongside migration wildcard routes", async () => {
+test("production gateway preserves canonical tenant domains without legacy-host routes", async () => {
   const root = await mkdtemp(join(tmpdir(), "savia-iac-tenant-domains-"));
   try {
     await renderProductionConfigs({
@@ -273,11 +273,6 @@ test("production gateway preserves configured tenant domains alongside migration
       { custom_domain: true, pattern: "acme-team.savia.hefesoft.com" },
       { pattern: "savia.hefesoft.com/*", zone_name: "hefesoft.com" },
       { pattern: "*.savia.hefesoft.com/*", zone_name: "hefesoft.com" },
-      { custom_domain: true, pattern: "savia.app.hefesoft.com" },
-      { custom_domain: true, pattern: "savia-team.savia.app.hefesoft.com" },
-      { custom_domain: true, pattern: "tenant-home.savia.app.hefesoft.com" },
-      { custom_domain: true, pattern: "acme-team.savia.app.hefesoft.com" },
-      { pattern: "*.savia.app.hefesoft.com/*", zone_name: "hefesoft.com" },
     ]);
   } finally {
     await rm(root, { recursive: true, force: true });
