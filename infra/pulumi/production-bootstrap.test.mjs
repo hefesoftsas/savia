@@ -75,6 +75,7 @@ test("bootstrap accepts only the exact fresh production persistence creation", (
 });
 const secrets = () => ({
   BETTER_AUTH_SECRET: "auth",
+  BETTER_AUTH_BOOTSTRAP_PASSWORD: "bootstrap-password-for-tests",
   SAVIA_MCP_SHARED_SECRET: "mcp",
   SAVIA_REQUEST_ENCRYPTION_KEY: "request",
   EXTENSION_CONNECTIONS_ENCRYPTION_KEY: "connections",
@@ -93,6 +94,24 @@ test("all application and backup credentials are required before creating persis
     delete value[key];
     assert.throws(() => validateBootstrapSecrets(value));
   }
+});
+
+test("first-install credentials satisfy Auth minimum password length before mutation", () => {
+  for (const password of ["", " ".repeat(12), "x".repeat(11)])
+    assert.throws(
+      () =>
+        validateBootstrapSecrets({
+          ...secrets(),
+          BETTER_AUTH_BOOTSTRAP_PASSWORD: password,
+        }),
+      /BETTER_AUTH_BOOTSTRAP_PASSWORD/,
+    );
+  assert.doesNotThrow(() =>
+    validateBootstrapSecrets({
+      ...secrets(),
+      BETTER_AUTH_BOOTSTRAP_PASSWORD: "x".repeat(12),
+    }),
+  );
 });
 
 test("initialization applies only its reviewed saved plan after validating credentials and identity", async () => {
@@ -171,6 +190,14 @@ test("first installation retains normal production preflight and isolates applic
   );
   assert.match(workflow, /initialize_environment:[\s\S]*?default: false/);
   assert.match(workflow, /environment: production-app\n/);
+  assert.ok(
+    (
+      workflow.match(
+        /BETTER_AUTH_BOOTSTRAP_PASSWORD: \$\{\{ secrets\.BETTER_AUTH_BOOTSTRAP_PASSWORD \}\}/g,
+      ) ?? []
+    ).length >= 3,
+    "bootstrap password must reach initialization, preview of secret uploads, and exact runtime apply",
+  );
   const initialize = workflow.indexOf(
     "name: Initialize empty production persistence",
   );

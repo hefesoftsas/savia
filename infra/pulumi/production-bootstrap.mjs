@@ -89,6 +89,15 @@ export function assertProductionBootstrapPlan(plan, accountId) {
 }
 
 export function validateBootstrapSecrets(env) {
+  const bootstrapPassword = env.BETTER_AUTH_BOOTSTRAP_PASSWORD;
+  if (
+    typeof bootstrapPassword !== "string" ||
+    !bootstrapPassword.trim() ||
+    bootstrapPassword.length < 12
+  )
+    throw new Error(
+      "Production requires BETTER_AUTH_BOOTSTRAP_PASSWORD with at least 12 characters",
+    );
   buildSecretUploads("production", {
     ...env,
     SAVIA_FLOWS_PROVISIONED: "false",

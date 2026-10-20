@@ -32,7 +32,13 @@ reviewer and `main` branch restriction before enabling a release. The
 `production-backup` environment is `main`-only and has no recurring interactive
 approval, so its scheduled recovery jobs can run unattended with restricted
 backup credentials. Never copy Preview application encryption keys into a fresh
-production installation.
+production installation. Store `BETTER_AUTH_BOOTSTRAP_PASSWORD` as a secret in
+`production-app`; first-install validation requires at least 12 characters, and runtime secret
+uploads include it only when configured and only for `savia-auth`. Keep it
+configured on later releases. On first request, Auth creates the fixed
+`savia.admin@example.test` administrator if it is absent and uses that account
+to create the fixed Savia OAuth clients. Keep the secret available on later
+releases and do not rotate it separately from the administrator's password.
 
 The application stack uses the existing `savia-pulumi-state-preview` bucket,
 owned and protected by the independent `savia-management/management` stack.
