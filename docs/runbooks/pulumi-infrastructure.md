@@ -499,10 +499,16 @@ capabilities against its namespace. The runner closes admission, waits up to
 30 seconds, verifies ownership after copying, and releases on success/failure.
 Capture is rejected if the 15-minute maintenance budget expires. A killed runner
 cannot leave a permanent pause: its lease expires. Unresolved writer permits fail
-the next drain rather than being silently discarded. Storage operations,
-including Auth session reads which can write, are temporarily unavailable during
-the maintenance window. Preview load/latency validation is required before
-activation because each D1 execution and R2 mutation uses central durable permits.
+the next drain rather than being silently discarded. D1 mutations, ambiguous SQL,
+and R2 mutations are temporarily unavailable during the maintenance window.
+Single statements starting with `SELECT` (ignoring whitespace and case) bypass
+the write barrier only when they contain no semicolon except an optional final
+one. Comments before `SELECT`, `WITH`, `PRAGMA`, multiple statements, `exec`,
+and batches remain guarded. Classification uses SQL, not the execution method:
+`UPDATE ... RETURNING` through `first()` still requires a permit. Auth session
+flows can still write and must retry when those writes encounter maintenance.
+Preview load/latency validation is required before activation because guarded
+operations use central durable permits.
 Gate-client and storage-wrapper identities may be cached, but Durable Object
 stubs must be obtained inside each RPC attempt. Sharing a mutable stub across
 concurrent requests can throw Cloudflare's "Cannot perform I/O on behalf of a

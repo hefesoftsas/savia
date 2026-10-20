@@ -327,6 +327,16 @@ async function guardedWrite(gate, callback) {
   }
 }
 
+function isSinglePlainSelect(sql) {
+  if (typeof sql !== "string") return false;
+  const statement = sql.trim();
+  if (!/^SELECT\b/i.test(statement)) return false;
+  const withoutTrailingTerminator = statement.endsWith(";")
+    ? statement.slice(0, -1).trimEnd()
+    : statement;
+  return !withoutTrailingTerminator.includes(";");
+}
+
 function wrapD1(database, gate, proxies, originals) {
   if (!database || typeof database !== "object") return database;
   if (proxies.has(database)) return proxies.get(database);
@@ -337,7 +347,13 @@ function wrapD1(database, gate, proxies, originals) {
 
       if (property === "prepare") {
         return (...args) =>
-          wrapStatement(value.apply(target, args), gate, proxies, originals);
+          wrapStatement(
+            value.apply(target, args),
+            gate,
+            proxies,
+            originals,
+            isSinglePlainSelect(args[0]),
+          );
       }
       if (property === "batch") {
         return (statements, ...args) =>
@@ -366,9 +382,8 @@ function wrapD1(database, gate, proxies, originals) {
   return proxy;
 }
 
-function wrapStatement(statement, gate, proxies, originals) {
+function wrapStatement(statement, gate, proxies, originals, isRead) {
   if (!statement || typeof statement !== "object") return statement;
-  if (proxies.has(statement)) return proxies.get(statement);
   const writes = new Set(["run", "all", "raw", "first"]);
   const proxy = new Proxy(statement, {
     get(target, property) {
@@ -376,10 +391,19 @@ function wrapStatement(statement, gate, proxies, originals) {
       if (typeof value !== "function") return value;
       if (property === "bind") {
         return (...args) =>
-          wrapStatement(value.apply(target, args), gate, proxies, originals);
+          wrapStatement(
+            value.apply(target, args),
+            gate,
+            proxies,
+            originals,
+            isRead,
+          );
       }
       if (writes.has(property))
-        return (...args) => guardedWrite(gate, () => value.apply(target, args));
+        return (...args) => {
+          const execute = () => value.apply(target, args);
+          return isRead ? execute() : guardedWrite(gate, execute);
+        };
       return value.bind(target);
     },
   });
