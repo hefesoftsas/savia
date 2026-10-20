@@ -473,16 +473,56 @@ it("preserves the API audience through native code exchange, rotation, and revoc
 
   const freshHandler = createAuthHandler({ ...environment });
   const clientMetadata = await freshHandler.fetch(
-    new Request(`${runtime.apiResource}/_internal/oauth/admin-client`),
+    new Request("https://savia-auth.internal/_internal/oauth/admin-client"),
   );
   expect(clientMetadata.status).toBe(200);
-  expect(await clientMetadata.json()).toMatchObject({
+  const adminClient = (await clientMetadata.json()) as {
+    clientId: string;
+    redirectUri: string;
+    resource: string;
+    scopes: string[];
+  };
+  expect(adminClient).toMatchObject({
     clientId: expect.any(String),
     redirectUri: expect.any(String),
     resource: expect.any(String),
   });
+  const adminAuthorization = await freshHandler.fetch(
+    new Request(
+      `https://savia-auth.internal/api/auth/oauth2/authorize?${new URLSearchParams(
+        {
+          client_id: adminClient.clientId,
+          code_challenge: challenge,
+          code_challenge_method: "S256",
+          redirect_uri: adminClient.redirectUri,
+          resource: adminClient.resource,
+          response_type: "code",
+          prompt: "login",
+          scope: adminClient.scopes.join(" "),
+          state: "managed-admin-authorize-test",
+        },
+      )}`,
+      { headers: { accept: "application/json" } },
+    ),
+  );
+  expect(
+    adminAuthorization.status,
+    await adminAuthorization.clone().text(),
+  ).toBe(200);
+  const adminAuthorizationResult = (await adminAuthorization.json()) as {
+    redirect?: unknown;
+    url?: unknown;
+  };
+  expect(adminAuthorizationResult.redirect).toBe(true);
+  expect(typeof adminAuthorizationResult.url).toBe("string");
+  expect(
+    new URL(
+      adminAuthorizationResult.url as string,
+      "https://savia-auth.internal",
+    ).pathname,
+  ).toBe("/api/auth/login");
   const session = await freshHandler.fetch(
-    new Request(`${runtime.apiResource}/_internal/session`, {
+    new Request("https://savia-auth.internal/_internal/session", {
       headers: { cookie: cookie.split(";")[0] },
     }),
   );
