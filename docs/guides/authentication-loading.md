@@ -117,6 +117,13 @@ login. A failed preparation blocks API publication and uses the existing release
 recovery path. Previous readiness records remain available for rollback. Local and
 branch environments without the managed revision retain lazy initialization.
 
+Preparation also completes Better Auth's explicit schema validation before
+recording readiness. Managed request handlers disable its automatic background
+schema check. A short metadata request must not start request-owned introspection
+that later authentication requests would await after the first request has ended.
+Runtime handlers rely on the validated readiness record; deployment and local
+initialization retain schema validation.
+
 The API login proxy also reports tenant-context lookup, registration preflight and
 the final Auth round-trip in `Server-Timing`, alongside Auth's own phases. Tenant
 resolution is reused within the request; branding, tenant validation and registration

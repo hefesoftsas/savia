@@ -135,7 +135,10 @@ type AuthBootstrap = {
   scalarClient: ScalarOAuthClient;
   adminClient: AdminOAuthClient;
 };
-type ManagedAuthRuntime = { seedOAuthResources?: boolean };
+type ManagedAuthRuntime = {
+  seedOAuthResources?: boolean;
+  validateSchema?: boolean;
+};
 type PersistedAuthReadiness = {
   revision: string;
   configurationFingerprint: string;
@@ -434,6 +437,12 @@ export function createBetterAuth(
     advanced: {
       cookiePrefix: "savia",
       ipAddress: { ipAddressHeaders: ["cf-connecting-ip"] },
+      // Managed runtimes validate during deployment. Avoid Better Auth's
+      // background check, which can outlive a short metadata request.
+      ...(runtime.seedOAuthResources === false ||
+      runtime.validateSchema === false
+        ? { database: { validateSchema: false } }
+        : {}),
       ...(() => {
         const canonical = normalizeCanonicalHost(
           new URL(adminLoginUrl(environment)).hostname,
@@ -1070,7 +1079,9 @@ export function createAuthHandler(
   }
 
   async function initializeManagedDeployment(revision: string): Promise<void> {
-    const auth = createBetterAuth(environment, dependencies);
+    const auth = createBetterAuth(environment, dependencies, {
+      validateSchema: false,
+    });
     void auth.$context.catch(() => undefined);
     await ensureSchema(auth, environment.AUTH_DB);
     await initializeAccountEmailSchema(environment);
@@ -1078,7 +1089,8 @@ export function createAuthHandler(
     await initializePendingEmailVerificationSchema(environment);
     await initializeEmailRegistrationSchema(environment);
     await initializeFederatedEmailVerificationSchema(environment);
-    await auth.$context;
+    const context = await auth.$context;
+    await context.explicitSchemaCheck?.();
     const bootstrap = await ensureAuthBootstrap(auth, environment);
     const fingerprint = await authConfigurationFingerprint(environment);
     const readiness = {

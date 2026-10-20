@@ -470,12 +470,89 @@ it("preserves the API audience through native code exchange, rotation, and revoc
     runtime.apiResource,
   );
   expect(rotated.refresh_token).not.toBe(credentials.refresh_token);
+
+  const freshHandler = createAuthHandler({ ...environment });
+  const clientMetadata = await freshHandler.fetch(
+    new Request("https://savia-auth.internal/_internal/oauth/admin-client"),
+  );
+  expect(clientMetadata.status).toBe(200);
+  const adminClient = (await clientMetadata.json()) as {
+    clientId: string;
+    redirectUri: string;
+    resource: string;
+    scopes: string[];
+  };
+  expect(adminClient).toMatchObject({
+    clientId: expect.any(String),
+    redirectUri: expect.any(String),
+    resource: expect.any(String),
+  });
+  const adminAuthorization = await freshHandler.fetch(
+    new Request(
+      `https://savia-auth.internal/api/auth/oauth2/authorize?${new URLSearchParams(
+        {
+          client_id: adminClient.clientId,
+          code_challenge: challenge,
+          code_challenge_method: "S256",
+          redirect_uri: adminClient.redirectUri,
+          resource: adminClient.resource,
+          response_type: "code",
+          prompt: "login",
+          scope: adminClient.scopes.join(" "),
+          state: "managed-admin-authorize-test",
+        },
+      )}`,
+      { headers: { accept: "application/json" } },
+    ),
+  );
+  expect(
+    adminAuthorization.status,
+    await adminAuthorization.clone().text(),
+  ).toBe(200);
+  const adminAuthorizationResult = (await adminAuthorization.json()) as {
+    redirect?: unknown;
+    url?: unknown;
+  };
+  expect(adminAuthorizationResult.redirect).toBe(true);
+  expect(typeof adminAuthorizationResult.url).toBe("string");
+  expect(
+    new URL(
+      adminAuthorizationResult.url as string,
+      "https://savia-auth.internal",
+    ).pathname,
+  ).toBe("/api/auth/login");
+  const session = await freshHandler.fetch(
+    new Request("https://savia-auth.internal/_internal/session", {
+      headers: { cookie: cookie.split(";")[0] },
+    }),
+  );
+  expect(session.status).toBe(200);
+  expect(await session.json()).toMatchObject({
+    user: { email },
+  });
+  const coldRefresh = await freshHandler.fetch(
+    new Request(`${runtime.issuer}/oauth2/token`, {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        grant_type: "refresh_token",
+        client_id: clientId,
+        refresh_token: rotated.refresh_token,
+        resource: runtime.apiResource,
+      }),
+    }),
+  );
+  expect(coldRefresh.status, await coldRefresh.clone().text()).toBe(200);
+  const coldRotated = (await coldRefresh.json()) as {
+    refresh_token: string;
+  };
+  expect(coldRotated.refresh_token).not.toBe(rotated.refresh_token);
   const revoke = await handler.fetch(
     new Request(`${runtime.issuer}/oauth2/revoke`, {
       method: "POST",
       headers: { "content-type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
-        token: rotated.refresh_token,
+        token: coldRotated.refresh_token,
         token_type_hint: "refresh_token",
         client_id: clientId,
       }),
@@ -500,7 +577,7 @@ it("preserves the API audience through native code exchange, rotation, and revoc
         new URLSearchParams({
           grant_type: "refresh_token",
           client_id: clientId,
-          refresh_token: rotated.refresh_token,
+          refresh_token: coldRotated.refresh_token,
           resource: runtime.apiResource,
         }),
       )
