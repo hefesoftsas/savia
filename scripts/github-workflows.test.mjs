@@ -317,7 +317,7 @@ test("Flows CI splits all seven package suites and keeps readiness fail-closed",
   const packageJson = JSON.parse(
     await readFile(new URL("../package.json", import.meta.url), "utf8"),
   );
-  const lanes = ["flows-api", "flows-core"];
+  const lanes = ["flows-api", "flows-core", "flows-readiness"];
   const laneBlocks = lanes.map((name) => {
     const start = ci.indexOf(`  ${name}:`);
     assert.notEqual(start, -1, `missing ${name} lane`);
@@ -348,20 +348,27 @@ test("Flows CI splits all seven package suites and keeps readiness fail-closed",
   assert.match(laneBlocks[0], /pnpm run flows:test:api/);
   assert.match(laneBlocks[1], /pnpm run flows:test:core/);
   assert.match(laneBlocks[1], /flows:verify/);
-  assert.match(laneBlocks[1], /flows:typecheck/);
-  assert.match(laneBlocks[1], /hook-executor typecheck/);
-  assert.match(laneBlocks[1], /npm ci --prefix infra\/pulumi --ignore-scripts/);
-  assert.match(laneBlocks[1], /infra\/pulumi\/\*\.test\.mjs/);
+  assert.doesNotMatch(
+    laneBlocks[1],
+    /flows:typecheck|Verify infrastructure and recovery/,
+  );
+  assert.match(laneBlocks[2], /flows:typecheck/);
+  assert.match(laneBlocks[2], /hook-executor typecheck/);
+  assert.match(laneBlocks[2], /npm ci --prefix infra\/pulumi --ignore-scripts/);
+  assert.match(laneBlocks[2], /infra\/pulumi\/\*\.test\.mjs/);
 
   const gateStart = ci.indexOf("\n  flows:\n");
   const gateEnd = ci.indexOf("\n  publication-safety:", gateStart);
   const gate = ci.slice(gateStart, gateEnd);
   assert.match(gate, /name: Flows runtime and preview readiness/);
-  assert.match(gate, /needs:\n\s+- changes\n\s+- flows-api\n\s+- flows-core/);
+  assert.match(
+    gate,
+    /needs:\n\s+- changes\n\s+- flows-api\n\s+- flows-core\n\s+- flows-readiness/,
+  );
   assert.match(gate, /if: always\(\)/);
   assert.match(
     gate,
-    /needs\.flows-api\.result }}" != "success"[\s\S]*needs\.flows-core\.result }}" != "success"/,
+    /needs\.flows-api\.result }}" != "success"[\s\S]*needs\.flows-core\.result }}" != "success"[\s\S]*needs\.flows-readiness\.result }}" != "success"/,
   );
   assert.match(gate, /exit 1/);
 
@@ -375,22 +382,29 @@ test("Flows CI splits all seven package suites and keeps readiness fail-closed",
   const results = ["success", "failure", "cancelled", "skipped"];
   for (const apiResult of results) {
     for (const coreResult of results) {
-      const script = gateScript
-        .replaceAll("${{ needs.flows-api.result }}", apiResult)
-        .replaceAll("${{ needs.flows-core.result }}", coreResult);
-      const result = spawnSync(
-        "bash",
-        ["-e", "-u", "-o", "pipefail", "-c", script],
-        {
-          encoding: "utf8",
-        },
-      );
+      for (const readinessResult of results) {
+        const script = gateScript
+          .replaceAll("${{ needs.flows-api.result }}", apiResult)
+          .replaceAll("${{ needs.flows-core.result }}", coreResult)
+          .replaceAll("${{ needs.flows-readiness.result }}", readinessResult);
+        const result = spawnSync(
+          "bash",
+          ["-e", "-u", "-o", "pipefail", "-c", script],
+          {
+            encoding: "utf8",
+          },
+        );
 
-      assert.equal(
-        result.status,
-        apiResult === "success" && coreResult === "success" ? 0 : 1,
-        `aggregate gate result for API=${apiResult}, core=${coreResult}`,
-      );
+        assert.equal(
+          result.status,
+          apiResult === "success" &&
+            coreResult === "success" &&
+            readinessResult === "success"
+            ? 0
+            : 1,
+          `aggregate gate result for API=${apiResult}, core=${coreResult}, readiness=${readinessResult}`,
+        );
+      }
     }
   }
 
