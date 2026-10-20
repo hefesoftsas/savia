@@ -64,7 +64,7 @@ jobs:
             if node "$trusted_script" --ci --base "$BASE_SHA" --head "$HEAD_SHA" --output "$ci_output" \
               && [[ "$(grep -c '^ci_kind=' "$ci_output")" == 1 ]] \
               && [[ "$(grep -c '^ci_flows=' "$ci_output")" == 1 ]] \
-              && { { grep -Fxq 'ci_kind=full' "$ci_output" && grep -Fxq 'ci_flows=true' "$ci_output"; } || { grep -Exq 'ci_kind=(infrastructure|plugin|none)' "$ci_output" && grep -Fxq 'ci_flows=false' "$ci_output"; }; }; then
+              && { { grep -Fxq 'ci_kind=full' "$ci_output" && grep -Fxq 'ci_flows=true' "$ci_output"; } || { grep -Exq 'ci_kind=(infrastructure|plugin|none|auth|api|backup-gate)' "$ci_output" && grep -Fxq 'ci_flows=false' "$ci_output"; }; }; then
               cat "$ci_output" >> "$GITHUB_OUTPUT"
             else
               {
@@ -398,6 +398,65 @@ jobs:
       - name: Run API unit tests
         run: VITEST_SHARD_ARGS='--shard 3/3' pnpm run test:unit:api
 
+  runtime-profile:
+    name: Focused runtime tests and type checks
+    needs: changes
+    if: >-
+      always() && needs.changes.result == 'success' &&
+      contains(fromJSON('["auth","api","backup-gate"]'), needs.changes.outputs.ci_kind)
+    timeout-minutes: 15
+    runs-on: ubuntu-24.04
+    env:
+      PNPM_CONFIG_STRICT_DEP_BUILDS: "false"
+      CI_KIND: ${{ needs.changes.outputs.ci_kind }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.24.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run profile-specific tests and type checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$CI_KIND" in
+            auth)
+              pnpm --filter @savia/auth test
+              pnpm --filter @savia/auth exec tsc --noEmit
+              ;;
+            api)
+              pnpm --filter @savia/api test
+              pnpm --filter @savia/api exec tsc --noEmit
+              ;;
+            backup-gate)
+              node --test packages/backup-gate/*.test.mjs
+              pnpm --filter @savia/api exec vitest run --config vitest.backup-gate.config.ts
+              pnpm --filter @savia/auth test
+              pnpm --filter @savia/request test
+              pnpm --filter @savia/connector-gateway test
+              pnpm --filter @savia/api exec tsc --noEmit
+              pnpm --filter @savia/auth exec tsc --noEmit
+              pnpm --filter @savia/request typecheck
+              pnpm --filter @savia/connector-gateway typecheck
+              ;;
+            *)
+              echo "Unsupported focused CI profile: $CI_KIND" >&2
+              exit 1
+              ;;
+          esac
+
   workspace:
     needs: changes
     if: always() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full')
@@ -519,6 +578,7 @@ jobs:
     needs:
       - changes
       - plugin-validation
+      - runtime-profile
     if: always()
     timeout-minutes: 10
     runs-on: ubuntu-24.04
@@ -528,7 +588,9 @@ jobs:
       - name: Require a successful change classification
         if: >-
           always() && (needs.changes.result != 'success' ||
-          (needs.changes.outputs.kind == 'plugin' && needs.plugin-validation.result != 'success'))
+          (needs.changes.outputs.kind == 'plugin' && needs.plugin-validation.result != 'success') ||
+          (contains(fromJSON('["auth","api","backup-gate"]'), needs.changes.outputs.ci_kind) &&
+          needs.runtime-profile.result != 'success'))
         run: exit 1
 
       - name: Check out source

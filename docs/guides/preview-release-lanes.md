@@ -100,3 +100,30 @@ complete platform checks.
 
 For coherent backup and failed-release recovery details, see
 [Preview and production operations](../runbooks/preview-production.md).
+
+## Preview code updates
+
+Existing application source changes can publish only the affected API, Auth,
+Request, Connector Gateway or admin gateway Worker. The frozen artifact retains
+all configurations and resource identities; its digest also covers the exact
+base, head and selected targets in `release-source.json`. Planning uses the last
+successful evidence-backed deployed ancestor, so a failed release cannot hide
+pending changes. Missing history, new/deleted files, schema statements, entrypoints,
+configuration, dependencies, migrations and unknown paths select the full release.
+Production always uses the complete publication sequence.
+
+This preview-only path requires an active runtime. It skips write pauses, Flows
+snapshot/drain, data backups, migrations and secret publication. Auth publication
+still completes deployment initialization before dependent Workers. Existing
+health checks and Worker version recovery remain mandatory; code-only recovery
+never restores databases. Build preparation still freezes the complete artifact.
+
+Isolated Auth and API changes use their focused CI profiles. Shared backup-gate
+changes test all four consumers. Mixed and uncertain changes retain full checks.
+Office assets and workspace store plugins publish only when their cumulative
+paths changed; a missing baseline enables both conservatively.
+
+Full releases stage secrets with `wrangler versions secret bulk` before publishing
+code, allowing retries after rollback leaves a newer inactive Worker version.
+The Auth helper records bounded subprocess diagnostics in the private encrypted
+failure artifact; CI displays only preparation stages and HTTP status numbers.

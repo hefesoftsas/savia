@@ -83,7 +83,7 @@ test("deployment initializes only its bound revision, validates readiness and re
           start: (binary, args, options) => {
             assert.match(binary, /wrangler$/);
             assert.ok(args.includes("--remote"));
-            assert.equal(options.stdio, "ignore");
+            assert.deepEqual(options.stdio, ["ignore", "pipe", "pipe"]);
             probePath = args[args.indexOf("--config") + 1];
             const source = readFileSync(probePath, "utf8");
             assert.doesNotMatch(source, /SECRET_CANARY|x-savia-bridge-key/);
@@ -117,6 +117,51 @@ test("deployment initializes only its bound revision, validates readiness and re
       assert.equal(requests.length, 2);
       await assert.rejects(access(probePath), /ENOENT/);
     }
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("failed remote session preserves private diagnostics and reports a safe stage", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "auth-session-failure-"));
+  const configPath = join(directory, "auth.json");
+  await writeFile(configPath, JSON.stringify(config));
+  const stages = [];
+  try {
+    await assert.rejects(
+      initializeAuthDeployment(
+        { environment: "preview", configPath },
+        {
+          env: { ...env, SAVIA_RUNTIME_OPERATION_DIRECTORY: directory },
+          report: (stage) => stages.push(stage),
+          start: () => {
+            const child = new EventEmitter();
+            child.stdout = new EventEmitter();
+            child.stderr = new EventEmitter();
+            queueMicrotask(() => {
+              child.stderr.emit("data", Buffer.from("PRIVATE_SESSION_FAILURE"));
+              child.emit("exit", 1);
+            });
+            return child;
+          },
+          request: async () => new Response(null, { status: 503 }),
+        },
+      ),
+      /session unavailable/,
+    );
+    const { readdir, readFile } = await import("node:fs/promises");
+    const records = await readdir(join(directory, "command-errors"));
+    assert.equal(records.length, 1);
+    const record = JSON.parse(
+      await readFile(join(directory, "command-errors", records[0]), "utf8"),
+    );
+    assert.match(record.stderr, /PRIVATE_SESSION_FAILURE/);
+    assert.equal(record.exitcode, 1);
+    assert.match(stages.join("\n"), /session/);
+    assert.doesNotMatch(
+      stages.join("\n"),
+      /PRIVATE_SESSION_FAILURE|SECRET_CANARY/,
+    );
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

@@ -7,6 +7,7 @@ import { join, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { buildSecretUploads } from "./upload-cloudflare-secrets.mjs";
+import { preserveCommandFailure } from "../infra/pulumi/command-diagnostics.mjs";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 
@@ -57,7 +58,12 @@ async function availablePort() {
 
 export async function initializeAuthDeployment(
   { environment, configPath },
-  { env = process.env, start = spawn, request = fetch } = {},
+  {
+    env = process.env,
+    start = spawn,
+    request = fetch,
+    report = console.log,
+  } = {},
 ) {
   const config = JSON.parse(await readFile(configPath, "utf8"));
   const { service, revision } = validateAuthDeployment(
@@ -72,7 +78,10 @@ export async function initializeAuthDeployment(
   const nonce = randomBytes(32).toString("hex");
   const directory = await mkdtemp(join(tmpdir(), "savia-auth-deployment-"));
   let child,
-    exited = false;
+    exited = false,
+    exitCode = null,
+    stdout = "",
+    stderr = "";
   try {
     const path = join(directory, "wrangler.json");
     await writeFile(
@@ -90,6 +99,7 @@ export async function initializeAuthDeployment(
       { mode: 0o600 },
     );
     const port = await availablePort();
+    report("Auth preparation: starting authenticated remote session.");
     child = start(
       join(root, "apps/api/node_modules/.bin/wrangler"),
       [
@@ -105,10 +115,18 @@ export async function initializeAuthDeployment(
         "0",
         "--show-interactive-dev-session=false",
       ],
-      { cwd: root, env, detached: true, stdio: "ignore" },
+      { cwd: root, env, detached: true, stdio: ["ignore", "pipe", "pipe"] },
     );
-    child.on("exit", () => {
+    // Keep bounded subprocess output in private diagnostics, never CI stdout.
+    child.stdout?.on("data", (chunk) => {
+      stdout = (stdout + chunk.toString()).slice(-65_536);
+    });
+    child.stderr?.on("data", (chunk) => {
+      stderr = (stderr + chunk.toString()).slice(-65_536);
+    });
+    child.on("exit", (code) => {
       exited = true;
+      exitCode = code;
     });
     child.on("error", () => {
       exited = true;
@@ -131,8 +149,11 @@ export async function initializeAuthDeployment(
       }
       await delay(1_000);
     }
-    if (!ready || exited)
+    if (!ready || exited) {
+      report("Auth preparation: remote session unavailable.");
       throw new Error("Auth initialization session unavailable");
+    }
+    report("Auth preparation: initializing the bound source revision.");
     const response = await request(`${base}/initialize`, {
       method: "POST",
       headers: {
@@ -142,11 +163,25 @@ export async function initializeAuthDeployment(
       signal: AbortSignal.timeout(120_000),
       redirect: "error",
     });
-    if (!response.ok) throw new Error("Auth preparation failed");
+    if (!response.ok) {
+      report(
+        `Auth preparation: initialization returned HTTP ${response.status}.`,
+      );
+      throw new Error("Auth preparation failed");
+    }
     const result = await response.json();
     if (result.status !== "ready" || result.revision !== revision)
       throw new Error("Auth deployment readiness mismatch");
+    report("Auth preparation: revision ready.");
     return { status: "ready", revision };
+  } catch (error) {
+    await preserveCommandFailure({
+      directory: env.SAVIA_RUNTIME_OPERATION_DIRECTORY,
+      executable: "wrangler",
+      operation: "auth-initialization-session",
+      error: { exitCode, stdout, stderr },
+    });
+    throw error;
   } finally {
     if (child?.pid) {
       try {

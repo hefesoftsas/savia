@@ -428,6 +428,7 @@ describe("admin OAuth bridge", () => {
 
     function fixture() {
       let tokenNumber = 0;
+      let nextRefreshResponse: (() => Response | Promise<Response>) | undefined;
       const authFetch = vi.fn(async (request: Request) => {
         const url = new URL(request.url);
         if (url.pathname === "/_internal/oauth/admin-client")
@@ -442,6 +443,8 @@ describe("admin OAuth bridge", () => {
           });
         if (url.pathname === "/api/auth/oauth2/token") {
           tokenNumber += 1;
+          if (tokenNumber > 1 && nextRefreshResponse)
+            return nextRefreshResponse();
           return Response.json({
             access_token: `access-${tokenNumber}`,
             refresh_token: `refresh-${crypto.randomUUID()}`,
@@ -496,7 +499,19 @@ describe("admin OAuth bridge", () => {
           method: "POST",
           headers: { origin, cookie },
         });
-      return { app, authFetch, cookieFrom, signIn, refresh };
+      const respondToNextRefresh = (
+        response: () => Response | Promise<Response>,
+      ) => {
+        nextRefreshResponse = response;
+      };
+      return {
+        app,
+        authFetch,
+        cookieFrom,
+        signIn,
+        refresh,
+        respondToNextRefresh,
+      };
     }
 
     it.each([
@@ -678,6 +693,87 @@ describe("admin OAuth bridge", () => {
         ),
       ).toHaveLength(1);
     });
+
+    it.each([
+      [
+        "provider rate limits",
+        () => new Response("slow down", { status: 429 }),
+      ],
+      [
+        "provider server errors",
+        () => new Response("unavailable", { status: 503 }),
+      ],
+      [
+        "malformed successful responses",
+        () => Response.json({ unexpected: true }),
+      ],
+      [
+        "malformed successful JSON",
+        () =>
+          new Response("{", {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          }),
+      ],
+      [
+        "provider transport failures",
+        () => Promise.reject(new Error("upstream unavailable")),
+      ],
+    ])(
+      "preserves a refresh session after %s",
+      async (_caseName, providerResponse) => {
+        const f = fixture();
+        const callback = await f.signIn(tenantOrigin);
+        const cookie = f.cookieFrom(callback);
+        f.respondToNextRefresh(providerResponse);
+
+        const failed = await f.refresh(tenantOrigin, cookie);
+
+        expect(failed.status).toBe(503);
+        expect(await failed.json()).toMatchObject({
+          error: { code: "AUTHENTICATION_UNAVAILABLE" },
+        });
+        expect(failed.headers.get("set-cookie")).toBeNull();
+        expect(
+          f.authFetch.mock.calls.some(
+            ([request]) =>
+              new URL(request.url).pathname === "/api/auth/sign-out",
+          ),
+        ).toBe(false);
+
+        f.respondToNextRefresh(() =>
+          Response.json({
+            access_token: "recovered-access",
+            refresh_token: "recovered-refresh",
+            token_type: "Bearer",
+            expires_in: 300,
+          }),
+        );
+        expect((await f.refresh(tenantOrigin, cookie)).status).toBe(200);
+      },
+    );
+
+    it.each([
+      ["invalid_grant", 400],
+      ["invalid_token", 401],
+    ])(
+      "clears a refresh cookie when the provider confirms %s",
+      async (code, status) => {
+        const f = fixture();
+        const callback = await f.signIn(tenantOrigin);
+        const cookie = f.cookieFrom(callback);
+        f.respondToNextRefresh(() =>
+          Response.json({ error: code }, { status }),
+        );
+
+        const failed = await f.refresh(tenantOrigin, cookie);
+
+        expect(failed.status).toBe(401);
+        expect(failed.headers.get("set-cookie")).toContain(
+          "savia.admin_refresh_token=",
+        );
+      },
+    );
 
     it("does not sign out another origin through a shared legacy cookie", async () => {
       const f = fixture();
