@@ -73,6 +73,17 @@ function cacheHeaders(headers: HeadersInit = {}): Headers {
   return result;
 }
 
+function serverTiming(phases: Array<[string, number]>): string {
+  return phases
+    .map(([name, duration]) => {
+      const safeDuration = Number.isFinite(duration)
+        ? Math.max(0, duration)
+        : 0;
+      return `${name};dur=${safeDuration.toFixed(2)}`;
+    })
+    .join(", ");
+}
+
 function refreshCookieNameForOrigin(origin: string): string {
   let url: URL;
   try {
@@ -601,7 +612,9 @@ export function registerAdminOAuthRoutes(
         "Authentication service is unavailable",
         503,
       );
+    let phaseStarted = performance.now();
     const client = await adminClient(service);
+    const clientDuration = performance.now() - phaseStarted;
     if (!client)
       return error(
         "AUTHENTICATION_UNAVAILABLE",
@@ -613,7 +626,9 @@ export function registerAdminOAuthRoutes(
       (isAllowedPublicOrigin(new URL(context.req.url).origin, canonicalHost)
         ? new URL(context.req.url).origin
         : new URL(client.redirectUri).origin);
+    phaseStarted = performance.now();
     const transaction = await createTransaction(d1, client, initiatedOrigin);
+    const transactionDuration = performance.now() - phaseStarted;
     const authorization = new URL(
       "/api/auth/oauth2/authorize",
       context.req.url,
@@ -629,12 +644,14 @@ export function registerAdminOAuthRoutes(
       scope: client.scopes.join(" "),
       state: transaction.state,
     }).toString();
+    phaseStarted = performance.now();
     const destination = await authorizationRedirect(
       service,
       client,
       authorization,
       context.req.raw,
     );
+    const authorizeDuration = performance.now() - phaseStarted;
     if (!destination)
       return error(
         "AUTHENTICATION_UNAVAILABLE",
@@ -642,6 +659,14 @@ export function registerAdminOAuthRoutes(
         503,
       );
     const headers = cacheHeaders({ location: destination });
+    headers.set(
+      "server-timing",
+      serverTiming([
+        ["oauth_client", clientDuration],
+        ["oauth_transaction", transactionDuration],
+        ["oauth_authorize", authorizeDuration],
+      ]),
+    );
     const targetOrigin = resolveInitiatedOrigin(context.req.raw, canonicalHost);
     if (targetOrigin) {
       headers.append(

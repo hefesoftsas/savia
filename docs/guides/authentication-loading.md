@@ -93,6 +93,12 @@ durations in its `Server-Timing` response header. Compare those phases with the
 request's total time before attributing a delay to schema or bootstrap work; a
 slow response alone does not identify which phase is responsible.
 
+Successful API `GET /api/auth/admin/authorize` redirects report `oauth_client`
+(admin OAuth client metadata lookup), `oauth_transaction` (PKCE transaction
+creation and persistence), and `oauth_authorize` (the authorization redirect
+service call) in `Server-Timing`. These values are durations only; the header
+does not include request URLs, state, tokens, or cookies.
+
 Protected API requests without an `Authorization` header or any `Cookie` are
 rejected before the API calls the internal session service. Requests with
 cookies still validate their session with the auth worker.
