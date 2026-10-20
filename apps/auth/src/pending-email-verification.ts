@@ -35,6 +35,20 @@ type Row = {
 };
 const TABLE =
   "CREATE TABLE IF NOT EXISTS pending_email_verification (id TEXT PRIMARY KEY, value TEXT NOT NULL, expires_at BIGINT NOT NULL, token_hash TEXT, token_expires_at BIGINT, sent_at BIGINT, sends INTEGER NOT NULL DEFAULT 0, consumed_at BIGINT)";
+const MAIL_BUDGET_TABLE =
+  "CREATE TABLE IF NOT EXISTS verification_mail_budget (key TEXT PRIMARY KEY, count INTEGER NOT NULL, expires_at BIGINT NOT NULL)";
+export async function initializePendingEmailVerificationSchema(
+  env: AccountEmailEnvironment,
+): Promise<void> {
+  await env.AUTH_DB.exec(TABLE);
+  await env.AUTH_DB.exec(MAIL_BUDGET_TABLE);
+}
+async function ensurePendingEmailVerificationSchema(
+  env: AccountEmailEnvironment,
+): Promise<void> {
+  if (!env.SAVIA_AUTH_DEPLOYMENT_REVISION)
+    await initializePendingEmailVerificationSchema(env);
+}
 const invalid = () =>
   new Error(
     "Email verification expired or invalid. Return to the original browser and try again.",
@@ -89,7 +103,7 @@ export async function createPendingVerification(
     browserNonceHash: await verificationHash(browserNonce),
     expiresAt: Date.now() + 20 * 60_000,
   };
-  await env.AUTH_DB.exec(TABLE);
+  await ensurePendingEmailVerificationSchema(env);
   await env.AUTH_DB.prepare(
     "INSERT INTO pending_email_verification(id,value,expires_at) VALUES(?,?,?)",
   )
@@ -107,7 +121,7 @@ export async function readPendingVerification(
     tenantId?: number;
   },
 ): Promise<PendingVerification> {
-  await env.AUTH_DB.exec(TABLE);
+  await ensurePendingEmailVerificationSchema(env);
   const row = await env.AUTH_DB.prepare(
     "SELECT * FROM pending_email_verification WHERE id=?",
   )
@@ -205,7 +219,7 @@ export async function consumePendingVerification(
 export async function cleanupPendingVerifications(
   env: AccountEmailEnvironment,
 ): Promise<void> {
-  await env.AUTH_DB.exec(TABLE);
+  await ensurePendingEmailVerificationSchema(env);
   await env.AUTH_DB.prepare(
     "DELETE FROM pending_email_verification WHERE id IN (SELECT id FROM pending_email_verification WHERE expires_at<? LIMIT 100)",
   )
@@ -218,9 +232,7 @@ export async function limitVerificationMail(
   env: AccountEmailEnvironment,
   input: { tenantId: number; email: string; ip?: string },
 ): Promise<void> {
-  await env.AUTH_DB.exec(
-    "CREATE TABLE IF NOT EXISTS verification_mail_budget (key TEXT PRIMARY KEY, count INTEGER NOT NULL, expires_at BIGINT NOT NULL)",
-  );
+  await ensurePendingEmailVerificationSchema(env);
   const window = Math.floor(Date.now() / 3_600_000),
     now = Date.now();
   const budgets = [

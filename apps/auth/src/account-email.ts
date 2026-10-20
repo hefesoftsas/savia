@@ -3,6 +3,7 @@ import { deliverSmtpEmail } from "./smtp";
 
 export type AccountEmailEnvironment = {
   AUTH_DB: D1Database;
+  SAVIA_AUTH_DEPLOYMENT_REVISION?: string;
   BETTER_AUTH_SECRET?: string;
   SAVIA_INTERNAL_BRIDGE_KEY?: string;
   SAVIA_SMTP_HOST?: string;
@@ -30,6 +31,19 @@ type StoredSettings = {
 
 const CREATE_TABLE =
   "CREATE TABLE IF NOT EXISTS tenant_email_settings (tenant_id INTEGER PRIMARY KEY, ciphertext TEXT NOT NULL, updated_at TEXT NOT NULL)";
+
+export async function initializeAccountEmailSchema(
+  environment: AccountEmailEnvironment,
+): Promise<void> {
+  await environment.AUTH_DB.exec(CREATE_TABLE);
+}
+
+async function ensureAccountEmailSchema(
+  environment: AccountEmailEnvironment,
+): Promise<void> {
+  if (!environment.SAVIA_AUTH_DEPLOYMENT_REVISION)
+    await initializeAccountEmailSchema(environment);
+}
 
 function validAddress(value: string): boolean {
   if (value.length > 254 || /[\s<>]/.test(value)) return false;
@@ -226,7 +240,7 @@ async function saveSettings(
   tenantId: number,
   input: unknown,
 ): Promise<TenantSMTPSettings> {
-  await environment.AUTH_DB.exec(CREATE_TABLE);
+  await ensureAccountEmailSchema(environment);
   const current = await readSettings(environment, tenantId);
   if (!input || typeof input !== "object" || Array.isArray(input))
     throw new Error("Invalid email settings");
@@ -286,7 +300,7 @@ export async function sendAccountEmail(
     Number.isSafeInteger(tenantId) &&
     tenantId > 0
   ) {
-    await environment.AUTH_DB.exec(CREATE_TABLE);
+    await ensureAccountEmailSchema(environment);
     const settings = await readSettings(environment, tenantId);
     if (settings && dependencies.deliverEmail)
       return dependencies.deliverEmail(settings, email);
@@ -318,7 +332,7 @@ export async function accountEmailAvailable(
     tenantId > 0
   ) {
     try {
-      await environment.AUTH_DB.exec(CREATE_TABLE);
+      await ensureAccountEmailSchema(environment);
       if (await readSettings(environment, tenantId)) return true;
     } catch {
       // A corrupt or unreadable tenant configuration cannot deliver mail.
@@ -436,7 +450,7 @@ export async function accountEmailSettingsResponse(
     }
   }
   try {
-    await environment.AUTH_DB.exec(CREATE_TABLE);
+    await ensureAccountEmailSchema(environment);
     if (request.method === "GET" && !testRoute)
       return jsonResponse(redacted(await readSettings(environment, tenantId)));
     if (request.method === "PUT" && !testRoute) {

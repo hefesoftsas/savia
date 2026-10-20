@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { decodeJwt } from "jose";
 import { oauthManagementResponse, oauthProviderOptions } from "../src/oauth";
 import { env } from "cloudflare:workers";
-import worker, { createBetterAuth } from "../src/index";
+import worker, { createAuthHandler } from "../src/index";
 import { oauthRuntime } from "../src/oauth";
 
 const callback = "com.hefesoft.savia.companion.preview:/oauth/callback";
@@ -306,33 +306,58 @@ describe("managed native OAuth clients", () => {
 });
 
 it("preserves the API audience through native code exchange, rotation, and revocation", async () => {
-  const runtime = oauthRuntime(env);
-  const auth = createBetterAuth(env);
-  const email = `native-flow-${crypto.randomUUID()}@example.test`;
-  await auth.api.createUser({
-    body: {
-      email,
-      name: "Native Flow User",
-      password: "TestPassword321!",
-      role: "user",
-      data: { emailVerified: true },
-    },
-  });
-  const signIn = await worker.fetch(
+  const revision = "2123456789abcdef0123456789abcdef01234567";
+  const environment = {
+    ...env,
+    SAVIA_INTERNAL_BRIDGE_KEY: "managed-native-flow-bridge",
+    SAVIA_AUTH_DEPLOYMENT_REVISION: revision,
+  };
+  const handler = createAuthHandler(environment);
+  const initialized = await handler.fetch(
+    new Request(`${env.BETTER_AUTH_URL}/_internal/deployment/initialize`, {
+      method: "POST",
+      headers: {
+        "x-savia-bridge-key": "managed-native-flow-bridge",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ revision }),
+    }),
+  );
+  expect(initialized.status).toBe(200);
+  const runtime = oauthRuntime(environment);
+  const email = `managed-native-flow-${crypto.randomUUID()}@example.test`;
+  const password = "Managed-Native-Flow-Password-123!";
+  const created = await handler.fetch(
+    new Request(`${runtime.apiResource}/_internal/users`, {
+      method: "POST",
+      headers: {
+        "x-savia-bridge-key": "managed-native-flow-bridge",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        email,
+        name: "Managed Native Flow",
+        password,
+        role: "user",
+        emailVerified: true,
+      }),
+    }),
+  );
+  expect(created.status).toBe(201);
+  const signIn = await handler.fetch(
     new Request(`${runtime.apiResource}/api/auth/sign-in/email`, {
       method: "POST",
       headers: {
         "content-type": "application/json",
         origin: runtime.apiResource,
       },
-      body: JSON.stringify({ email, password: "TestPassword321!" }),
+      body: JSON.stringify({ email, password }),
     }),
-    env,
   );
   expect(signIn.status).toBe(200);
   const cookie = signIn.headers.get("set-cookie")!;
   const callbackUri = "com.hefesoft.savia.companion.preview:/oauth/callback";
-  const registration = await worker.fetch(
+  const registration = await handler.fetch(
     new Request(`${runtime.issuer}/oauth2/register`, {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -347,7 +372,6 @@ it("preserves the API audience through native code exchange, rotation, and revoc
           "openid profile offline_access recordings:read recordings:upload recordings:process",
       }),
     }),
-    env,
   );
   expect(registration.status, await registration.clone().text()).toBe(201);
   const { client_id: clientId } = (await registration.json()) as {
@@ -373,18 +397,17 @@ it("preserves the API audience through native code exchange, rotation, and revoc
     code_challenge: challenge,
     code_challenge_method: "S256",
   });
-  const authorize = await worker.fetch(
+  const authorize = await handler.fetch(
     new Request(`${runtime.issuer}/oauth2/authorize?${query}`, {
       headers: { cookie },
     }),
-    env,
   );
   expect(authorize.status).toBe(302);
   const consentUrl = new URL(
     authorize.headers.get("location")!,
     runtime.apiResource,
   );
-  const consent = await worker.fetch(
+  const consent = await handler.fetch(
     new Request(`${runtime.issuer}/oauth2/consent`, {
       method: "POST",
       headers: {
@@ -397,20 +420,18 @@ it("preserves the API audience through native code exchange, rotation, and revoc
         oauth_query: consentUrl.search.slice(1),
       }),
     }),
-    env,
   );
-  expect(consent.status).toBe(200);
+  expect(consent.status, await consent.clone().text()).toBe(200);
   const callback = new URL(((await consent.json()) as { url: string }).url);
   expect(`${callback.protocol}${callback.pathname}`).toBe(callbackUri);
   const code = callback.searchParams.get("code")!;
   const tokenRequest = (body: URLSearchParams) =>
-    worker.fetch(
+    handler.fetch(
       new Request(`${runtime.issuer}/oauth2/token`, {
         method: "POST",
         headers: { "content-type": "application/x-www-form-urlencoded" },
         body,
       }),
-      env,
     );
   const issued = await tokenRequest(
     new URLSearchParams({
@@ -449,7 +470,7 @@ it("preserves the API audience through native code exchange, rotation, and revoc
     runtime.apiResource,
   );
   expect(rotated.refresh_token).not.toBe(credentials.refresh_token);
-  const revoke = await worker.fetch(
+  const revoke = await handler.fetch(
     new Request(`${runtime.issuer}/oauth2/revoke`, {
       method: "POST",
       headers: { "content-type": "application/x-www-form-urlencoded" },
@@ -459,7 +480,6 @@ it("preserves the API audience through native code exchange, rotation, and revoc
         client_id: clientId,
       }),
     }),
-    env,
   );
   expect(revoke.status, await revoke.clone().text()).toBe(200);
   expect(

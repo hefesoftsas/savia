@@ -5,6 +5,60 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { freezeRuntimeRelease } from "./runtime-artifact.mjs";
 import { verifyRuntimeArtifact } from "./runtime-publisher.mjs";
+test("managed Auth readiness is tied to the frozen source revision", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "savia-auth-release-test-"));
+  try {
+    const config = join(directory, "auth.json");
+    await writeFile(
+      config,
+      JSON.stringify({
+        name: "savia-auth-preview",
+        main: "worker.ts",
+        vars: { BETTER_AUTH_URL: "https://savia-preview.hefesoft.com" },
+      }),
+    );
+    const runWrangler = async (args) => {
+      const out = args[args.indexOf("--outdir") + 1];
+      await writeFile(join(out, "worker.mjs"), "export default {};");
+      await writeFile(
+        args[args.indexOf("--metafile") + 1],
+        JSON.stringify({
+          outputs: { [join(out, "worker.mjs")]: { entryPoint: "worker.ts" } },
+        }),
+      );
+    };
+    const artifact = await freezeRuntimeRelease(
+      {
+        environment: "preview",
+        configs: [config],
+        sourceRevision: "a".repeat(40),
+        destination: join(directory, "release"),
+      },
+      { runWrangler },
+    );
+    const manifest = await verifyRuntimeArtifact(artifact);
+    const frozen = JSON.parse(
+      await readFile(
+        join(artifact.artifactDirectory, manifest.configs[0]),
+        "utf8",
+      ),
+    );
+    assert.equal(frozen.vars.SAVIA_AUTH_DEPLOYMENT_REVISION, "a".repeat(40));
+    await assert.rejects(
+      freezeRuntimeRelease(
+        {
+          environment: "preview",
+          configs: [config],
+          destination: join(directory, "invalid"),
+        },
+        { runWrangler },
+      ),
+      /source revision/i,
+    );
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
 test("artifact preparation bundles once and freezes code, assets and both migration histories", async () => {
   const directory = await mkdtemp(join(tmpdir(), "savia-freeze-test-"));
   try {

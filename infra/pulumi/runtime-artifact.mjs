@@ -165,6 +165,18 @@ export async function freezeRuntimeRelease(
         );
       await normalizeBuildMetadata(directory);
       const output = structuredClone(config);
+      if (
+        ["preview", "production"].includes(environment) &&
+        config.name ===
+          (environment === "preview" ? "savia-auth-preview" : "savia-auth")
+      ) {
+        if (!sourceRevision)
+          throw new Error("Managed Auth requires an exact source revision");
+        output.vars = {
+          ...output.vars,
+          SAVIA_AUTH_DEPLOYMENT_REVISION: sourceRevision,
+        };
+      }
       delete output.$schema;
       delete output.build;
       output.main = main;

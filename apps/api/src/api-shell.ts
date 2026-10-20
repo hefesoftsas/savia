@@ -7,7 +7,7 @@ import {
 import type { CaptchaOptions } from "./public-forms/captcha";
 import { databaseConflict, databaseInputFailure } from "@savia/db/errors";
 import { returnOriginFromRequest } from "./auth/admin-oauth";
-import { readTenantBrandingForRequest } from "./tenant-branding/service";
+import { tenantBrandingContextForRequest } from "./tenant-branding/service";
 import { resolveTenantSlug } from "./tenant-slugs";
 import { parseTenantSlugFromHostname } from "@savia/tenant-host/tenant-host";
 import { RealtimeHubError } from "./realtime/hub-client";
@@ -527,6 +527,8 @@ export function createApiShell(
     if (!resolvedAuthService) return authenticationUnavailableResponse();
     // Never forward a caller-supplied identity payload to the authentication UI.
     const headers = publicAuthHeaders(context.req.raw);
+    let tenantDuration = 0;
+    let registrationDuration = 0;
     if (
       identityBridgeKey?.trim() &&
       ((context.req.method === "POST" &&
@@ -567,6 +569,10 @@ export function createApiShell(
           "/api/auth/chatgpt-email-verification/send",
         ].includes(context.req.path))
     ) {
+      const tenantStartedAt = performance.now();
+      let tenantContext: Awaited<
+        ReturnType<typeof tenantBrandingContextForRequest>
+      > = null;
       try {
         const returnOrigin =
           new URL(context.req.url).hostname === canonicalHost
@@ -577,36 +583,39 @@ export function createApiShell(
               headers: { accept: "application/json" },
             })
           : context.req.raw;
-        const branding = await readTenantBrandingForRequest(
+        tenantContext = await tenantBrandingContextForRequest(
           db,
           brandingRequest,
           canonicalHost,
         );
-        if (branding)
+        if (tenantContext?.branding)
           headers.set(
             "x-savia-tenant-branding",
-            encodeURIComponent(JSON.stringify(branding)),
+            encodeURIComponent(JSON.stringify(tenantContext.branding)),
           );
-        if (
-          identityBridgeKey?.trim() &&
-          context.req.method === "GET" &&
-          ["/api/auth/login", "/api/auth/forgot-password"].includes(
-            context.req.path,
-          )
-        ) {
-          const slug = parseTenantSlugFromHostname(
-            new URL(brandingRequest.url).hostname,
-            canonicalHost,
-          );
-          const tenant = slug ? await resolveTenantSlug(db, slug) : null;
-          if (tenant) {
-            headers.set("x-savia-tenant-email-id", String(tenant.id));
-            headers.set("x-savia-bridge-key", identityBridgeKey);
-            if (
-              context.req.path === "/api/auth/login" &&
-              registrationCaptcha &&
-              new URL(context.req.url).hostname !== canonicalHost
-            ) {
+      } catch {
+        // Branding is cosmetic: a failed lookup must not prevent authentication.
+      } finally {
+        tenantDuration = performance.now() - tenantStartedAt;
+      }
+      if (
+        identityBridgeKey?.trim() &&
+        context.req.method === "GET" &&
+        ["/api/auth/login", "/api/auth/forgot-password"].includes(
+          context.req.path,
+        )
+      ) {
+        const tenant = tenantContext?.tenant;
+        if (tenant) {
+          headers.set("x-savia-tenant-email-id", String(tenant.id));
+          headers.set("x-savia-bridge-key", identityBridgeKey);
+          if (
+            context.req.path === "/api/auth/login" &&
+            registrationCaptcha &&
+            new URL(context.req.url).hostname !== canonicalHost
+          ) {
+            const registrationStartedAt = performance.now();
+            try {
               const effective = (await registrationBridge(
                 resolvedAuthService,
                 identityBridgeKey,
@@ -627,14 +636,36 @@ export function createApiShell(
                 registrationCaptcha.rateLimiter
               )
                 headers.set("x-savia-registration-ready", "true");
+            } catch {
+              // Registration preflight is fail-closed: omit its trusted header.
+            } finally {
+              registrationDuration = performance.now() - registrationStartedAt;
             }
           }
         }
-      } catch {
-        // Branding is cosmetic: a failed lookup must not prevent authentication.
       }
     }
-    return resolvedAuthService.fetch(new Request(context.req.raw, { headers }));
+    const authStartedAt = performance.now();
+    const upstream = await resolvedAuthService.fetch(
+      new Request(context.req.raw, { headers }),
+    );
+    const authDuration = performance.now() - authStartedAt;
+    const responseHeaders = new Headers(upstream.headers);
+    const timing = [
+      `tenant_context;dur=${tenantDuration.toFixed(1)}`,
+      `registration_preflight;dur=${registrationDuration.toFixed(1)}`,
+      `auth_roundtrip;dur=${authDuration.toFixed(1)}`,
+    ].join(", ");
+    const existingTiming = responseHeaders.get("server-timing");
+    responseHeaders.set(
+      "server-timing",
+      existingTiming ? `${existingTiming}, ${timing}` : timing,
+    );
+    return new Response(upstream.body, {
+      status: upstream.status,
+      statusText: upstream.statusText,
+      headers: responseHeaders,
+    });
   });
   if (oauthResource) {
     app.get("/.well-known/oauth-protected-resource", async (context) =>

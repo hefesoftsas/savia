@@ -1,4 +1,4 @@
-import { resolveTenantSlug } from "../tenant-slugs";
+import { resolveTenantSlug, type ResolvedTenantSlug } from "../tenant-slugs";
 import { dialectFor } from "@savia/db/dialect";
 import {
   defaultTenantBranding,
@@ -88,13 +88,31 @@ export async function readTenantBrandingForRequest(
   request: Request,
   canonicalHost?: string,
 ): Promise<TenantBrandingConfig | null> {
+  const context = await tenantBrandingContextForRequest(
+    db,
+    request,
+    canonicalHost,
+  );
+  return context?.branding ?? null;
+}
+
+export async function tenantBrandingContextForRequest(
+  db: D1Database,
+  request: Request,
+  canonicalHost?: string,
+): Promise<{
+  tenant: ResolvedTenantSlug;
+  branding: TenantBrandingConfig;
+} | null> {
   const slug = parseTenantSlugFromHostname(
     new URL(request.url).hostname,
     canonicalHost,
   );
   if (!slug) return null;
   const tenant = await resolveTenantSlug(db, slug);
-  return tenant ? readTenantBranding(db, tenant) : null;
+  return tenant
+    ? { tenant, branding: await readTenantBranding(db, tenant) }
+    : null;
 }
 export async function saveTenantBranding(
   db: D1Database,
