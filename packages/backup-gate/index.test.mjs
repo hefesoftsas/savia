@@ -407,6 +407,214 @@ test("failed storage operations still release their permit", async () => {
   assert.match(calls[1], /^leave:[0-9a-f-]{36}$/i);
 });
 
+test("plain SELECT statements bypass backup gate RPC for D1 read methods", async () => {
+  const calls = [];
+  const statement = {
+    bind(...args) {
+      calls.push(`bind:${args.join(",")}`);
+      return this;
+    },
+    async all() {
+      calls.push("all");
+      return { results: [] };
+    },
+    async raw() {
+      calls.push("raw");
+      return [];
+    },
+    async first() {
+      calls.push("first");
+      return { value: 1 };
+    },
+    async run() {
+      calls.push("run");
+      return { success: true };
+    },
+  };
+  let gateRequests = 0;
+  const guarded = guardStorageEnvironment({
+    BACKUP_GATE: {
+      idFromName: (name) => name,
+      get: () => ({
+        async fetch(request) {
+          gateRequests += 1;
+          const body = await request.json();
+          return new URL(request.url).pathname === "/enter"
+            ? Response.json({ permit: body.permit })
+            : Response.json({ ok: true });
+        },
+      }),
+    },
+    DB: {
+      prepare() {
+        return statement;
+      },
+      async batch() {},
+      async exec() {},
+    },
+  });
+
+  assert.deepEqual(
+    await guarded.DB.prepare("  SELECT value FROM records WHERE id = ?  ")
+      .bind(1)
+      .all(),
+    { results: [] },
+  );
+  assert.deepEqual(
+    await guarded.DB.prepare("\nselect count(*) FROM records;\n").raw(),
+    [],
+  );
+  assert.deepEqual(
+    await guarded.DB.prepare("SELECT value FROM records WHERE id = ?;")
+      .bind(2)
+      .first(),
+    { value: 1 },
+  );
+  assert.deepEqual(await guarded.DB.prepare("SELECT 1").run(), {
+    success: true,
+  });
+  assert.equal(gateRequests, 0);
+  assert.deepEqual(calls, ["bind:1", "all", "raw", "bind:2", "first", "run"]);
+});
+
+test("unsafe SQL prefixes, embedded semicolons, and multi-statements remain guarded", async () => {
+  const gatePaths = [];
+  const executed = [];
+  const guarded = guardStorageEnvironment({
+    BACKUP_GATE: {
+      idFromName: (name) => name,
+      get: () => ({
+        async fetch(request) {
+          const path = new URL(request.url).pathname;
+          gatePaths.push(path);
+          const body = await request.json();
+          return path === "/enter"
+            ? Response.json({ permit: body.permit })
+            : Response.json({ ok: true });
+        },
+      }),
+    },
+    DB: {
+      prepare(sql) {
+        return {
+          async first() {
+            executed.push(sql);
+            return null;
+          },
+        };
+      },
+      async batch() {},
+      async exec() {},
+    },
+  });
+  const unsafeQueries = [
+    "WITH selected AS (SELECT 1) SELECT * FROM selected",
+    'PRAGMA table_info("records")',
+    "-- comment before query\nSELECT * FROM records",
+    "/* comment before query */ SELECT * FROM records",
+    "SELECT 1; DELETE FROM records",
+    "SELECT ';' AS value",
+    "SELECT 1 -- ; another statement\n",
+    "SELECT 1;;",
+  ];
+
+  for (const query of unsafeQueries) await guarded.DB.prepare(query).first();
+
+  assert.deepEqual(executed, unsafeQueries);
+  assert.equal(gatePaths.filter((path) => path === "/enter").length, 8);
+  assert.equal(gatePaths.filter((path) => path === "/leave").length, 8);
+});
+
+test("UPDATE RETURNING stays guarded when read methods execute it", async () => {
+  const gatePaths = [];
+  let databaseCalls = 0;
+  const guarded = guardStorageEnvironment({
+    BACKUP_GATE: {
+      idFromName: (name) => name,
+      get: () => ({
+        async fetch(request) {
+          const path = new URL(request.url).pathname;
+          gatePaths.push(path);
+          const body = await request.json();
+          return path === "/enter"
+            ? Response.json({ permit: body.permit })
+            : Response.json({ ok: true });
+        },
+      }),
+    },
+    DB: {
+      prepare() {
+        return {
+          bind() {
+            return this;
+          },
+          async first() {
+            databaseCalls += 1;
+            return { id: "updated" };
+          },
+        };
+      },
+      async batch() {},
+      async exec() {},
+    },
+  });
+
+  assert.deepEqual(
+    await guarded.DB.prepare("UPDATE records SET value = ? RETURNING id")
+      .bind("new")
+      .first(),
+    { id: "updated" },
+  );
+  assert.equal(databaseCalls, 1);
+  assert.deepEqual(gatePaths, ["/enter", "/leave"]);
+});
+
+test("SELECT classification survives bind and withSession without stale statement reuse", async () => {
+  const gatePaths = [];
+  const sharedStatement = {
+    bind() {
+      return this;
+    },
+    async first() {
+      return { ok: true };
+    },
+  };
+  const db = {
+    prepare() {
+      return sharedStatement;
+    },
+    withSession() {
+      return this;
+    },
+    async batch() {},
+    async exec() {},
+  };
+  const guarded = guardStorageEnvironment({
+    BACKUP_GATE: {
+      idFromName: (name) => name,
+      get: () => ({
+        async fetch(request) {
+          const path = new URL(request.url).pathname;
+          gatePaths.push(path);
+          const body = await request.json();
+          return path === "/enter"
+            ? Response.json({ permit: body.permit })
+            : Response.json({ ok: true });
+        },
+      }),
+    },
+    DB: db,
+  });
+
+  await guarded.DB.withSession().prepare("SELECT 1").bind().first();
+  assert.deepEqual(gatePaths, []);
+  await guarded.DB.withSession()
+    .prepare("UPDATE records SET value = 1 RETURNING id")
+    .bind()
+    .first();
+  assert.deepEqual(gatePaths, ["/enter", "/leave"]);
+});
+
 test("lost enter and leave acknowledgements retry the same permit without orphaning it", async () => {
   const storage = new MemoryStorage();
   const coordinator = makeCoordinator(storage).coordinator;

@@ -124,6 +124,13 @@ that later authentication requests would await after the first request has ended
 Runtime handlers rely on the validated readiness record; deployment and local
 initialization retain schema validation.
 
+The backup write barrier exempts conservative, single-statement `SELECT` reads.
+Previously, even tenant and login-policy reads acquired and released durable
+write permits, adding two coordinator calls per query. Writes, ambiguous SQL,
+batches, and `exec` still acquire permits; `UPDATE ... RETURNING` remains guarded
+even when executed through a read-shaped method such as `first()`. Policy reads
+remain current on every request and are not replaced with a cross-request cache.
+
 The API login proxy also reports tenant-context lookup, registration preflight and
 the final Auth round-trip in `Server-Timing`, alongside Auth's own phases. Tenant
 resolution is reused within the request; branding, tenant validation and registration

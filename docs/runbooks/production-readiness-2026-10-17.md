@@ -271,10 +271,13 @@ Original bookmark and R2 inventory checks remain mandatory to detect direct
 operator/API writes outside application bindings.
 
 This is a storage checkpoint, not a multi-request application transaction. During
-the capture window application database operations are temporarily unavailable;
-callers must retry. Guarding all D1 executions avoids guessing whether SQL invoked
-through `all`, `first` or `raw` can mutate data. The central permit coordinator
-adds latency and persistent writes to these calls; measure traffic throughput and
+the capture window guarded database operations are temporarily unavailable;
+callers must retry. The initial implementation guarded all D1 executions.
+The October 20 latency correction exempts only conservative single `SELECT`
+statements, as specified in the infrastructure runbook. Mutations and ambiguous
+SQL remain guarded regardless of whether they use `all`, `first`, or `raw`.
+The central permit coordinator adds latency and persistent writes to guarded
+calls; measure traffic throughput and
 backup duration in preview before production activation. Unknown in-flight permits
 never expire automatically: an interrupted writer with an unacknowledged release
 causes a failed drain and an actionable job failure, rather than risking data

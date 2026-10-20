@@ -33,6 +33,17 @@ it("guards native D1 batches/sessions and R2 mutations with a SQLite Durable Obj
     owner,
   });
   try {
+    expect(
+      await guarded.DB.withSession()
+        .prepare("SELECT id FROM gate_smoke WHERE id = ?")
+        .bind("before")
+        .first(),
+    ).toEqual({ id: "before" });
+    await expect(
+      guarded.DB.prepare(
+        "UPDATE gate_smoke SET id = 'changed' RETURNING id",
+      ).first(),
+    ).rejects.toThrow(/gate/);
     await expect(
       guarded.DB.prepare("INSERT INTO gate_smoke VALUES ('blocked')").run(),
     ).rejects.toThrow(/gate/);
