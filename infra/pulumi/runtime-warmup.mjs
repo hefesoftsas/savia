@@ -139,9 +139,15 @@ export async function warmupStandardRuntime(
     );
   }
   const suffix = inputs.environment === "preview" ? "-preview" : "";
+  const storageWriters = [
+    `savia-auth${suffix}`,
+    `savia-request${suffix}`,
+    `savia-connectors${suffix}`,
+  ];
   const warmupNames = [
     `savia-backup-coordinator${suffix}`,
     `savia-agencies${suffix}`,
+    ...storageWriters,
     `savia-flows${suffix}`,
   ];
   if (!bootstrap)
@@ -171,6 +177,10 @@ export async function warmupStandardRuntime(
     for (const binding of config.d1_databases ?? [])
       if (binding.migrations_dir)
         binding.migrations_dir = resolve(base, binding.migrations_dir);
+    if (storageWriters.includes(name)) {
+      config.workers_dev = false;
+      config.preview_urls = false;
+    }
     config.routes = [];
     config.triggers = { crons: [] };
     if (config.queues) config.queues.consumers = [];

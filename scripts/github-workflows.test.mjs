@@ -56,7 +56,11 @@ test("production deployment is limited to main and has ordered Worker stages", a
   assert.doesNotMatch(deploy, /workflow_run:/);
   assert.match(deploy, /workflow_dispatch:/);
   assert.match(deploy, /group: savia-production/);
-  assert.match(deploy, /verify:[\s\S]*?uses: \.\/\.github\/workflows\/ci\.yml/);
+  assert.match(
+    deploy,
+    /verify:[\s\S]*?run: node infra\/pulumi\/production-ci-proof\.mjs/,
+  );
+  assert.doesNotMatch(deploy, /uses: \.\/\.github\/workflows\/ci\.yml/);
   assert.match(deploy, /needs: preview-check/);
   assert.match(deploy, /needs\.verify\.result == 'success'/);
   assert.match(deploy, /ref: \$\{\{ github\.sha \}\}/);

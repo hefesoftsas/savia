@@ -112,6 +112,17 @@ automatic operation performed by this change.
    Partial initialization fails closed and requires explicit reconciliation.
    Apply the saved plan through `environment.mjs`; do not deploy independent
    Worker versions or the historical domain-transition redirect bridge.
+   Before that first backup, the release privately warms the coordinator, API,
+   auth, request, and connector storage writers. The coordinator verifies each
+   writer's shared backup-gate capability before it grants the backup lease;
+   first-install writer placeholders cannot answer that check. Auth, request,
+   and connector Workers remain without workers.dev, preview URLs, routes,
+   crons, or queue consumers, and the API stays in maintenance. Gateway, MCP,
+   hooks, and public routes remain unavailable until the mandatory archive is
+   complete. On retained stacks, required writer secrets are checked before
+   any warmup deployment and are never re-uploaded by this step.
+   The capability endpoint returns before the normal auth handler, so auth
+   schema initialization remains deferred until after the backup.
 6. Verify the initialized environment, capture and restore-test a new encrypted
    backup, and run production preflight with the new outputs and credentials.
    Confirm successful Preview evidence for the intended release commit. Only
@@ -123,3 +134,9 @@ The cloud teardown is recorded in the
 [dated operation audit](production-retirement-2026-10-18.md). The earlier
 readiness/adoption records describe resources that no longer exist and are not
 proof that a future deployment is ready.
+
+Production promotion reuses the latest successful trusted `ci.yml` push run on
+`main` for the exact commit instead of rerunning the full suite. The proof
+rejects forks, other branches or events, mismatched commits, and incomplete or
+failed latest runs. A successful Preview publication for that same commit, the
+`production-app` reviewer, and the encrypted pre-release backup remain required.
