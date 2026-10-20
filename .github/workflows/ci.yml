@@ -140,7 +140,7 @@ jobs:
   admin:
     name: Admin unit tests (shard 1/6)
     needs: changes
-    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full')
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full') }}
     timeout-minutes: 15
     runs-on: ubuntu-24.04
     env:
@@ -168,7 +168,7 @@ jobs:
 
   admin-2:
     needs: changes
-    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full')
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full') }}
     name: Admin unit tests (shard 2/6)
     timeout-minutes: 15
     runs-on: ubuntu-24.04
@@ -197,7 +197,7 @@ jobs:
 
   admin-3:
     needs: changes
-    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full')
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full') }}
     name: Admin unit tests (shard 3/6)
     timeout-minutes: 15
     runs-on: ubuntu-24.04
@@ -226,7 +226,7 @@ jobs:
 
   admin-4:
     needs: changes
-    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full')
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full') }}
     name: Admin unit tests (shard 4/6)
     timeout-minutes: 15
     runs-on: ubuntu-24.04
@@ -255,7 +255,7 @@ jobs:
 
   admin-5:
     needs: changes
-    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full')
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full') }}
     name: Admin unit tests (shard 5/6)
     timeout-minutes: 15
     runs-on: ubuntu-24.04
@@ -284,7 +284,7 @@ jobs:
 
   admin-6:
     needs: changes
-    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full')
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full') }}
     name: Admin unit tests (shard 6/6)
     timeout-minutes: 15
     runs-on: ubuntu-24.04
@@ -313,7 +313,7 @@ jobs:
 
   api:
     needs: changes
-    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full')
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full') }}
     name: API unit tests (shard 1/3)
     timeout-minutes: 15
     runs-on: ubuntu-24.04
@@ -342,7 +342,7 @@ jobs:
 
   api-2:
     needs: changes
-    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full')
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full') }}
     name: API unit tests (shard 2/3)
     timeout-minutes: 15
     runs-on: ubuntu-24.04
@@ -371,7 +371,7 @@ jobs:
 
   api-3:
     needs: changes
-    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full')
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full') }}
     name: API unit tests (shard 3/3)
     timeout-minutes: 15
     runs-on: ubuntu-24.04
@@ -402,8 +402,8 @@ jobs:
     name: Focused runtime tests and type checks
     needs: changes
     if: >-
-      always() && needs.changes.result == 'success' &&
-      contains(fromJSON('["auth","api","backup-gate"]'), needs.changes.outputs.ci_kind)
+      ${{ !cancelled() && needs.changes.result == 'success' &&
+      contains(fromJSON('["auth","api","backup-gate"]'), needs.changes.outputs.ci_kind) }}
     timeout-minutes: 15
     runs-on: ubuntu-24.04
     env:
@@ -459,7 +459,7 @@ jobs:
 
   workspace:
     needs: changes
-    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full')
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full') }}
     name: Workspace unit tests (Core packages)
     timeout-minutes: 10
     runs-on: ubuntu-24.04
@@ -488,7 +488,7 @@ jobs:
 
   workspace-2:
     needs: changes
-    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full')
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full') }}
     name: Workspace unit tests (Insurance solutions)
     timeout-minutes: 10
     runs-on: ubuntu-24.04
@@ -517,7 +517,7 @@ jobs:
 
   workspace-3:
     needs: changes
-    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full')
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full') }}
     name: Workspace unit tests (Studio server 1/2)
     timeout-minutes: 10
     runs-on: ubuntu-24.04
@@ -546,7 +546,7 @@ jobs:
 
   workspace-4:
     needs: changes
-    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full')
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full') }}
     name: Workspace unit tests (Studio server 2/2)
     timeout-minutes: 10
     runs-on: ubuntu-24.04
@@ -622,7 +622,7 @@ jobs:
 
   typecheck:
     needs: changes
-    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full')
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full') }}
     name: Type-check (Core & Apps)
     timeout-minutes: 10
     runs-on: ubuntu-24.04
@@ -651,7 +651,7 @@ jobs:
 
   typecheck-2:
     needs: changes
-    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full')
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full') }}
     name: Type-check (Insurance solutions)
     timeout-minutes: 10
     runs-on: ubuntu-24.04
@@ -681,7 +681,7 @@ jobs:
   flows-api:
     name: Flows API tests
     needs: changes
-    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.ci_flows == 'true')
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.ci_flows == 'true') }}
     timeout-minutes: 25
     runs-on: ubuntu-24.04
     env:
@@ -703,7 +703,7 @@ jobs:
   flows-core:
     name: Flows core tests
     needs: changes
-    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.ci_flows == 'true')
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.ci_flows == 'true') }}
     timeout-minutes: 25
     runs-on: ubuntu-24.04
     env:
@@ -725,7 +725,7 @@ jobs:
   flows-readiness:
     name: Flows types and recovery
     needs: changes
-    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.ci_flows == 'true')
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.ci_flows == 'true') }}
     timeout-minutes: 15
     runs-on: ubuntu-24.04
     env:
@@ -757,7 +757,7 @@ jobs:
       - flows-api
       - flows-core
       - flows-readiness
-    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.ci_flows == 'true')
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.ci_flows == 'true') }}
     runs-on: ubuntu-24.04
     steps:
       - name: Require all Flows validation lanes

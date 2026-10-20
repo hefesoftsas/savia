@@ -69,6 +69,22 @@ test("focused runtime profile failures block the required Contract tests gate", 
   assert.match(contracts, /needs\.runtime-profile\.result != 'success'/);
 });
 
+test("long-running CI jobs honor cancellation while Contracts retains its final guard", async () => {
+  const ci = await workflow("ci.yml");
+  const contracts = ci.slice(
+    ci.indexOf("  contracts:"),
+    ci.indexOf("  typecheck:"),
+  );
+
+  assert.doesNotMatch(ci, /^\s+if: always\(\) &&/m);
+  assert.match(contracts, /^    if: always\(\)$/m);
+  assert.match(
+    contracts,
+    /Require a successful change classification[\s\S]*?if: >-[\s\S]*?always\(\)/,
+  );
+  assert.match(ci, /!cancelled\(\)/);
+});
+
 test("production deployment is limited to main and has ordered Worker stages", async () => {
   const deploy = await workflow("deploy-cloudflare.yml");
 
@@ -407,7 +423,7 @@ test("Flows CI splits all seven package suites and keeps readiness fail-closed",
     gate,
     /needs:\n\s+- changes\n\s+- flows-api\n\s+- flows-core\n\s+- flows-readiness/,
   );
-  assert.match(gate, /if: always\(\)/);
+  assert.match(gate, /if: \$\{\{ !cancelled\(\)/);
   assert.match(
     gate,
     /needs\.flows-api\.result }}" != "success"[\s\S]*needs\.flows-core\.result }}" != "success"[\s\S]*needs\.flows-readiness\.result }}" != "success"/,
@@ -454,7 +470,7 @@ test("Flows CI splits all seven package suites and keeps readiness fail-closed",
     assert.match(lane, /needs: changes/);
     assert.match(
       lane,
-      /if: always\(\) && \(needs\.changes\.result != 'success' \|\| needs\.changes\.outputs\.ci_flows == 'true'\)/,
+      /if: \$\{\{ !cancelled\(\) && \(needs\.changes\.result != 'success' \|\| needs\.changes\.outputs\.ci_flows == 'true'\) \}\}/,
     );
   }
 });
