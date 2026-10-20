@@ -566,11 +566,19 @@ fn start_capture_blocking(
     };
     let temp_path = temp_dir.path().to_path_buf();
     session.temp_dir = Some(temp_dir);
-    if let Err(error) = start_session_sources(&mut session, &temp_path, generation) {
-        let _ = session.discard();
-        session.lifecycle.fail(error);
-        return session.status();
-    }
+    let generation = match start_session_sources(
+        &mut session,
+        &temp_path,
+        std::time::Duration::ZERO,
+    ) {
+        Ok(generation) => generation,
+        Err(error) => {
+            let _ = session.discard();
+            session.lifecycle.fail(error);
+            return session.status();
+        }
+    };
+    session.lifecycle.reanchor_start(generation);
     drop(session);
     spawn_elapsed_watcher(capture.clone(), generation);
     capture
@@ -582,8 +590,8 @@ fn start_capture_blocking(
 fn start_session_sources(
     session: &mut CaptureSession,
     temp_dir: &Path,
-    origin: Instant,
-) -> Result<(), String> {
+    offset: std::time::Duration,
+) -> Result<Instant, String> {
     let microphone_dir = temp_dir.join("microphone");
     let system_dir = temp_dir.join("system");
     std::fs::create_dir_all(&microphone_dir)
@@ -594,6 +602,9 @@ fn start_session_sources(
         .as_ref()
         .ok_or("The meeting has no capture storage.")?
         .clone();
+    let microphone_authorization = capture::authorize_microphone(&microphone_dir);
+    let generation = Instant::now();
+    let origin = generation.checked_sub(offset).unwrap_or(generation);
     let (mut mic_attempt, mut system_attempt) = (0, 0);
     let result = start_available_sources(
         || {
@@ -605,7 +616,9 @@ fn start_session_sources(
                 Some(mic_attempt),
                 None,
             );
-            capture::authorize_microphone(&microphone_dir)?;
+            if let Err(error) = &microphone_authorization {
+                return Err(error.clone());
+            }
             MicrophoneCapture::start(spool.clone(), origin)
         },
         || {
@@ -659,7 +672,7 @@ fn start_session_sources(
         None,
         None,
     );
-    Ok(())
+    Ok(generation)
 }
 
 fn spawn_elapsed_watcher(capture: SharedCapture, generation: Instant) {
@@ -707,17 +720,17 @@ fn resume_capture_blocking(capture: SharedCapture) -> Result<CaptureStatus, Stri
         .prefix("savia-companion-")
         .tempdir()
         .map_err(|_| "Could not prepare temporary audio storage.".to_string())?;
-    let generation = Instant::now();
-    let origin = generation
-        .checked_sub(std::time::Duration::from_secs_f64(offset))
-        .unwrap_or(generation);
+    let elapsed = std::time::Duration::from_secs_f64(offset);
     let path = temp_dir.path().to_path_buf();
     session.temp_dir = Some(temp_dir);
-    if let Err(error) = start_session_sources(&mut session, &path, origin) {
-        session.temp_dir.take();
-        return Err(error);
-    }
-    session.lifecycle.elapsed = std::time::Duration::from_secs_f64(offset);
+    let generation = match start_session_sources(&mut session, &path, elapsed) {
+        Ok(generation) => generation,
+        Err(error) => {
+            session.temp_dir.take();
+            return Err(error);
+        }
+    };
+    session.lifecycle.elapsed = elapsed;
     session.lifecycle.resume(generation)?;
     session.lifecycle.reanchor_start(generation);
     drop(session);
