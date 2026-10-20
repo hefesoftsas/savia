@@ -224,7 +224,9 @@ test("GET retries transient Cloudflare server errors after canceling the respons
               new ReadableStream({
                 start(controller) {
                   controller.enqueue(
-                    new TextEncoder().encode(JSON.stringify({ success: false })),
+                    new TextEncoder().encode(
+                      JSON.stringify({ success: false }),
+                    ),
                   );
                   closeTimer = setTimeout(() => controller.close(), 1);
                 },
@@ -261,6 +263,15 @@ test("GET server-error retries stop after the existing bounded attempts", async 
         attempts += 1;
         return new Response(
           new ReadableStream({
+            start(controller) {
+              controller.enqueue(
+                new TextEncoder().encode(
+                  JSON.stringify({
+                    errors: [{ message: "PRIVATE_SERVER_DETAIL" }],
+                  }),
+                ),
+              );
+            },
             cancel() {
               canceledBodies += 1;
             },
@@ -298,7 +309,10 @@ test("mutating requests do not retry Cloudflare server errors", async () => {
     },
   );
 
-  await assert.rejects(client.api("/queues", { method: "POST", body: {} }), /502/);
+  await assert.rejects(
+    client.api("/queues", { method: "POST", body: {} }),
+    /502/,
+  );
   assert.equal(attempts, 1);
   assert.deepEqual(sleeps, []);
 });
