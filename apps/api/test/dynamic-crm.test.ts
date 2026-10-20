@@ -505,6 +505,50 @@ it("forwards principal binding through both authenticated synchronization gatewa
   }
 });
 
+it("preserves upstream no-transform on authenticated plugin HTML and keeps JSON no-store", async () => {
+  const app = createTestApp({
+    documents: env.DOCUMENTS,
+    auth: agencyAdministratorAuthenticator(),
+    collectionGatewayFactory: () => ({
+      async prepare() {},
+      async fetch(request) {
+        if (new URL(request.url).pathname.endsWith("/shell")) {
+          return new Response(
+            "<!doctype html><html><body>plugin</body></html>",
+            {
+              headers: {
+                "content-type": "text/html; charset=utf-8",
+                "cache-control": "private, no-store, no-transform",
+                "content-security-policy":
+                  "default-src 'none'; script-src 'self';",
+              },
+            },
+          );
+        }
+        return Response.json(
+          { data: [] },
+          {
+            headers: { "cache-control": "private, no-store" },
+          },
+        );
+      },
+    }),
+  });
+
+  const shell = await app.request(
+    "/v1/studio/101/api/plugin-store/custom.demo/shell?screen=cotizador_por_pasos&view=records",
+  );
+  expect(shell.status, await shell.clone().text()).toBe(200);
+  expect(shell.headers.get("cache-control")).toBe("no-store, no-transform");
+  expect(shell.headers.get("content-security-policy")).toBe(
+    "default-src 'none'; script-src 'self';",
+  );
+
+  const json = await app.request("/v1/studio/101/api/records/example");
+  expect(json.status).toBe(200);
+  expect(json.headers.get("cache-control")).toBe("no-store");
+});
+
 it("generates numeric and collection schemas for the expanded low-code fields", async () => {
   const app = admin();
   const created = await app.request(prefix + "/objects", {

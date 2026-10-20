@@ -6,10 +6,16 @@ import { useRealtimeRefresh } from "./use-realtime-refresh";
 export function BrandingRealtimeSync() {
   const { refetch } = useTenantBranding();
   const tenant = useCurrentTenant();
+  const hasTenant =
+    typeof tenant.id === "number" &&
+    Number.isSafeInteger(tenant.id) &&
+    tenant.id > 0;
+  const canSubscribe =
+    hasTenant || (!tenant.isDedicated && tenant.isPlatformAdmin);
   useRealtimeRefresh({
     topics: ["settings"],
-    tenantId: tenant.id ?? 0,
-    enabled: !tenant.isLoading,
+    tenantId: hasTenant ? tenant.id! : 0,
+    enabled: !tenant.isLoading && canSubscribe,
     accepts: (event) => event.collection === "branding",
     refresh: () => refetch({ reload: true }),
   });

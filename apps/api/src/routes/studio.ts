@@ -615,7 +615,13 @@ export function registerStudioRoutes(
       );
     }
     const responseHeaders = new Headers(response.headers);
-    responseHeaders.set("cache-control", "no-store");
+    const preservesNoTransform = /(?:^|,)\s*no-transform\s*(?:,|$)/i.test(
+      responseHeaders.get("cache-control") ?? "",
+    );
+    responseHeaders.set(
+      "cache-control",
+      preservesNoTransform ? "no-store, no-transform" : "no-store",
+    );
     if (
       !response.ok &&
       responseHeaders.get("content-type")?.includes("application/json")
