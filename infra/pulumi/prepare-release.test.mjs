@@ -30,7 +30,10 @@ test("standard preparation derives actual binding IDs, freezes the exact source 
   const result = await prepareEnvironmentRelease(
     { environment: "preview", destination: "/tmp/not-created-release" },
     {
-      env: { CLOUDFLARE_ACCOUNT_ID: accountId },
+      env: {
+        CLOUDFLARE_ACCOUNT_ID: accountId,
+        SAVIA_PREVIEW_RELEASE_BASE: "a".repeat(40),
+      },
       readOutputs: async () => outputs,
       client: { api: async () => ({ subdomain: "test-account" }) },
       render: async (env) => {
@@ -38,7 +41,17 @@ test("standard preparation derives actual binding IDs, freezes the exact source 
         events.push("render");
       },
       run: async (binary, args, options) => {
-        if (binary === "git") return { stdout: "b".repeat(40) };
+        if (binary === "git")
+          return {
+            stdout:
+              args[0] === "rev-parse"
+                ? "b".repeat(40)
+                : args[0] === "diff"
+                  ? "apps/api/src/auth/admin-oauth.ts"
+                  : args[0] === "show"
+                    ? "export const x = 1"
+                    : "",
+          };
         assert.equal(binary, "pnpm");
         assert.match(
           options.env.VITE_PLUGIN_EDITOR_RUNTIME_URL,
@@ -48,6 +61,11 @@ test("standard preparation derives actual binding IDs, freezes the exact source 
       },
       freeze: async (options) => {
         assert.equal(options.sourceRevision, "b".repeat(40));
+        assert.deepEqual(options.codeOnly, {
+          base: "a".repeat(40),
+          head: "b".repeat(40),
+          targets: ["api"],
+        });
         assert.equal(options.configs.length, 9);
         assert.ok(
           options.configs.some((path) =>

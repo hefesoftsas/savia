@@ -461,6 +461,7 @@ test("the actual CI workflow falls back when trusted CI output is unsupported or
     ["inconsistent", "ci_kind=full\nci_flows=false\n"],
     ["valid-full", "ci_kind=full\nci_flows=true\n"],
     ["valid-infrastructure", "ci_kind=infrastructure\nci_flows=false\n"],
+    ["valid-auth", "ci_kind=auth\nci_flows=false\n"],
   ];
 
   for (const [mode, ciOutput] of scenarios) {
@@ -525,6 +526,51 @@ test("the release-facing classifier keeps infrastructure classified as platform"
   );
 });
 
+test("CI selects focused profiles for isolated Auth, API, and backup-gate changes", (t) => {
+  const f = fixture(t);
+  f.put("apps/auth/src/index.ts", "export const auth = 1;\n");
+  f.put("apps/api/src/index.ts", "export const api = 1;\n");
+  f.put("packages/backup-gate/index.mjs", "export const gate = 1;\n");
+  let base = f.commit("base");
+
+  for (const [path, profile] of [
+    ["apps/auth/src/index.ts", "auth"],
+    ["apps/api/src/index.ts", "api"],
+    ["packages/backup-gate/index.mjs", "backup-gate"],
+  ]) {
+    f.put(path, `export const changed = ${JSON.stringify(profile)};\n`);
+    f.put("docs/runtime.md", `Document ${profile} change.\n`);
+    const head = f.commit(`${profile} change`);
+    const plan = classifyCiChanges({ base, head, repo: f.repo });
+    assert.equal(plan.kind, profile);
+    assert.equal(plan.flows, false);
+    base = head;
+  }
+});
+
+test("mixed runtime scopes and migration changes retain full CI and Flows checks", (t) => {
+  const f = fixture(t);
+  f.put("apps/auth/src/index.ts", "export const auth = 1;\n");
+  f.put("apps/api/src/index.ts", "export const api = 1;\n");
+  f.put("apps/db/migrations/0001.sql", "select 1;\n");
+  const base = f.commit("base");
+  f.put("apps/auth/src/index.ts", "export const auth = 2;\n");
+  f.put("apps/api/src/index.ts", "export const api = 2;\n");
+  const mixed = f.commit("mixed runtime change");
+  const mixedPlan = classifyCiChanges({ base, head: mixed, repo: f.repo });
+  assert.equal(mixedPlan.kind, "full");
+  assert.equal(mixedPlan.flows, true);
+  f.put("apps/db/migrations/0001.sql", "select 2;\n");
+  const migration = f.commit("migration change");
+  const plan = classifyCiChanges({
+    base: mixed,
+    head: migration,
+    repo: f.repo,
+  });
+  assert.equal(plan.kind, "full");
+  assert.equal(plan.flows, true);
+});
+
 test("CI routes infrastructure contracts through the existing required gate", () => {
   const workflow = readFileSync(
     new URL("../.github/workflows/ci.yml", import.meta.url),
@@ -549,6 +595,12 @@ test("CI routes infrastructure contracts through the existing required gate", ()
   );
   assert.match(contracts, /scripts\/flows-maintenance\/\*\.test\.mjs/);
   assert.match(workflow, /ci_flows == 'true'/);
+  assert.match(
+    workflow,
+    /ci_kind=\(infrastructure\|plugin\|none\|auth\|api\|backup-gate\)/,
+  );
+  assert.match(workflow, /^  runtime-profile:/m);
+  assert.match(workflow, /pnpm --filter @savia\/connector-gateway typecheck/);
   assert.doesNotMatch(
     workflow,
     /runs: pnpm run test:unit:workspace|typecheck:plugins && pnpm run typecheck:companion/,

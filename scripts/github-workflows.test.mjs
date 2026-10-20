@@ -27,6 +27,11 @@ test("CI validates main pushes and pull requests without deployment credentials"
   assert.match(ci, /^  workspace:/m);
   assert.match(ci, /^  contracts:/m);
   assert.match(ci, /^  typecheck:/m);
+  assert.match(ci, /^  runtime-profile:/m);
+  assert.match(
+    ci,
+    /ci_kind=\(infrastructure\|plugin\|none\|auth\|api\|backup-gate\)/,
+  );
   assert.match(ci, /pnpm run test:unit:admin/);
   assert.match(ci, /pnpm run test:unit:api/);
   assert.match(ci, /pnpm run test:unit:workspace/);
@@ -43,12 +48,41 @@ test("plugin validation is part of the required Contract tests gate", async () =
   );
 
   assert.match(contracts, /needs:\n\s+- changes\n\s+- plugin-validation/);
-  assert.match(contracts, /if: always\(\)/);
+  assert.match(contracts, /if: >-\n\s+always\(\)/);
   assert.match(
     contracts,
     /needs\.changes\.result != 'success'[\s\S]*needs\.plugin-validation\.result != 'success'/,
   );
   assert.match(contracts, /run: exit 1/);
+});
+
+test("focused runtime profile failures block the required Contract tests gate", async () => {
+  const ci = await workflow("ci.yml");
+  const contracts = ci.slice(
+    ci.indexOf("  contracts:"),
+    ci.indexOf("  typecheck:"),
+  );
+
+  assert.match(contracts, /needs:[\s\S]*- runtime-profile/);
+  assert.match(contracts, /name: Contract tests[\s\S]*?\n\s+if: always\(\)/);
+  assert.match(contracts, /contains\(fromJSON\('[^']*backup-gate/);
+  assert.match(contracts, /needs\.runtime-profile\.result != 'success'/);
+});
+
+test("long-running CI jobs honor cancellation while Contracts retains its final guard", async () => {
+  const ci = await workflow("ci.yml");
+  const contracts = ci.slice(
+    ci.indexOf("  contracts:"),
+    ci.indexOf("  typecheck:"),
+  );
+
+  assert.doesNotMatch(ci, /^\s+if: always\(\) &&/m);
+  assert.match(contracts, /^    if: always\(\)$/m);
+  assert.match(
+    contracts,
+    /Require a successful change classification[\s\S]*?if: >-[\s\S]*?always\(\)/,
+  );
+  assert.match(ci, /!cancelled\(\)/);
 });
 
 test("production deployment is limited to main and has ordered Worker stages", async () => {
@@ -174,6 +208,30 @@ test("preview deploys only successful same-repository main CI and uses its own e
   assert.doesNotMatch(
     preview,
     /wrangler\.production\.jsonc|reset-d1|environment: production/,
+  );
+  assert.match(
+    preview,
+    /SAVIA_PREVIEW_RELEASE_BASE: \$\{\{ needs\.plan\.outputs\.base \}\}/,
+  );
+  assert.match(
+    preview,
+    /name: Check out source[\s\S]*?ref: \$\{\{ github\.event\.workflow_run\.head_sha \}\}\n\s+fetch-depth: 0/,
+  );
+  assert.match(
+    preview,
+    /office_runtime_changed: \$\{\{ steps\.plan\.outputs\.office_runtime_changed \}\}/,
+  );
+  assert.match(
+    preview,
+    /store_plugins_changed: \$\{\{ steps\.plan\.outputs\.store_plugins_changed \}\}/,
+  );
+  assert.match(
+    preview,
+    /name: Prepare Office runtime assets\n\s+if: \$\{\{ success\(\) && !cancelled\(\) && needs\.plan\.outputs\.office_runtime_changed == 'true' \}\}/,
+  );
+  assert.match(
+    preview,
+    /name: Deploy release plugin ZIPs to all workspaces\n\s+if: \$\{\{ success\(\) && !cancelled\(\) && needs\.plan\.outputs\.store_plugins_changed == 'true' \}\}/,
   );
 });
 
@@ -365,7 +423,7 @@ test("Flows CI splits all seven package suites and keeps readiness fail-closed",
     gate,
     /needs:\n\s+- changes\n\s+- flows-api\n\s+- flows-core\n\s+- flows-readiness/,
   );
-  assert.match(gate, /if: always\(\)/);
+  assert.match(gate, /if: \$\{\{ !cancelled\(\)/);
   assert.match(
     gate,
     /needs\.flows-api\.result }}" != "success"[\s\S]*needs\.flows-core\.result }}" != "success"[\s\S]*needs\.flows-readiness\.result }}" != "success"/,
@@ -412,7 +470,28 @@ test("Flows CI splits all seven package suites and keeps readiness fail-closed",
     assert.match(lane, /needs: changes/);
     assert.match(
       lane,
-      /if: always\(\) && \(needs\.changes\.result != 'success' \|\| needs\.changes\.outputs\.ci_flows == 'true'\)/,
+      /if: \$\{\{ !cancelled\(\) && \(needs\.changes\.result != 'success' \|\| needs\.changes\.outputs\.ci_flows == 'true'\) \}\}/,
     );
   }
+});
+
+test("focused API validation regenerates and typechecks frontend consumers", async () => {
+  const ci = await workflow("ci.yml");
+  const profile = ci.split("            api)")[1].split(";;")[0];
+  assert.match(profile, /pnpm --filter @savia\/admin typecheck/);
+});
+
+test("focused API changes retain all three parallel API test shards", async () => {
+  const ci = await workflow("ci.yml");
+  const shards = ci.slice(
+    ci.indexOf("  api:\n"),
+    ci.indexOf("  runtime-profile:\n"),
+  );
+  assert.equal(
+    (shards.match(/contains\(fromJSON\('\["full","api"\]'\)/g) ?? []).length,
+    3,
+  );
+  assert.equal((shards.match(/pnpm run test:unit:api/g) ?? []).length, 3);
+  const profile = ci.split("            api)")[1].split(";;")[0];
+  assert.doesNotMatch(profile, /@savia\/api test/);
 });

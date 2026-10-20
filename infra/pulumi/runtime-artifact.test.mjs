@@ -32,11 +32,27 @@ test("managed Auth readiness is tied to the frozen source revision", async () =>
         environment: "preview",
         configs: [config],
         sourceRevision: "a".repeat(40),
+        codeOnly: {
+          base: "b".repeat(40),
+          head: "a".repeat(40),
+          targets: ["auth"],
+        },
         destination: join(directory, "release"),
       },
       { runWrangler },
     );
     const manifest = await verifyRuntimeArtifact(artifact);
+    const source = JSON.parse(
+      await readFile(
+        join(artifact.artifactDirectory, "release-source.json"),
+        "utf8",
+      ),
+    );
+    assert.deepEqual(source.codeOnly, {
+      base: "b".repeat(40),
+      head: "a".repeat(40),
+      targets: ["auth"],
+    });
     const frozen = JSON.parse(
       await readFile(
         join(artifact.artifactDirectory, manifest.configs[0]),

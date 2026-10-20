@@ -12,6 +12,7 @@ import {
 import { freezeRuntimeRelease } from "./runtime-artifact.mjs";
 import { createRuntimeCloudClient } from "./runtime-cloud.mjs";
 import { execFileWithInput } from "./runtime-publisher-branch.mjs";
+import { derivePreviewCodeScope } from "../../scripts/preview-code-release.mjs";
 const root = resolve(fileURLToPath(new URL("../../", import.meta.url)));
 export async function prepareEnvironmentRelease(
   { environment, destination },
@@ -86,11 +87,21 @@ export async function prepareEnvironmentRelease(
     await renderShared({ env, run });
     configs = [join(root, "apps/plugin-registry/wrangler.production.jsonc")];
   }
+  const codeOnly =
+    environment === "preview"
+      ? await derivePreviewCodeScope({
+          base: env.SAVIA_PREVIEW_RELEASE_BASE,
+          head: revision,
+          cwd: root,
+          run,
+        })
+      : null;
   const artifact = await freeze({
     environment,
     configs,
     destination: resolve(destination),
     sourceRevision: revision,
+    ...(codeOnly ? { codeOnly } : {}),
     ...(descriptor.kind === "application"
       ? { domainMigrations: join(root, "packages/db/migrations") }
       : {}),

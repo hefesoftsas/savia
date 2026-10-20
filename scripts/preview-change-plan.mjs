@@ -297,6 +297,43 @@ export function classifyCiChanges({ base, head, repo = process.cwd() } = {}) {
     };
   }
 
+  const runtimePaths = paths.filter((path) => !documentationPath(path));
+  const isolatedRuntimeProfile = (profile) => ({
+    kind: profile,
+    flows: false,
+    plugins: [],
+    plugin_only: false,
+    reasons: [`Only ${profile} runtime files changed.`],
+  });
+  if (
+    runtimePaths.length > 0 &&
+    runtimePaths.every(
+      (path) =>
+        path.startsWith("packages/backup-gate/") ||
+        path === "apps/api/test/backup-gate.native.ts",
+    )
+  ) {
+    return isolatedRuntimeProfile("backup-gate");
+  }
+  if (
+    runtimePaths.length > 0 &&
+    runtimePaths.every(
+      (path) =>
+        path.startsWith("apps/auth/src/") || path.startsWith("apps/auth/test/"),
+    )
+  ) {
+    return isolatedRuntimeProfile("auth");
+  }
+  if (
+    runtimePaths.length > 0 &&
+    runtimePaths.every(
+      (path) =>
+        path.startsWith("apps/api/src/") || path.startsWith("apps/api/test/"),
+    )
+  ) {
+    return isolatedRuntimeProfile("api");
+  }
+
   const infraPaths = paths.filter((path) => path.startsWith("infra/pulumi/"));
   const allowedInfrastructureChange =
     infraPaths.length > 0 &&

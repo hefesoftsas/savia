@@ -1,9 +1,14 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 import {
   selectPreviewBaseline,
   buildPreviewReleasePlan,
   hasPromotionEvidence,
+  releaseAssetFlags,
 } from "./preview-release-plan.mjs";
 
 const head = "b".repeat(40),
@@ -63,7 +68,74 @@ test("missing deployment history or unavailable history uses full release", asyn
     assert.equal(plan.kind, "platform");
     assert.equal(plan.flows, true);
     assert.equal(plan.base, null);
+    assert.equal(plan.officeRuntimeChanged, true);
+    assert.equal(plan.storePluginsChanged, true);
   }
+});
+
+test("release asset flags identify Office and store plugin changes independently", () => {
+  assert.deepEqual(releaseAssetFlags(["apps/auth/src/index.ts"]), {
+    officeRuntimeChanged: false,
+    storePluginsChanged: false,
+  });
+  assert.deepEqual(releaseAssetFlags(["apps/admin/office-runtime.json"]), {
+    officeRuntimeChanged: true,
+    storePluginsChanged: false,
+  });
+  assert.deepEqual(releaseAssetFlags(["deployment/plugins/sources.json"]), {
+    officeRuntimeChanged: false,
+    storePluginsChanged: true,
+  });
+  assert.deepEqual(releaseAssetFlags(null), {
+    officeRuntimeChanged: true,
+    storePluginsChanged: true,
+  });
+});
+
+test("release assets compare cumulatively with the verified deployed baseline", async (t) => {
+  const repo = mkdtempSync(join(tmpdir(), "savia-release-assets-"));
+  const git = (...args) =>
+    execFileSync("git", args, { cwd: repo, stdio: "ignore" });
+  const put = (path, value) => {
+    const fullPath = join(repo, path);
+    mkdirSync(join(fullPath, ".."), { recursive: true });
+    writeFileSync(fullPath, value);
+  };
+  const commit = (message) => {
+    git("add", "--all");
+    git("commit", "-m", message);
+    return execFileSync("git", ["rev-parse", "HEAD"], {
+      cwd: repo,
+      encoding: "utf8",
+    }).trim();
+  };
+  git("init", "-q");
+  git("config", "user.email", "ci@example.invalid");
+  git("config", "user.name", "CI Test");
+  t.after(() => rmSync(repo, { recursive: true, force: true }));
+  put("apps/auth/src/index.ts", "export {}\n");
+  const deployed = commit("deployed baseline");
+  put("apps/admin/office-runtime.json", "{}\n");
+  commit("office update");
+  put("apps/auth/src/index.ts", "export const update = true\n");
+  const head = commit("auth update");
+
+  const plan = await buildPreviewReleasePlan({
+    head,
+    currentRunId: 3,
+    runs: [run({ head_sha: deployed })],
+    isAncestor: () => true,
+    repo,
+    classify: () => ({
+      kind: "platform",
+      flows: false,
+      plugins: [],
+      plugin_only: false,
+      reasons: [],
+    }),
+  });
+  assert.equal(plan.officeRuntimeChanged, true);
+  assert.equal(plan.storePluginsChanged, false);
 });
 test("compares against the last deployed ancestor including undeployed core changes", async () => {
   let request;

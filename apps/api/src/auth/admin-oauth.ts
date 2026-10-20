@@ -909,42 +909,68 @@ export function registerAdminOAuthRoutes(
         { status: 401, headers },
       );
     }
-    const response = await service!.fetch(
-      new Request("https://savia-auth.internal/api/auth/oauth2/token", {
-        method: "POST",
-        headers: {
-          accept: "application/json",
-          "content-type": "application/x-www-form-urlencoded",
-        },
-        body: new URLSearchParams({
-          client_id: client.clientId,
-          grant_type: "refresh_token",
-          refresh_token: currentRefreshToken,
-          resource: client.resource,
-        }).toString(),
-      }),
-    );
-    const token = response.ok
-      ? tokenResponse(await response.json().catch(() => undefined))
-      : undefined;
-    const nextRefreshToken = token ? refreshToken(token) : undefined;
-    if (!token || !nextRefreshToken) {
-      for (const cookie of clearRefreshCookies(
-        context.req.url,
-        cookieDomain(context.req.url),
-        sessionOriginFromRequest(context.req.raw),
-      )) {
-        headers.append("set-cookie", cookie);
-      }
-      return Response.json(
+    const unavailable = () =>
+      Response.json(
         {
           error: {
-            code: "AUTHENTICATION_REQUIRED",
-            message: "The administrator session has expired",
+            code: "AUTHENTICATION_UNAVAILABLE",
+            message: "Authentication service is temporarily unavailable",
           },
         },
-        { status: 401, headers },
+        { status: 503, headers },
       );
+    let response: Response;
+    try {
+      response = await service!.fetch(
+        new Request("https://savia-auth.internal/api/auth/oauth2/token", {
+          method: "POST",
+          headers: {
+            accept: "application/json",
+            "content-type": "application/x-www-form-urlencoded",
+          },
+          body: new URLSearchParams({
+            client_id: client.clientId,
+            grant_type: "refresh_token",
+            refresh_token: currentRefreshToken,
+            resource: client.resource,
+          }).toString(),
+        }),
+      );
+    } catch {
+      return unavailable();
+    }
+    let token: OAuthTokenResponse | undefined;
+    if (response.ok) {
+      token = tokenResponse(await response.json().catch(() => undefined));
+    } else {
+      const providerError = await response.json().catch(() => undefined);
+      const code = oauthErrorCode(providerError);
+      if (
+        (response.status === 400 || response.status === 401) &&
+        (code === "invalid_grant" || code === "invalid_token")
+      ) {
+        for (const cookie of clearRefreshCookies(
+          context.req.url,
+          cookieDomain(context.req.url),
+          sessionOriginFromRequest(context.req.raw),
+        )) {
+          headers.append("set-cookie", cookie);
+        }
+        return Response.json(
+          {
+            error: {
+              code: "AUTHENTICATION_REQUIRED",
+              message: "The administrator session has expired",
+            },
+          },
+          { status: 401, headers },
+        );
+      }
+      return unavailable();
+    }
+    const nextRefreshToken = token ? refreshToken(token) : undefined;
+    if (!token || !nextRefreshToken) {
+      return unavailable();
     }
     await rememberSessionOrigin(
       d1,

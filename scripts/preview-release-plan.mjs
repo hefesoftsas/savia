@@ -5,6 +5,42 @@ import { classifyChanges } from "./preview-change-plan.mjs";
 
 const shaPattern = /^[a-f0-9]{40}$/;
 
+export function releaseAssetFlags(paths) {
+  if (!Array.isArray(paths) || paths.some((path) => typeof path !== "string")) {
+    return { officeRuntimeChanged: true, storePluginsChanged: true };
+  }
+  return {
+    officeRuntimeChanged: paths.some(
+      (path) =>
+        path === "apps/admin/office-runtime.json" ||
+        /^scripts\/(?:prepare|package|upload)-office-runtime\.mjs$/.test(path),
+    ),
+    storePluginsChanged: paths.some(
+      (path) =>
+        path.startsWith("deployment/plugins/") ||
+        path.startsWith("store-ports/") ||
+        /^scripts\/(?:deploy-store-plugins|pack-store-plugin|publish-store-plugins)\.mjs$/.test(
+          path,
+        ),
+    ),
+  };
+}
+
+function changedPaths({ base, head, repo = process.cwd() }) {
+  try {
+    return execFileSync(
+      "git",
+      ["diff", "--name-only", "-z", "--no-renames", base, head, "--"],
+      { cwd: repo, encoding: "buffer", stdio: ["ignore", "pipe", "ignore"] },
+    )
+      .toString("utf8")
+      .split("\0")
+      .filter(Boolean);
+  } catch {
+    return null;
+  }
+}
+
 export function selectPreviewBaseline(
   runs,
   { head, currentRunId, isAncestor },
@@ -36,6 +72,8 @@ export async function buildPreviewReleasePlan({
   runs,
   isAncestor,
   classify = classifyChanges,
+  classifyAssets = releaseAssetFlags,
+  repo = process.cwd(),
 }) {
   if (!shaPattern.test(head ?? ""))
     throw new Error("An exact approved commit is required.");
@@ -49,9 +87,16 @@ export async function buildPreviewReleasePlan({
       reasons: ["No verified deployed ancestor; full release required."],
       base: null,
       head,
+      officeRuntimeChanged: true,
+      storePluginsChanged: true,
     };
   const plan = await classify({ base, head });
-  return { ...plan, base, head };
+  return {
+    ...plan,
+    ...classifyAssets(changedPaths({ base, head, repo })),
+    base,
+    head,
+  };
 }
 
 export function hasPromotionEvidence(artifacts, run) {
@@ -145,7 +190,7 @@ async function main() {
   if (process.env.GITHUB_OUTPUT)
     appendFileSync(
       process.env.GITHUB_OUTPUT,
-      `kind=${plan.kind}\nplugins=${JSON.stringify(plan.plugins)}\nbase=${plan.base ?? ""}\n`,
+      `kind=${plan.kind}\nplugins=${JSON.stringify(plan.plugins)}\nbase=${plan.base ?? ""}\noffice_runtime_changed=${plan.officeRuntimeChanged}\nstore_plugins_changed=${plan.storePluginsChanged}\n`,
     );
   console.log(
     `Preview release: ${plan.kind}; ${plan.plugins.length} eligible plugin(s).`,

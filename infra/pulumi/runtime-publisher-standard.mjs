@@ -12,6 +12,10 @@ import {
 import { encryptBackup } from "../../scripts/encrypt-flows-backup.mjs";
 import { buildSecretUploads } from "../../scripts/upload-cloudflare-secrets.mjs";
 import { verifyRuntimeArtifact, publishRuntime } from "./runtime-publisher.mjs";
+import {
+  codeOnlyReleaseCommands,
+  createCodeOnlyPublisher,
+} from "./runtime-publisher-code-only.mjs";
 
 // Extracted release ordering from deploy-preview/deploy-cloudflare. Executors
 // resolve credentials at operation time; command descriptors contain no values.
@@ -281,6 +285,39 @@ export async function createStandardPublisher(
   const migrationDirectory = join(inputs.artifactDirectory, "migrations");
   if (!(await stat(migrationDirectory)).isDirectory())
     throw new Error("Frozen standard migrations are missing");
+  let releaseSource;
+  try {
+    releaseSource = JSON.parse(
+      await readFile(
+        join(inputs.artifactDirectory, "release-source.json"),
+        "utf8",
+      ),
+    );
+  } catch (cause) {
+    if (cause?.code !== "ENOENT")
+      throw new Error("Invalid standard release source metadata", { cause });
+  }
+  const runtimeState = env.SAVIA_FLOWS_RUNTIME_STATE ?? "active";
+  const codeOnlyPlan = codeOnlyReleaseCommands({
+    releaseSource,
+    environment: inputs.environment,
+    runtimeState,
+    configs,
+  });
+  if (codeOnlyPlan) {
+    const snapshot = await client?.readSnapshot?.();
+    if (
+      !Array.isArray(snapshot?.maintenanceWorkerNames) ||
+      snapshot.maintenanceWorkerNames.length > 0
+    )
+      throw new Error("Code-only publication requires an active runtime");
+    return createCodeOnlyPublisher(inputs, codeOnlyPlan, {
+      env,
+      root,
+      run,
+      runWrangler,
+    });
+  }
   const uploads = buildSecretUploads(inputs.environment, env);
   const backupKey = env.SAVIA_BACKUP_KEY ?? env.SAVIA_FLOWS_BACKUP_KEY;
   if (!/^[a-f\d]{64}$/i.test(backupKey ?? ""))
@@ -299,7 +336,7 @@ export async function createStandardPublisher(
   const plan = standardReleaseCommands({
     environment: inputs.environment,
     provisionedFlows: env.SAVIA_FLOWS_PROVISIONED === "true",
-    runtimeState: env.SAVIA_FLOWS_RUNTIME_STATE ?? "active",
+    runtimeState,
     flowsPolicyGeneration: finalFlowsGeneration,
     desiredFlows: !!configs.flows,
     configs,
@@ -378,7 +415,13 @@ export async function createStandardPublisher(
         secrets: async () => {
           for (const upload of uploads)
             await runWrangler(
-              ["secret", "bulk", "--config", byName.get(upload.worker)],
+              [
+                "versions",
+                "secret",
+                "bulk",
+                "--config",
+                byName.get(upload.worker),
+              ],
               {
                 env,
                 cwd: inputs.artifactDirectory,

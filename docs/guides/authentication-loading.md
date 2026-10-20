@@ -142,3 +142,10 @@ database query, preserving canonical-slug priority, aliases and active commercia
 tenant filtering. Registration preflight runs independent settings, email
 availability and password-policy reads concurrently. These reads remain scoped
 to the request, so policy changes do not wait for a cross-request cache to expire.
+
+A temporary OAuth renewal failure (network error, rate limit, provider server
+error or malformed token response) returns `503 AUTHENTICATION_UNAVAILABLE` and
+preserves the renewal cookie and origin record. A later retry can reuse that
+session. Only a confirmed `invalid_grant` or `invalid_token` from the provider
+clears renewal state and returns 401. Deployment unavailability must not sign
+users out permanently.

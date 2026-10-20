@@ -57,7 +57,14 @@ async function normalizeBuildMetadata(directory) {
 }
 
 export async function freezeRuntimeRelease(
-  { environment, configs, destination, domainMigrations, sourceRevision },
+  {
+    environment,
+    configs,
+    destination,
+    domainMigrations,
+    sourceRevision,
+    codeOnly,
+  },
   {
     runWrangler = async (args) => {
       try {
@@ -102,7 +109,11 @@ export async function freezeRuntimeRelease(
         throw new Error("Exact source revision required");
       await writeFile(
         join(staging, "release-source.json"),
-        JSON.stringify({ version: 1, sourceRevision }),
+        JSON.stringify({
+          version: 1,
+          sourceRevision,
+          ...(codeOnly ? { codeOnly } : {}),
+        }),
         { mode: 0o600 },
       );
     }

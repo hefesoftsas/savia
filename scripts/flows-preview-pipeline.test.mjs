@@ -162,6 +162,11 @@ test("accepted standard runtime transactions defer cancellation until Pulumi fin
     const content = deploy
       .split("- name: Deploy release plugin ZIPs to all workspaces")[1]
       .split("- name:")[0];
-    assert.match(content, /if: \$\{\{ success\(\) && !cancelled\(\) \}\}/);
+    assert.match(
+      content,
+      file === "deploy-preview"
+        ? /if: \$\{\{ success\(\) && !cancelled\(\) && needs\.plan\.outputs\.store_plugins_changed == 'true' \}\}/
+        : /if: \$\{\{ success\(\) && !cancelled\(\) \}\}/,
+    );
   }
 });

@@ -64,7 +64,7 @@ jobs:
             if node "$trusted_script" --ci --base "$BASE_SHA" --head "$HEAD_SHA" --output "$ci_output" \
               && [[ "$(grep -c '^ci_kind=' "$ci_output")" == 1 ]] \
               && [[ "$(grep -c '^ci_flows=' "$ci_output")" == 1 ]] \
-              && { { grep -Fxq 'ci_kind=full' "$ci_output" && grep -Fxq 'ci_flows=true' "$ci_output"; } || { grep -Exq 'ci_kind=(infrastructure|plugin|none)' "$ci_output" && grep -Fxq 'ci_flows=false' "$ci_output"; }; }; then
+              && { { grep -Fxq 'ci_kind=full' "$ci_output" && grep -Fxq 'ci_flows=true' "$ci_output"; } || { grep -Exq 'ci_kind=(infrastructure|plugin|none|auth|api|backup-gate)' "$ci_output" && grep -Fxq 'ci_flows=false' "$ci_output"; }; }; then
               cat "$ci_output" >> "$GITHUB_OUTPUT"
             else
               {
@@ -140,7 +140,7 @@ jobs:
   admin:
     name: Admin unit tests (shard 1/6)
     needs: changes
-    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full')
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full') }}
     timeout-minutes: 15
     runs-on: ubuntu-24.04
     env:
@@ -168,7 +168,7 @@ jobs:
 
   admin-2:
     needs: changes
-    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full')
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full') }}
     name: Admin unit tests (shard 2/6)
     timeout-minutes: 15
     runs-on: ubuntu-24.04
@@ -197,7 +197,7 @@ jobs:
 
   admin-3:
     needs: changes
-    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full')
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full') }}
     name: Admin unit tests (shard 3/6)
     timeout-minutes: 15
     runs-on: ubuntu-24.04
@@ -226,7 +226,7 @@ jobs:
 
   admin-4:
     needs: changes
-    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full')
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full') }}
     name: Admin unit tests (shard 4/6)
     timeout-minutes: 15
     runs-on: ubuntu-24.04
@@ -255,7 +255,7 @@ jobs:
 
   admin-5:
     needs: changes
-    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full')
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full') }}
     name: Admin unit tests (shard 5/6)
     timeout-minutes: 15
     runs-on: ubuntu-24.04
@@ -284,7 +284,7 @@ jobs:
 
   admin-6:
     needs: changes
-    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full')
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full') }}
     name: Admin unit tests (shard 6/6)
     timeout-minutes: 15
     runs-on: ubuntu-24.04
@@ -313,7 +313,7 @@ jobs:
 
   api:
     needs: changes
-    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full')
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || contains(fromJSON('["full","api"]'), needs.changes.outputs.ci_kind)) }}
     name: API unit tests (shard 1/3)
     timeout-minutes: 15
     runs-on: ubuntu-24.04
@@ -342,7 +342,7 @@ jobs:
 
   api-2:
     needs: changes
-    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full')
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || contains(fromJSON('["full","api"]'), needs.changes.outputs.ci_kind)) }}
     name: API unit tests (shard 2/3)
     timeout-minutes: 15
     runs-on: ubuntu-24.04
@@ -371,7 +371,7 @@ jobs:
 
   api-3:
     needs: changes
-    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full')
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || contains(fromJSON('["full","api"]'), needs.changes.outputs.ci_kind)) }}
     name: API unit tests (shard 3/3)
     timeout-minutes: 15
     runs-on: ubuntu-24.04
@@ -398,9 +398,68 @@ jobs:
       - name: Run API unit tests
         run: VITEST_SHARD_ARGS='--shard 3/3' pnpm run test:unit:api
 
+  runtime-profile:
+    name: Focused runtime tests and type checks
+    needs: changes
+    if: >-
+      ${{ !cancelled() && needs.changes.result == 'success' &&
+      contains(fromJSON('["auth","api","backup-gate"]'), needs.changes.outputs.ci_kind) }}
+    timeout-minutes: 15
+    runs-on: ubuntu-24.04
+    env:
+      PNPM_CONFIG_STRICT_DEP_BUILDS: "false"
+      CI_KIND: ${{ needs.changes.outputs.ci_kind }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.24.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run profile-specific tests and type checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$CI_KIND" in
+            auth)
+              pnpm --filter @savia/auth test
+              pnpm --filter @savia/auth exec tsc --noEmit
+              ;;
+            api)
+              pnpm --filter @savia/api exec tsc --noEmit
+              pnpm --filter @savia/admin typecheck
+              ;;
+            backup-gate)
+              node --test packages/backup-gate/*.test.mjs
+              pnpm --filter @savia/api exec vitest run --config vitest.backup-gate.config.ts
+              pnpm --filter @savia/auth test
+              pnpm --filter @savia/request test
+              pnpm --filter @savia/connector-gateway test
+              pnpm --filter @savia/api exec tsc --noEmit
+              pnpm --filter @savia/auth exec tsc --noEmit
+              pnpm --filter @savia/request typecheck
+              pnpm --filter @savia/connector-gateway typecheck
+              ;;
+            *)
+              echo "Unsupported focused CI profile: $CI_KIND" >&2
+              exit 1
+              ;;
+          esac
+
   workspace:
     needs: changes
-    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full')
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full') }}
     name: Workspace unit tests (Core packages)
     timeout-minutes: 10
     runs-on: ubuntu-24.04
@@ -429,7 +488,7 @@ jobs:
 
   workspace-2:
     needs: changes
-    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full')
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full') }}
     name: Workspace unit tests (Insurance solutions)
     timeout-minutes: 10
     runs-on: ubuntu-24.04
@@ -458,7 +517,7 @@ jobs:
 
   workspace-3:
     needs: changes
-    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full')
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full') }}
     name: Workspace unit tests (Studio server 1/2)
     timeout-minutes: 10
     runs-on: ubuntu-24.04
@@ -487,7 +546,7 @@ jobs:
 
   workspace-4:
     needs: changes
-    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full')
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full') }}
     name: Workspace unit tests (Studio server 2/2)
     timeout-minutes: 10
     runs-on: ubuntu-24.04
@@ -519,6 +578,7 @@ jobs:
     needs:
       - changes
       - plugin-validation
+      - runtime-profile
     if: always()
     timeout-minutes: 10
     runs-on: ubuntu-24.04
@@ -528,7 +588,9 @@ jobs:
       - name: Require a successful change classification
         if: >-
           always() && (needs.changes.result != 'success' ||
-          (needs.changes.outputs.kind == 'plugin' && needs.plugin-validation.result != 'success'))
+          (needs.changes.outputs.kind == 'plugin' && needs.plugin-validation.result != 'success') ||
+          (contains(fromJSON('["auth","api","backup-gate"]'), needs.changes.outputs.ci_kind) &&
+          needs.runtime-profile.result != 'success'))
         run: exit 1
 
       - name: Check out source
@@ -560,7 +622,7 @@ jobs:
 
   typecheck:
     needs: changes
-    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full')
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full') }}
     name: Type-check (Core & Apps)
     timeout-minutes: 10
     runs-on: ubuntu-24.04
@@ -589,7 +651,7 @@ jobs:
 
   typecheck-2:
     needs: changes
-    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full')
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full') }}
     name: Type-check (Insurance solutions)
     timeout-minutes: 10
     runs-on: ubuntu-24.04
@@ -619,7 +681,7 @@ jobs:
   flows-api:
     name: Flows API tests
     needs: changes
-    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.ci_flows == 'true')
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.ci_flows == 'true') }}
     timeout-minutes: 25
     runs-on: ubuntu-24.04
     env:
@@ -641,7 +703,7 @@ jobs:
   flows-core:
     name: Flows core tests
     needs: changes
-    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.ci_flows == 'true')
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.ci_flows == 'true') }}
     timeout-minutes: 25
     runs-on: ubuntu-24.04
     env:
@@ -663,7 +725,7 @@ jobs:
   flows-readiness:
     name: Flows types and recovery
     needs: changes
-    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.ci_flows == 'true')
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.ci_flows == 'true') }}
     timeout-minutes: 15
     runs-on: ubuntu-24.04
     env:
@@ -695,7 +757,7 @@ jobs:
       - flows-api
       - flows-core
       - flows-readiness
-    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.ci_flows == 'true')
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.ci_flows == 'true') }}
     runs-on: ubuntu-24.04
     steps:
       - name: Require all Flows validation lanes
