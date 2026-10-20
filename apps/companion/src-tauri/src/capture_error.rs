@@ -6,12 +6,19 @@ pub enum CaptureErrorCode {
     MicrophonePermissionDenied,
     SystemPermissionDenied,
     CaptureUnavailable,
+    PendingDraft,
     CaptureFailed,
 }
 
 pub fn classify_capture_error(message: &str) -> CaptureErrorCode {
     let message = message.to_ascii_lowercase();
-    if message.contains("microphone permission was denied")
+    if matches!(
+        message.as_str(),
+        "a saved capture draft must be discarded before starting another recording."
+            | "the recording is paused. resume or discard it before starting another recording."
+    ) {
+        CaptureErrorCode::PendingDraft
+    } else if message.contains("microphone permission was denied")
         || message.contains("could not request microphone permission")
         || message.contains("microphone permission did not resolve")
     {
@@ -19,6 +26,7 @@ pub fn classify_capture_error(message: &str) -> CaptureErrorCode {
     } else if message.contains("capture permission")
         || message.contains("system audio recording permission")
         || message.contains("audio recording permissions")
+        || message.contains("could not start the system audio tap")
     {
         CaptureErrorCode::SystemPermissionDenied
     } else if message.contains("no windows system output device is available")
@@ -47,6 +55,12 @@ mod tests {
             CaptureErrorCode::SystemPermissionDenied
         );
         assert_eq!(
+            classify_capture_error(
+                "macOS could not start the system audio tap. Check System Settings > Privacy & Security > Screen & System Audio Recording."
+            ),
+            CaptureErrorCode::SystemPermissionDenied
+        );
+        assert_eq!(
             classify_capture_error("No Windows system output device is available: none"),
             CaptureErrorCode::CaptureUnavailable
         );
@@ -61,6 +75,28 @@ mod tests {
     }
 
     #[test]
+    fn classifies_pending_draft_hints() {
+        assert_eq!(
+            classify_capture_error(
+                "A saved capture draft must be discarded before starting another recording."
+            ),
+            CaptureErrorCode::PendingDraft
+        );
+        assert_eq!(
+            classify_capture_error(
+                "The recording is paused. Resume or discard it before starting another recording."
+            ),
+            CaptureErrorCode::PendingDraft
+        );
+        assert_eq!(
+            classify_capture_error(
+                "A saved capture draft must be discarded before starting another recording. Driver failed."
+            ),
+            CaptureErrorCode::CaptureFailed
+        );
+    }
+
+    #[test]
     fn serializes_codes_for_the_frontend_contract() {
         assert_eq!(
             serde_json::to_string(&CaptureErrorCode::MicrophonePermissionDenied).unwrap(),
@@ -69,6 +105,10 @@ mod tests {
         assert_eq!(
             serde_json::to_string(&CaptureErrorCode::CaptureFailed).unwrap(),
             "\"captureFailed\""
+        );
+        assert_eq!(
+            serde_json::to_string(&CaptureErrorCode::PendingDraft).unwrap(),
+            "\"pendingDraft\""
         );
     }
 }

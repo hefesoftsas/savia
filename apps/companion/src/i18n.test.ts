@@ -24,6 +24,7 @@ const vars = {
   size: 3,
   seconds: 4,
   id: "abc12345",
+  filename: "savia-companion-diagnostics-test.jsonl",
 };
 
 describe("Companion desktop locale catalog", () => {

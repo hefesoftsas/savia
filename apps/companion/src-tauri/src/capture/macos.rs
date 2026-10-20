@@ -30,18 +30,49 @@ pub struct SystemCapture {
 
 impl SystemCapture {
     pub fn authorize_microphone(temp_dir: &Path) -> Result<(), String> {
-        let helper = helper_path(temp_dir)?;
+        let started = Instant::now();
+        crate::diagnostics::record(
+            "macos_microphone_authorization",
+            "started",
+            None,
+            None,
+            Some(0),
+        );
+        let helper = match helper_path(temp_dir) {
+            Ok(helper) => helper,
+            Err(error) => {
+                record_microphone_authorization("failed", Some("prepare_helper"), started);
+                return Err(error);
+            }
+        };
         let mut command = Command::new(helper);
         command.arg("--authorize-microphone");
-        let (status, _stdout, stderr) =
-            bounded_helper_output(&mut command, MICROPHONE_AUTH_TIMEOUT)?;
+        let (status, _stdout, stderr) = match bounded_helper_output(
+            &mut command,
+            MICROPHONE_AUTH_TIMEOUT,
+            "microphone_authorization",
+        ) {
+            Ok(output) => output,
+            Err(error) => {
+                let timeout = error.contains("permission did not resolve within 60 seconds");
+                record_microphone_authorization(
+                    if timeout { "timeout" } else { "failed" },
+                    Some(if timeout { "timeout" } else { "helper" }),
+                    started,
+                );
+                return Err(error);
+            }
+        };
         if status.success() {
+            record_microphone_authorization("succeeded", None, started);
             return Ok(());
         }
         let details = String::from_utf8_lossy(&stderr);
         if details.contains("Microphone permission was denied") {
+            record_microphone_authorization("failed", Some("denied"), started);
             Err("Microphone permission was denied. Enable it in System Settings > Privacy & Security > Microphone.".into())
         } else {
+            record_microphone_authorization("failed", Some("helper_exit"), started);
             Err("macOS could not request microphone permission.".into())
         }
     }
@@ -51,9 +82,17 @@ impl SystemCapture {
         spool: Arc<Mutex<CaptureSpool>>,
         origin: Instant,
     ) -> Result<Self, String> {
-        let helper = helper_path(temp_dir)?;
+        let started = Instant::now();
+        crate::diagnostics::record("macos_system_capture", "started", None, None, Some(0));
+        let helper = match helper_path(temp_dir) {
+            Ok(helper) => helper,
+            Err(error) => {
+                record_system_start("failed", Some("prepare_helper"), started);
+                return Err(error);
+            }
+        };
         let command = Command::new(&helper);
-        Self::start_helper(command, STARTUP_TIMEOUT, spool, origin)
+        Self::start_helper(command, STARTUP_TIMEOUT, spool, origin, started)
     }
 
     fn start_helper(
@@ -61,20 +100,34 @@ impl SystemCapture {
         timeout: Duration,
         spool: Arc<Mutex<CaptureSpool>>,
         origin: Instant,
+        started: Instant,
     ) -> Result<Self, String> {
         command
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
-        let mut child = command
-            .spawn()
-            .map_err(|_| "Could not start the macOS system audio capture helper.".to_string())?;
+        let mut child = match command.spawn() {
+            Ok(child) => child,
+            Err(error) => {
+                crate::diagnostics::record(
+                    "macos_helper_spawn",
+                    "failed",
+                    Some("system_capture"),
+                    error.raw_os_error().map(i64::from),
+                    Some(started.elapsed().as_millis() as u64),
+                );
+                record_system_start("failed", Some("spawn"), started);
+                return Err("Could not start the macOS system audio capture helper.".into());
+            }
+        };
         let Some(stdout) = child.stdout.take() else {
             kill_child(&mut child);
+            record_system_start("failed", Some("stdout_pipe"), started);
             return Err("The macOS capture helper did not start.".into());
         };
         let Some(stderr) = child.stderr.take() else {
             kill_child(&mut child);
+            record_system_start("failed", Some("stderr_pipe"), started);
             return Err("The macOS capture helper did not start.".into());
         };
         let (ready_sender, ready_receiver) = mpsc::channel();
@@ -90,6 +143,8 @@ impl SystemCapture {
                 kill_child(&mut child);
                 let _ = stdout_thread.join();
                 let details = stderr_thread.join().unwrap_or_default();
+                record_swift_capture_failure(&details);
+                record_system_start("failed", Some("helper_exit"), started);
                 let message = if details.contains("could not create the system audio tap")
                     || details.contains("capture permission")
                 {
@@ -105,12 +160,14 @@ impl SystemCapture {
                 kill_child(&mut child);
                 let _ = stdout_thread.join();
                 let _ = stderr_thread.join();
+                record_system_start("timeout", Some("readiness"), started);
                 return Err("macOS system audio capture did not become ready within 12 seconds. Check system audio recording permission and try again.".into());
             }
             Err(mpsc::RecvTimeoutError::Disconnected) => {
                 kill_child(&mut child);
                 let _ = stdout_thread.join();
                 let _ = stderr_thread.join();
+                record_system_start("failed", Some("readiness_disconnected"), started);
                 return Err("The macOS capture helper stopped before it was ready.".into());
             }
         };
@@ -118,6 +175,8 @@ impl SystemCapture {
             kill_child(&mut child);
             let _ = stdout_thread.join();
             let details = stderr_thread.join().unwrap_or_default();
+            record_swift_capture_failure(&details);
+            record_system_start("failed", Some("invalid_readiness"), started);
             let sanitized = if details.contains("macOS 14.2") {
                 "System audio capture requires macOS 14.2 or later.".to_string()
             } else if details.contains("unsupported system audio format") {
@@ -145,25 +204,37 @@ impl SystemCapture {
             Err(error) => {
                 kill_child(&mut child);
                 let _ = stderr_thread.join();
+                record_system_start("failed", Some("sample_rate"), started);
                 return Err(error);
             }
         };
         let Some(stdin) = child.stdin.take() else {
             kill_child(&mut child);
             let _ = stderr_thread.join();
+            record_system_start("failed", Some("control_pipe"), started);
             return Err("The macOS capture helper has no control pipe.".into());
         };
-        let segments = SegmentWorker::start(
+        let segments = match SegmentWorker::start(
             Source::System,
             sample_rate,
             origin.elapsed().as_secs_f64(),
             spool,
-        )?;
+        ) {
+            Ok(segments) => segments,
+            Err(error) => {
+                record_system_start("failed", Some("segment_worker"), started);
+                return Err(error);
+            }
+        };
         let assembler = segments.assembler();
         let stdout_worker = thread::Builder::new()
             .name("savia-macos-segment-reader".into())
             .spawn(move || read_segments(stdout, assembler))
-            .map_err(|_| "Could not start the macOS audio segment reader.".to_string())?;
+            .map_err(|_| {
+                record_system_start("failed", Some("segment_reader"), started);
+                "Could not start the macOS audio segment reader.".to_string()
+            })?;
+        record_system_start("ready", None, started);
         Ok(Self {
             child: Some(child),
             stdin: Some(stdin),
@@ -316,14 +387,85 @@ fn collect_stderr(stderr: std::process::ChildStderr) -> String {
     String::from_utf8_lossy(&captured).into_owned()
 }
 
+fn parse_swift_capture_status(details: &str) -> Option<(&'static str, i64)> {
+    const ERRORS: [(&str, &str); 5] = [
+        (
+            "macOS could not create the system audio tap (",
+            "create_system_audio_tap",
+        ),
+        (
+            "macOS could not create the capture device (",
+            "create_capture_device",
+        ),
+        (
+            "macOS returned an unsupported system audio format (",
+            "system_audio_format",
+        ),
+        (
+            "macOS could not start the system audio stream (",
+            "start_system_audio_stream",
+        ),
+        (
+            "macOS could not start system audio capture (",
+            "start_system_audio_capture",
+        ),
+    ];
+    let line = details.trim_end_matches(['\r', '\n']);
+    ERRORS.iter().find_map(|(prefix, stage)| {
+        let status = line.strip_prefix(prefix)?.strip_suffix(").")?;
+        status.parse::<i64>().ok().map(|code| (*stage, code))
+    })
+}
+
+fn record_swift_capture_failure(details: &str) {
+    if let Some((stage, code)) = parse_swift_capture_status(details) {
+        crate::diagnostics::record("macos_coreaudio", "failed", Some(stage), Some(code), None);
+    }
+}
+
+fn record_microphone_authorization(
+    outcome: &'static str,
+    detail: Option<&'static str>,
+    started: Instant,
+) {
+    crate::diagnostics::record(
+        "macos_microphone_authorization",
+        outcome,
+        detail,
+        None,
+        Some(started.elapsed().as_millis() as u64),
+    );
+}
+
+fn record_system_start(outcome: &'static str, detail: Option<&'static str>, started: Instant) {
+    crate::diagnostics::record(
+        "macos_system_capture",
+        outcome,
+        detail,
+        None,
+        Some(started.elapsed().as_millis() as u64),
+    );
+}
+
 fn bounded_helper_output(
     command: &mut Command,
     timeout: Duration,
+    operation: &'static str,
 ) -> Result<(ExitStatus, Vec<u8>, Vec<u8>), String> {
     command.stdout(Stdio::piped()).stderr(Stdio::piped());
-    let mut child = command
-        .spawn()
-        .map_err(|_| "Could not start the macOS permission helper.".to_string())?;
+    let mut child = match command.spawn() {
+        Ok(child) => child,
+        Err(error) => {
+            crate::diagnostics::record(
+                "macos_helper_spawn",
+                "failed",
+                Some(operation),
+                error.raw_os_error().map(i64::from),
+                None,
+            );
+            return Err("Could not start the macOS permission helper.".to_string());
+        }
+    };
     let stdout = child.stdout.take().ok_or_else(|| {
         kill_child(&mut child);
         "The macOS permission helper did not start.".to_string()
@@ -417,6 +559,7 @@ mod tests {
             Duration::from_millis(100),
             spool,
             Instant::now(),
+            Instant::now(),
         )
         .err()
         .expect("startup should time out");
@@ -433,6 +576,7 @@ mod tests {
             Duration::from_secs(1),
             spool,
             Instant::now(),
+            Instant::now(),
         )
         .err()
         .expect("helper should fail before READY");
@@ -444,11 +588,37 @@ mod tests {
     fn microphone_authorization_helper_is_bounded() {
         let started = std::time::Instant::now();
         let mut command = shell_command("exec sleep 30");
-        let error = bounded_helper_output(&mut command, Duration::from_millis(100))
-            .err()
-            .expect("authorization should time out");
+        let error = bounded_helper_output(
+            &mut command,
+            Duration::from_millis(100),
+            "microphone_authorization",
+        )
+        .err()
+        .expect("authorization should time out");
 
         assert!(error.contains("permission did not resolve"));
         assert!(started.elapsed() < Duration::from_secs(3));
+    }
+
+    #[test]
+    fn parses_only_whitelisted_swift_status_errors() {
+        assert_eq!(
+            parse_swift_capture_status("macOS could not create the system audio tap (-123).\n"),
+            Some(("create_system_audio_tap", -123))
+        );
+        assert_eq!(
+            parse_swift_capture_status("macOS could not start the system audio stream (42)."),
+            Some(("start_system_audio_stream", 42))
+        );
+        assert_eq!(
+            parse_swift_capture_status("unexpected failure Bearer fake-token"),
+            None
+        );
+        assert_eq!(
+            parse_swift_capture_status(
+                "macOS could not create the system audio tap (-123) Bearer fake-token."
+            ),
+            None
+        );
     }
 }

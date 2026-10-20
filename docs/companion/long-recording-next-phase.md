@@ -19,13 +19,54 @@ automatically. Discard removes that local draft, not uploaded backend audio.
 Credentials are kept in memory, never in the capture spool, unless the user
 opts into Remember on this device: origin and token are then stored as one
 envelope in the OS keychain, reloaded and revalidated on launch, and removed
-on demand. An interrupted segment
-that has not been committed may be lost; completed segments remain recoverable.
+on demand. Saving verifies the origin and token with a fresh keychain read
+before closing Connection settings. Failed saves keep settings open. A keychain
+read failure on launch opens settings with an explicit error and keeps Remember
+enabled, so a manual reconnect does not silently delete the existing entry.
+Automatic reconnection does not rewrite the saved credential. The credential
+bootstrap is invoked on mount, and a production-bundle regression test exercises
+both loading and reconnection; source-only tests do not cover this boundary. See the
+[desktop setup and macOS keychain troubleshooting](../../apps/companion/README.md#connect-to-savia).
+An interrupted segment that has not been committed may be lost; completed
+segments remain recoverable.
+
+Recording is independent of the Savia connection and does not save credentials.
+A failure to start the macOS system audio tap uses system-audio permission
+guidance instead of the generic capture failure. Check **System Settings →
+Privacy & Security → Screen & System Audio Recording**. Trying microphone-only
+capture can isolate a system-audio startup failure; it does not establish that
+credentials were saved or that upload is connected. A generic capture failure
+still does not identify its native cause. A recovered interrupted draft without
+completed chunks must be discarded before Start recording is available again.
+The pending-draft message explains that Discard removes that draft's local audio;
+a draft with recoverable chunks continues to offer preview and upload.
 
 Mobile records AAC-LC mono 24 kHz at 32 kbps for up to an hour with the app open.
 Its completed M4A file is split into independently playable segments before upload.
 Background/locked-screen capture remains outside this increment: the foreground
 capture lifecycle still stops on application interruption.
+
+## Desktop support diagnostics
+
+Desktop diagnostics record fixed stage labels, numeric native/HTTP status codes,
+timestamps, elapsed operation time, OS/architecture/version, and a diagnostic
+build identifier. They exclude API keys, URLs, HTTP headers/bodies, response
+text, device names, recording identifiers, audio, transcripts, and filesystem
+paths. Local logging failures do not fail capture or credential operations.
+Logs persist across launches and rotate to one previous file, retaining at most
+512 KiB combined. macOS files are private to the current user (0600, directory
+0700).
+
+To share a failure: reproduce it, open **Connection settings**, and choose
+**Export diagnostic log**. A `savia-companion-diagnostics-*.jsonl` file is written
+to Downloads for manual sharing. Export has its own UI state and does not acquire
+the capture mutex, so it remains available while recording startup or a connection
+is busy. It sends nothing to Savia or to support automatically.
+
+If the UI cannot export, macOS retains the current and previous logs under
+`~/Library/Logs/com.hefesoft.savia.companion/` as `diagnostics.jsonl` and
+`diagnostics.previous.jsonl`. The stage sequence distinguishes connection failure
+before saving from keychain write/read failure and audio-helper startup failure.
 
 ## Upload and workspace isolation
 
@@ -124,14 +165,22 @@ A user-chosen name is never overwritten.
 Library listing returns metadata; individual session reads retrieve saved transcripts
 and notes, keeping long recordings from expanding every list response.
 
-Before upload, the desktop app can explicitly preview each source in the current
-stopped, interrupted, or recovered draft. It reads completed Ogg/Opus chunks from the private
-native spool, validates them, and remuxes them in sequence into a local preview
-capped at 64 MiB per source. This path requires no Savia API connection, key,
-upload permission, upload consent, or provider request; it does not upload audio.
-Starting a new recording or discarding the draft clears its previews. The app
-releases temporary preview URLs when replacing a preview and when the view is
-closed.
+Before upload, the desktop inbox retains multiple stopped, interrupted, or
+recovered meetings across launches. Each UUID has an independent native spool
+and atomic metadata; the legacy single draft migrates without discarding chunks.
+A corrupt meeting is isolated from healthy entries. New capture always attempts
+both sources, retries each unavailable source three times, and retains a source
+that already started. It fails only if neither can start.
+
+One local player mixes both available sources on their chunk timelines, preserving
+offsets and gaps. Native bounded Opus decoding produces 48 kHz mono PCM; WebAudio
+schedules a 20-second lookahead and releases nodes on pause, seek, selection,
+and close. Preview requires no connection, key, consent, or provider request.
+Uploads remain explicit and individual. Finalization marks the meeting uploaded
+for its API origin; local copies stay until confirmed deletion. Meeting names,
+audio, and metadata are native files rather than browser storage. Files have
+private permissions but are not application-encrypted; local deletion is not
+secure erasure and retention consumes device disk space.
 
 Recordings → Recording sessions shows one session with combined playback,
 processing state, partial transcripts, summary and questions. When a session has
@@ -198,3 +247,13 @@ See [mobile capture](mobile.md), [download publication](downloads.md), and
 [the existing epics](epics.md). OpenRouter's
 [STT documentation](https://openrouter.ai/docs/guides/overview/multimodal/stt),
 checked on 2026-10-03, distinguishes upload size from provider processing time.
+
+### Remembered upload acknowledgement
+
+The desktop app shows a permission disclaimer before the first upload. Explicit
+acceptance persists in a versioned private native file; missing or corrupt data
+requires a fresh acknowledgement. Connection settings can reset it. Each meeting
+has its own explicit upload action, which confirms authorization for that meeting
+in the backend request. Acceptance alone never starts an upload. The preference
+does not contain credentials, names, or recording audio, and browser storage is
+not used.

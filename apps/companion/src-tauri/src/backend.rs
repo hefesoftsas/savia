@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use reqwest::{header::AUTHORIZATION, redirect::Policy, Client, Method, Url};
 use serde::Deserialize;
@@ -22,6 +22,19 @@ pub enum Operation {
 }
 
 impl Operation {
+    fn diagnostic_phase(self) -> &'static str {
+        match self {
+            Self::Capabilities => "backend_capabilities",
+            Self::Transcribe => "backend_transcribe",
+            Self::Summarize => "backend_summarize",
+            Self::Save => "backend_save",
+            Self::Recordings => "backend_recordings",
+            Self::Sessioncreate => "backend_session_create",
+            Self::Sessionchunk => "backend_session_chunk",
+            Self::Sessionfinalize => "backend_session_finalize",
+        }
+    }
+
     fn path(self) -> &'static str {
         match self {
             Self::Capabilities => "capabilities",
@@ -127,15 +140,56 @@ fn request_target(origin: &str, operation: Operation, body: Value) -> Result<(Ur
 }
 
 pub async fn request(request: CompanionRequest) -> Result<Value, String> {
-    validate_token(&request.token)?;
-    let (url, body) = request_target(
+    let started = Instant::now();
+    let operation_phase = request.operation.diagnostic_phase();
+    if let Err(error) = validate_token(&request.token) {
+        crate::diagnostics::record(
+            "backend_validation",
+            "failed",
+            Some("token"),
+            None,
+            Some(started.elapsed().as_millis() as u64),
+        );
+        return Err(error);
+    }
+    let (url, body) = match request_target(
         &request.origin,
         request.operation,
         request.body.unwrap_or(Value::Null),
-    )?;
-    let body_bytes =
-        serde_json::to_vec(&body).map_err(|_| "Request data must be JSON.".to_string())?;
+    ) {
+        Ok(target) => target,
+        Err(error) => {
+            crate::diagnostics::record(
+                "backend_validation",
+                "failed",
+                Some("target"),
+                None,
+                Some(started.elapsed().as_millis() as u64),
+            );
+            return Err(error);
+        }
+    };
+    let body_bytes = match serde_json::to_vec(&body) {
+        Ok(bytes) => bytes,
+        Err(_) => {
+            crate::diagnostics::record(
+                "backend_validation",
+                "failed",
+                Some("serialization"),
+                None,
+                Some(started.elapsed().as_millis() as u64),
+            );
+            return Err("Request data must be JSON.".to_string());
+        }
+    };
     if request.operation.method() != Method::GET && body_bytes.len() > MAX_REQUEST_BYTES {
+        crate::diagnostics::record(
+            "backend_validation",
+            "failed",
+            Some("request_size"),
+            None,
+            Some(started.elapsed().as_millis() as u64),
+        );
         return Err("Request data exceeds the 12 MiB limit.".into());
     }
 
@@ -143,7 +197,16 @@ pub async fn request(request: CompanionRequest) -> Result<Value, String> {
         .redirect(Policy::none())
         .timeout(Duration::from_secs(75))
         .build()
-        .map_err(|_| "Could not initialize the Savia connection.".to_string())?;
+        .map_err(|_| {
+            crate::diagnostics::record(
+                "backend_validation",
+                "failed",
+                Some("client_init"),
+                None,
+                Some(started.elapsed().as_millis() as u64),
+            );
+            "Could not initialize the Savia connection.".to_string()
+        })?;
     let mut builder = client
         .request(request.operation.method(), url)
         .header(AUTHORIZATION, format!("Bearer {}", request.token));
@@ -153,16 +216,45 @@ pub async fn request(request: CompanionRequest) -> Result<Value, String> {
             .body(body_bytes);
     }
 
-    let mut response = builder
-        .send()
-        .await
-        .map_err(|error| if error.is_timeout() {
-            "The request timed out after submission. Its outcome may be billable; check Savia before retrying.".to_string()
+    let mut response = match builder.send().await {
+        Ok(response) => response,
+        Err(error) => {
+            let detail = if error.is_timeout() {
+                "timeout"
+            } else if error.is_connect() {
+                "connect"
+            } else if error.is_request() {
+                "request"
+            } else {
+                "transport"
+            };
+            crate::diagnostics::record(
+                operation_phase,
+                "failed",
+                Some(detail),
+                None,
+                Some(started.elapsed().as_millis() as u64),
+            );
+            return Err(if error.is_timeout() {
+                "The request timed out after submission. Its outcome may be billable; check Savia before retrying.".to_string()
+            } else {
+                "Could not reach the Savia server.".to_string()
+            });
+        }
+    };
+    let status = response.status().as_u16();
+    crate::diagnostics::record(
+        operation_phase,
+        if response.status().is_success() {
+            "response"
         } else {
-            "Could not reach the Savia server.".to_string()
-        })?;
+            "http_error"
+        },
+        None,
+        Some(i64::from(status)),
+        Some(started.elapsed().as_millis() as u64),
+    );
     if !response.status().is_success() {
-        let status = response.status().as_u16();
         let fallback = format!("Savia request failed (HTTP {status}).");
         let mut error_bytes = Vec::new();
         while error_bytes.len() < 16 * 1024 {
@@ -198,18 +290,43 @@ pub async fn request(request: CompanionRequest) -> Result<Value, String> {
         return Err("Savia response exceeds the 1 MiB limit.".into());
     }
     let mut bytes = Vec::new();
-    while let Some(chunk) = response
-        .chunk()
-        .await
-        .map_err(|_| "Could not read the Savia response.".to_string())?
-    {
+    while let Some(chunk) = match response.chunk().await {
+        Ok(chunk) => chunk,
+        Err(error) => {
+            let detail = if error.is_timeout() {
+                "response_timeout"
+            } else if error.is_connect() {
+                "response_connect"
+            } else if error.is_request() {
+                "response_request"
+            } else {
+                "response_read"
+            };
+            crate::diagnostics::record(
+                operation_phase,
+                "failed",
+                Some(detail),
+                Some(i64::from(status)),
+                Some(started.elapsed().as_millis() as u64),
+            );
+            return Err("Could not read the Savia response.".to_string());
+        }
+    } {
         if bytes.len().saturating_add(chunk.len()) > MAX_RESPONSE_BYTES {
             return Err("Savia response exceeds the 1 MiB limit.".into());
         }
         bytes.extend_from_slice(&chunk);
     }
-    let result = serde_json::from_slice(&bytes)
-        .map_err(|_| "Savia returned an invalid JSON response.".to_string())?;
+    let result = serde_json::from_slice(&bytes).map_err(|_| {
+        crate::diagnostics::record(
+            operation_phase,
+            "failed",
+            Some("invalid_json"),
+            Some(i64::from(status)),
+            Some(started.elapsed().as_millis() as u64),
+        );
+        "Savia returned an invalid JSON response.".to_string()
+    })?;
     Ok(result)
 }
 
