@@ -46,7 +46,20 @@ jobs:
 
   verify:
     needs: preview-check
-    uses: ./.github/workflows/ci.yml
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out exact promoted source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify successful trusted main CI for this exact source
+        run: node infra/pulumi/production-ci-proof.mjs
+        env:
+          GH_TOKEN: ${{ github.token }}
 
   deploy:
     needs: verify
