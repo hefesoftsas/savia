@@ -297,6 +297,7 @@ export function classifyCiChanges({ base, head, repo = process.cwd() } = {}) {
     };
   }
 
+  const runtimePaths = paths.filter((path) => !documentationPath(path));
   const isolatedRuntimeProfile = (profile) => ({
     kind: profile,
     flows: false,
@@ -305,7 +306,8 @@ export function classifyCiChanges({ base, head, repo = process.cwd() } = {}) {
     reasons: [`Only ${profile} runtime files changed.`],
   });
   if (
-    paths.every(
+    runtimePaths.length > 0 &&
+    runtimePaths.every(
       (path) =>
         path.startsWith("packages/backup-gate/") ||
         path === "apps/api/test/backup-gate.native.ts",
@@ -314,7 +316,8 @@ export function classifyCiChanges({ base, head, repo = process.cwd() } = {}) {
     return isolatedRuntimeProfile("backup-gate");
   }
   if (
-    paths.every(
+    runtimePaths.length > 0 &&
+    runtimePaths.every(
       (path) =>
         path.startsWith("apps/auth/src/") || path.startsWith("apps/auth/test/"),
     )
@@ -322,7 +325,8 @@ export function classifyCiChanges({ base, head, repo = process.cwd() } = {}) {
     return isolatedRuntimeProfile("auth");
   }
   if (
-    paths.every(
+    runtimePaths.length > 0 &&
+    runtimePaths.every(
       (path) =>
         path.startsWith("apps/api/src/") || path.startsWith("apps/api/test/"),
     )

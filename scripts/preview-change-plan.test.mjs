@@ -539,6 +539,7 @@ test("CI selects focused profiles for isolated Auth, API, and backup-gate change
     ["packages/backup-gate/index.mjs", "backup-gate"],
   ]) {
     f.put(path, `export const changed = ${JSON.stringify(profile)};\n`);
+    f.put("docs/runtime.md", `Document ${profile} change.\n`);
     const head = f.commit(`${profile} change`);
     const plan = classifyCiChanges({ base, head, repo: f.repo });
     assert.equal(plan.kind, profile);
