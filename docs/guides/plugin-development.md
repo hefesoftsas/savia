@@ -49,6 +49,26 @@ builds use a timestamp patch version in the local database. Do not distribute
 those development artifacts. Returning a local installation to a lower release
 version requires the normal explicit rollback flow.
 
+## Run the quote wizard locally
+
+The quote wizard depends on the `insurance.quotes` store plugin. After the
+release migration, store plugins are uploaded per workspace; `pnpm dev` does not
+automatically publish them. Set `SAVIA_SESSION_COOKIE` to the full session
+cookie for a local administrator, then upload and install the quote plugin for
+the local platform workspace (`0`):
+
+```sh
+export SAVIA_SESSION_COOKIE='<local administrator session cookie>'
+pnpm store:publish --api-url http://127.0.0.1:8787 --tenant 0 --install --ports quotes
+```
+
+Open Studio's **Funcionalidades** tab and enable **Cotizador** in the solution
+packages catalog. This
+creates the wizard and quote-history collections and prepares the Savia Request
+provider bundle. This setup does not include provider credentials or run a
+provider quote; configure provider connections separately before testing live
+quotes.
+
 ## Files and public packages
 
 - `savia-extension.json`: plugin identity, release version, and dependencies.
@@ -145,6 +165,8 @@ accepts loopback requests with that credential and rejects browser Origin header
 It permits plugin upload/install into an explicitly selected existing tenant.
 Production and preview still use `apps/api/src/index.ts`, which does not mount
 this development endpoint. Never copy local runtime configurations to a deployment.
+The local wrapper re-exports both `RealtimeHub` and `WhatsappDispatcher`, matching
+the Durable Object bindings in the API configuration so the local Worker can start.
 
 ## Create with AI inside Savia
 

@@ -189,32 +189,25 @@ for keyboard focus.
   waveform analysis or audio quality.
 - The recording light may pulse gently; respect reduced-motion preferences.
 
-### Local Source Preview
+### Local Meeting Inbox and Preview
 
-- After capture stops, offer an explicit Preview action for each source with
-  completed chunks, including a recovered draft. Show a loading state while the
-  app reads and assembles that source from the native spool.
-- Keep preview local and source-specific. It does not require API credentials,
-  upload permission, upload consent, or a provider call, and it never uploads
-  automatically.
-- Bound each assembled preview to 64 MiB. Preserve chunk order and validate the
-  stored native segments before making the local audio player available.
-- Treat preview URLs as temporary. Release them when a new recording replaces
-  the draft, when the user discards it, and when the view is destroyed.
-- Keep durable recording history, cross-session playback, transcripts, and
-  summaries in Savia's authenticated review surface.
-
-### Source Controls
-
-- Present microphone and system audio as independently labeled switches.
-- Use a quiet gray track when off and the primary green when on. Keep the
-  30 × 18 px track, visible label, and keyboard focus treatment together.
+- Retain multiple meetings across launches. New meeting is independent of the
+  selected finished meeting; upload is a separate explicit action.
+- Select a meeting to rename it, play one combined preview, or upload individually.
+  Show uploaded state and require confirmation before deleting local audio.
+- Mix both available sources on the stored timeline, preserving offsets and gaps.
+  Use bounded native decoding and streaming playback, with keyboard controls.
+- Attempt both capture sources, retry unavailable sources three times, and retain
+  a successful source. Show actual availability without source switches.
+- Move secondary guidance into tooltips accessible through hover and focus.
+  Keep consent, capture errors, and deletion consequences visible.
+- Transcripts, summaries, and remote processing stay in Savia's review surface.
 
 ### Buttons
 
 - **Primary:** A full-width emerald action with a 9 px radius and 44 px minimum
-  height. Its label follows the state: Start recording, Stop recording, or
-  Upload recording.
+  height for active recording controls. Upload is a compact action on each
+  meeting row, with its own uploaded state.
 - **Hover / Focus:** Darken on hover; show a 3 px green offset outline for
   keyboard focus.
 - **Active:** Press down by 1 px. Reduce transitions and animation to near-zero
@@ -224,8 +217,9 @@ for keyboard focus.
 
 ### Consent and Footer
 
-- Show the upload-permission checkbox when a recording is ready, next to its
-  explicit consent statement.
+- Show the initial permission disclaimer until explicitly accepted. Persist
+  acknowledgement natively and provide a reset action in connection settings.
+  Acceptance never uploads audio; each meeting has its own explicit upload.
 - Keep a short privacy reminder near the action area to clarify that audio is
   not sent until the user chooses Upload. Local preview does not send audio.
 - Keep “Savia — Desarrollado por Hefesoft SAS, Colombia.” in the persistent
@@ -235,9 +229,9 @@ for keyboard focus.
 
 ### Do:
 
-- **Do** make the current recording state, real timer, source selection, and next
+- **Do** make the current recording state, real timer, source availability, and next
   action easy to identify at a glance.
-- **Do** keep microphone and system audio selection independent.
+- **Do** attempt both sources and show which audio is available.
 - **Do** retain a ready recording and its upload identity after an upload error
   so the user can retry.
 - **Do** keep consent, privacy copy, and attribution legible in the compact
@@ -246,12 +240,29 @@ for keyboard focus.
 
 ### Don't:
 
-- **Don't** place transcripts, summaries, recording history, or cross-session
-  playback in this capture utility; Savia is the review surface. A preview of
-  the current stopped draft, separated by source, is allowed.
+- **Don't** place transcripts, summaries, or remote processing in this capture
+  utility; Savia is the review surface. Local meeting retention and combined
+  playback support deferred upload.
 - **Don't** hide connection settings in the first view behind a large setup
   form.
 - **Don't** show invented waveform activity or decorate the timer with
   nonfunctional motion.
 - **Don't** upload captured audio before the user chooses Upload and provides
   the required consent.
+
+Help icons align on the same line as their heading or field label. Tooltip
+bubbles float outside scrolling containers and clamp horizontally to the
+viewport; they show on hover, focus, or click and dismiss with Escape, blur,
+scroll, or resize.
+
+### Inline meeting names and action icons
+
+Each meeting exposes a pencil icon that opens a focused inline name editor.
+Save explicitly with the check icon or Enter; cancel with the close icon or
+Escape without a write. Disable other meeting operations while editing or
+saving. Keep the custom name in private native meeting metadata.
+
+Use matching SVG icons for edit, upload, delete, new meeting, local play/pause,
+and closing settings. Every icon button has a translated accessible label and
+tooltip. Permission acknowledgements, connection submission, destructive
+confirmation, and core recording controls retain text when clarity requires it.

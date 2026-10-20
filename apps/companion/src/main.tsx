@@ -1,10 +1,13 @@
 import React, {
+  useCallback,
   useEffect,
   useRef,
+  useId,
   useState,
   type FormEvent,
   type MouseEvent,
 } from "react";
+import { createPortal } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { isTauri } from "@tauri-apps/api/core";
 import {
@@ -14,6 +17,7 @@ import {
   native,
   type Capabilities,
   type CaptureStatus,
+  type LocalMeeting,
   type Source,
 } from "./client";
 import {
@@ -25,13 +29,14 @@ import {
 import {
   loadLocale,
   translate,
-  formatDuration,
   defaultSessionName,
   isValidSessionName,
   type Locale,
   type MessageKey,
 } from "./i18n";
-import { loadPreviewAudio } from "./preview-audio";
+import { ActionIcon } from "./action-icon";
+import { MeetingPreview } from "./meeting-preview";
+import { loadCredential, saveCredential } from "./credentials";
 import "./styles.css";
 
 const empty: CaptureStatus = {
@@ -51,27 +56,104 @@ function recordingReviewHref(value: string): string | null {
   }
 }
 
+function HelpTooltip({ label, children }: { label: string; children: string }) {
+  const id = useId();
+  const anchor = useRef<HTMLButtonElement>(null);
+  const [position, setPosition] = useState<{
+    left: number;
+    top: number;
+    above: boolean;
+  } | null>(null);
+  const show = () => {
+    const rect = anchor.current?.getBoundingClientRect();
+    if (!rect) return;
+    const width = Math.min(270, window.innerWidth - 32);
+    const above = window.innerHeight - rect.bottom < 120;
+    setPosition({
+      left: Math.max(16, Math.min(rect.left, window.innerWidth - width - 16)),
+      top: above ? rect.top - 7 : rect.bottom + 7,
+      above,
+    });
+  };
+  useEffect(() => {
+    if (!position) return;
+    const close = () => setPosition(null);
+    const key = (event: KeyboardEvent) => {
+      if (event.key === "Escape") close();
+    };
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    window.addEventListener("keydown", key);
+    return () => {
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", close);
+      window.removeEventListener("keydown", key);
+    };
+  }, [position]);
+  return (
+    <span
+      className="help-tooltip"
+      onMouseEnter={show}
+      onMouseLeave={() => setPosition(null)}
+    >
+      <button
+        ref={anchor}
+        type="button"
+        aria-label={label}
+        aria-describedby={position ? id : undefined}
+        onFocus={show}
+        onBlur={() => setPosition(null)}
+        onClick={show}
+      >
+        <span aria-hidden="true">?</span>
+      </button>
+      {position &&
+        createPortal(
+          <span
+            id={id}
+            className="help-tooltip__content"
+            role="tooltip"
+            style={{
+              left: position.left,
+              top: position.top,
+              transform: position.above ? "translateY(-100%)" : undefined,
+            }}
+          >
+            {children}
+          </span>,
+          document.body,
+        )}
+    </span>
+  );
+}
+
 function App() {
   const [status, setStatus] = useState(empty);
-  const [microphone, setMicrophone] = useState(true);
-  const [system, setSystem] = useState(true);
+  const [meetings, setMeetings] = useState<LocalMeeting[]>([]);
+  const [editingMeetingId, setEditingMeetingId] = useState<string | null>(null);
+  const [confirmRemoveId, setConfirmRemoveId] = useState<string | null>(null);
   const [apiOrigin, setApiOrigin] = useState(DEFAULT_API_ORIGIN);
   const [appOrigin, setAppOrigin] = useState(DEFAULT_APP_ORIGIN);
   const [token, setToken] = useState("");
   const [remember, setRemember] = useState(false);
   const [hasStored, setHasStored] = useState(false);
+  const [exportingDiagnostics, setExportingDiagnostics] = useState(false);
+  const [diagnosticsFile, setDiagnosticsFile] = useState<string | null>(null);
+  const [diagnosticsExportFailed, setDiagnosticsExportFailed] = useState(false);
   const [capabilities, setCapabilities] = useState<Capabilities | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [consent, setConsent] = useState(false);
+  const [permissionLoaded, setPermissionLoaded] = useState(false);
+  const [permissionOpen, setPermissionOpen] = useState(false);
   const [notice, setNotice] = useState<{
     message: LocalizedMessage;
     isError: boolean;
   } | null>(null);
-  const [saved, setSaved] = useState(false);
   const [busy, setBusy] = useState<LocalizedMessage | null>(null);
   const [locale, setLocale] = useState<Locale>(() => loadLocale());
   const [sessionName, setSessionName] = useState("");
-  const lastSessionId = useRef<string | null | undefined>(undefined);
+  const sessionNameDirty = useRef(false);
+  const meetingsRevision = useRef("");
   const t = (key: MessageKey, vars?: Record<string, string | number>) =>
     translate(locale, key, vars);
   const message = (key: MessageKey, vars?: Record<string, string | number>) =>
@@ -80,68 +162,105 @@ function App() {
   useEffect(() => {
     document.documentElement.lang = locale === "pt" ? "pt-BR" : locale;
   }, [locale]);
-  const [previews, setPreviews] = useState<Record<Source, string | null>>({
-    microphone: null,
-    system: null,
-  });
-  const previewUrls = useRef<Record<Source, string | null>>({
-    microphone: null,
-    system: null,
-  });
   const inFlight = useRef(false);
   const mounted = useRef(true);
+
+  const mergeMeetings = useCallback((next: LocalMeeting[]) => {
+    setMeetings((previous) =>
+      next.map((meeting) => {
+        const old = previous.find(
+          (item) => item.sessionId === meeting.sessionId,
+        );
+        if (!old) return meeting;
+        const sameChunks =
+          old.chunks.length === meeting.chunks.length &&
+          old.chunks.every((chunk, index) => {
+            const other = meeting.chunks[index];
+            return (
+              chunk.source === other.source &&
+              chunk.sequence === other.sequence &&
+              chunk.startSeconds === other.startSeconds &&
+              chunk.durationSeconds === other.durationSeconds &&
+              chunk.bytes === other.bytes &&
+              chunk.sampleRate === other.sampleRate
+            );
+          });
+        return sameChunks ? { ...meeting, chunks: old.chunks } : meeting;
+      }),
+    );
+  }, []);
+  const refreshMeetings = useCallback(async () => {
+    const next = await native<LocalMeeting[]>("meeting_list");
+    if (!mounted.current) return;
+    mergeMeetings(next);
+  }, [mergeMeetings]);
 
   useEffect(() => {
     mounted.current = true;
     let timer: ReturnType<typeof setInterval> | undefined;
+    let pollInFlight = false;
     const poll = async () => {
+      if (pollInFlight) return;
+      pollInFlight = true;
       try {
         const next = await native<CaptureStatus>("capture_status");
-        if (mounted.current) setStatus(next);
+        if (!mounted.current) return;
+        setStatus((previous) => {
+          const sameChunks =
+            previous.sessionId === next.sessionId &&
+            (previous.chunks?.length ?? 0) === (next.chunks?.length ?? 0) &&
+            (previous.chunks ?? []).every((chunk, index) => {
+              const other = next.chunks?.[index];
+              return (
+                other !== undefined &&
+                chunk.source === other.source &&
+                chunk.sequence === other.sequence &&
+                chunk.startSeconds === other.startSeconds &&
+                chunk.durationSeconds === other.durationSeconds &&
+                chunk.bytes === other.bytes &&
+                chunk.sampleRate === other.sampleRate
+              );
+            });
+          return sameChunks ? { ...next, chunks: previous.chunks } : next;
+        });
+        const revision = `${next.sessionId ?? ""}:${next.state}:${next.chunks?.length ?? 0}`;
+        if (revision !== meetingsRevision.current) {
+          meetingsRevision.current = revision;
+          await refreshMeetings();
+        }
       } catch (error) {
         if (mounted.current)
           setNotice({ message: operationErrorMessage(error), isError: true });
+      } finally {
+        pollInFlight = false;
       }
     };
     if (isTauri()) {
       void poll();
-      timer = setInterval(() => void poll(), 1000);
+      timer = setInterval(() => void poll(), 1500);
     }
     return () => {
       mounted.current = false;
       if (timer !== undefined) clearInterval(timer);
-      for (const url of Object.values(previewUrls.current))
-        if (url) URL.revokeObjectURL(url);
-      previewUrls.current = { microphone: null, system: null };
     };
-  }, []);
+  }, [refreshMeetings]);
+
+  const selectedMeeting = meetings.find(
+    (meeting) => meeting.sessionId === status.sessionId,
+  );
 
   useEffect(() => {
-    const current = status.sessionId ?? null;
-    const previous = lastSessionId.current;
-    lastSessionId.current = current;
-    const isReady =
-      status.state === "ready" ||
-      (["error", "interrupted"].includes(status.state) &&
-        Boolean(status.chunks?.length));
-    if (current && current !== previous) {
-      if (isReady) {
-        // New session that is already ready (e.g. recovered recording):
-        // reset to a fresh date default, never leak the previous name.
-        setSessionName(defaultSessionName(locale));
-      } else {
-        // New recording in progress: clear so stop/ready populates a fresh default.
-        setSessionName("");
-      }
-    } else if (!current) {
-      if (previous) setSessionName("");
-    } else if (isReady) {
-      // Same session became ready (stop): ensure a date default when empty.
-      setSessionName((prev) =>
-        prev.trim() ? prev : defaultSessionName(locale),
-      );
+    if (!status.sessionId) {
+      setSessionName("");
+      sessionNameDirty.current = false;
+      return;
     }
-  }, [status.sessionId, status.state, status.chunks, status.recovered, locale]);
+    if (selectedMeeting && !sessionNameDirty.current) {
+      setSessionName(selectedMeeting.name);
+    } else if (!selectedMeeting && !sessionNameDirty.current) {
+      setSessionName(defaultSessionName(locale));
+    }
+  }, [status.sessionId, selectedMeeting?.name, locale]);
 
   const run = async (label: LocalizedMessage, action: () => Promise<void>) => {
     if (inFlight.current) return;
@@ -160,26 +279,26 @@ function App() {
 
   const start = () =>
     run(message("Starting recording"), async () => {
-      revokePreviews();
+      const name = defaultSessionName(locale);
       const next = await native<CaptureStatus>("start_capture", {
         sessionId: crypto.randomUUID(),
-        sources: { microphone, system },
+        name,
+        sources: { microphone: true, system: true },
       });
       setStatus(next);
-      setConsent(false);
-      setSaved(false);
-      setSessionName("");
+
+      setConfirmRemoveId(null);
+      sessionNameDirty.current = false;
+      setSessionName(name);
+      await refreshMeetings();
     });
 
   const stop = () =>
     run(message("Finalizing audio"), async () => {
       const next = await native<CaptureStatus>("stop_capture");
       setStatus(next);
-      setConsent(false);
-      setSaved(false);
-      setSessionName((prev) =>
-        prev.trim() ? prev : defaultSessionName(locale),
-      );
+
+      await refreshMeetings();
     });
 
   const pause = () =>
@@ -192,60 +311,70 @@ function App() {
     run(message("Resume recording"), async () => {
       const next = await native<CaptureStatus>("resume_capture");
       setStatus(next);
-      setConsent(false);
-      setSaved(false);
     });
 
-  const discard = () =>
-    run(message("Discarding audio"), async () => {
-      setStatus(await native<CaptureStatus>("discard_capture"));
-      revokePreviews();
-      setConsent(false);
-      setSaved(false);
-      setNotice(null);
-      setSessionName("");
+  const selectMeeting = (meeting: LocalMeeting) =>
+    run(message("Opening meeting"), async () => {
+      if (isRecording || isPaused)
+        throw new Error("Finish the active meeting before selecting another.");
+      const next = await native<CaptureStatus>("meeting_select", {
+        sessionId: meeting.sessionId,
+      });
+      setStatus(next);
+
+      setConfirmRemoveId(null);
+      sessionNameDirty.current = false;
+      setSessionName(meeting.name);
     });
 
-  function revokePreviewUrls() {
-    for (const url of Object.values(previewUrls.current))
-      if (url) URL.revokeObjectURL(url);
-    previewUrls.current = { microphone: null, system: null };
-  }
-
-  const revokePreviews = () => {
-    revokePreviewUrls();
-    setPreviews({ microphone: null, system: null });
+  const editMeeting = (meeting: LocalMeeting) =>
+    run(message("Opening meeting"), async () => {
+      if (meeting.sessionId !== status.sessionId) {
+        setStatus(
+          await native<CaptureStatus>("meeting_select", {
+            sessionId: meeting.sessionId,
+          }),
+        );
+      }
+      sessionNameDirty.current = true;
+      setSessionName(meeting.name);
+      setEditingMeetingId(meeting.sessionId);
+      setConfirmRemoveId(null);
+    });
+  const cancelNameEdit = () => {
+    sessionNameDirty.current = false;
+    setSessionName(selectedMeeting?.name ?? "");
+    setEditingMeetingId(null);
   };
-
-  const loadPreview = (source: Source) =>
-    run(message("Loading preview"), async () => {
-      const segments = (status.chunks ?? [])
-        .filter((chunk) => chunk.source === source)
-        .sort((a, b) => a.sequence - b.sequence);
-      if (!segments.length) {
-        throw new Error("There is no captured audio to preview yet.");
-      }
-      const bytes = await loadPreviewAudio(segments, (sequence) =>
-        native<{ base64: string; format: string }>("read_capture_chunk", {
-          source,
-          sequence,
-        }),
-      );
-      if (!mounted.current) return;
-      const url = URL.createObjectURL(
-        new Blob([bytes.buffer], { type: "audio/ogg" }),
-      );
-      if (!mounted.current) {
-        URL.revokeObjectURL(url);
-        return;
-      }
-      const previous = previewUrls.current[source];
-      if (previous) URL.revokeObjectURL(previous);
-      previewUrls.current = { ...previewUrls.current, [source]: url };
-      setPreviews(previewUrls.current);
+  const saveMeetingName = () =>
+    run(message("Saving meeting name"), async () => {
+      if (!editingMeetingId || !isValidSessionName(sessionName)) return;
+      await native<void>("meeting_rename", {
+        sessionId: editingMeetingId,
+        name: sessionName.trim(),
+      });
+      setSessionName(sessionName.trim());
+      sessionNameDirty.current = false;
+      setEditingMeetingId(null);
+      await refreshMeetings();
     });
 
-  const connectWith = (origin: string, tok: string, save: boolean) =>
+  const removeMeeting = (meeting: LocalMeeting) =>
+    run(message("Deleting meeting"), async () => {
+      const next = await native<CaptureStatus>("meeting_remove", {
+        sessionId: meeting.sessionId,
+      });
+      if (meeting.sessionId === status.sessionId) {
+        setStatus(next);
+
+        setSessionName("");
+        sessionNameDirty.current = false;
+      }
+      setConfirmRemoveId(null);
+      await refreshMeetings();
+    });
+
+  const connectWith = (origin: string, tok: string, save?: boolean) =>
     run(message("Checking connection"), async () => {
       // Normalize once so the stored credential matches what connected.
       const cleanOrigin = origin.trim();
@@ -266,35 +395,41 @@ function App() {
         ),
         isError: false,
       });
-      if (result.storageAvailable) setSettingsOpen(false);
-      if (save) {
+      if (save === true) {
         try {
-          await native<void>("credential_save", {
+          await saveCredential({
             origin: cleanOrigin,
             token: cleanToken,
           });
           if (mounted.current) setHasStored(true);
         } catch {
-          if (mounted.current)
+          if (mounted.current) {
+            setSettingsOpen(true);
             setNotice({
               message: message("Unable to save the credential on this device."),
               isError: true,
             });
+          }
+          return;
         }
-      } else {
+      } else if (save === false) {
         try {
           await native<void>("credential_clear");
           if (mounted.current) setHasStored(false);
         } catch {
           // Keep the Forget action visible so a locked keychain can be
           // retried; the stored credential may still auto-reconnect.
-          if (mounted.current)
+          if (mounted.current) {
+            setSettingsOpen(true);
             setNotice({
               message: message("Unable to forget the saved credential."),
               isError: true,
             });
+          }
+          return;
         }
       }
+      if (mounted.current && result.storageAvailable) setSettingsOpen(false);
     });
 
   const connect = (event: FormEvent) => {
@@ -315,22 +450,44 @@ function App() {
     if (!isTauri()) return;
     void (async () => {
       try {
-        const saved = await native<{ origin: string; token: string } | null>(
-          "credential_load",
-        );
+        const saved = await loadCredential();
         if (!mounted.current || !saved) return;
         setApiOrigin(saved.origin);
         setToken(saved.token);
         setRemember(true);
         setHasStored(true);
-        await connectWith(saved.origin, saved.token, true);
-      } catch {
-        // No usable saved credential: stay disconnected for manual setup.
+        // Reconnecting must not rewrite or delete the saved keychain entry.
+        await connectWith(saved.origin, saved.token);
+      } catch (error) {
+        if (!mounted.current) return;
+        // A locked or inaccessible keychain is not an empty keychain. Keep
+        // remembering enabled so a manual reconnect cannot silently erase it.
+        setRemember(true);
+        setSettingsOpen(true);
+        setNotice({ message: operationErrorMessage(error), isError: true });
       }
-    });
+    })();
     // connectWith is stable for this bootstrap; run once on launch.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Export has its own state so it stays available during a stalled capture
+  // or connection. Do not route it through the shared operation/busy gate.
+  const exportDiagnostics = async () => {
+    if (exportingDiagnostics) return;
+    setExportingDiagnostics(true);
+    setDiagnosticsExportFailed(false);
+    setDiagnosticsFile(null);
+    try {
+      const path = await native<string>("diagnostics_export");
+      if (mounted.current)
+        setDiagnosticsFile(path.split(/[\\/]/).pop() ?? path);
+    } catch {
+      if (mounted.current) setDiagnosticsExportFailed(true);
+    } finally {
+      if (mounted.current) setExportingDiagnostics(false);
+    }
+  };
 
   const openSavia = (event: MouseEvent<HTMLAnchorElement>) => {
     if (!isTauri()) return;
@@ -341,32 +498,54 @@ function App() {
     });
   };
 
-  const upload = () =>
-    run(message("Uploading to Savia"), async () => {
+  const upload = (meeting: LocalMeeting) => {
+    if (!consent) {
+      setPermissionOpen(true);
+      return;
+    }
+    return run(message("Uploading to Savia"), async () => {
       if (!canUploadRecording(capabilities) || !consent)
         throw localizedOperationError(
           "Connect storage and confirm permission before upload.",
         );
-      if (!status.sessionId || !status.chunks?.length)
+      if (!meeting.chunks.length)
         throw localizedOperationError(
           "No recoverable audio is available to upload.",
         );
-      const trimmedName = sessionName.trim();
+      const meetingId = meeting.sessionId;
+      const trimmedName = (
+        meetingId === status.sessionId ? sessionName : meeting.name
+      ).trim();
+      if (meetingId !== status.sessionId) {
+        const selected = await native<CaptureStatus>("meeting_select", {
+          sessionId: meetingId,
+        });
+        setStatus(selected);
+        setSessionName(meeting.name);
+        sessionNameDirty.current = false;
+      }
       if (!isValidSessionName(trimmedName))
         throw localizedOperationError(
           "No recoverable audio is available to upload.",
         );
+      if (trimmedName !== meeting.name) {
+        await native<void>("meeting_rename", {
+          sessionId: meetingId,
+          name: trimmedName,
+        });
+        sessionNameDirty.current = false;
+      }
       const session = await companionRequest<{
         state: string;
         chunks: { source: string; sequence: number }[];
       }>(apiOrigin, token, "sessioncreate", {
-        id: status.sessionId,
+        id: meetingId,
         name: trimmedName,
-        sources: [...new Set(status.chunks.map((chunk) => chunk.source))],
+        sources: [...new Set(meeting.chunks.map((chunk) => chunk.source))],
         consent: true,
       });
       let uploaded = 0;
-      for (const chunk of status.chunks) {
+      for (const chunk of meeting.chunks) {
         if (
           !session.chunks.some(
             (saved) =>
@@ -376,10 +555,14 @@ function App() {
         ) {
           const audio = await native<{ base64: string; format: "ogg" }>(
             "read_capture_chunk",
-            { source: chunk.source, sequence: chunk.sequence },
+            {
+              sessionId: meetingId,
+              source: chunk.source,
+              sequence: chunk.sequence,
+            },
           );
           await companionRequest(apiOrigin, token, "sessionchunk", {
-            sessionId: status.sessionId,
+            sessionId: meetingId,
             payload: {
               source: chunk.source,
               sequence: chunk.sequence,
@@ -392,36 +575,39 @@ function App() {
         setBusy(
           message("Upload progress", {
             uploaded,
-            total: status.chunks.length,
+            total: meeting.chunks.length,
           }),
         );
       }
       await companionRequest(apiOrigin, token, "sessionfinalize", {
-        sessionId: status.sessionId,
+        sessionId: meetingId,
         payload: {
-          expectedChunks: status.chunks.length,
+          expectedChunks: meeting.chunks.length,
           durationSeconds: Math.min(
             3600,
             Math.max(
-              ...status.chunks.map(
+              ...meeting.chunks.map(
                 (chunk) => chunk.startSeconds + chunk.durationSeconds,
               ),
             ),
           ),
         },
       });
-      setSaved(true);
+      await native<void>("meeting_mark_uploaded", {
+        sessionId: meetingId,
+        origin: validateApiOrigin(apiOrigin),
+      });
+      await refreshMeetings();
       setNotice({
         message: message("Audio saved privately in Savia."),
         isError: false,
       });
     });
-
+  };
   const changeConnection = (change: () => void) => {
     change();
     setCapabilities(null);
-    setConsent(false);
-    setSaved(false);
+
     setNotice(null);
   };
 
@@ -438,42 +624,67 @@ function App() {
     (["error", "interrupted"].includes(status.state) &&
       Boolean(status.chunks?.length));
   const connected = Boolean(capabilities);
-  const complete = ready && saved;
-  const selectedSources = microphone || system;
+  const currentApiOrigin = (() => {
+    try {
+      return validateApiOrigin(apiOrigin);
+    } catch {
+      return "";
+    }
+  })();
+  const uploadedForCurrentOrigin = Boolean(
+    selectedMeeting?.uploadedOrigin &&
+    currentApiOrigin &&
+    selectedMeeting.uploadedOrigin === currentApiOrigin,
+  );
+  const complete = ready && uploadedForCurrentOrigin;
+  const selectedChunks = selectedMeeting?.chunks ?? status.chunks ?? [];
   const previewSources = [
-    ...new Set((status.chunks ?? []).map((chunk) => chunk.source)),
+    ...new Set(selectedChunks.map((chunk) => chunk.source)),
   ];
+  const previewChunks = selectedChunks;
+  const readPreviewChunk = useCallback(
+    async (source: Source, sequence: number) => {
+      if (!status.sessionId) throw new Error("Meeting is unavailable.");
+      return native<{ base64Pcm: string; sampleRate: number }>(
+        "read_preview_chunk",
+        { sessionId: status.sessionId, source, sequence },
+      );
+    },
+    [status.sessionId],
+  );
   const reviewHref = recordingReviewHref(appOrigin);
-  const locked = Boolean(busy) || isRecording || isPaused;
   const trimmedSessionName = sessionName.trim();
   const sessionNameValid = isValidSessionName(trimmedSessionName);
-  const actionDisabled =
-    Boolean(busy) ||
-    (isRecording || isPaused
-      ? false
-      : ready
-        ? complete ||
-          !canUploadRecording(capabilities) ||
-          !consent ||
-          !sessionNameValid
-        : !isTauri() || !selectedSources);
-
-  const primaryAction = () => {
-    if (isRecording) return stop();
-    if (isPaused) return resume();
-    if (ready) return upload();
-    return start();
-  };
-
-  const actionLabel = isRecording
-    ? t("Stop recording")
-    : isPaused
-      ? t("Resume recording")
-      : ready
-        ? complete
-          ? t("Saved to Savia")
-          : t("Upload to Savia")
-        : t("Start recording");
+  const actionDisabled = Boolean(busy);
+  const primaryAction = () => (isRecording ? stop() : resume());
+  const actionLabel = isRecording ? t("Stop recording") : t("Resume recording");
+  useEffect(() => {
+    if (!isTauri()) return;
+    void native<boolean>("upload_permission_load")
+      .then((accepted) => {
+        if (!mounted.current) return;
+        setConsent(accepted === true);
+        setPermissionOpen(accepted !== true);
+      })
+      .catch(() => {
+        if (mounted.current) setPermissionOpen(true);
+      })
+      .finally(() => {
+        if (mounted.current) setPermissionLoaded(true);
+      });
+  }, []);
+  const acceptPermission = () =>
+    run(message("Accept and remember"), async () => {
+      await native<void>("upload_permission_save", { accepted: true });
+      setConsent(true);
+      setPermissionOpen(false);
+    });
+  const reviewPermission = () =>
+    run(message("Review permission notice"), async () => {
+      await native<void>("upload_permission_save", { accepted: false });
+      setConsent(false);
+      setPermissionOpen(true);
+    });
 
   return (
     <div className="app-shell">
@@ -523,10 +734,32 @@ function App() {
         </div>
       </header>
 
-      {!isTauri() && (
-        <p className="preview-note" role="status">
-          {t("Preview only · Open the desktop app to record audio.")}
-        </p>
+      {permissionLoaded && permissionOpen && (
+        <section
+          className="permission-disclaimer"
+          aria-labelledby="permission-title"
+        >
+          <h2 id="permission-title">{t("Recording and upload permission")}</h2>
+          <p>{t("Permission disclaimer body")}</p>
+          <div className="permission-actions">
+            <button
+              className="permission-accept"
+              type="button"
+              disabled={Boolean(busy)}
+              onClick={() => void acceptPermission()}
+            >
+              {t("Accept and remember")}
+            </button>
+            <button
+              className="text-button"
+              type="button"
+              disabled={Boolean(busy)}
+              onClick={() => setPermissionOpen(false)}
+            >
+              {t("Not now")}
+            </button>
+          </div>
+        </section>
       )}
 
       {settingsOpen && (
@@ -538,7 +771,9 @@ function App() {
           <div className="settings-heading">
             <div>
               <h2>{t("Connect to Savia")}</h2>
-              <p>{t("Credentials stay in memory for this session.")}</p>
+              <HelpTooltip label={t("More information")}>
+                {t("Credentials stay in memory for this session.")}
+              </HelpTooltip>
             </div>
             <button
               className="text-button"
@@ -546,7 +781,7 @@ function App() {
               onClick={() => setSettingsOpen(false)}
               aria-label={t("Close settings")}
             >
-              {t("Done")}
+              <ActionIcon kind="close" />
             </button>
           </div>
           <form onSubmit={connect}>
@@ -589,9 +824,17 @@ function App() {
                   placeholder={t("Paste your Savia credential")}
                 />
               </label>
-              <label>
-                {t("Savia app address")}
+              <div className="settings-field">
+                <div className="label-with-help">
+                  <label htmlFor="savia-app-origin">
+                    {t("Savia app address")}
+                  </label>
+                  <HelpTooltip label={t("Savia app address")}>
+                    {t("Opens the private recording review page.")}
+                  </HelpTooltip>
+                </div>
                 <input
+                  id="savia-app-origin"
                   type="url"
                   value={appOrigin}
                   onChange={(event) => setAppOrigin(event.target.value)}
@@ -599,35 +842,23 @@ function App() {
                   autoCapitalize="off"
                   autoComplete="url"
                 />
-              </label>
-              <p className="field-hint">
-                {t("Opens the private recording review page.")}
-              </p>
+              </div>
               {isTauri() && (
                 <>
-                  <label
-                    style={{
-                      display: "flex",
-                      alignItems: "flex-start",
-                      gap: "8px",
-                      fontSize: "12px",
-                      fontWeight: 400,
-                    }}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={remember}
-                      disabled={Boolean(busy)}
-                      onChange={(event) => setRemember(event.target.checked)}
-                      style={{ marginTop: "2px" }}
-                    />
-                    <span>
-                      {t("Remember on this device")}{" "}
-                      <span style={{ color: "#5a6660" }}>
-                        {t("Stored in the system keychain.")}
-                      </span>
-                    </span>
-                  </label>
+                  <div className="remember-row">
+                    <label className="remember-option">
+                      <input
+                        type="checkbox"
+                        checked={remember}
+                        disabled={Boolean(busy)}
+                        onChange={(event) => setRemember(event.target.checked)}
+                      />
+                      <span>{t("Remember on this device")}</span>
+                    </label>
+                    <HelpTooltip label={t("More information")}>
+                      {t("Stored in the system keychain.")}
+                    </HelpTooltip>
+                  </div>
                   {hasStored && (
                     <button
                       type="button"
@@ -649,6 +880,49 @@ function App() {
               </button>
             </fieldset>
           </form>
+          <button
+            className="text-button permission-review"
+            type="button"
+            disabled={Boolean(busy) || !permissionLoaded}
+            onClick={() => void reviewPermission()}
+          >
+            {t("Review permission notice")}
+          </button>
+          {isTauri() && (
+            <div className="diagnostics-actions">
+              <div className="label-with-help">
+                <button
+                  type="button"
+                  className="text-button"
+                  disabled={exportingDiagnostics}
+                  onClick={() => void exportDiagnostics()}
+                >
+                  {t(
+                    exportingDiagnostics
+                      ? "Exporting diagnostics…"
+                      : "Export diagnostic log",
+                  )}
+                </button>
+                <HelpTooltip label={t("More information")}>
+                  {t(
+                    "Export a diagnostic log to Downloads to share with support. API keys and audio are excluded.",
+                  )}
+                </HelpTooltip>
+              </div>
+              {diagnosticsFile && (
+                <p className="field-hint" role="status">
+                  {t("Saved in Downloads: {filename}", {
+                    filename: diagnosticsFile,
+                  })}
+                </p>
+              )}
+              {diagnosticsExportFailed && (
+                <p className="notice is-error" role="alert">
+                  {t("Unable to export diagnostics. Try again.")}
+                </p>
+              )}
+            </div>
+          )}
         </section>
       )}
 
@@ -666,102 +940,117 @@ function App() {
                   ? t("Paused")
                   : ready
                     ? complete
-                      ? t("Saved to Savia")
+                      ? t("Uploaded to Savia")
                       : t("Ready to upload")
                     : status.state === "error" || status.state === "interrupted"
                       ? t("Capture needs attention")
                       : t("Ready to record")}
             </span>
           </div>
-          <p className="timer" aria-label={t("Seconds recorded", { seconds })}>
-            {duration}
-            <span> / 01:00:00</span>
-          </p>
-          <div
-            className="time-track"
-            role="progressbar"
-            aria-label={t("Recording time")}
-            aria-valuemin={0}
-            aria-valuemax={3600}
-            aria-valuenow={Math.min(seconds, 3600)}
-          >
-            <span
-              style={{ transform: `scaleX(${Math.min(seconds / 3600, 1)})` }}
-            />
-          </div>
-          <p className="stage-hint">
-            {isRecording
-              ? t("Recording stays on device")
-              : isPaused
-                ? t(
-                    "Recording is paused. Resume to keep adding to the same take.",
-                  )
-                : ready
-                  ? t("Review before upload")
-                  : status.state === "error" || status.state === "interrupted"
-                    ? t("Capture trouble")
-                    : t("Capture up to one hour")}
-          </p>
-          {ready && status.tracks.length > 0 && (
-            <ul className="captured-sources" aria-label={t("Captured audio")}>
-              {status.tracks.map((track) => (
-                <li key={track.source}>
-                  <span>
-                    {track.source === "microphone"
-                      ? t("Microphone")
-                      : t("System audio")}
-                  </span>
-                  <span>
-                    {t("Track details", {
-                      duration: formatDuration(locale, track.durationSeconds),
-                      size: Math.ceil(track.bytes / 1024),
-                    })}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-          {ready && previewSources.length > 0 && (
-            <div
-              className="preview-panel"
-              aria-label={t("Preview on this device before uploading")}
-            >
-              <p className="preview-title">
-                {t("Preview on this device before uploading")}
+          {(isRecording || isPaused) && (
+            <>
+              <p
+                className="timer"
+                aria-label={t("Seconds recorded", { seconds })}
+              >
+                {duration}
+                <span> / 01:00:00</span>
               </p>
-              {previewSources.map((source) => {
-                const url = previews[source];
-                return (
-                  <div key={source} className="preview-row">
+              <div
+                className="time-track"
+                role="progressbar"
+                aria-label={t("Recording time")}
+                aria-valuemin={0}
+                aria-valuemax={3600}
+                aria-valuenow={Math.min(seconds, 3600)}
+              >
+                <span
+                  style={{
+                    transform: `scaleX(${Math.min(seconds / 3600, 1)})`,
+                  }}
+                />
+              </div>
+              <div className="stage-help">
+                <HelpTooltip label={t("More information")}>
+                  {isRecording
+                    ? t("Recording stays on device")
+                    : t(
+                        "Recording is paused. Resume to keep adding to the same take.",
+                      )}
+                </HelpTooltip>
+              </div>
+            </>
+          )}
+          {(isRecording || isPaused) &&
+            (status.activeSources?.length ?? 0) > 0 && (
+              <ul
+                className="captured-sources"
+                aria-label={t("Active audio sources")}
+              >
+                {status.activeSources!.map((source) => (
+                  <li key={source}>
                     <span>
                       {source === "microphone"
                         ? t("Microphone")
                         : t("System audio")}
                     </span>
-                    {url ? (
-                      <audio className="preview-audio" src={url} controls />
-                    ) : (
-                      <button
-                        className="discard-action"
-                        type="button"
-                        disabled={Boolean(busy)}
-                        onClick={() => void loadPreview(source)}
-                      >
-                        {t(
-                          source === "microphone"
-                            ? "Preview microphone"
-                            : "Preview system audio",
-                        )}
-                      </button>
-                    )}
-                  </div>
-                );
-              })}
+                    <span>{t("Active")}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          {ready &&
+            previewSources.length > 0 &&
+            busy?.key !== "Starting recording" && (
+              <ul className="captured-sources" aria-label={t("Captured audio")}>
+                {previewSources.map((source) => (
+                  <li key={source}>
+                    <span>
+                      {source === "microphone"
+                        ? t("Microphone")
+                        : t("System audio")}
+                    </span>
+                    <span>{t("Captured")}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          {ready && previewSources.length > 0 && (
+            <div
+              className="preview-panel"
+              aria-label={t("Preview on this device before uploading")}
+            >
+              <div className="preview-panel__heading">
+                <p className="preview-title">{t("Preview")}</p>
+                <HelpTooltip label={t("More information")}>
+                  {t("Preview on this device before uploading")}
+                </HelpTooltip>
+              </div>
+              <MeetingPreview
+                chunks={previewChunks}
+                readChunk={readPreviewChunk}
+                locale={locale}
+              />
             </div>
           )}
           {status.recovered && (
             <p className="notice" role="status">
               {t("Recovered recording")}
+            </p>
+          )}
+          {status.sourceWarnings?.map((warning) => (
+            <p className="notice is-warning" role="status" key={warning.source}>
+              {t(
+                warning.source === "microphone"
+                  ? "Microphone partial warning"
+                  : "System audio partial warning",
+              )}{" "}
+              {t(captureErrorMessage(warning.errorCode).key)}
+            </p>
+          ))}
+          {selectedMeeting?.error && (
+            <p className="notice is-error" role="alert">
+              {t("Meeting data unavailable")}
             </p>
           )}
           {status.error && (
@@ -778,103 +1067,284 @@ function App() {
             </p>
           )}
           {!isTauri() && !notice && (
-            <p className="stage-hint preview-hint">
-              {t("Recording is available in the desktop app.")}
-            </p>
+            <div className="stage-help preview-hint">
+              <HelpTooltip label={t("More information")}>
+                {t("Recording is available in the desktop app.")}
+              </HelpTooltip>
+            </div>
           )}
         </section>
       </main>
 
+      <section className="meeting-library" aria-label={t("Local meetings")}>
+        <div className="meeting-library__heading">
+          <div>
+            <h2>{t("Local meetings")}</h2>
+            <HelpTooltip label={t("More information")}>
+              {t("Local meetings help")}
+            </HelpTooltip>
+          </div>
+          {!isRecording && !isPaused && (
+            <button
+              className="new-meeting-button icon-button"
+              type="button"
+              title={t("New meeting")}
+              aria-label={t("New meeting")}
+              disabled={
+                !isTauri() || Boolean(busy) || Boolean(editingMeetingId)
+              }
+              onClick={() => void start()}
+            >
+              <ActionIcon kind="plus" />
+            </button>
+          )}
+        </div>
+        {meetings.length === 0 ? (
+          <p className="meeting-library__empty">{t("No local meetings")}</p>
+        ) : (
+          <ul className="meeting-list">
+            {meetings.map((meeting) => {
+              const selected = meeting.sessionId === status.sessionId;
+              const deleting = confirmRemoveId === meeting.sessionId;
+              const originLabel = meeting.uploadedOrigin
+                ? (() => {
+                    try {
+                      return new URL(meeting.uploadedOrigin).host;
+                    } catch {
+                      return meeting.uploadedOrigin;
+                    }
+                  })()
+                : null;
+              return (
+                <li
+                  key={meeting.sessionId}
+                  className={`meeting-row${selected ? " is-selected" : ""}${meeting.state === "error" ? " has-error" : ""}`}
+                >
+                  <button
+                    className="meeting-row__select"
+                    type="button"
+                    aria-label={`${t("Select meeting")}: ${meeting.name}`}
+                    title={meeting.name}
+                    aria-current={selected ? "true" : undefined}
+                    disabled={
+                      Boolean(busy) ||
+                      Boolean(editingMeetingId) ||
+                      isRecording ||
+                      isPaused ||
+                      meeting.state === "error" ||
+                      selected
+                    }
+                    onClick={() => void selectMeeting(meeting)}
+                  >
+                    <span className="meeting-row__name">{meeting.name}</span>
+                    <span className="meeting-row__meta">
+                      {new Date(meeting.createdAtMs).toLocaleString(locale, {
+                        dateStyle: "short",
+                        timeStyle: "short",
+                      })}
+                      <span
+                        className={`meeting-state meeting-state--${meeting.state}`}
+                      >
+                        {t(
+                          meeting.state === "interrupted"
+                            ? "Interrupted"
+                            : meeting.state === "recording"
+                              ? "Recording"
+                              : meeting.state === "error"
+                                ? "Unavailable"
+                                : meeting.state === "ready"
+                                  ? "Ready"
+                                  : "Ready",
+                        )}
+                      </span>
+                    </span>
+                  </button>
+                  {busy && selected && (
+                    <span className="meeting-row__progress" role="status">
+                      {t(busy.key, busy.vars)}
+                    </span>
+                  )}
+                  {originLabel && (
+                    <span
+                      className="meeting-uploaded"
+                      title={meeting.uploadedOrigin ?? undefined}
+                    >
+                      {t("Uploaded")} · {originLabel}
+                    </span>
+                  )}
+                  {meeting.state === "error" && (
+                    <span className="meeting-row__error">
+                      {t("Meeting data unavailable")}
+                    </span>
+                  )}
+                  {editingMeetingId === meeting.sessionId && (
+                    <form
+                      className="meeting-name-editor"
+                      onSubmit={(event) => {
+                        event.preventDefault();
+                        void saveMeetingName();
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === "Escape" && !busy) {
+                          event.preventDefault();
+                          cancelNameEdit();
+                        }
+                      }}
+                    >
+                      <input
+                        autoFocus
+                        onFocus={(event) => event.currentTarget.select()}
+                        aria-label={t("Session name")}
+                        aria-invalid={!sessionNameValid}
+                        value={sessionName}
+                        onChange={(event) => setSessionName(event.target.value)}
+                        maxLength={255}
+                        disabled={Boolean(busy)}
+                      />
+                      <button
+                        className="meeting-name-save icon-button"
+                        type="submit"
+                        title={t("Save name")}
+                        aria-label={t("Save name")}
+                        disabled={Boolean(busy) || !sessionNameValid}
+                      >
+                        <ActionIcon kind="check" />
+                      </button>
+                      <button
+                        className="meeting-name-cancel icon-button"
+                        type="button"
+                        title={t("Cancel editing")}
+                        aria-label={t("Cancel editing")}
+                        disabled={Boolean(busy)}
+                        onClick={cancelNameEdit}
+                      >
+                        <ActionIcon kind="close" />
+                      </button>
+                      {!sessionNameValid && (
+                        <span className="meeting-name-error">
+                          {t("Meeting name length")}
+                        </span>
+                      )}
+                    </form>
+                  )}
+                  <div className="meeting-row__actions">
+                    <button
+                      className="meeting-row__edit icon-button"
+                      type="button"
+                      title={t("Edit meeting name")}
+                      aria-label={`${t("Edit meeting name")}: ${meeting.name}`}
+                      disabled={
+                        Boolean(busy) ||
+                        Boolean(editingMeetingId) ||
+                        isRecording ||
+                        isPaused ||
+                        Boolean(meeting.error)
+                      }
+                      onClick={() => void editMeeting(meeting)}
+                    >
+                      <ActionIcon kind="edit" />
+                    </button>
+                    <button
+                      className="meeting-row__upload icon-button"
+                      type="button"
+                      title={t(
+                        meeting.uploadedOrigin === currentApiOrigin
+                          ? "Uploaded"
+                          : "Upload to Savia",
+                      )}
+                      aria-label={`${t(meeting.uploadedOrigin === currentApiOrigin ? "Uploaded" : "Upload to Savia")}: ${meeting.name}`}
+                      disabled={
+                        !permissionLoaded ||
+                        Boolean(busy) ||
+                        Boolean(editingMeetingId) ||
+                        isRecording ||
+                        isPaused ||
+                        !canUploadRecording(capabilities) ||
+                        Boolean(meeting.error) ||
+                        !meeting.chunks.length ||
+                        meeting.uploadedOrigin === currentApiOrigin ||
+                        (selected && !sessionNameValid)
+                      }
+                      onClick={() => void upload(meeting)}
+                    >
+                      <ActionIcon
+                        kind={
+                          meeting.uploadedOrigin === currentApiOrigin
+                            ? "check"
+                            : "upload"
+                        }
+                      />
+                    </button>
+                    {!deleting ? (
+                      <button
+                        className="meeting-row__delete icon-button"
+                        type="button"
+                        title={t("Delete")}
+                        aria-label={`${t("Delete")}: ${meeting.name}`}
+                        disabled={
+                          Boolean(busy) ||
+                          Boolean(editingMeetingId) ||
+                          (selected && (isRecording || isPaused))
+                        }
+                        onClick={() => setConfirmRemoveId(meeting.sessionId)}
+                      >
+                        <ActionIcon kind="delete" />
+                      </button>
+                    ) : (
+                      <div
+                        className="meeting-delete-confirm"
+                        role="group"
+                        aria-label={t("Confirm meeting deletion")}
+                      >
+                        <span>{t("Delete meeting consequence")}</span>
+                        <button
+                          type="button"
+                          className="meeting-delete-confirm__confirm"
+                          disabled={
+                            Boolean(busy) ||
+                            (selected && (isRecording || isPaused))
+                          }
+                          onClick={() => void removeMeeting(meeting)}
+                        >
+                          {t("Delete meeting")}
+                        </button>
+                        <button
+                          type="button"
+                          className="text-button"
+                          disabled={Boolean(busy)}
+                          onClick={() => setConfirmRemoveId(null)}
+                        >
+                          {t("Keep meeting")}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
+
       <footer className="capture-dock">
-        <fieldset className="source-picker" disabled={locked}>
-          <legend>{t("Capture sources")}</legend>
-          <label className="source-choice">
-            <input
-              type="checkbox"
-              checked={microphone}
-              onChange={(event) => setMicrophone(event.target.checked)}
-            />
-            <span className="switch" aria-hidden="true">
-              <i />
-            </span>
-            <span>{t("Microphone")}</span>
-          </label>
-          <label className="source-choice">
-            <input
-              type="checkbox"
-              checked={system}
-              onChange={(event) => setSystem(event.target.checked)}
-            />
-            <span className="switch" aria-hidden="true">
-              <i />
-            </span>
-            <span>{t("System audio")}</span>
-          </label>
-        </fieldset>
-
-        {ready && (
-          <label
-            className="session-name-field"
-            style={{
-              display: "grid",
-              gap: "4px",
-              color: "#35413a",
-              fontSize: "11px",
-              fontWeight: 600,
-              textAlign: "left",
-            }}
-          >
-            <span>{t("Session name")}</span>
-            <input
-              type="text"
-              value={sessionName}
-              onChange={(event) => setSessionName(event.target.value)}
-              placeholder={t("Name this recording")}
-              maxLength={255}
-              disabled={Boolean(busy) || complete}
-              aria-label={t("Session name")}
-              style={{
-                width: "100%",
-                height: "34px",
-                minWidth: 0,
-                padding: "0 9px",
-                border: "1px solid #ccd6d0",
-                borderRadius: "7px",
-                background: "#fff",
-                fontSize: "12px",
-              }}
-            />
-          </label>
-        )}
-
-        {ready && (
-          <label className="consent-row">
-            <input
-              type="checkbox"
-              checked={consent}
-              disabled={Boolean(busy)}
-              onChange={(event) => setConsent(event.target.checked)}
-            />
-            <span>{t("Recording consent")}</span>
-          </label>
-        )}
-
         <div className="dock-actions">
-          <button
-            className="primary-action"
-            type="button"
-            disabled={actionDisabled}
-            onClick={primaryAction}
-          >
-            {busy ? (
-              <span className="button-spinner" aria-hidden="true" />
-            ) : (
-              <span className="action-glyph" aria-hidden="true">
-                {isRecording ? "■" : isPaused ? "●" : ready ? "↑" : "●"}
-              </span>
-            )}
-            {busy ? t(busy.key, busy.vars) : actionLabel}
-          </button>
+          {(isRecording || isPaused) && (
+            <button
+              className="primary-action"
+              type="button"
+              disabled={actionDisabled}
+              onClick={primaryAction}
+            >
+              {busy ? (
+                <span className="button-spinner" aria-hidden="true" />
+              ) : (
+                <span className="action-glyph" aria-hidden="true">
+                  {isRecording ? "■" : "●"}
+                </span>
+              )}
+              {busy ? t(busy.key, busy.vars) : actionLabel}
+            </button>
+          )}
           {isRecording && (
             <button
               className="discard-action"
@@ -895,31 +1365,23 @@ function App() {
               {t("Finish")}
             </button>
           )}
-          {(isRecording ||
-            isPaused ||
-            ready ||
-            status.state === "error" ||
-            status.state === "interrupted") && (
-            <button
-              className="discard-action"
-              type="button"
-              disabled={Boolean(busy)}
-              onClick={discard}
-            >
-              {t("Discard")}
-            </button>
-          )}
         </div>
         {ready && !complete && !capabilities?.storageAvailable && (
-          <p className="action-guidance">{t("Storage unavailable guidance")}</p>
+          <HelpTooltip label={t("More information")}>
+            {t("Storage unavailable guidance")}
+          </HelpTooltip>
         )}
         {connected &&
           capabilities?.storageAvailable &&
           !canUploadRecording(capabilities) && (
-            <p className="action-guidance">{t("Upload permission guidance")}</p>
+            <HelpTooltip label={t("More information")}>
+              {t("Upload permission guidance")}
+            </HelpTooltip>
           )}
         {ready && !complete && canUploadRecording(capabilities) && !consent && (
-          <p className="action-guidance">{t("Consent guidance")}</p>
+          <HelpTooltip label={t("More information")}>
+            {t("Consent guidance")}
+          </HelpTooltip>
         )}
         {connected && reviewHref && complete && (
           <a

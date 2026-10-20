@@ -1,8 +1,10 @@
 pub mod audio;
 pub mod codec;
+pub mod library;
 pub mod lifecycle;
 pub mod segments;
 pub mod spool;
+pub mod startup;
 
 #[cfg(target_os = "macos")]
 mod macos;

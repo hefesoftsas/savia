@@ -1957,7 +1957,7 @@ export function registerPluginStore(
       {
         headers: {
           "content-type": "text/html; charset=utf-8",
-          "cache-control": "private, no-store",
+          "cache-control": "private, no-store, no-transform",
           "referrer-policy": "no-referrer",
           "x-frame-options": "SAMEORIGIN",
         },
