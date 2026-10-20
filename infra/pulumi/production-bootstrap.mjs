@@ -89,6 +89,8 @@ export function assertProductionBootstrapPlan(plan, accountId) {
 }
 
 export function validateBootstrapSecrets(env) {
+  if (!env.BETTER_AUTH_BOOTSTRAP_PASSWORD?.trim())
+    throw new Error("Production requires BETTER_AUTH_BOOTSTRAP_PASSWORD");
   buildSecretUploads("production", {
     ...env,
     SAVIA_FLOWS_PROVISIONED: "false",

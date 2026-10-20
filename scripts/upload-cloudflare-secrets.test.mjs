@@ -15,6 +15,7 @@ const values = {
       "NANGO_API_KEY",
     ].map((key) => [key, "test-only-value"]),
   ),
+  BETTER_AUTH_BOOTSTRAP_PASSWORD: "test-only-bootstrap-password",
 };
 test("preview secrets always use explicit preview configuration and names", () => {
   const plans = buildSecretUploads("preview", values);
@@ -116,6 +117,39 @@ test("OAuth credentials are optional complete pairs for the auth Worker", () => 
       /SAVIA_(GOOGLE|MICROSOFT)_CLIENT_(ID|SECRET).*configured together/,
     );
   }
+});
+
+test("bootstrap password is optional when uploading retained environments and scoped to auth", () => {
+  const password = "random-production-bootstrap-password";
+  const plans = buildSecretUploads("production", {
+    ...values,
+    BETTER_AUTH_BOOTSTRAP_PASSWORD: password,
+  });
+  const auth = plans.find((plan) => plan.app === "auth").secrets;
+  assert.equal(auth.BETTER_AUTH_BOOTSTRAP_PASSWORD, password);
+  for (const plan of plans.filter((item) => item.app !== "auth"))
+    assert.equal("BETTER_AUTH_BOOTSTRAP_PASSWORD" in plan.secrets, false);
+  const withoutPassword = { ...values };
+  delete withoutPassword.BETTER_AUTH_BOOTSTRAP_PASSWORD;
+  const retained = buildSecretUploads("production", withoutPassword).find(
+    (plan) => plan.app === "auth",
+  ).secrets;
+  assert.equal("BETTER_AUTH_BOOTSTRAP_PASSWORD" in retained, false);
+});
+
+test("preview bootstrap password remains optional but is scoped to auth when supplied", () => {
+  const withoutPassword = { ...values };
+  delete withoutPassword.BETTER_AUTH_BOOTSTRAP_PASSWORD;
+  const without = buildSecretUploads("preview", withoutPassword).find(
+    (plan) => plan.app === "auth",
+  ).secrets;
+  assert.equal("BETTER_AUTH_BOOTSTRAP_PASSWORD" in without, false);
+  const password = "preview-bootstrap-password";
+  const withPassword = buildSecretUploads("preview", {
+    ...values,
+    BETTER_AUTH_BOOTSTRAP_PASSWORD: password,
+  }).find((plan) => plan.app === "auth").secrets;
+  assert.equal(withPassword.BETTER_AUTH_BOOTSTRAP_PASSWORD, password);
 });
 
 test("database bridge requires a complete HTTPS configuration", () => {

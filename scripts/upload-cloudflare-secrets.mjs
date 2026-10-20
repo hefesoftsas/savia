@@ -152,6 +152,9 @@ export function buildSecretUploads(environment, values) {
       secrets.SQL_BRIDGE_SECRET = values.SQL_BRIDGE_SECRET;
     }
     if (app === "auth") {
+      if (values.BETTER_AUTH_BOOTSTRAP_PASSWORD?.trim())
+        secrets.BETTER_AUTH_BOOTSTRAP_PASSWORD =
+          values.BETTER_AUTH_BOOTSTRAP_PASSWORD;
       if (chatgptId) {
         secrets.SAVIA_CHATGPT_CLIENT_ID = chatgptId;
         secrets.SAVIA_CHATGPT_TOKEN_AUTH_METHOD = chatgptMethod;
