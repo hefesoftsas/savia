@@ -27,6 +27,8 @@ test("unknown, configuration, schema and entrypoint changes require full publica
     "apps/api/src/env.ts",
     "packages/db/migrations/01.sql",
     "apps/admin/vite.config.ts",
+    "apps/admin/src/plugin-vscode-runtime.ts",
+    "apps/admin/src/components/Button.tsx",
   ])
     assert.equal(classifyPreviewCodeChanges([file(path)]), null, path);
   for (const source of [

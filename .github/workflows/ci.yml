@@ -313,7 +313,7 @@ jobs:
 
   api:
     needs: changes
-    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full') }}
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || contains(fromJSON('["full","api"]'), needs.changes.outputs.ci_kind)) }}
     name: API unit tests (shard 1/3)
     timeout-minutes: 15
     runs-on: ubuntu-24.04
@@ -342,7 +342,7 @@ jobs:
 
   api-2:
     needs: changes
-    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full') }}
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || contains(fromJSON('["full","api"]'), needs.changes.outputs.ci_kind)) }}
     name: API unit tests (shard 2/3)
     timeout-minutes: 15
     runs-on: ubuntu-24.04
@@ -371,7 +371,7 @@ jobs:
 
   api-3:
     needs: changes
-    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full') }}
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || contains(fromJSON('["full","api"]'), needs.changes.outputs.ci_kind)) }}
     name: API unit tests (shard 3/3)
     timeout-minutes: 15
     runs-on: ubuntu-24.04
@@ -437,8 +437,8 @@ jobs:
               pnpm --filter @savia/auth exec tsc --noEmit
               ;;
             api)
-              pnpm --filter @savia/api test
               pnpm --filter @savia/api exec tsc --noEmit
+              pnpm --filter @savia/admin typecheck
               ;;
             backup-gate)
               node --test packages/backup-gate/*.test.mjs

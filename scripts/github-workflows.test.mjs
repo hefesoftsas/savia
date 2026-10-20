@@ -474,3 +474,24 @@ test("Flows CI splits all seven package suites and keeps readiness fail-closed",
     );
   }
 });
+
+test("focused API validation regenerates and typechecks frontend consumers", async () => {
+  const ci = await workflow("ci.yml");
+  const profile = ci.split("            api)")[1].split(";;")[0];
+  assert.match(profile, /pnpm --filter @savia\/admin typecheck/);
+});
+
+test("focused API changes retain all three parallel API test shards", async () => {
+  const ci = await workflow("ci.yml");
+  const shards = ci.slice(
+    ci.indexOf("  api:\n"),
+    ci.indexOf("  runtime-profile:\n"),
+  );
+  assert.equal(
+    (shards.match(/contains\(fromJSON\('\["full","api"\]'\)/g) ?? []).length,
+    3,
+  );
+  assert.equal((shards.match(/pnpm run test:unit:api/g) ?? []).length, 3);
+  const profile = ci.split("            api)")[1].split(";;")[0];
+  assert.doesNotMatch(profile, /@savia\/api test/);
+});

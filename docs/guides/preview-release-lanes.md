@@ -104,7 +104,8 @@ For coherent backup and failed-release recovery details, see
 ## Preview code updates
 
 Existing application source changes can publish only the affected API, Auth,
-Request, Connector Gateway or admin gateway Worker. The frozen artifact retains
+Request or Connector Gateway Worker. Admin source uses the full lane because it
+can also feed the isolated plugin-editor bundle. The frozen artifact retains
 all configurations and resource identities; its digest also covers the exact
 base, head and selected targets in `release-source.json`. Planning uses the last
 successful evidence-backed deployed ancestor, so a failed release cannot hide
@@ -118,7 +119,8 @@ still completes deployment initialization before dependent Workers. Existing
 health checks and Worker version recovery remain mandatory; code-only recovery
 never restores databases. Build preparation still freezes the complete artifact.
 
-Isolated Auth and API changes use their focused CI profiles. Shared backup-gate
+Isolated Auth and API changes use their focused CI profiles. API changes also
+regenerate and typecheck Admin API clients to validate frontend consumers. Shared backup-gate
 changes test all four consumers. Mixed and uncertain changes retain full checks.
 Office assets and workspace store plugins publish only when their cumulative
 paths changed; a missing baseline enables both conservatively.

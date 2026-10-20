@@ -1,13 +1,12 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 const execute = promisify(execFile);
-const roles = ["auth", "api", "request", "connectors", "gateway"];
+const roles = ["auth", "api", "request", "connectors"];
 const roots = {
   auth: "apps/auth/src/",
   api: "apps/api/src/",
   request: "apps/savia-request/src/",
   connectors: "apps/connector-gateway/src/",
-  gateway: "apps/admin/src/",
 };
 // This lane deliberately excludes schema/configuration changes, including schema
 // statements embedded in application source. Missing source/history means full.
