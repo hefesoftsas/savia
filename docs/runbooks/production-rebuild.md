@@ -33,7 +33,7 @@ reviewer and `main` branch restriction before enabling a release. The
 approval, so its scheduled recovery jobs can run unattended with restricted
 backup credentials. Never copy Preview application encryption keys into a fresh
 production installation. Store `BETTER_AUTH_BOOTSTRAP_PASSWORD` as a secret in
-`production-app`; first-install validation requires it, and runtime secret
+`production-app`; first-install validation requires at least 12 characters, and runtime secret
 uploads include it only when configured and only for `savia-auth`. Keep it
 configured on later releases. On first request, Auth creates the fixed
 `savia.admin@example.test` administrator if it is absent and uses that account

@@ -96,6 +96,24 @@ test("all application and backup credentials are required before creating persis
   }
 });
 
+test("first-install credentials satisfy Auth minimum password length before mutation", () => {
+  for (const password of ["", " ".repeat(12), "x".repeat(11)])
+    assert.throws(
+      () =>
+        validateBootstrapSecrets({
+          ...secrets(),
+          BETTER_AUTH_BOOTSTRAP_PASSWORD: password,
+        }),
+      /BETTER_AUTH_BOOTSTRAP_PASSWORD/,
+    );
+  assert.doesNotThrow(() =>
+    validateBootstrapSecrets({
+      ...secrets(),
+      BETTER_AUTH_BOOTSTRAP_PASSWORD: "x".repeat(12),
+    }),
+  );
+});
+
 test("initialization applies only its reviewed saved plan after validating credentials and identity", async () => {
   const directory = await mkdtemp(join(tmpdir(), "savia-bootstrap-test-"));
   try {
