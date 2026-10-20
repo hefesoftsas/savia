@@ -71,11 +71,12 @@ maintenance/recovery tests for this scope. Public source security checks remain
 active.
 
 Flows unit tests run in two Actions jobs: the API suite runs alongside the root,
-native, app, runtime, geo, and utilities suites. Source verification, Flows and
-hook-executor typechecks, plus offline infrastructure/recovery tests stay in the
-core job. The existing **Flows runtime and preview readiness** check waits for
-both jobs and fails if either does not succeed. Infrastructure-only runs keep
-both jobs and this aggregate check skipped.
+native, app, runtime, geo, and utilities suites. Source verification stays with
+the core tests. Flows and hook-executor
+typechecks plus offline infrastructure/recovery tests run in a third independent
+job, alongside both test jobs. The existing **Flows runtime and preview readiness**
+check waits for all three jobs and fails if any does not succeed.
+Infrastructure-only runs keep all three jobs and this aggregate check skipped.
 
 Mixed application/infrastructure changes, shared code, dependencies, workflow or
 classifier changes, unknown paths, and unreadable revision ranges select full CI.
