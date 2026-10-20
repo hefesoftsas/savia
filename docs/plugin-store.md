@@ -24,7 +24,10 @@ an artifact checksum ETag and `private, no-cache`: the browser may retain static
 code, but must revalidate before reusing it. A matching conditional request checks
 the active installation and version, returns `304`, and avoids transferring the
 module body from D1. Disabled installations and invalid or expired grants return
-`404` with `no-store`. The shell itself remains `no-store`.
+`404` with `no-store`. The shell itself remains `no-store` and sends
+`no-transform`, which the authenticated Studio proxy preserves. This prevents
+Cloudflare from injecting analytics scripts into the sandbox HTML; its existing
+`script-src 'self'` policy remains strict.
 
 This caches executable artifacts only, not application records, credentials, or
 permission decisions. The iframe remains sandboxed with an opaque origin, and

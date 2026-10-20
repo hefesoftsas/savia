@@ -11,7 +11,7 @@
 use rubato::{Fft, FixedSync, Resampler};
 use ruopus::{
     ogg::{OggOpusReader, OggOpusWriter, OpusHead, OpusTags, PageReader},
-    Bandwidth, OpusEncoder,
+    Bandwidth, OpusDecoder, OpusEncoder,
 };
 
 use super::{audio::RawAudio, lifecycle::MAX_PCM_BYTES};
@@ -27,6 +27,69 @@ pub struct EncodedAudio {
     pub ogg: Vec<u8>,
     pub sample_rate: u32,
     pub duration_seconds: f64,
+}
+
+/// Decode one bounded, mono Opus/Ogg track for local preview. Samples are
+/// signed 16-bit PCM at 48 kHz, after Opus pre-skip and end trimming.
+pub fn decode_preview_pcm(ogg: &[u8]) -> Result<Vec<i16>, String> {
+    if ogg.is_empty() || ogg.len() > MAX_OGG_BYTES {
+        return Err("Captured audio is empty or exceeds the per-track limit.".into());
+    }
+    let mut reader =
+        OggOpusReader::new(ogg).map_err(|_| "Captured audio is invalid or corrupt.".to_string())?;
+    if reader.head().channel_count != 1
+        || !matches!(
+            reader.head().channel_mapping,
+            ruopus::ogg::ChannelMapping::Family0
+        )
+        || reader.head().pre_skip > 3_840
+    {
+        return Err("Captured audio has an unsupported channel layout or pre-skip.".into());
+    }
+    let head = reader.head().clone();
+    let duration = reader
+        .pcm_duration_48k()
+        .ok_or_else(|| "Captured audio has no valid duration.".to_string())?;
+    if duration == 0 || duration > u64::from(OPUS_RATE) * 60 {
+        return Err("Captured audio must be at most 60 seconds.".into());
+    }
+
+    // Decode packet-by-packet so a malformed stream cannot make ruopus build
+    // an unbounded intermediate PCM vector before its final granule is checked.
+    let mut decoder = OpusDecoder::new(1);
+    let mut decoded = Vec::<i16>::with_capacity(duration as usize + usize::from(head.pre_skip));
+    let max_decoded = duration as usize + usize::from(head.pre_skip) + 5_760;
+    let mut final_granule = 0;
+    while let Some(packet) = reader.next() {
+        let frame = decoder
+            .decode_packet_i16(&packet.data)
+            .map_err(|_| "Captured audio is invalid or corrupt.".to_string())?;
+        if decoded.len().saturating_add(frame.len()) > max_decoded {
+            return Err("Captured audio exceeds the bounded preview duration.".into());
+        }
+        decoded.extend(frame);
+        final_granule = packet.granule_position;
+    }
+    let trimmed_duration = final_granule.saturating_sub(u64::from(head.pre_skip));
+    if trimmed_duration != duration
+        || decoded.len() < usize::from(head.pre_skip) + duration as usize
+    {
+        return Err("Captured audio has an invalid decoded duration or layout.".into());
+    }
+    let mut samples: Vec<i16> = decoded
+        .into_iter()
+        .skip(usize::from(head.pre_skip))
+        .take(duration as usize)
+        .collect();
+    if head.output_gain_q8 != 0 {
+        let gain = 10.0_f64.powf(f64::from(head.output_gain_q8) / (20.0 * 256.0));
+        for sample in &mut samples {
+            *sample = (f64::from(*sample) * gain)
+                .clamp(f64::from(i16::MIN), f64::from(i16::MAX))
+                .round() as i16;
+        }
+    }
+    Ok(samples)
 }
 
 pub fn encode_ogg_opus(audio: RawAudio) -> Result<EncodedAudio, String> {
@@ -349,5 +412,26 @@ mod tests {
             ffmpeg_sample_count(&encoded.ogg),
             Some((6_041u64 * 48_000 + 22_050).div_euclid(44_100) as usize)
         );
+    }
+
+    #[test]
+    fn preview_decoder_returns_mono_i16_at_effective_duration() {
+        let encoded = encode_ogg_opus(sine(44_100, 6_041)).unwrap();
+        let decoded = decode_preview_pcm(&encoded.ogg).unwrap();
+        assert_eq!(
+            decoded.len(),
+            (6_041u64 * 48_000 + 22_050).div_euclid(44_100) as usize
+        );
+        assert!(decoded.iter().any(|sample| sample.abs() > 100));
+    }
+
+    #[test]
+    fn preview_decoder_rejects_corrupt_and_oversized_ogg() {
+        let encoded = encode_ogg_opus(sine(48_000, 4_800)).unwrap();
+        let mut corrupt = encoded.ogg.clone();
+        let last = corrupt.len() - 1;
+        corrupt[last] ^= 1;
+        assert!(decode_preview_pcm(&corrupt).is_err());
+        assert!(decode_preview_pcm(&vec![0; MAX_OGG_BYTES + 1]).is_err());
     }
 }

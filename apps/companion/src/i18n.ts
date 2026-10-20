@@ -133,6 +133,32 @@ const messages = {
     en: "Paste your Savia credential",
     pt: "Cole sua credencial do Savia",
   },
+  "Export diagnostic log": {
+    es: "Exportar registro de diagnóstico",
+    en: "Export diagnostic log",
+    pt: "Exportar registro de diagnóstico",
+  },
+  "Exporting diagnostics…": {
+    es: "Exportando diagnóstico…",
+    en: "Exporting diagnostics…",
+    pt: "Exportando diagnóstico…",
+  },
+  "Export a diagnostic log to Downloads to share with support. API keys and audio are excluded.":
+    {
+      es: "Exporta un registro a Descargas para compartirlo con soporte. No incluye claves API ni audio.",
+      en: "Export a diagnostic log to Downloads to share with support. API keys and audio are excluded.",
+      pt: "Exporte um registro para Downloads e compartilhe com o suporte. Não inclui chaves API nem áudio.",
+    },
+  "Saved in Downloads: {filename}": {
+    es: "Guardado en Descargas: {filename}",
+    en: "Saved in Downloads: {filename}",
+    pt: "Salvo em Downloads: {filename}",
+  },
+  "Unable to export diagnostics. Try again.": {
+    es: "No se pudo exportar el diagnóstico. Inténtalo de nuevo.",
+    en: "Unable to export diagnostics. Try again.",
+    pt: "Não foi possível exportar o diagnóstico. Tente novamente.",
+  },
   "Remember on this device": {
     es: "Recordar en este equipo",
     en: "Remember on this device",
@@ -153,6 +179,12 @@ const messages = {
     en: "Unable to save the credential on this device.",
     pt: "Não foi possível salvar a credencial neste dispositivo.",
   },
+  "Unable to read the saved credential. Check access to the system keychain and try again.":
+    {
+      es: "No se pudo leer la credencial guardada. Revisa el acceso al llavero del sistema e inténtalo de nuevo.",
+      en: "Unable to read the saved credential. Check access to the system keychain and try again.",
+      pt: "Não foi possível ler a credencial salva. Verifique o acesso ao gerenciador de credenciais do sistema e tente novamente.",
+    },
   "Unable to forget the saved credential.": {
     es: "No se pudo olvidar la credencial guardada.",
     en: "Unable to forget the saved credential.",
@@ -354,9 +386,9 @@ const messages = {
     pt: "Fontes de captura",
   },
   "Recording consent": {
-    es: "Tengo permiso para grabar y guardar esta grabación en Savia.",
-    en: "I have permission to record and store this recording in Savia.",
-    pt: "Tenho permissão para gravar e salvar esta gravação no Savia.",
+    es: "Tengo permiso para subir esta grabación a Savia.",
+    en: "I have permission to upload this recording to Savia.",
+    pt: "Tenho permissão para enviar esta gravação ao Savia.",
   },
   "Stop recording": {
     es: "Detener grabación",
@@ -443,6 +475,11 @@ const messages = {
     en: "Audio capture is unavailable on this device.",
     pt: "A captura de áudio não está disponível neste dispositivo.",
   },
+  CAPTURE_PENDING_DRAFT: {
+    es: "Hay un borrador pendiente. Descartarlo elimina el audio local de ese borrador y permite iniciar otra grabación.",
+    en: "A draft is pending. Discarding it removes that draft's local audio and lets you start another recording.",
+    pt: "Há um rascunho pendente. Descartá-lo remove o áudio local desse rascunho e permite iniciar outra gravação.",
+  },
   CAPTURE_FAILED: {
     es: "No se pudo completar la captura de audio.",
     en: "Audio capture could not be completed.",
@@ -474,9 +511,171 @@ const messages = {
     pt: "Revisar gravação no Savia",
   },
   "Audio stays on device": {
-    es: "Ningún audio sale de este dispositivo hasta que elijas Subir.",
-    en: "No audio leaves this device until you choose Upload.",
-    pt: "Nenhum áudio sai deste dispositivo até você escolher Enviar.",
+    es: "El audio solo se sube cuando eliges Subir. La copia local permanece aquí hasta que la elimines.",
+    en: "Audio is uploaded only when you choose Upload. The local copy stays here until you delete it.",
+    pt: "O áudio só é enviado quando você escolhe Enviar. A cópia local fica aqui até você excluí-la.",
+  },
+  "More information": {
+    es: "Más información",
+    en: "More information",
+    pt: "Mais informações",
+  },
+  "Local meetings": {
+    es: "Reuniones locales",
+    en: "Local meetings",
+    pt: "Reuniões locais",
+  },
+  "Local meetings help": {
+    es: "Las grabaciones permanecen en este dispositivo. Elige una para revisarla, subirla o eliminarla.",
+    en: "Recordings stay on this device. Select one to review, upload, or delete it.",
+    pt: "As gravações ficam neste dispositivo. Selecione uma para revisar, enviar ou excluir.",
+  },
+  "No local meetings": {
+    es: "Todavía no hay reuniones guardadas en este dispositivo.",
+    en: "There are no meetings saved on this device yet.",
+    pt: "Ainda não há reuniões salvas neste dispositivo.",
+  },
+  "New meeting": {
+    es: "Nueva reunión",
+    en: "New meeting",
+    pt: "Nova reunião",
+  },
+  "Opening meeting": {
+    es: "Abriendo reunión",
+    en: "Opening meeting",
+    pt: "Abrindo reunião",
+  },
+  "Saving meeting name": {
+    es: "Guardando nombre de la reunión",
+    en: "Saving meeting name",
+    pt: "Salvando nome da reunião",
+  },
+  "Deleting meeting": {
+    es: "Eliminando reunión",
+    en: "Deleting meeting",
+    pt: "Excluindo reunião",
+  },
+  "Select meeting": {
+    es: "Seleccionar reunión",
+    en: "Select meeting",
+    pt: "Selecionar reunião",
+  },
+  Delete: {
+    es: "Eliminar",
+    en: "Delete",
+    pt: "Excluir",
+  },
+  "Delete meeting": {
+    es: "Eliminar reunión",
+    en: "Delete meeting",
+    pt: "Excluir reunião",
+  },
+  "Keep meeting": {
+    es: "Conservar reunión",
+    en: "Keep meeting",
+    pt: "Manter reunião",
+  },
+  "Confirm meeting deletion": {
+    es: "Confirmar eliminación de la reunión",
+    en: "Confirm meeting deletion",
+    pt: "Confirmar exclusão da reunião",
+  },
+  "Delete meeting consequence": {
+    es: "Se eliminarán de este dispositivo la reunión y su audio local. La copia que ya subiste a Savia seguirá allí.",
+    en: "This removes the meeting and its local audio from this device. Any copy already uploaded to Savia stays there.",
+    pt: "A reunião e o áudio local serão removidos deste dispositivo. Uma cópia já enviada ao Savia continuará lá.",
+  },
+  Uploaded: {
+    es: "Subida a",
+    en: "Uploaded to",
+    pt: "Enviada para",
+  },
+  "Uploaded to Savia": {
+    es: "Subida a Savia",
+    en: "Uploaded to Savia",
+    pt: "Enviada ao Savia",
+  },
+  Interrupted: {
+    es: "Interrumpida",
+    en: "Interrupted",
+    pt: "Interrompida",
+  },
+  Unavailable: {
+    es: "No disponible",
+    en: "Unavailable",
+    pt: "Indisponível",
+  },
+  Ready: {
+    es: "Lista",
+    en: "Ready",
+    pt: "Pronta",
+  },
+  "Active audio sources": {
+    es: "Fuentes de audio activas",
+    en: "Active audio sources",
+    pt: "Fontes de áudio ativas",
+  },
+  Active: {
+    es: "Activa",
+    en: "Active",
+    pt: "Ativa",
+  },
+  Captured: {
+    es: "Capturada",
+    en: "Captured",
+    pt: "Capturada",
+  },
+  "Meeting data unavailable": {
+    es: "No se puede leer esta reunión. Puedes eliminar su copia local.",
+    en: "This meeting cannot be read. You can remove its local copy.",
+    pt: "Não foi possível ler esta reunião. Você pode remover a cópia local.",
+  },
+  "Microphone partial warning": {
+    es: "El micrófono no pudo iniciarse. La grabación continúa con la otra fuente disponible.",
+    en: "The microphone could not start. Recording continues with the other available source.",
+    pt: "Não foi possível iniciar o microfone. A gravação continua com a outra fonte disponível.",
+  },
+  "System audio partial warning": {
+    es: "El audio del sistema no pudo iniciarse. La grabación continúa con la otra fuente disponible.",
+    en: "System audio could not start. Recording continues with the other available source.",
+    pt: "Não foi possível iniciar o áudio do sistema. A gravação continua com a outra fonte disponível.",
+  },
+  "Recording and upload permission": {
+    es: "Permiso para grabar y subir",
+    en: "Recording and upload permission",
+    pt: "Permissão para gravar e enviar",
+  },
+  "Permission disclaimer body": {
+    es: "Graba y sube únicamente reuniones para las que tienes autorización de los participantes. Al elegir Subir a Savia confirmas que tienes permiso para guardar ese audio en Savia. Esta aceptación se recuerda en este dispositivo; puedes restablecerla en Ajustes. Ninguna reunión se sube automáticamente.",
+    en: "Only record and upload meetings you have permission from the participants to capture. Choosing Upload to Savia confirms you have permission to store that recording in Savia. This acknowledgement is remembered on this device and can be reset in Settings. No meeting is uploaded automatically.",
+    pt: "Grave e envie apenas reuniões que você tem autorização dos participantes para capturar. Ao escolher Enviar ao Savia, você confirma que tem permissão para armazenar essa gravação no Savia. Esta confirmação é lembrada neste dispositivo e pode ser redefinida nas configurações. Nenhuma reunião é enviada automaticamente.",
+  },
+  "Accept and remember": {
+    es: "Aceptar y recordar",
+    en: "Accept and remember",
+    pt: "Aceitar e lembrar",
+  },
+  "Not now": { es: "Ahora no", en: "Not now", pt: "Agora não" },
+  "Review permission notice": {
+    es: "Restablecer aviso de permisos",
+    en: "Reset permission notice",
+    pt: "Redefinir aviso de permissão",
+  },
+  "Edit meeting name": {
+    es: "Editar nombre de la reunión",
+    en: "Edit meeting name",
+    pt: "Editar nome da reunião",
+  },
+  "Save name": { es: "Guardar nombre", en: "Save name", pt: "Salvar nome" },
+  "Cancel editing": {
+    es: "Cancelar edición",
+    en: "Cancel editing",
+    pt: "Cancelar edição",
+  },
+  "Meeting name length": {
+    es: "Escribe un nombre de 1 a 255 caracteres.",
+    en: "Enter a name with 1 to 255 characters.",
+    pt: "Digite um nome de 1 a 255 caracteres.",
   },
   Attribution: {
     es: "Savia — Desarrollado por Hefesoft SAS, Colombia.",

@@ -2,9 +2,11 @@ pub mod backend;
 pub mod capture;
 mod capture_error;
 mod credential;
+mod diagnostics;
+mod preferences;
 
 use std::{
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::{Arc, Mutex},
     thread,
     time::Instant,
@@ -13,8 +15,10 @@ use std::{
 use base64::{engine::general_purpose::STANDARD, Engine};
 use capture::{
     audio::MicrophoneCapture,
+    library::{LocalMeeting, MeetingLibrary},
     lifecycle::{Lifecycle, Source, Sources, State, TrackInfo, MAX_CAPTURE_DURATION},
     spool::{CaptureSpool, ChunkInfo, DraftState},
+    startup::start_available_sources,
     SystemCapture,
 };
 use capture_error::{classify_capture_error, CaptureErrorCode};
@@ -130,6 +134,8 @@ struct CaptureSession {
     temp_dir: Option<TempDir>,
     spool: Option<Arc<Mutex<CaptureSpool>>>,
     spool_root: Option<PathBuf>,
+    library_root: Option<PathBuf>,
+    source_warnings: Vec<SourceWarning>,
     recovered: bool,
     storage_error: Option<String>,
 }
@@ -139,6 +145,13 @@ struct CaptureSession {
 pub struct StartSources {
     pub microphone: bool,
     pub system: bool,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SourceWarning {
+    source: Source,
+    error_code: CaptureErrorCode,
 }
 
 #[derive(Serialize)]
@@ -153,6 +166,8 @@ pub struct CaptureStatus {
     chunks: Vec<ChunkInfo>,
     recovered: bool,
     interrupted: bool,
+    active_sources: Vec<Source>,
+    source_warnings: Vec<SourceWarning>,
 }
 
 impl CaptureSession {
@@ -204,6 +219,11 @@ impl CaptureSession {
                 .unwrap_or_default(),
             recovered: self.recovered,
             interrupted,
+            active_sources: [Source::Microphone, Source::System]
+                .into_iter()
+                .filter(|source| self.lifecycle.sources.includes(*source))
+                .collect(),
+            source_warnings: self.source_warnings.clone(),
         }
     }
 
@@ -351,7 +371,16 @@ impl CaptureSession {
         self.microphone.take();
         self.system.take();
         self.temp_dir.take();
-        let delete_result = if let Some(spool) = self.spool.as_ref() {
+        let meeting_id = self.spool.as_ref().map(|spool| {
+            spool
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .session_id()
+                .to_string()
+        });
+        let delete_result = if let (Some(root), Some(id)) = (&self.library_root, meeting_id) {
+            MeetingLibrary::open(root.clone()).and_then(|library| library.remove(&id))
+        } else if let Some(spool) = self.spool.as_ref() {
             spool
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -367,6 +396,8 @@ impl CaptureSession {
             return Err(error);
         }
         self.spool = None;
+        self.spool_root = None;
+        self.source_warnings.clear();
         self.recovered = false;
         self.storage_error = None;
         self.lifecycle.discard();
@@ -398,82 +429,133 @@ async fn start_capture(
     capture: TauriState<'_, SharedCapture>,
     session_id: String,
     sources: StartSources,
+    name: Option<String>,
 ) -> Result<CaptureStatus, String> {
+    let _legacy_sources = (sources.microphone, sources.system);
     let sources = Sources {
-        microphone: sources.microphone,
-        system: sources.system,
+        microphone: true,
+        system: true,
     };
     let capture = capture.inner().clone();
-    tauri::async_runtime::spawn_blocking(move || {
-        start_capture_blocking(capture, sources, session_id, app)
+    let selected = match (sources.microphone, sources.system) {
+        (true, true) => "microphone_and_system",
+        (true, false) => "microphone",
+        (false, true) => "system",
+        _ => "none",
+    };
+    diagnostics::record("capture.start", "requested", Some(selected), None, None);
+    let started = Instant::now();
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        diagnostics::record("capture.start", "worker_started", None, None, None);
+        start_capture_blocking(capture, sources, session_id, name, app)
     })
-    .await
-    .map_err(|_| "Could not start audio capture.".to_string())
+    .await;
+    match result {
+        Ok(status) => {
+            diagnostics::record(
+                "capture.start",
+                "completed",
+                Some(status.state),
+                None,
+                Some(started.elapsed().as_millis() as u64),
+            );
+            Ok(status)
+        }
+        Err(_) => {
+            diagnostics::record(
+                "capture.start",
+                "worker_failed",
+                None,
+                None,
+                Some(started.elapsed().as_millis() as u64),
+            );
+            Err("Could not start audio capture.".into())
+        }
+    }
 }
 
 fn start_capture_blocking(
     capture: SharedCapture,
     sources: Sources,
     session_id: String,
+    name: Option<String>,
     app: AppHandle,
 ) -> CaptureStatus {
     let mut session = capture
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
-    if session.spool.is_some() {
-        let hint = if session.lifecycle.state == State::Paused {
-            "The recording is paused. Resume or discard it before starting another recording."
-        } else {
-            "A saved capture draft must be discarded before starting another recording."
-        };
-        session.lifecycle.fail(hint.into());
-        return session.status();
+    if matches!(session.lifecycle.state, State::Recording | State::Paused) {
+        let mut status = session.status();
+        status.error = Some("Finish the current meeting before starting another recording.".into());
+        status.error_code = Some(CaptureErrorCode::PendingDraft);
+        return status;
     }
-    if let Some(error) = session.storage_error.clone() {
-        session.lifecycle.fail(error);
-        return session.status();
-    }
-    if let Err(error) = session.lifecycle.start(sources, Instant::now()) {
-        if !sources.any() {
-            session.lifecycle.fail(error);
-        }
-        return session.status();
-    }
-    let root = match session.spool_root.clone().or_else(|| {
+    // Detach a completed selection; its files stay in the meeting library.
+    session.spool = None;
+    session.spool_root = None;
+    session.storage_error = None;
+    session.source_warnings.clear();
+    session.recovered = false;
+    session.lifecycle.discard();
+    let root = match session.library_root.clone().or_else(|| {
         app.path()
             .app_data_dir()
             .ok()
-            .map(|path| path.join("capture-spool"))
+            .map(|p| p.join("capture-spool"))
     }) {
         Some(root) => root,
         None => {
             session
                 .lifecycle
-                .fail("Could not prepare private capture storage.".into());
+                .fail("Could not prepare private meeting storage.".into());
             return session.status();
         }
     };
-    let source_list = [Source::Microphone, Source::System]
-        .into_iter()
-        .filter(|source| sources.includes(*source))
-        .collect();
-    let spool = match CaptureSpool::create(root.clone(), session_id, source_list) {
-        Ok(spool) => Arc::new(Mutex::new(spool)),
+    let library = match MeetingLibrary::open(root.clone()) {
+        Ok(library) => library,
         Err(error) => {
             session.lifecycle.fail(error);
             return session.status();
         }
     };
-    session.spool_root = Some(root);
+    session.library_root = Some(root);
+    let name = name.unwrap_or_else(|| "Meeting".into());
+    if let Err(error) = library.initialize(&session_id, &name) {
+        session.lifecycle.fail(error);
+        return session.status();
+    }
+    let meeting_path = match library.meeting_path(&session_id) {
+        Ok(path) => path,
+        Err(error) => {
+            session.lifecycle.fail(error);
+            return session.status();
+        }
+    };
+    let spool = match CaptureSpool::create(
+        meeting_path.clone(),
+        session_id.clone(),
+        vec![Source::Microphone, Source::System],
+    ) {
+        Ok(spool) => Arc::new(Mutex::new(spool)),
+        Err(error) => {
+            let _ = library.remove(&session_id);
+            session.lifecycle.fail(error);
+            return session.status();
+        }
+    };
+    session.spool_root = Some(meeting_path);
     session.spool = Some(spool);
-    session.recovered = false;
-    session.temp_dir.take();
-
+    let generation = Instant::now();
+    if let Err(error) = session.lifecycle.start(sources, generation) {
+        let _ = session.discard();
+        session.lifecycle.fail(error);
+        return session.status();
+    }
     let temp_dir = match tempfile::Builder::new()
         .prefix("savia-companion-")
         .tempdir()
     {
-        Ok(temp_dir) => temp_dir,
+        Ok(dir) => dir,
         Err(_) => {
             let _ = session.discard();
             session
@@ -482,51 +564,115 @@ fn start_capture_blocking(
             return session.status();
         }
     };
-    if sources.microphone {
-        if let Err(error) = capture::authorize_microphone(temp_dir.path()) {
+    let temp_path = temp_dir.path().to_path_buf();
+    session.temp_dir = Some(temp_dir);
+    let generation = match start_session_sources(
+        &mut session,
+        &temp_path,
+        std::time::Duration::ZERO,
+    ) {
+        Ok(generation) => generation,
+        Err(error) => {
             let _ = session.discard();
             session.lifecycle.fail(error);
             return session.status();
         }
-    }
-    let generation = Instant::now();
+    };
     session.lifecycle.reanchor_start(generation);
-    session.temp_dir = Some(temp_dir);
-    if sources.system {
-        let started = match session.temp_dir.as_ref() {
-            Some(temp_dir) => SystemCapture::start(
-                temp_dir.path(),
-                Arc::clone(session.spool.as_ref().unwrap()),
-                generation,
-            ),
-            None => Err("Could not prepare temporary audio storage.".into()),
-        };
-        match started {
-            Ok(system) => session.system = Some(system),
-            Err(error) => {
-                let _ = session.discard();
-                session.lifecycle.fail(error);
-                return session.status();
-            }
-        }
-    }
-    if sources.microphone {
-        match MicrophoneCapture::start(Arc::clone(session.spool.as_ref().unwrap()), generation) {
-            Ok(microphone) => session.microphone = Some(microphone),
-            Err(error) => {
-                let _ = session.discard();
-                session.lifecycle.fail(error);
-                return session.status();
-            }
-        }
-    }
     drop(session);
-
     spawn_elapsed_watcher(capture.clone(), generation);
     capture
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
         .status()
+}
+
+fn start_session_sources(
+    session: &mut CaptureSession,
+    temp_dir: &Path,
+    offset: std::time::Duration,
+) -> Result<Instant, String> {
+    let microphone_dir = temp_dir.join("microphone");
+    let system_dir = temp_dir.join("system");
+    std::fs::create_dir_all(&microphone_dir)
+        .and_then(|_| std::fs::create_dir_all(&system_dir))
+        .map_err(|_| "Could not prepare temporary audio storage.".to_string())?;
+    let spool = session
+        .spool
+        .as_ref()
+        .ok_or("The meeting has no capture storage.")?
+        .clone();
+    let microphone_authorization = capture::authorize_microphone(&microphone_dir);
+    let generation = Instant::now();
+    let origin = generation.checked_sub(offset).unwrap_or(generation);
+    let (mut mic_attempt, mut system_attempt) = (0, 0);
+    let result = start_available_sources(
+        || {
+            mic_attempt += 1;
+            diagnostics::record(
+                "capture.source",
+                "attempt",
+                Some("microphone"),
+                Some(mic_attempt),
+                None,
+            );
+            if let Err(error) = &microphone_authorization {
+                return Err(error.clone());
+            }
+            MicrophoneCapture::start(spool.clone(), origin)
+        },
+        || {
+            system_attempt += 1;
+            diagnostics::record(
+                "capture.source",
+                "attempt",
+                Some("system"),
+                Some(system_attempt),
+                None,
+            );
+            SystemCapture::start(&system_dir, spool.clone(), origin)
+        },
+        || thread::sleep(std::time::Duration::from_millis(200)),
+    );
+    session.source_warnings.clear();
+    if let Some(error) = result.microphone_error {
+        session.source_warnings.push(SourceWarning {
+            source: Source::Microphone,
+            error_code: classify_capture_error(&error),
+        });
+    }
+    if let Some(error) = result.system_error {
+        session.source_warnings.push(SourceWarning {
+            source: Source::System,
+            error_code: classify_capture_error(&error),
+        });
+    }
+    session.lifecycle.sources = Sources {
+        microphone: result.microphone.is_some(),
+        system: result.system.is_some(),
+    };
+    session.microphone = result.microphone;
+    session.system = result.system;
+    if !session.lifecycle.sources.any() {
+        diagnostics::record("capture.source", "all_failed", None, Some(3), None);
+        return Err("Neither microphone nor system audio could start after three attempts.".into());
+    }
+    diagnostics::record(
+        "capture.source",
+        "ready",
+        Some(
+            if session.lifecycle.sources.microphone && session.lifecycle.sources.system {
+                "both"
+            } else if session.lifecycle.sources.microphone {
+                "microphone_only"
+            } else {
+                "system_only"
+            },
+        ),
+        None,
+        None,
+    );
+    Ok(generation)
 }
 
 fn spawn_elapsed_watcher(capture: SharedCapture, generation: Instant) {
@@ -553,7 +699,6 @@ fn spawn_elapsed_watcher(capture: SharedCapture, generation: Instant) {
 }
 
 fn resume_capture_blocking(capture: SharedCapture) -> Result<CaptureStatus, String> {
-    let requested_at = Instant::now();
     let mut session = capture
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
@@ -563,72 +708,31 @@ fn resume_capture_blocking(capture: SharedCapture) -> Result<CaptureStatus, Stri
     let spool = session
         .spool
         .as_ref()
-        .ok_or_else(|| "The paused recording has no saved audio.".to_string())?
+        .ok_or("The paused meeting has no saved audio.")?
         .clone();
-    let sources = session.lifecycle.sources;
-    if !sources.any() {
-        return Err("The paused recording has no capture sources.".into());
-    }
-    // Continue the timeline where prior audio ended so chunks stay ordered
-    // and non-overlapping; paused wall-clock time is excluded.
-    let spool_elapsed = spool
+    let offset = spool
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
-        .elapsed_seconds();
-    let resume_offset = spool_elapsed
+        .elapsed_seconds()
         .max(session.lifecycle.elapsed.as_secs_f64())
         .min(3_600.0);
-    // Allocate fallible resources before changing lifecycle state so a
-    // failure keeps the session paused instead of reporting a recording
-    // that captures nothing.
     let temp_dir = tempfile::Builder::new()
         .prefix("savia-companion-")
         .tempdir()
         .map_err(|_| "Could not prepare temporary audio storage.".to_string())?;
-    if sources.microphone {
-        if let Err(error) = capture::authorize_microphone(temp_dir.path()) {
+    let elapsed = std::time::Duration::from_secs_f64(offset);
+    let path = temp_dir.path().to_path_buf();
+    session.temp_dir = Some(temp_dir);
+    let generation = match start_session_sources(&mut session, &path, elapsed) {
+        Ok(generation) => generation,
+        Err(error) => {
+            session.temp_dir.take();
             return Err(error);
         }
-    }
-    session.lifecycle.elapsed = std::time::Duration::from_secs_f64(resume_offset);
-    session.lifecycle.resume(requested_at)?;
-    session.temp_dir.take();
-    let generation = Instant::now();
+    };
+    session.lifecycle.elapsed = elapsed;
+    session.lifecycle.resume(generation)?;
     session.lifecycle.reanchor_start(generation);
-    session.temp_dir = Some(temp_dir);
-    // Shift the device clock origin back by the recorded offset so new
-    // segments continue the timeline instead of restarting at zero.
-    let origin = generation
-        .checked_sub(std::time::Duration::from_secs_f64(resume_offset))
-        .unwrap_or(generation);
-    if sources.system {
-        let started = match session.temp_dir.as_ref() {
-            Some(temp_dir) => SystemCapture::start(temp_dir.path(), Arc::clone(&spool), origin),
-            None => Err("Could not prepare temporary audio storage.".into()),
-        };
-        match started {
-            Ok(system) => session.system = Some(system),
-            Err(error) => {
-                session.temp_dir.take();
-                session.lifecycle.pause(generation);
-                session.lifecycle.elapsed = std::time::Duration::from_secs_f64(resume_offset);
-                return Err(error);
-            }
-        }
-    }
-    if sources.microphone {
-        match MicrophoneCapture::start(Arc::clone(&spool), origin) {
-            Ok(microphone) => session.microphone = Some(microphone),
-            Err(error) => {
-                session.temp_dir.take();
-                session.microphone.take();
-                session.system.take();
-                session.lifecycle.pause(generation);
-                session.lifecycle.elapsed = std::time::Duration::from_secs_f64(resume_offset);
-                return Err(error);
-            }
-        }
-    }
     drop(session);
     spawn_elapsed_watcher(capture.clone(), generation);
     Ok(capture
@@ -685,6 +789,163 @@ async fn discard_capture(capture: TauriState<'_, SharedCapture>) -> Result<Captu
     })
     .await
     .map_err(|_| "Could not discard audio capture.".to_string())?
+}
+
+fn meeting_library(app: &AppHandle) -> Result<MeetingLibrary, String> {
+    let root = app
+        .path()
+        .app_data_dir()
+        .map_err(|_| "Could not locate meeting storage.".to_string())?
+        .join("capture-spool");
+    MeetingLibrary::open(root)
+}
+
+#[tauri::command]
+async fn meeting_list(app: AppHandle) -> Result<Vec<LocalMeeting>, String> {
+    tauri::async_runtime::spawn_blocking(move || meeting_library(&app)?.list())
+        .await
+        .map_err(|_| "Could not read local meetings.".to_string())?
+}
+
+fn restore_selected_meeting(session: &mut CaptureSession, spool: CaptureSpool) {
+    let elapsed = spool.elapsed_seconds();
+    let sources = spool
+        .chunks()
+        .iter()
+        .map(|chunk| chunk.source)
+        .collect::<Vec<_>>();
+    session.microphone.take();
+    session.system.take();
+    session.temp_dir.take();
+    session.lifecycle = Lifecycle::default();
+    session.lifecycle.state = State::Ready;
+    session.lifecycle.elapsed = std::time::Duration::from_secs_f64(elapsed);
+    session.lifecycle.sources = Sources {
+        microphone: sources.contains(&Source::Microphone),
+        system: sources.contains(&Source::System),
+    };
+    session.spool_root = Some(spool.root().to_path_buf());
+    session.recovered = spool.recovered();
+    session.storage_error = None;
+    session.source_warnings.clear();
+    session.spool = Some(Arc::new(Mutex::new(spool)));
+}
+
+#[tauri::command]
+async fn meeting_select(
+    app: AppHandle,
+    capture: TauriState<'_, SharedCapture>,
+    session_id: String,
+) -> Result<CaptureStatus, String> {
+    let capture = capture.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut session = capture
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if matches!(session.lifecycle.state, State::Recording | State::Paused) {
+            return Err("Finish the current meeting before selecting another.".into());
+        }
+        let path = meeting_library(&app)?.meeting_path(&session_id)?;
+        let spool = CaptureSpool::load(path)?.ok_or("The selected meeting is unavailable.")?;
+        restore_selected_meeting(&mut session, spool);
+        Ok(session.status())
+    })
+    .await
+    .map_err(|_| "Could not select the meeting.".to_string())?
+}
+
+#[tauri::command]
+async fn meeting_rename(app: AppHandle, session_id: String, name: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || meeting_library(&app)?.rename(&session_id, &name))
+        .await
+        .map_err(|_| "Could not rename the meeting.".to_string())?
+}
+
+#[tauri::command]
+async fn meeting_mark_uploaded(
+    app: AppHandle,
+    session_id: String,
+    origin: String,
+) -> Result<(), String> {
+    let origin = backend::validate_origin(&origin)?
+        .origin()
+        .ascii_serialization();
+    tauri::async_runtime::spawn_blocking(move || {
+        meeting_library(&app)?.mark_uploaded(&session_id, &origin)
+    })
+    .await
+    .map_err(|_| "Could not save the upload status.".to_string())?
+}
+
+#[tauri::command]
+async fn meeting_remove(
+    app: AppHandle,
+    capture: TauriState<'_, SharedCapture>,
+    session_id: String,
+) -> Result<CaptureStatus, String> {
+    let capture = capture.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut session = capture
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let selected = session.spool.as_ref().is_some_and(|spool| {
+            spool
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .session_id()
+                == session_id
+        });
+        if selected && matches!(session.lifecycle.state, State::Recording | State::Paused) {
+            return Err("Finish the current meeting before deleting it.".into());
+        }
+        meeting_library(&app)?.remove(&session_id)?;
+        if selected {
+            session.spool = None;
+            session.spool_root = None;
+            session.storage_error = None;
+            session.source_warnings.clear();
+            session.recovered = false;
+            session.lifecycle.discard();
+        }
+        Ok(session.status())
+    })
+    .await
+    .map_err(|_| "Could not remove the meeting.".to_string())?
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PreviewChunkPcm {
+    base64_pcm: String,
+    sample_rate: u32,
+}
+
+#[tauri::command]
+async fn read_preview_chunk(
+    app: AppHandle,
+    session_id: String,
+    source: Source,
+    sequence: u16,
+) -> Result<PreviewChunkPcm, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let path = meeting_library(&app)?.meeting_path(&session_id)?;
+        let spool = CaptureSpool::load_read_only(path)?.ok_or("The meeting is unavailable.")?;
+        if spool.state() == DraftState::Recording {
+            return Err("Finish the meeting before previewing it.".into());
+        }
+        let ogg = spool.read_chunk(source, sequence)?;
+        let pcm = capture::codec::decode_preview_pcm(&ogg)?;
+        let bytes = pcm
+            .into_iter()
+            .flat_map(i16::to_le_bytes)
+            .collect::<Vec<_>>();
+        Ok(PreviewChunkPcm {
+            base64_pcm: STANDARD.encode(bytes),
+            sample_rate: 48_000,
+        })
+    })
+    .await
+    .map_err(|_| "Could not read the meeting preview.".to_string())?
 }
 
 #[derive(Serialize)]
@@ -748,6 +1009,7 @@ async fn read_capture_chunk(
     capture: TauriState<'_, SharedCapture>,
     source: Source,
     sequence: u16,
+    session_id: Option<String>,
 ) -> Result<ReadCaptureChunk, String> {
     let capture = capture.inner().clone();
     tauri::async_runtime::spawn_blocking(move || {
@@ -761,6 +1023,12 @@ async fn read_capture_chunk(
         let spool = spool
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if session_id
+            .as_deref()
+            .is_some_and(|id| id != spool.session_id())
+        {
+            return Err("Selected meeting changed. Choose the meeting again.".into());
+        }
         let info = spool
             .chunks()
             .iter()
@@ -777,15 +1045,31 @@ async fn read_capture_chunk(
     .map_err(|_| "Could not read captured segment.".to_string())?
 }
 
+fn log_keychain_error(phase: &'static str, error: &keyring::Error) {
+    let (detail, code) = credential::diagnostic_error(error);
+    diagnostics::record(phase, "failed", Some(detail), code, None);
+}
+
 #[tauri::command]
 async fn credential_save(origin: String, token: String) -> Result<(), String> {
-    let secret = credential::envelope(&origin, &token)?;
+    diagnostics::record("keychain.save", "requested", None, None, None);
+    let secret = credential::envelope(&origin, &token).map_err(|error| {
+        diagnostics::record("keychain.save", "invalid_input", None, None, None);
+        error
+    })?;
     tauri::async_runtime::spawn_blocking(move || {
-        let entry = keyring::Entry::new(credential::service(), credential::account())
-            .map_err(|_| "Could not save the credential on this device.".to_string())?;
-        entry
-            .set_password(&secret)
-            .map_err(|_| "Could not save the credential on this device.".to_string())
+        diagnostics::record("keychain.save", "started", None, None, None);
+        let entry =
+            keyring::Entry::new(credential::service(), credential::account()).map_err(|error| {
+                log_keychain_error("keychain.save", &error);
+                "Could not save the credential on this device.".to_string()
+            })?;
+        entry.set_password(&secret).map_err(|error| {
+            log_keychain_error("keychain.save", &error);
+            "Could not save the credential on this device.".to_string()
+        })?;
+        diagnostics::record("keychain.save", "saved", None, None, None);
+        Ok(())
     })
     .await
     .map_err(|_| "Could not save the credential on this device.".to_string())?
@@ -793,13 +1077,31 @@ async fn credential_save(origin: String, token: String) -> Result<(), String> {
 
 #[tauri::command]
 async fn credential_load() -> Result<Option<credential::SavedCredential>, String> {
+    diagnostics::record("keychain.load", "requested", None, None, None);
     tauri::async_runtime::spawn_blocking(|| {
-        let entry = keyring::Entry::new(credential::service(), credential::account())
-            .map_err(|_| "Could not read the saved credential.".to_string())?;
+        diagnostics::record("keychain.load", "started", None, None, None);
+        let entry =
+            keyring::Entry::new(credential::service(), credential::account()).map_err(|error| {
+                log_keychain_error("keychain.load", &error);
+                "Could not read the saved credential.".to_string()
+            })?;
         match entry.get_password() {
-            Ok(secret) => credential::parse_envelope(&secret).map(Some),
-            Err(keyring::Error::NoEntry) => Ok(None),
-            Err(_) => Err("Could not read the saved credential.".to_string()),
+            Ok(secret) => {
+                let saved = credential::parse_envelope(&secret).map_err(|error| {
+                    diagnostics::record("keychain.load", "invalid_entry", None, None, None);
+                    error
+                })?;
+                diagnostics::record("keychain.load", "loaded", None, None, None);
+                Ok(Some(saved))
+            }
+            Err(keyring::Error::NoEntry) => {
+                diagnostics::record("keychain.load", "not_found", None, None, None);
+                Ok(None)
+            }
+            Err(error) => {
+                log_keychain_error("keychain.load", &error);
+                Err("Could not read the saved credential.".to_string())
+            }
         }
     })
     .await
@@ -808,16 +1110,41 @@ async fn credential_load() -> Result<Option<credential::SavedCredential>, String
 
 #[tauri::command]
 async fn credential_clear() -> Result<(), String> {
+    diagnostics::record("keychain.clear", "requested", None, None, None);
     tauri::async_runtime::spawn_blocking(|| {
-        let entry = keyring::Entry::new(credential::service(), credential::account())
-            .map_err(|_| "Could not forget the saved credential.".to_string())?;
+        let entry =
+            keyring::Entry::new(credential::service(), credential::account()).map_err(|error| {
+                log_keychain_error("keychain.clear", &error);
+                "Could not forget the saved credential.".to_string()
+            })?;
         match entry.delete_credential() {
-            Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
-            Err(_) => Err("Could not forget the saved credential.".to_string()),
+            Ok(()) | Err(keyring::Error::NoEntry) => {
+                diagnostics::record("keychain.clear", "cleared", None, None, None);
+                Ok(())
+            }
+            Err(error) => {
+                log_keychain_error("keychain.clear", &error);
+                Err("Could not forget the saved credential.".to_string())
+            }
         }
     })
     .await
     .map_err(|_| "Could not forget the saved credential.".to_string())?
+}
+
+#[tauri::command]
+async fn diagnostics_export(app: AppHandle) -> Result<String, String> {
+    // This command never touches the capture mutex and stays usable during a
+    // stalled recording or keychain operation. The renderer cannot pick a path.
+    let destination = app
+        .path()
+        .download_dir()
+        .map_err(|_| "Could not locate the Downloads folder.".to_string())?;
+    tauri::async_runtime::spawn_blocking(move || {
+        diagnostics::export(&destination).map(|path| path.to_string_lossy().into_owned())
+    })
+    .await
+    .map_err(|_| "Could not export diagnostics.".to_string())?
 }
 
 #[derive(Serialize)]
@@ -832,14 +1159,85 @@ async fn companion_request(
     operation: backend::Operation,
     body: Option<Value>,
 ) -> Result<Value, ApiError> {
-    backend::request(backend::CompanionRequest {
+    diagnostics::record("api.request", "requested", None, None, None);
+    let started = Instant::now();
+    let result = backend::request(backend::CompanionRequest {
         origin,
         token,
         operation,
         body,
     })
-    .await
-    .map_err(|message| ApiError { message })
+    .await;
+    diagnostics::record(
+        "api.request",
+        if result.is_ok() {
+            "completed"
+        } else {
+            "failed"
+        },
+        None,
+        None,
+        Some(started.elapsed().as_millis() as u64),
+    );
+    result.map_err(|message| ApiError { message })
+}
+
+#[cfg(target_os = "macos")]
+fn log_macos_environment() {
+    if let Ok(output) = std::process::Command::new("/usr/bin/sw_vers")
+        .arg("-productVersion")
+        .output()
+    {
+        if output.status.success() {
+            let version = String::from_utf8_lossy(&output.stdout);
+            for (label, value) in ["major", "minor", "patch"]
+                .into_iter()
+                .zip(version.trim().split('.'))
+            {
+                if let Ok(number) = value.parse::<u16>() {
+                    diagnostics::record(
+                        "platform.macos_version",
+                        "detected",
+                        Some(label),
+                        Some(i64::from(number)),
+                        None,
+                    );
+                }
+            }
+        }
+    }
+    if let Ok(executable) = std::env::current_exe() {
+        let path = executable.to_string_lossy();
+        let location = if path.contains("/AppTranslocation/") {
+            "translocated"
+        } else if path.starts_with("/Volumes/") {
+            "mounted_volume"
+        } else {
+            "installed"
+        };
+        diagnostics::record(
+            "platform.executable",
+            "location",
+            Some(location),
+            None,
+            None,
+        );
+        if let Ok(output) = std::process::Command::new("/usr/bin/codesign")
+            .args(["-dv", "--verbose=2"])
+            .arg(executable)
+            .output()
+        {
+            let signature = String::from_utf8_lossy(&output.stderr);
+            let kind = if !output.status.success() {
+                "unavailable"
+            } else if signature.contains("Signature=adhoc") {
+                "adhoc"
+            } else {
+                "certificate"
+            };
+            diagnostics::record("platform.signature", "detected", Some(kind), None, None);
+        }
+    }
 }
 
 pub fn run() {
@@ -847,25 +1245,40 @@ pub fn run() {
         .manage(Arc::new(Mutex::new(CaptureSession::default())))
         .manage(ExitCleanup::default())
         .setup(|app| {
+            if let Ok(directory) = app.path().app_log_dir() {
+                let _ = diagnostics::init(directory);
+            }
+            diagnostics::record(
+                "app",
+                "started",
+                Some("meeting-inbox-diagnostics-v8"),
+                None,
+                None,
+            );
+            diagnostics::record("platform", "os", Some(std::env::consts::OS), None, None);
+            diagnostics::record("platform", "arch", Some(std::env::consts::ARCH), None, None);
+            #[cfg(target_os = "macos")]
+            log_macos_environment();
             let root = app.path().app_data_dir()?.join("capture-spool");
-            std::fs::create_dir_all(&root)?;
+            let library = MeetingLibrary::open(root.clone())?;
+            for meeting in library.list()? {
+                if meeting.state == "recording" {
+                    let _ = CaptureSpool::load(library.meeting_path(&meeting.session_id)?);
+                }
+            }
             let capture = app.state::<SharedCapture>();
             let mut capture = capture
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            capture.spool_root = Some(root);
-            match CaptureSpool::load(capture.spool_root.as_ref().unwrap()) {
-                Ok(Some(spool)) => {
-                    capture.lifecycle.state = State::Ready;
-                    capture.lifecycle.elapsed =
-                        std::time::Duration::from_secs_f64(spool.elapsed_seconds());
-                    capture.recovered = spool.recovered();
-                    capture.spool = Some(Arc::new(Mutex::new(spool)));
-                }
-                Ok(None) => {}
-                Err(error) => {
-                    capture.storage_error = Some(error.clone());
-                    capture.lifecycle.fail(error);
+            capture.library_root = Some(root);
+            if let Some(meeting) = library
+                .list()?
+                .into_iter()
+                .find(|meeting| meeting.error.is_none())
+            {
+                if let Some(spool) = CaptureSpool::load(library.meeting_path(&meeting.session_id)?)?
+                {
+                    restore_selected_meeting(&mut capture, spool);
                 }
             }
             Ok(())
@@ -879,9 +1292,18 @@ pub fn run() {
             discard_capture,
             read_capture,
             read_capture_chunk,
+            read_preview_chunk,
+            meeting_list,
+            meeting_select,
+            meeting_rename,
+            meeting_mark_uploaded,
+            meeting_remove,
             credential_save,
             credential_load,
             credential_clear,
+            preferences::upload_permission_load,
+            preferences::upload_permission_save,
+            diagnostics_export,
             open_savia,
             companion_request,
         ])
@@ -939,12 +1361,65 @@ mod tests {
     }
 
     #[test]
-    fn a_close_finishes_by_closing_the_window_only_after_discard() {
+    fn a_close_finishes_by_closing_the_window_only_after_capture_cleanup() {
         let cleanup = ExitCleanup::default();
 
         assert_eq!(cleanup.request_close(), CleanupRequest::Start);
         assert_eq!(cleanup.finish(), CleanupCompletion::CloseWindow);
         assert_eq!(cleanup.request_close(), CleanupRequest::Continue);
+    }
+
+    #[test]
+    fn selecting_and_deleting_one_meeting_preserves_the_other() {
+        let root = tempfile::tempdir().unwrap();
+        let library = MeetingLibrary::open(root.path().join("meetings")).unwrap();
+        let first = "1f2c83ab-4d6e-4a10-9f71-c11a3f4d2e80";
+        let second = "2f2c83ab-4d6e-4a10-9f71-c11a3f4d2e80";
+        for id in [first, second] {
+            library.initialize(id, "Meeting").unwrap();
+            let mut spool = CaptureSpool::create(
+                library.meeting_path(id).unwrap(),
+                id.into(),
+                vec![Source::Microphone],
+            )
+            .unwrap();
+            spool
+                .append_chunk(
+                    ChunkInfo {
+                        source: Source::Microphone,
+                        sequence: 0,
+                        start_seconds: 0.0,
+                        duration_seconds: 1.0,
+                        bytes: 4,
+                        sample_rate: 48_000,
+                    },
+                    b"OggS",
+                )
+                .unwrap();
+            spool.stop(1.0, false).unwrap();
+        }
+        let mut session = CaptureSession {
+            library_root: Some(library.root().to_path_buf()),
+            ..Default::default()
+        };
+        restore_selected_meeting(
+            &mut session,
+            CaptureSpool::load(library.meeting_path(first).unwrap())
+                .unwrap()
+                .unwrap(),
+        );
+        restore_selected_meeting(
+            &mut session,
+            CaptureSpool::load(library.meeting_path(second).unwrap())
+                .unwrap()
+                .unwrap(),
+        );
+        assert_eq!(library.list().unwrap().len(), 2);
+        session.discard().unwrap();
+        let remaining = library.list().unwrap();
+        assert_eq!(remaining.len(), 1);
+        assert_eq!(remaining[0].session_id, first);
+        assert_eq!(remaining[0].chunks.len(), 1);
     }
 
     #[test]

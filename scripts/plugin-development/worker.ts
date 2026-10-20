@@ -1,7 +1,7 @@
 import api from "../../apps/api/src/index";
 import type { RuntimeEnvironment } from "../../apps/api/src/runtime";
 import { handlePluginDevelopment } from "./handler";
-export { RealtimeHub } from "../../apps/api/src/index";
+export { RealtimeHub, WhatsappDispatcher } from "../../apps/api/src/index";
 
 // Generated local runtime only. Production continues to use apps/api/src/index.ts.
 export default {

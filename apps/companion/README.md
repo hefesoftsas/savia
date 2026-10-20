@@ -36,12 +36,27 @@ pnpm --filter @savia/companion desktop:build
 ```
 
 `desktop:dev` runs Vite on **5181**, independently of Savia admin on 5173. The
-application only records after a user clicks Start recording. Choose sources,
-start, stop, then inspect the capture state. Completed chunks stay in a private
-native app-data spool so an interrupted draft can be recovered after restart;
-recording does not resume automatically. Discard removes the current local draft,
-and starting a new recording replaces it. The spool is not a local recording
-history, and deletion is not guaranteed secure erasure.
+application only records after a user clicks New meeting. It always attempts
+microphone and system audio, with three bounded attempts per unavailable source;
+a source that starts stays running while its peer is retried. If only one starts,
+it records that source and shows which audio is available. Capture fails when
+neither source can start. Stop or pause/resume explicitly; recordings never
+resume automatically after restart.
+
+Each meeting has its own private native app-data directory. The meeting inbox
+survives closing the app, and a new recording preserves earlier meetings.
+Select a finished meeting to listen to its combined local preview. Use its
+pencil icon to edit a custom name inline; the check icon or Enter saves, while
+the close icon or Escape cancels. Names persist across launches. Use the upload
+and trash icons for individual upload and confirmed local deletion. The initial permission notice is shown
+until accepted and its acknowledgement is remembered in a private native file.
+Reset permission notice in Connection settings clears that acknowledgement.
+Acceptance does not upload any audio; each upload still requires its meeting
+button. Declining leaves local recording and preview available. Both tracks play on their
+stored timeline, including gaps; no API connection is required to preview.
+Uploaded meetings retain their local copy until explicit deletion. Deletion
+requires confirmation and is not guaranteed secure erasure. Device disk space
+limits the number of retained meetings; the app does not silently delete them.
 
 For browser layout preview and checks:
 
@@ -87,21 +102,37 @@ window and is not saved. See the [desktop language guide](../../docs/companion/d
    Savia OAuth flow. Paste it into the validation app's password field; it remains
    in memory unless you check Remember on this device, which stores the origin
    and token in the OS keychain (macOS Keychain, Windows Credential Manager)
-   and reconnects on launch. Forgetting removes it. Built-in desktop OAuth
-   sign-in is a later increment.
+   and reconnects on launch. The app verifies the saved origin and token with a
+   fresh keychain read before closing Connection settings. A failed save keeps
+   settings open; a failed keychain read on launch opens settings with an error
+   instead of silently behaving like a first launch. Automatic reconnection
+   reads the saved credential without rewriting it. Forgetting removes it.
+   Built-in desktop OAuth sign-in is a later increment.
+
+   On macOS, if a remembered credential cannot be restored, open **Keychain
+   Access**, select the login keychain, and look for the **Savia Companion**
+   password with account **savia-api-credential**. Unlock the login keychain if
+   it is locked, and allow access when macOS asks for it. Launch the installed
+   app from a stable location such as `/Applications`, rather than a mounted
+   DMG. If the entry is absent, reconnect with Remember on this device checked
+   and check for a save error. Do not paste the credential into logs or support
+   messages. Apple documents [keychain access prompts](https://support.apple.com/guide/keychain-access/kyca1243/mac)
+   and [locked login keychains](https://support.apple.com/guide/keychain-access/kyca1242/mac).
+
 4. Enter the API origin (HTTPS, or local HTTP), then Check connection. Origins
    must have no path, credentials, query or fragment. Native forwarding rejects
    redirects to avoid disclosing the access token to another host.
 5. Enter the main Savia application origin in Connection settings (normally
    `http://localhost:5173` locally). The compact 380 × 540 desktop window supports
-   capture, local source preview, and explicit upload; transcription and summaries
+   capture, local meeting inbox, combined preview, and explicit upload; transcription and summaries
    live in Savia.
-6. Stop capture and, if useful, choose Preview for each source to listen on this
-   device before uploading. Preview reads the current draft from the native spool;
-   it does not require a connection or send audio. To upload, confirm permission
-   and choose Upload to Savia. Each selected source is uploaded separately as
-   private compressed audio; upload itself does not call OpenRouter. Use Open in
-   Savia to open the recording library.
+6. Stop capture, select a meeting in the local inbox, and use its single preview
+   player to listen to both available sources on this device. Record additional
+   meetings without uploading the previous one. To upload, connect to Savia,
+   accept the initial permission notice once, and choose the meeting’s own
+   Upload to Savia button. Sources
+   remain separate in backend storage; upload itself does not call OpenRouter.
+   Use Open in Savia to open the recording library.
 7. Sign in to the main Savia app with the same user account.
    Open **Recordings** in the Work menu, or `/#/companion-recordings`. Select a
    recording to listen or download its Ogg/Opus file. If your browser cannot
@@ -134,6 +165,17 @@ usage before choosing to try again. The client does not automatically retry.
 The generated API at `/openapi.json` describes the `/v1/companion` routes. This
 README is a usage guide rather than a hand-maintained API reference.
 
+## Share desktop diagnostics
+
+After reproducing a connection, keychain, or capture failure, open Connection
+settings and choose **Export diagnostic log**. Share the generated
+`savia-companion-diagnostics-*.jsonl` file from Downloads. The export action stays
+available while another operation is busy. Nothing is uploaded automatically.
+Logs contain only fixed operation labels, timestamps, durations, platform
+metadata, and numeric native/HTTP status codes, excluding keys and recording
+content. Logs survive app restart and retain at most 512 KiB. See
+[diagnostic privacy and fallback locations](../../docs/companion/long-recording-next-phase.md#desktop-support-diagnostics).
+
 ## Inspect a sample
 
 ```sh
@@ -148,10 +190,11 @@ intelligibility, permissions, absence of echo or speaker identity. The inspector
 is a bounded diagnostic, not the future streaming upload path.
 
 Keep real samples outside Git. Sources are not speakers. The desktop app keeps
-only the current draft, not a local history across multiple takes; use Savia for
-saved-session history, playback, and downloads. Encryption at rest for the native
-spool and real-device qualification remain outstanding before production support
-claims. The local preview is only for the current native draft.
+a private inbox of meetings until explicit deletion. Encryption at rest for the
+native spool and real-device qualification remain outstanding before production
+support claims. Secondary guidance is available through keyboard-accessible
+tooltips aligned with their labels; capture failures and the initial upload
+permission notice remain visible.
 
 ## Licensing
 
@@ -164,10 +207,15 @@ has been imported. Keep required Savia attribution in distributed UI and artifac
 
 Desktop capture keeps devices open and encodes bounded 30-second Ogg/Opus segments
 for up to one hour. A private native spool preserves completed segments on close;
-the desktop app can preview each current source locally before upload. Discard
-deletes the local draft. Upload resumes missing immutable segments in an
+the desktop app can preview both sources together before upload. Each meeting
+remains in the local inbox until explicitly deleted. Upload resumes missing immutable segments in an
 owner/workspace session. Savia provides durable playback and downloads, background
 processing, summary and evidence-grounded questions with separate provider consent.
 
 See [phase 2](../../docs/companion/long-recording-next-phase.md) for limits,
 recovery semantics and the distinction between synthetic and real-device validation.
+
+Meeting actions and local preview controls use consistent SVG icons with
+translated tooltips and accessible labels. A custom local name is sent when a
+meeting is first uploaded. Renaming a local copy after upload does not rename
+the already saved server session; edit that session in Savia when needed.

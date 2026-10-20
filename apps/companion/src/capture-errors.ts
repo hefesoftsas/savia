@@ -16,13 +16,15 @@ export function captureErrorMessage(
   code: CaptureErrorCode | null | undefined,
 ): LocalizedMessage {
   const key: MessageKey =
-    code === "microphonePermissionDenied"
-      ? "CAPTURE_PERMISSION_DENIED_MICROPHONE"
-      : code === "systemPermissionDenied"
-        ? "CAPTURE_PERMISSION_DENIED_SYSTEM"
-        : code === "captureUnavailable"
-          ? "CAPTURE_UNAVAILABLE"
-          : "CAPTURE_FAILED";
+    code === "pendingDraft"
+      ? "CAPTURE_PENDING_DRAFT"
+      : code === "microphonePermissionDenied"
+        ? "CAPTURE_PERMISSION_DENIED_MICROPHONE"
+        : code === "systemPermissionDenied"
+          ? "CAPTURE_PERMISSION_DENIED_SYSTEM"
+          : code === "captureUnavailable"
+            ? "CAPTURE_UNAVAILABLE"
+            : "CAPTURE_FAILED";
   return { key };
 }
 

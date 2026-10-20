@@ -56,7 +56,17 @@ pub struct CaptureSpool {
 impl CaptureSpool {
     /// Load the only pending draft, marking a previously recording session interrupted.
     pub fn load(root: impl AsRef<Path>) -> Result<Option<Self>, String> {
-        let root = root.as_ref().to_path_buf();
+        Self::load_inner(root.as_ref(), true)
+    }
+
+    /// Inspect a meeting without changing its manifest. Library polling uses this
+    /// while a capture may still be recording in this process.
+    pub fn load_read_only(root: impl AsRef<Path>) -> Result<Option<Self>, String> {
+        Self::load_inner(root.as_ref(), false)
+    }
+
+    fn load_inner(root: &Path, mark_interrupted: bool) -> Result<Option<Self>, String> {
+        let root = root.to_path_buf();
         fs::create_dir_all(&root)
             .map_err(|_| "Could not prepare private capture storage.".to_string())?;
         set_private_dir(&root)?;
@@ -76,8 +86,9 @@ impl CaptureSpool {
         let mut manifest: Manifest = serde_json::from_slice(&bytes)
             .map_err(|_| "Saved capture state is corrupt.".to_string())?;
         validate_manifest(&manifest)?;
-        let recovered = true;
-        if manifest.state == DraftState::Recording {
+        let recovered = manifest.state == DraftState::Interrupted
+            || (mark_interrupted && manifest.state == DraftState::Recording);
+        if mark_interrupted && manifest.state == DraftState::Recording {
             manifest.state = DraftState::Interrupted;
             persist_manifest(&root, &manifest)?;
         }
@@ -130,6 +141,9 @@ impl CaptureSpool {
     pub fn session_id(&self) -> &str {
         &self.manifest.session_id
     }
+    pub fn root(&self) -> &Path {
+        &self.root
+    }
     pub fn state(&self) -> DraftState {
         self.manifest.state
     }
@@ -141,6 +155,9 @@ impl CaptureSpool {
     }
     pub fn chunks(&self) -> &[ChunkInfo] {
         &self.manifest.chunks
+    }
+    pub fn sources(&self) -> &[Source] {
+        &self.manifest.sources
     }
     pub fn chunks_for(&self, source: Source) -> Vec<ChunkInfo> {
         self.manifest
@@ -414,6 +431,23 @@ mod tests {
     }
     fn spool(dir: &TempDir) -> CaptureSpool {
         CaptureSpool::create(dir.path(), SESSION.into(), vec![Source::Microphone]).unwrap()
+    }
+
+    #[test]
+    fn normally_finished_meeting_is_not_reported_as_recovered() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut spool = CaptureSpool::create(
+            dir.path(),
+            "1f2c83ab-4d6e-4a10-9f71-c11a3f4d2e80".into(),
+            vec![Source::Microphone],
+        )
+        .unwrap();
+        spool.stop(0.0, false).unwrap();
+        assert!(!CaptureSpool::load(dir.path()).unwrap().unwrap().recovered());
+        assert!(!CaptureSpool::load_read_only(dir.path())
+            .unwrap()
+            .unwrap()
+            .recovered());
     }
 
     #[test]

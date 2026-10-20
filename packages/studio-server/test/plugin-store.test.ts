@@ -401,6 +401,9 @@ describe("plugin store por tenant", () => {
       {},
       platform.env,
     );
+    expect(wizardShell.headers.get("cache-control")).toBe(
+      "private, no-store, no-transform",
+    );
     const wizardHtml = await wizardShell.text();
     expect(wizardHtml).toContain("screen=cotizador_por_pasos");
     expect(wizardHtml).toContain("view=records");

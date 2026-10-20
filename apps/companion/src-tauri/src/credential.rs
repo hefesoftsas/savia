@@ -63,9 +63,75 @@ pub fn account() -> &'static str {
     ACCOUNT
 }
 
+/// Only a fixed error category and numeric native code are shareable. Raw
+/// Keyring diagnostics may carry credential attributes and never enter logs.
+pub fn diagnostic_error(error: &keyring::Error) -> (&'static str, Option<i64>) {
+    let (category, source) = match error {
+        keyring::Error::PlatformFailure(source) => ("platform_failure", Some(source)),
+        keyring::Error::NoStorageAccess(source) => ("storage_unavailable", Some(source)),
+        keyring::Error::NoEntry => ("not_found", None),
+        keyring::Error::BadEncoding(_) => ("bad_encoding", None),
+        keyring::Error::TooLong(_, _) => ("too_long", None),
+        keyring::Error::Invalid(_, _) => ("invalid_input", None),
+        keyring::Error::Ambiguous(_) => ("ambiguous_entry", None),
+        _ => ("unknown", None),
+    };
+    // security-framework's Debug includes `code: OSStatus`. Parse just that
+    // integer without adding its human-readable message to the log.
+    let code = source.and_then(|source| {
+        let debug = format!("{source:?}");
+        let value = debug.strip_prefix("Error { code: ")?;
+        let number = value.split([',', '}']).next()?.trim();
+        number.parse::<i32>().ok().map(i64::from)
+    });
+    (category, code)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn diagnostic_categories_exclude_invalid_values_and_bad_secret_bytes() {
+        let secret = "savia_pat_do_not_log";
+        let invalid = keyring::Error::Invalid("token".into(), secret.into());
+        let encoded = keyring::Error::BadEncoding(secret.as_bytes().to_vec());
+        assert_eq!(diagnostic_error(&invalid), ("invalid_input", None));
+        assert_eq!(diagnostic_error(&encoded), ("bad_encoding", None));
+        assert!(!serde_json::to_string(&diagnostic_error(&invalid))
+            .unwrap()
+            .contains(secret));
+        assert!(!serde_json::to_string(&diagnostic_error(&encoded))
+            .unwrap()
+            .contains(secret));
+    }
+
+    #[test]
+    fn diagnostic_native_codes_do_not_include_source_messages() {
+        struct NativeFailure;
+        impl std::fmt::Debug for NativeFailure {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                f.debug_struct("Error")
+                    .field("code", &-25308)
+                    .field("message", &"savia_pat_do_not_log")
+                    .finish()
+            }
+        }
+        impl std::fmt::Display for NativeFailure {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(f, "savia_pat_do_not_log")
+            }
+        }
+        impl std::error::Error for NativeFailure {}
+        let failure = keyring::Error::PlatformFailure(Box::new(NativeFailure));
+        assert_eq!(
+            diagnostic_error(&failure),
+            ("platform_failure", Some(-25308))
+        );
+        assert!(!serde_json::to_string(&diagnostic_error(&failure))
+            .unwrap()
+            .contains("savia_pat_do_not_log"));
+    }
 
     #[test]
     fn envelope_round_trips_a_valid_credential() {

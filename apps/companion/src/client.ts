@@ -4,7 +4,8 @@ export type CaptureErrorCode =
   | "microphonePermissionDenied"
   | "systemPermissionDenied"
   | "captureUnavailable"
-  | "captureFailed";
+  | "captureFailed"
+  | "pendingDraft";
 export type CaptureStatus = {
   state: "idle" | "recording" | "paused" | "ready" | "interrupted" | "error";
   elapsedSeconds: number;
@@ -19,6 +20,8 @@ export type CaptureStatus = {
     bytes: number;
     sampleRate: number;
   }[];
+  activeSources?: Source[];
+  sourceWarnings?: { source: Source; errorCode: CaptureErrorCode }[];
   tracks: {
     source: Source;
     durationSeconds: number;
@@ -27,6 +30,17 @@ export type CaptureStatus = {
   }[];
   error: string | null;
   errorCode?: CaptureErrorCode | null;
+};
+export type LocalMeeting = {
+  sessionId: string;
+  name: string;
+  createdAtMs: number;
+  state: "recording" | "interrupted" | "ready" | "error" | string;
+  elapsedSeconds: number;
+  chunks: NonNullable<CaptureStatus["chunks"]>;
+  uploadedOrigin: string | null;
+  error: string | null;
+  recovered: boolean;
 };
 export type Transcript = {
   text: string;
