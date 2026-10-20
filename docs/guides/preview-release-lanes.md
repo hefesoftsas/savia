@@ -125,6 +125,11 @@ changes test all four consumers. Mixed and uncertain changes retain full checks.
 Office assets and workspace store plugins publish only when their cumulative
 paths changed; a missing baseline enables both conservatively.
 
+Cloudflare API reads retry transient 500, 502, 503 and 504 responses up to three
+times with 1, 2 and 4 second backoff. Failed response bodies are canceled before
+waiting. Mutations are not retried for these server errors; existing 429 handling
+continues to honor `Retry-After`. Network errors are returned without retry.
+
 Full releases stage secrets with `wrangler versions secret bulk` before publishing
 code, allowing retries after rollback leaves a newer inactive Worker version.
 The Auth helper records bounded subprocess diagnostics in the private encrypted
