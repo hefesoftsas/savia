@@ -100,6 +100,84 @@ it("adds tenant email context only to tenant recovery HTML and strips caller bri
   expect(await apiCall.json()).toEqual({ bridgeKey: null, tenantId: null });
 });
 
+it("reuses the tenant lookup for login context and preserves registration and timing headers", async () => {
+  const authRequests: Request[] = [];
+  const registrationRequests: Request[] = [];
+  const fetch = vi.fn(async (request: Request) => {
+    if (
+      new URL(request.url).pathname.startsWith(
+        "/_internal/tenant-registration/",
+      )
+    ) {
+      registrationRequests.push(request);
+      return Response.json({
+        allowEmailRegistration: true,
+        captchaMode: "inherit",
+        siteKey: "site-key",
+        secretConfigured: true,
+        emailReady: true,
+        revision: "r1",
+        passwordAllowed: true,
+      });
+    }
+    authRequests.push(request);
+    return Response.json(
+      {
+        branding: request.headers.get("x-savia-tenant-branding"),
+        tenantId: request.headers.get("x-savia-tenant-email-id"),
+        registrationReady: request.headers.get("x-savia-registration-ready"),
+        bridgeKey: request.headers.get("x-savia-bridge-key"),
+      },
+      { headers: { "server-timing": "auth-handler;dur=4" } },
+    );
+  });
+  const prepare = vi.spyOn(env.DB, "prepare");
+  const app = createTestApp({
+    authService: { fetch },
+    identityBridgeKey: "trusted-bridge-key",
+    publicForms: {
+      publicOrigin: "https://savia.hefesoft.com",
+      siteKey: "site-key",
+      secretKey: "secret-key",
+      rateLimiter: { limit: async () => ({ success: true }) },
+    },
+  });
+
+  try {
+    const response = await app.request(
+      "https://branding-preview.savia.hefesoft.com/api/auth/login",
+      {
+        headers: {
+          "x-savia-tenant-email-id": "999999",
+          "x-savia-registration-ready": "true",
+          "x-savia-bridge-key": "caller-key",
+        },
+      },
+    );
+    const body = await response.json();
+    const tenantResolutions = prepare.mock.calls.filter(([sql]) =>
+      String(sql).includes("FROM tenants t"),
+    );
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({
+      tenantId: "919191",
+      registrationReady: "true",
+      bridgeKey: "trusted-bridge-key",
+    });
+    expect(tenantResolutions).toHaveLength(1);
+    expect(registrationRequests).toHaveLength(1);
+    expect(authRequests).toHaveLength(1);
+    const timing = response.headers.get("server-timing") ?? "";
+    expect(timing).toContain("auth-handler;dur=4");
+    expect(timing).toMatch(/tenant_context;dur=\d+(?:\.\d+)?/);
+    expect(timing).toMatch(/registration_preflight;dur=\d+(?:\.\d+)?/);
+    expect(timing).toMatch(/auth_roundtrip;dur=\d+(?:\.\d+)?/);
+  } finally {
+    prepare.mockRestore();
+  }
+});
+
 beforeAll(async () => {
   const migrations = Object.entries(
     import.meta.glob<string>("../../../packages/db/migrations/*.sql", {

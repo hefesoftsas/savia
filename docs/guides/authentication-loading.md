@@ -96,3 +96,29 @@ slow response alone does not identify which phase is responsible.
 Protected API requests without an `Authorization` header or any `Cookie` are
 rejected before the API calls the internal session service. Requests with
 cookies still validate their session with the auth worker.
+
+## Deployment preparation
+
+Managed preview and production releases prepare Auth before opening application
+traffic. The frozen Auth configuration includes `SAVIA_AUTH_DEPLOYMENT_REVISION`,
+set to the exact source commit. After publishing Auth, the managed publisher runs
+`scripts/initialize-auth-deployment.mjs` through a short-lived authenticated service
+binding. The initialization endpoint requires the internal bridge credential and
+an exact revision match. Credentials are never written into the probe configuration
+or command arguments.
+
+Preparation performs schema migrations, bootstrap client reconciliation and OAuth
+resource seeding, then records readiness in Auth D1. Readiness includes the revision,
+a SHA-256 configuration fingerprint and public client metadata. Normal managed
+requests load this record once per handler and do not rerun migrations or bootstrap
+writes. `auth_readiness` measures this lookup; managed requests omit
+`auth_schema` and `auth_bootstrap` because those phases ran at deployment. Missing or mismatched readiness returns 503 instead of preparing Auth during
+login. A failed preparation blocks API publication and uses the existing release
+recovery path. Previous readiness records remain available for rollback. Local and
+branch environments without the managed revision retain lazy initialization.
+
+The API login proxy also reports tenant-context lookup, registration preflight and
+the final Auth round-trip in `Server-Timing`, alongside Auth's own phases. Tenant
+resolution is reused within the request; branding, tenant validation and registration
+availability keep their existing checks. Use these measurements to distinguish
+remaining database/network time from deployment preparation.

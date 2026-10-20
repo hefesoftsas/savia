@@ -174,11 +174,11 @@ export function standardReleaseCommands({
       ],
     });
   for (const kind of [
+    "auth",
     "mcp",
     "hookExecutor",
     "flows",
     "api",
-    "auth",
     "request",
     "connectors",
     "pluginEditor",
@@ -186,6 +186,15 @@ export function standardReleaseCommands({
   ])
     if (configs[kind]) {
       deploy.push(wrangler(kind));
+      if (kind === "auth")
+        deploy.push(
+          node("scripts/initialize-auth-deployment.mjs", [
+            "--environment",
+            environment,
+            "--config",
+            configs.auth,
+          ]),
+        );
       if (kind === "pluginEditor")
         deploy.push({ kind: "plugin-editor-verify" });
     }

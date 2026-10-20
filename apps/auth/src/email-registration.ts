@@ -22,6 +22,17 @@ const schema = `CREATE TABLE IF NOT EXISTS pending_password_registration (
   /\n/g,
   " ",
 );
+export async function initializeEmailRegistrationSchema(
+  environment: AuthWorkerEnvironment,
+): Promise<void> {
+  await environment.AUTH_DB.exec(schema);
+}
+async function ensureEmailRegistrationSchema(
+  environment: AuthWorkerEnvironment,
+): Promise<void> {
+  if (!environment.SAVIA_AUTH_DEPLOYMENT_REVISION)
+    await initializeEmailRegistrationSchema(environment);
+}
 type Pending = {
   id: string;
   user_id: string;
@@ -119,7 +130,7 @@ async function removeOwnedUnverified(
       .run();
 }
 export async function cleanupPasswordRegistrations(env: AuthWorkerEnvironment) {
-  await env.AUTH_DB.exec(schema);
+  await ensureEmailRegistrationSchema(env);
   const rows = await env.AUTH_DB.prepare(
     "SELECT * FROM pending_password_registration WHERE expires_at<? AND status NOT IN ('expired','verified_pending') LIMIT 25",
   )
@@ -337,7 +348,7 @@ export function emailRegistrationHooks(
     session: {
       create: {
         before: async (session, ctx) => {
-          await environment.AUTH_DB.exec(schema);
+          await ensureEmailRegistrationSchema(environment);
           const pending = await environment.AUTH_DB.prepare(
             "SELECT * FROM pending_password_registration WHERE user_id=? AND status NOT IN ('completed','existing')",
           )

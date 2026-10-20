@@ -45,6 +45,33 @@ const CHATGPT_TABLE =
   "CREATE TABLE IF NOT EXISTS chatgpt_email_binding (provider_subject TEXT NOT NULL, provider_tenant_id TEXT NOT NULL, tenant_id BIGINT NOT NULL, user_id TEXT NOT NULL, verified_email TEXT NOT NULL, created_at TEXT NOT NULL, PRIMARY KEY(provider_subject,provider_tenant_id))";
 const CHATGPT_RECOVERY_TABLE =
   "CREATE TABLE IF NOT EXISTS chatgpt_registration_recovery (user_id TEXT PRIMARY KEY, intent_id TEXT NOT NULL UNIQUE, provider_subject TEXT NOT NULL, tenant_id BIGINT NOT NULL, email TEXT NOT NULL, name TEXT NOT NULL, revision TEXT NOT NULL, created_at TEXT NOT NULL)";
+export async function initializeFederatedEmailVerificationSchema(
+  env: AuthWorkerEnvironment,
+): Promise<void> {
+  for (const schema of [
+    TABLE,
+    RECOVERY_TABLE,
+    CHATGPT_TABLE,
+    CHATGPT_RECOVERY_TABLE,
+  ])
+    await env.AUTH_DB.exec(schema);
+}
+async function ensureFederatedEmailVerificationSchema(
+  env: AuthWorkerEnvironment,
+  provider: "microsoft" | "chatgpt",
+  recovery = false,
+): Promise<void> {
+  if (env.SAVIA_AUTH_DEPLOYMENT_REVISION) return;
+  await env.AUTH_DB.exec(
+    recovery
+      ? provider === "microsoft"
+        ? RECOVERY_TABLE
+        : CHATGPT_RECOVERY_TABLE
+      : provider === "microsoft"
+        ? TABLE
+        : CHATGPT_TABLE,
+  );
+}
 type Profile = {
   tid?: unknown;
   oid?: unknown;
@@ -118,8 +145,8 @@ export async function assertFederatedRegistrationCompleted(
   env: AuthWorkerEnvironment,
   userId: string,
 ) {
-  await env.AUTH_DB.exec(RECOVERY_TABLE);
-  await env.AUTH_DB.exec(CHATGPT_RECOVERY_TABLE);
+  await ensureFederatedEmailVerificationSchema(env, "microsoft", true);
+  await ensureFederatedEmailVerificationSchema(env, "chatgpt", true);
   const microsoftPending = await env.AUTH_DB.prepare(
     "SELECT user_id FROM microsoft_registration_recovery WHERE user_id=?",
   )
@@ -178,7 +205,7 @@ export async function provenMicrosoftIdentity(
     typeof profile.oid !== "string"
   )
     throw denied();
-  await env.AUTH_DB.exec(TABLE);
+  await ensureFederatedEmailVerificationSchema(env, "microsoft");
   const binding = await env.AUTH_DB.prepare(
     "SELECT user_id,tenant_id,verified_email FROM microsoft_email_binding WHERE provider_subject=? AND provider_tenant_id=?",
   )
@@ -264,7 +291,7 @@ export async function provenChatgptIdentity(
     profile.clientId !== clientId
   )
     throw denied();
-  await env.AUTH_DB.exec(CHATGPT_TABLE);
+  await ensureFederatedEmailVerificationSchema(env, "chatgpt");
   const binding = await env.AUTH_DB.prepare(
     "SELECT user_id,tenant_id,verified_email FROM chatgpt_email_binding WHERE provider_subject=? AND provider_tenant_id=?",
   )
@@ -579,7 +606,10 @@ async function completeFederatedVerification(
     provider,
     pending.revision,
   );
-  await env.AUTH_DB.exec(microsoft ? TABLE : CHATGPT_TABLE);
+  await ensureFederatedEmailVerificationSchema(
+    env,
+    microsoft ? "microsoft" : "chatgpt",
+  );
   const bound = await env.AUTH_DB.prepare(
     `SELECT user_id FROM ${bindingTable} WHERE provider_subject=?${microsoft ? "" : " AND provider_tenant_id=?"}`,
   )
@@ -606,7 +636,11 @@ async function completeFederatedVerification(
     "content-type": "application/json",
     "x-savia-bridge-key": env.SAVIA_INTERNAL_BRIDGE_KEY,
   };
-  await env.AUTH_DB.exec(microsoft ? RECOVERY_TABLE : CHATGPT_RECOVERY_TABLE);
+  await ensureFederatedEmailVerificationSchema(
+    env,
+    microsoft ? "microsoft" : "chatgpt",
+    true,
+  );
   await env.AUTH_DB.prepare(
     `DELETE FROM ${recoveryTable} WHERE user_id IN (SELECT r.user_id FROM ${recoveryTable} r WHERE r.created_at<? AND NOT EXISTS(SELECT 1 FROM "user" u WHERE u.id=r.user_id) LIMIT 100)`,
   )

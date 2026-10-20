@@ -5,20 +5,26 @@ import {
 } from "../../../packages/backup-gate/control.mjs";
 import { chatgptOAuthPlugins } from "./chatgpt-sign-in";
 import { getIP } from "@better-auth/core/utils/ip";
-import { limitVerificationMail } from "./pending-email-verification";
+import {
+  initializePendingEmailVerificationSchema,
+  limitVerificationMail,
+} from "./pending-email-verification";
 import {
   emailRegistrationResponse,
   emailRegistrationHooks,
   registrationPasswordAllowed,
+  initializeEmailRegistrationSchema,
 } from "./email-registration";
 import {
   microsoftEmailVerificationPlugin,
   chatgptEmailVerificationPlugin,
   assertFederatedRegistrationCompleted,
+  initializeFederatedEmailVerificationSchema,
 } from "./microsoft-email-verification";
 import {
   tenantRegistrationSettingsResponse,
   readTenantRegistrationSettings,
+  initializeTenantRegistrationSettingsSchema,
 } from "./tenant-registration-settings";
 import { exchangeMcpToken } from "./mcp-exchange";
 import {
@@ -72,6 +78,7 @@ import {
   accountEmailSettingsResponse,
   sendAccountEmail,
   trustedAccountEmailTenantId,
+  initializeAccountEmailSchema,
   type AccountEmailDependencies,
 } from "./account-email";
 import {
@@ -100,6 +107,7 @@ export type AuthWorkerEnvironment = SocialEnvironment & {
   SAVIA_SMTP_SECURITY?: "tls" | "starttls" | "plain";
   SAVIA_SMTP_ALLOW_INSECURE?: string;
   SAVIA_INTERNAL_BRIDGE_KEY?: string;
+  SAVIA_AUTH_DEPLOYMENT_REVISION?: string;
   SAVIA_SSO_ALLOW_LOCAL_IDP?: string;
   SAVIA_IDENTITY?: { fetch(request: Request): Promise<Response> };
 };
@@ -127,6 +135,15 @@ type AuthBootstrap = {
   scalarClient: ScalarOAuthClient;
   adminClient: AdminOAuthClient;
 };
+type ManagedAuthRuntime = { seedOAuthResources?: boolean };
+type PersistedAuthReadiness = {
+  revision: string;
+  configurationFingerprint: string;
+  bootstrap: AuthBootstrap;
+};
+const AUTH_READINESS_TABLE = "savia_auth_deployment_readiness";
+const AUTH_READINESS_FORMAT = 1;
+const AUTH_SCHEMA_REVISION = "savia-auth-schema-v1";
 const bootstrapInitializations = new WeakMap<
   object,
   Map<string, Promise<AuthBootstrap>>
@@ -284,9 +301,17 @@ function userDocument(value: unknown): AuthenticatedUser {
 export function createBetterAuth(
   environment: AuthWorkerEnvironment,
   dependencies: AuthDependencies = {},
+  runtime: ManagedAuthRuntime = {},
 ) {
   const deliverAccountEmail = (email: SMTPEmail, tenantId?: number) =>
     sendAccountEmail(environment, dependencies, email, tenantId);
+  const oauthProviderPlugin = oauthProvider(oauthProviderOptions(environment));
+  if (runtime.seedOAuthResources === false) {
+    // The provider validates default resource identifiers at construction,
+    // then closes over this same options object for startup seeding and runtime
+    // database resolution. Keep those defaults while disabling only seeding.
+    (oauthProviderPlugin.options as { resources?: unknown[] }).resources = [];
+  }
   return betterAuth({
     basePath: "/api/auth",
     baseURL: requiredValue(environment.BETTER_AUTH_URL, "BETTER_AUTH_URL"),
@@ -403,7 +428,7 @@ export function createBetterAuth(
       samlAwareTwoFactor(),
       bearer({ requireSignature: true }),
       jwt(),
-      oauthProvider(oauthProviderOptions(environment)),
+      oauthProviderPlugin,
     ],
     secret: requiredValue(environment.BETTER_AUTH_SECRET, "BETTER_AUTH_SECRET"),
     advanced: {
@@ -569,7 +594,106 @@ function ensureAuthBootstrap(
   return initialization;
 }
 
+function isDeploymentRevision(value: string | undefined): value is string {
+  return !!value && /^[a-f0-9]{40}$/.test(value);
+}
+
+async function authConfigurationFingerprint(
+  environment: AuthWorkerEnvironment,
+): Promise<string> {
+  const configuration = Object.entries(environment)
+    .filter(
+      ([key, value]) =>
+        key !== "AUTH_DB" &&
+        key !== "SAVIA_AUTH_DEPLOYMENT_REVISION" &&
+        value !== null &&
+        (typeof value === "string" ||
+          typeof value === "number" ||
+          typeof value === "boolean"),
+    )
+    .sort(([left], [right]) => left.localeCompare(right));
+  const source = JSON.stringify({
+    format: AUTH_READINESS_FORMAT,
+    schemaRevision: AUTH_SCHEMA_REVISION,
+    bootstrap: bootstrapEnvironmentKey(environment),
+    configuration,
+  });
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(source),
+  );
+  return Array.from(new Uint8Array(digest), (byte) =>
+    byte.toString(16).padStart(2, "0"),
+  ).join("");
+}
+
+function isAuthBootstrap(value: unknown): value is AuthBootstrap {
+  if (!value || typeof value !== "object") return false;
+  const candidate = value as Record<string, unknown>;
+  const validClient = (client: unknown) => {
+    if (!client || typeof client !== "object") return false;
+    const record = client as Record<string, unknown>;
+    return (
+      typeof record.clientId === "string" &&
+      typeof record.redirectUri === "string" &&
+      typeof record.resource === "string" &&
+      Array.isArray(record.scopes) &&
+      record.scopes.every((scope) => typeof scope === "string")
+    );
+  };
+  return (
+    validClient(candidate.scalarClient) && validClient(candidate.adminClient)
+  );
+}
+
+async function saveAuthReadiness(
+  database: D1Database,
+  readiness: PersistedAuthReadiness,
+): Promise<void> {
+  await database
+    .prepare(
+      `CREATE TABLE IF NOT EXISTS "${AUTH_READINESS_TABLE}" ("revision" TEXT NOT NULL, "configurationFingerprint" TEXT NOT NULL, "bootstrap" TEXT NOT NULL, PRIMARY KEY ("revision", "configurationFingerprint"))`,
+    )
+    .run();
+  await database
+    .prepare(
+      `INSERT INTO "${AUTH_READINESS_TABLE}" ("revision", "configurationFingerprint", "bootstrap") VALUES (?, ?, ?) ON CONFLICT ("revision", "configurationFingerprint") DO UPDATE SET "bootstrap" = excluded."bootstrap"`,
+    )
+    .bind(
+      readiness.revision,
+      readiness.configurationFingerprint,
+      JSON.stringify(readiness.bootstrap),
+    )
+    .run();
+}
+
+async function readAuthReadiness(
+  database: D1Database,
+  revision: string,
+  configurationFingerprint: string,
+): Promise<AuthBootstrap | null> {
+  try {
+    const row = await database
+      .prepare(
+        `SELECT "revision", "configurationFingerprint", "bootstrap" FROM "${AUTH_READINESS_TABLE}" WHERE "revision" = ? AND "configurationFingerprint" = ?`,
+      )
+      .bind(revision, configurationFingerprint)
+      .first<{
+        revision: string;
+        configurationFingerprint: string;
+        bootstrap: string;
+      }>();
+    if (!row) return null;
+    const bootstrap: unknown = JSON.parse(row.bootstrap);
+    return isAuthBootstrap(bootstrap) ? bootstrap : null;
+  } catch {
+    // A missing table means deployment preparation has not completed.
+    return null;
+  }
+}
+
 type AuthRequestTimings = {
+  auth_readiness?: number;
   auth_schema?: number;
   auth_bootstrap?: number;
   auth_dispatch?: number;
@@ -581,7 +705,14 @@ function withAuthServerTiming(
   timings: AuthRequestTimings,
 ): Response {
   const headers = new Headers(response.headers);
-  const entries = (["auth_schema", "auth_bootstrap", "auth_dispatch"] as const)
+  const entries = (
+    [
+      "auth_readiness",
+      "auth_schema",
+      "auth_bootstrap",
+      "auth_dispatch",
+    ] as const
+  )
     .flatMap((name) => {
       const duration = timings[name];
       return duration === undefined
@@ -910,6 +1041,58 @@ export function createAuthHandler(
   dependencies: AuthDependencies = {},
 ) {
   let instance: ReturnType<typeof createBetterAuth> | undefined;
+  let readinessCache:
+    { cacheKey: string; bootstrap: AuthBootstrap } | undefined;
+  let readinessLoad:
+    { cacheKey: string; promise: Promise<AuthBootstrap | null> } | undefined;
+
+  async function loadManagedReadiness(
+    revision: string,
+  ): Promise<AuthBootstrap | null> {
+    const fingerprint = await authConfigurationFingerprint(environment);
+    const cacheKey = `${revision}:${fingerprint}`;
+    if (readinessCache?.cacheKey === cacheKey) return readinessCache.bootstrap;
+    if (readinessLoad?.cacheKey === cacheKey) return readinessLoad.promise;
+    const promise = readAuthReadiness(
+      environment.AUTH_DB,
+      revision,
+      fingerprint,
+    ).then((bootstrap) => {
+      if (bootstrap) readinessCache = { cacheKey, bootstrap };
+      return bootstrap;
+    });
+    readinessLoad = { cacheKey, promise };
+    try {
+      return await promise;
+    } finally {
+      if (readinessLoad?.promise === promise) readinessLoad = undefined;
+    }
+  }
+
+  async function initializeManagedDeployment(revision: string): Promise<void> {
+    const auth = createBetterAuth(environment, dependencies);
+    void auth.$context.catch(() => undefined);
+    await ensureSchema(auth, environment.AUTH_DB);
+    await initializeAccountEmailSchema(environment);
+    await initializeTenantRegistrationSettingsSchema(environment);
+    await initializePendingEmailVerificationSchema(environment);
+    await initializeEmailRegistrationSchema(environment);
+    await initializeFederatedEmailVerificationSchema(environment);
+    await auth.$context;
+    const bootstrap = await ensureAuthBootstrap(auth, environment);
+    const fingerprint = await authConfigurationFingerprint(environment);
+    const readiness = {
+      revision,
+      configurationFingerprint: fingerprint,
+      bootstrap,
+    };
+    await saveAuthReadiness(environment.AUTH_DB, readiness);
+    readinessCache = {
+      cacheKey: `${revision}:${fingerprint}`,
+      bootstrap,
+    };
+  }
+
   async function publicAccountEmailRequest(
     auth: ReturnType<typeof createBetterAuth>,
     request: Request,
@@ -977,21 +1160,92 @@ export function createAuthHandler(
       executionContext: ExecutionContext | undefined,
       timings: AuthRequestTimings,
     ) {
-      // Native startup verifies the database under its deployment lock first.
-      const auth = (instance ??= createBetterAuth(environment, dependencies));
-      // Better Auth begins plugin initialization immediately, before this
-      // request reaches the first $context await. Observe an early rejection
-      // so it cannot become unhandled while schema/bootstrap work completes;
-      // the later await still propagates the original error to the caller.
-      void auth.$context.catch(() => undefined);
-      const schemaStarted = performance.now();
-      await ensureSchema(auth, environment.AUTH_DB);
-      timings.auth_schema = performance.now() - schemaStarted;
-      const bootstrapStarted = performance.now();
-      const bootstrap = await ensureAuthBootstrap(auth, environment);
-      timings.auth_bootstrap = performance.now() - bootstrapStarted;
-      timings.dispatchStarted = performance.now();
       const pathname = new URL(request.url).pathname;
+      const deploymentRevision = environment.SAVIA_AUTH_DEPLOYMENT_REVISION;
+      const managedDeployment = deploymentRevision !== undefined;
+      if (
+        managedDeployment &&
+        pathname === "/_internal/deployment/initialize"
+      ) {
+        if (request.method !== "POST")
+          return Response.json(
+            { error: "POST is required for deployment initialization." },
+            { status: 405 },
+          );
+        if (
+          !authNoticeBridgeAuthorized(
+            environment.SAVIA_INTERNAL_BRIDGE_KEY,
+            request,
+          )
+        )
+          return Response.json(
+            { error: "Forbidden bridge access." },
+            { status: 403 },
+          );
+        if (!isDeploymentRevision(deploymentRevision))
+          return Response.json(
+            { error: "Auth deployment revision is not configured." },
+            { status: 503 },
+          );
+        const body = (await request.json().catch(() => null)) as {
+          revision?: unknown;
+        } | null;
+        if (!body || body.revision !== deploymentRevision)
+          return Response.json(
+            { error: "Deployment revision does not match this release." },
+            { status: 409 },
+          );
+        try {
+          await initializeManagedDeployment(deploymentRevision);
+          timings.dispatchStarted = performance.now();
+          return Response.json({
+            status: "ready",
+            revision: deploymentRevision,
+          });
+        } catch {
+          return Response.json(
+            { error: "Auth deployment initialization failed." },
+            { status: 503 },
+          );
+        }
+      }
+
+      let bootstrap: AuthBootstrap;
+      let auth: ReturnType<typeof createBetterAuth>;
+      if (managedDeployment) {
+        if (!isDeploymentRevision(deploymentRevision))
+          return Response.json(
+            { error: "Auth deployment revision is not configured." },
+            { status: 503 },
+          );
+        const readinessStarted = performance.now();
+        const ready = await loadManagedReadiness(deploymentRevision);
+        timings.auth_readiness = performance.now() - readinessStarted;
+        if (!ready)
+          return Response.json(
+            { error: "Auth deployment is not initialized." },
+            { status: 503 },
+          );
+        bootstrap = ready;
+        auth = instance ??= createBetterAuth(environment, dependencies, {
+          seedOAuthResources: false,
+        });
+      } else {
+        // Native startup verifies the database under its deployment lock first.
+        auth = instance ??= createBetterAuth(environment, dependencies);
+        // Better Auth begins plugin initialization immediately, before this
+        // request reaches the first $context await. Observe an early rejection
+        // so it cannot become unhandled while schema/bootstrap work completes;
+        // the later await still propagates the original error to the caller.
+        void auth.$context.catch(() => undefined);
+        const schemaStarted = performance.now();
+        await ensureSchema(auth, environment.AUTH_DB);
+        timings.auth_schema = performance.now() - schemaStarted;
+        const bootstrapStarted = performance.now();
+        bootstrap = await ensureAuthBootstrap(auth, environment);
+        timings.auth_bootstrap = performance.now() - bootstrapStarted;
+      }
+      timings.dispatchStarted = performance.now();
       if (
         request.method === "POST" &&
         pathname === "/_internal/oauth/mcp-exchange"

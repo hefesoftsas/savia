@@ -23,6 +23,17 @@ const defaults: TenantRegistrationSettings = {
 };
 const table =
   "CREATE TABLE IF NOT EXISTS tenant_registration_settings (tenant_id BIGINT PRIMARY KEY, ciphertext TEXT NOT NULL, revision TEXT NOT NULL, updated_at TEXT NOT NULL)";
+export async function initializeTenantRegistrationSettingsSchema(
+  env: AccountEmailEnvironment,
+): Promise<void> {
+  await env.AUTH_DB.exec(table);
+}
+async function ensureTenantRegistrationSettingsSchema(
+  env: AccountEmailEnvironment,
+): Promise<void> {
+  if (!env.SAVIA_AUTH_DEPLOYMENT_REVISION)
+    await initializeTenantRegistrationSettingsSchema(env);
+}
 const json = (body: unknown, status = 200) =>
   Response.json(body, { status, headers: { "cache-control": "no-store" } });
 const encode = (bytes: Uint8Array) => btoa(String.fromCharCode(...bytes));
@@ -62,7 +73,7 @@ export async function readTenantRegistrationSettings(
   env: AccountEmailEnvironment,
   tenantId: number,
 ): Promise<TenantRegistrationSettings> {
-  await env.AUTH_DB.exec(table);
+  await ensureTenantRegistrationSettingsSchema(env);
   const row = await env.AUTH_DB.prepare(
     "SELECT ciphertext FROM tenant_registration_settings WHERE tenant_id=?",
   )

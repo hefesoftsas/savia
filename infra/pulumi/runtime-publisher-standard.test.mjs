@@ -39,8 +39,15 @@ test("standard commands preserve coordinator, backup, migration and publication 
   assert.equal(plan.migrate[0].script, "scripts/apply-d1-migrations.mjs");
   assert.deepEqual(
     plan.deploy.map((step) => step.worker),
-    ["flows", "api", "auth", "gateway"],
+    ["auth", undefined, "flows", "api", "gateway"],
   );
+  assert.equal(plan.deploy[1].script, "scripts/initialize-auth-deployment.mjs");
+  assert.deepEqual(plan.deploy[1].args, [
+    "--environment",
+    "preview",
+    "--config",
+    "/f/auth.json",
+  ]);
   assert.equal(
     plan.backup.some((step) => step.kind === "encrypt"),
     true,
@@ -140,6 +147,34 @@ test("the concrete standard publisher uses existing helpers and never places sec
       /mismatch/,
     );
     assert.deepEqual(calls, []);
+    const blocked = await createStandardPublisher(inputs, {
+      ...deps,
+      run: async (binary, args, options) => {
+        calls.push({ binary, args, input: options.input });
+        if (args[0]?.endsWith("scripts/initialize-auth-deployment.mjs"))
+          throw new Error("Auth preparation failed");
+      },
+    });
+    await assert.rejects(blocked.publish(), /Auth preparation failed/);
+    assert.equal(
+      calls.some(
+        (row) =>
+          row.binary === "wrangler" &&
+          row.args[0] === "deploy" &&
+          row.args.some((arg) => /savia-agencies-preview\.json$/.test(arg)) &&
+          !row.args.includes("SAVIA_MAINTENANCE:true"),
+      ),
+      false,
+    );
+    assert.equal(
+      calls.some(
+        (row) =>
+          row.binary === "wrangler" &&
+          row.args[0] === "deploy" &&
+          row.args.some((arg) => /\/savia-preview\.json$/.test(arg)),
+      ),
+      false,
+    );
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -165,7 +200,7 @@ test("a first install skips existing-data capture but keeps the dependency order
   assert.equal(plan.backup[0].args.includes("--flows-snapshot"), false);
   assert.deepEqual(
     plan.deploy.map((step) => step.worker),
-    ["api", "auth", "gateway"],
+    ["auth", undefined, "api", "gateway"],
   );
   assert.throws(
     () => standardReleaseCommands({ environment: "other", configs: {} }),
