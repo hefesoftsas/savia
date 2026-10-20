@@ -136,6 +136,11 @@ write permits, adding two coordinator calls per query. Writes, ambiguous SQL,
 batches, and `exec` still acquire permits; `UPDATE ... RETURNING` remains guarded
 even when executed through a read-shaped method such as `first()`. Policy reads
 remain current on every request and are not replaced with a cross-request cache.
+The gate client also cancels unused response bodies after successful permit
+release and before retrying failed coordinator responses. This prevents
+unneeded internal response streams from accumulating. It is a resource-lifecycle
+hardening change; current live evidence does not establish it as the cause of
+the reported pending Auth requests.
 
 The API login proxy also reports tenant-context lookup, registration preflight and
 the final Auth round-trip in `Server-Timing`, alongside Auth's own phases. Tenant

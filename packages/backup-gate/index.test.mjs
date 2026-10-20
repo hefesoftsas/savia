@@ -615,6 +615,139 @@ test("SELECT classification survives bind and withSession without stale statemen
   assert.deepEqual(gatePaths, ["/enter", "/leave"]);
 });
 
+test("successful leave responses are discarded without changing the guarded write result", async () => {
+  let leaveBodyCancelled = false;
+  const coordinator = {
+    async fetch(request) {
+      if (new URL(request.url).pathname === "/enter")
+        return Response.json({ permit: (await request.json()).permit });
+      return new Response(
+        new ReadableStream({
+          cancel() {
+            leaveBodyCancelled = true;
+            throw new Error("response cleanup failed");
+          },
+        }),
+      );
+    },
+  };
+  const db = {
+    prepare() {
+      return {
+        async run() {
+          return { success: true, meta: { changes: 1 } };
+        },
+      };
+    },
+    async batch() {},
+    async exec() {},
+  };
+  const guarded = guardStorageEnvironment({
+    BACKUP_GATE: { idFromName: (name) => name, get: () => coordinator },
+    DB: db,
+  });
+
+  assert.deepEqual(await guarded.DB.prepare("UPDATE records").run(), {
+    success: true,
+    meta: { changes: 1 },
+  });
+  assert.equal(leaveBodyCancelled, true);
+});
+
+test("failed gate response bodies are discarded before retrying", async () => {
+  let failedBodyCancelled = false;
+  let enters = 0;
+  const coordinator = {
+    async fetch(request) {
+      const path = new URL(request.url).pathname;
+      if (path === "/enter") {
+        enters += 1;
+        if (enters === 1)
+          return new Response(
+            new ReadableStream({
+              cancel() {
+                failedBodyCancelled = true;
+                throw new Error("failed response cleanup failed");
+              },
+            }),
+            { status: 500 },
+          );
+        assert.equal(failedBodyCancelled, true);
+        return Response.json({ permit: (await request.json()).permit });
+      }
+      return Response.json({ ok: true });
+    },
+  };
+  const db = {
+    prepare() {
+      return {
+        async run() {
+          return { success: true };
+        },
+      };
+    },
+    async batch() {},
+    async exec() {},
+  };
+  const guarded = guardStorageEnvironment({
+    BACKUP_GATE: { idFromName: (name) => name, get: () => coordinator },
+    DB: db,
+  });
+
+  await guarded.DB.prepare("UPDATE records").run();
+
+  assert.equal(enters, 2);
+  assert.equal(failedBodyCancelled, true);
+});
+
+test("sequential writes release successful leave response slots", async () => {
+  let outstandingLeaveBodies = 0;
+  let writes = 0;
+  const coordinator = {
+    async fetch(request) {
+      const path = new URL(request.url).pathname;
+      if (path === "/enter") {
+        if (outstandingLeaveBodies >= 6)
+          return Response.json(
+            { error: "response slots exhausted" },
+            { status: 503 },
+          );
+        return Response.json({ permit: (await request.json()).permit });
+      }
+      outstandingLeaveBodies += 1;
+      return new Response(
+        new ReadableStream({
+          cancel() {
+            outstandingLeaveBodies -= 1;
+          },
+        }),
+      );
+    },
+  };
+  const db = {
+    prepare() {
+      return {
+        async run() {
+          writes += 1;
+          return { success: true };
+        },
+      };
+    },
+    async batch() {},
+    async exec() {},
+  };
+  const guarded = guardStorageEnvironment({
+    BACKUP_GATE: { idFromName: (name) => name, get: () => coordinator },
+    DB: db,
+  });
+
+  for (let index = 0; index < 8; index += 1)
+    await guarded.DB.prepare("UPDATE records").run();
+
+  assert.equal(writes, 8);
+  assert.equal(outstandingLeaveBodies, 0);
+});
+
 test("lost enter and leave acknowledgements retry the same permit without orphaning it", async () => {
   const storage = new MemoryStorage();
   const coordinator = makeCoordinator(storage).coordinator;
