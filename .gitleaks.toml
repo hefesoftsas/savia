@@ -79,3 +79,10 @@ condition = "AND"
 paths = ['''^infra/pulumi/production-preflight\.test\.mjs$''']
 regexTarget = "secret"
 regexes = ['''^REPLACE_WITH_D1_ID$''']
+
+[[allowlists]]
+description = "Synthetic source revision in managed Auth readiness tests"
+condition = "AND"
+paths = ['''^apps/auth/test/request-initialization\.test\.ts$''']
+regexTarget = "secret"
+regexes = ['''^1123456789abcdef0123456789abcdef01234567$''']

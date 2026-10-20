@@ -58,8 +58,15 @@ test("managed release stops on a failed backup and publishes the executor before
     ["scripts/flows-maintenance.mjs", "infra/pulumi/backup.mjs", "encrypt"],
   );
   assert.deepEqual(
-    commands.deploy.map((step) => step.worker),
-    ["hookExecutor", "flows", "api", "auth", "gateway"],
+    commands.deploy.map((step) => step.worker ?? step.script),
+    [
+      "auth",
+      "scripts/initialize-auth-deployment.mjs",
+      "hookExecutor",
+      "flows",
+      "api",
+      "gateway",
+    ],
   );
   assert.ok(
     commands.verify.some(
