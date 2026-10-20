@@ -28,6 +28,15 @@ protected, even for preview, and is excluded from application teardown.
 Secrets in checkpoint/configuration are encrypted with the stack passphrase.
 Do not pass `--show-secrets`, commit checkpoints, or expose the state bucket.
 
+Failed lifecycle subprocesses retain their stdout/stderr only in private files
+under `SAVIA_RUNTIME_OPERATION_DIRECTORY/command-errors`. Public errors remain
+generic. The Preview workflow encrypts only this diagnostics directory with its
+existing backup key and retains the ciphertext artifact for seven days. It does
+not include environment variables, stdin, command arguments, checkpoints or
+database recovery archives. Treat captured output as sensitive: download and
+decrypt it only into private operational custody; never paste it into CI logs or
+issues. Missing diagnostics are not evidence of a successful release.
+
 ## Environment ownership migration
 
 See [environment ownership](pulumi-environment-ownership.md) for the complete

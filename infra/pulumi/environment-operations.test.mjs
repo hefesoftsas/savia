@@ -4,7 +4,7 @@ import {
   assertProvisionPlan,
   verifySavedEnvironmentPlan,
 } from "./environment-operations.mjs";
-import { productionBackupLifecycleRule } from "./naming.mjs";
+import { productionBackupLifecycleRule, stateBackendUrl } from "./naming.mjs";
 const accountId = "a".repeat(32);
 const plan = {
   accountId: "a".repeat(32),
@@ -184,6 +184,64 @@ test("first-install provision plans allow only persistence creates in the select
         { accountId, profile: { flowsEnabled: false } },
       ),
     );
+  }
+});
+
+test("state-catalog command failures preserve private output and stay generic", async () => {
+  const { createEnvironmentDependencies } =
+      await import("./environment-operations.mjs"),
+    { execFile } = await import("node:child_process"),
+    { promisify } = await import("node:util"),
+    { mkdtemp, readFile, readdir, stat, rm } = await import("node:fs/promises"),
+    { tmpdir } = await import("node:os"),
+    { join } = await import("node:path"),
+    execute = promisify(execFile),
+    directory = await mkdtemp(join(tmpdir(), "savia-state-catalog-failure-")),
+    account = "a".repeat(32),
+    deps = createEnvironmentDependencies({
+      env: {
+        CLOUDFLARE_ACCOUNT_ID: account,
+        AWS_ACCESS_KEY_ID: "test-access-key",
+        AWS_SECRET_ACCESS_KEY: "test-secret-key",
+        PULUMI_CONFIG_PASSPHRASE: "test-passphrase",
+        PULUMI_BACKEND_URL: stateBackendUrl(
+          account,
+          "savia-pulumi-state-preview",
+        ),
+        SAVIA_RUNTIME_OPERATION_DIRECTORY: directory,
+      },
+      cloud: async () => [{ kind: "r2", name: "savia-pulumi-state-preview" }],
+      run: async (_binary, _args, options) =>
+        execute(
+          process.execPath,
+          [
+            "-e",
+            'process.stdout.write("catalog stdout"); process.stderr.write("catalog stderr"); process.exit(29)',
+          ],
+          options,
+        ),
+    });
+  try {
+    await assert.rejects(deps.inventory("preview"), {
+      message: "Environment command failed: pulumi stack",
+    });
+    const errorsDirectory = join(directory, "command-errors"),
+      files = await readdir(errorsDirectory),
+      path = join(errorsDirectory, files[0]),
+      record = JSON.parse(await readFile(path, "utf8"));
+    assert.equal(files.length, 1);
+    assert.deepEqual(record, {
+      executable: "pulumi",
+      operation: "environment-command",
+      exitcode: 29,
+      signal: null,
+      stdout: "catalog stdout",
+      stderr: "catalog stderr",
+    });
+    assert.equal((await stat(errorsDirectory)).mode & 0o777, 0o700);
+    assert.equal((await stat(path)).mode & 0o777, 0o600);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
   }
 });
 

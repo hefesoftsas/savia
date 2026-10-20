@@ -266,6 +266,27 @@ jobs:
           SAVIA_FLOWS_BACKUP_KEY: ${{ secrets.SAVIA_FLOWS_BACKUP_KEY }}
           SAVIA_RUNTIME_OPERATION_DIRECTORY: ${{ runner.temp }}/savia-runtime
 
+      - name: Encrypt private command diagnostics
+        if: ${{ always() }}
+        env:
+          SAVIA_BACKUP_KEY: ${{ secrets.SAVIA_FLOWS_BACKUP_KEY }}
+        run: |
+          if [ -d "$RUNNER_TEMP/savia-runtime/command-errors" ]; then
+            umask 077
+            tar -czf "$RUNNER_TEMP/preview-command-diagnostics.tar.gz" -C "$RUNNER_TEMP/savia-runtime" command-errors
+            node scripts/encrypt-flows-backup.mjs --action encrypt --input "$RUNNER_TEMP/preview-command-diagnostics.tar.gz" --output "$RUNNER_TEMP/preview-command-diagnostics.enc"
+            rm -f "$RUNNER_TEMP/preview-command-diagnostics.tar.gz"
+          fi
+
+      - name: Retain encrypted command diagnostics
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: preview-command-diagnostics
+          path: ${{ runner.temp }}/preview-command-diagnostics.enc
+          retention-days: 7
+          if-no-files-found: ignore
+
       - name: Retain encrypted managed recovery archive
         if: ${{ always() }}
         uses: actions/upload-artifact@v4

@@ -40,6 +40,7 @@ import { planRuntimeRetirement } from "./runtime-retirement.mjs";
 import { emptyBucketForDestroy } from "./destroy.mjs";
 import { createRuntimeCloudClient } from "./runtime-cloud.mjs";
 import { execFileWithInput } from "./runtime-publisher-branch.mjs";
+import { runWithCommandDiagnostics } from "./command-diagnostics.mjs";
 import {
   previewNames,
   slugifyBranch,
@@ -319,13 +320,8 @@ export function retirementRows(
 
 export function createEnvironmentDependencies({
   env = process.env,
-  run = async (binary, args, options) => {
-    try {
-      return await execFileWithInput(binary, args, options);
-    } catch {
-      throw new Error(`Environment command failed: ${binary} ${args[0]}`);
-    }
-  },
+  run: execute = async (binary, args, options) =>
+    execFileWithInput(binary, args, options),
   cloud = listEnvironmentCloudResources,
   catalog = readStateCatalog,
   configuration = ({ descriptor }) =>
@@ -334,6 +330,16 @@ export function createEnvironmentDependencies({
   emptyBucket = emptyBucketForDestroy,
   makeClient = createRuntimeCloudClient,
 } = {}) {
+  const run = (binary, args, options) =>
+    runWithCommandDiagnostics({
+      execute,
+      executable: binary,
+      args,
+      options,
+      directory: env.SAVIA_RUNTIME_OPERATION_DIRECTORY,
+      operation: "environment-command",
+      publicError: `Environment command failed: ${String(binary).split(/[\\/]/).at(-1)} ${args[0] ?? "command"}`,
+    });
   const accountId = assertAccountId(env.CLOUDFLARE_ACCOUNT_ID);
   let dataPromise,
     executionEnv = { ...env };
@@ -464,9 +470,9 @@ export function createEnvironmentDependencies({
       const result = await run("pulumi", args, options(descriptor));
       await recordCommand({ ...entry, status: "completed" });
       return result;
-    } catch (error) {
+    } catch {
       await recordCommand({ ...entry, status: "failed" });
-      throw error;
+      throw new Error(`Environment command failed: pulumi ${args[0]}`);
     }
   };
   const setConfig = async (descriptor, key, value) =>
