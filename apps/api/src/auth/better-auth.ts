@@ -346,6 +346,12 @@ export function betterAuthAuthenticator(
           "Authentication service is unavailable",
         );
       }
+      if (!request.headers.get("cookie")?.trim()) {
+        throw new AuthenticationError(
+          "AUTHENTICATION_REQUIRED",
+          "An active session is required",
+        );
+      }
       let session: AuthServiceSession;
       try {
         ({ body: session } = await serviceJson<AuthServiceSession>(

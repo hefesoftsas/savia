@@ -569,6 +569,35 @@ function ensureAuthBootstrap(
   return initialization;
 }
 
+type AuthRequestTimings = {
+  auth_schema?: number;
+  auth_bootstrap?: number;
+  auth_dispatch?: number;
+  dispatchStarted?: number;
+};
+
+function withAuthServerTiming(
+  response: Response,
+  timings: AuthRequestTimings,
+): Response {
+  const headers = new Headers(response.headers);
+  const entries = (["auth_schema", "auth_bootstrap", "auth_dispatch"] as const)
+    .flatMap((name) => {
+      const duration = timings[name];
+      return duration === undefined
+        ? []
+        : [`${name};dur=${Math.max(0, duration).toFixed(1)}`];
+    })
+    .join(", ");
+  const existing = headers.get("server-timing");
+  headers.set("server-timing", existing ? `${existing}, ${entries}` : entries);
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
 async function internalSession(
   auth: ReturnType<typeof createBetterAuth>,
   request: Request,
@@ -942,8 +971,12 @@ export function createAuthHandler(
     else void completion;
     return Response.json({ status: true, message: fallbackMessage });
   }
-  return {
-    async fetch(request: Request, executionContext?: ExecutionContext) {
+  const handler = {
+    async fetch(
+      request: Request,
+      executionContext: ExecutionContext | undefined,
+      timings: AuthRequestTimings,
+    ) {
       // Native startup verifies the database under its deployment lock first.
       const auth = (instance ??= createBetterAuth(environment, dependencies));
       // Better Auth begins plugin initialization immediately, before this
@@ -951,8 +984,13 @@ export function createAuthHandler(
       // so it cannot become unhandled while schema/bootstrap work completes;
       // the later await still propagates the original error to the caller.
       void auth.$context.catch(() => undefined);
+      const schemaStarted = performance.now();
       await ensureSchema(auth, environment.AUTH_DB);
+      timings.auth_schema = performance.now() - schemaStarted;
+      const bootstrapStarted = performance.now();
       const bootstrap = await ensureAuthBootstrap(auth, environment);
+      timings.auth_bootstrap = performance.now() - bootstrapStarted;
+      timings.dispatchStarted = performance.now();
       const pathname = new URL(request.url).pathname;
       if (
         request.method === "POST" &&
@@ -1175,6 +1213,15 @@ export function createAuthHandler(
         { error: { code: "NOT_FOUND", message: "Not found" } },
         { status: 404 },
       );
+    },
+  };
+  return {
+    async fetch(request: Request, executionContext?: ExecutionContext) {
+      const timings: AuthRequestTimings = {};
+      const response = await handler.fetch(request, executionContext, timings);
+      timings.auth_dispatch =
+        performance.now() - (timings.dispatchStarted ?? performance.now());
+      return withAuthServerTiming(response, timings);
     },
   };
 }

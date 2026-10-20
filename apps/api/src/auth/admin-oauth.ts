@@ -73,13 +73,32 @@ function cacheHeaders(headers: HeadersInit = {}): Headers {
   return result;
 }
 
+function refreshCookieNameForOrigin(origin: string): string {
+  let url: URL;
+  try {
+    url = new URL(origin);
+  } catch {
+    // Opaque or malformed caller origins must still receive an auth denial.
+    return refreshCookieName;
+  }
+  // The callback uses the canonical host, so the cookie must retain the
+  // initiating origin in its name while sharing the canonical cookie domain.
+  if (url.protocol !== "https:") return refreshCookieName;
+  return `${refreshCookieName}.${base64url(new TextEncoder().encode(url.origin))}`;
+}
+
+function sessionOriginFromRequest(request: Request): string {
+  return request.headers.get("origin") ?? new URL(request.url).origin;
+}
+
 function refreshCookie(
   token: string,
   requestUrl: string,
   cookieDomain?: string,
+  sessionOrigin: string = new URL(requestUrl).origin,
 ): string {
   const attributes = [
-    `${refreshCookieName}=${encodeURIComponent(token)}`,
+    `${refreshCookieNameForOrigin(sessionOrigin)}=${encodeURIComponent(token)}`,
     "HttpOnly",
     `Max-Age=${refreshTokenLifetimeSeconds}`,
     `Path=${refreshCookiePath}`,
@@ -90,9 +109,13 @@ function refreshCookie(
   return attributes.join("; ");
 }
 
-function clearRefreshCookie(requestUrl: string, cookieDomain?: string): string {
+function clearRefreshCookie(
+  requestUrl: string,
+  cookieDomain?: string,
+  name: string = refreshCookieName,
+): string {
   const attributes = [
-    `${refreshCookieName}=`,
+    `${name}=`,
     "HttpOnly",
     "Max-Age=0",
     `Path=${refreshCookiePath}`,
@@ -106,10 +129,18 @@ function clearRefreshCookie(requestUrl: string, cookieDomain?: string): string {
 function clearRefreshCookies(
   requestUrl: string,
   cookieDomain?: string,
+  sessionOrigin: string = new URL(requestUrl).origin,
 ): string[] {
-  const list = [clearRefreshCookie(requestUrl)];
-  if (cookieDomain) list.push(clearRefreshCookie(requestUrl, cookieDomain));
-  return list;
+  const names = new Set([
+    refreshCookieNameForOrigin(sessionOrigin),
+    refreshCookieName,
+  ]);
+  return [...names].flatMap((name) => [
+    clearRefreshCookie(requestUrl, undefined, name),
+    ...(cookieDomain
+      ? [clearRefreshCookie(requestUrl, cookieDomain, name)]
+      : []),
+  ]);
 }
 
 function clearBetterAuthCookie(
@@ -244,12 +275,14 @@ function appendSetCookies(source: Headers, target: Headers): void {
 
 function refreshTokenFromRequest(request: Request): string | undefined {
   const cookies = request.headers.get("cookie")?.split(";") ?? [];
-  const entry = cookies
-    .map((cookie) => cookie.trim())
-    .find((cookie) => cookie.startsWith(`${refreshCookieName}=`));
+  const entries = cookies.map((cookie) => cookie.trim());
+  const name = refreshCookieNameForOrigin(new URL(request.url).origin);
+  const entry =
+    entries.find((cookie) => cookie.startsWith(`${name}=`)) ??
+    entries.find((cookie) => cookie.startsWith(`${refreshCookieName}=`));
   if (!entry) return undefined;
   try {
-    const token = decodeURIComponent(entry.slice(refreshCookieName.length + 1));
+    const token = decodeURIComponent(entry.slice(entry.indexOf("=") + 1));
     return token || undefined;
   } catch {
     return undefined;
@@ -258,13 +291,13 @@ function refreshTokenFromRequest(request: Request): string | undefined {
 
 function corsHeaders(
   origin: string | null,
-  client: AdminOAuthClient,
+  client: AdminOAuthClient | undefined,
   canonicalHost: string = DEFAULT_CANONICAL_HOST,
 ): Headers {
   const headers = cacheHeaders();
   if (
     origin &&
-    (origin === new URL(client.redirectUri).origin ||
+    ((client && origin === new URL(client.redirectUri).origin) ||
       isAllowedPublicOrigin(origin, canonicalHost))
   ) {
     headers.set("access-control-allow-origin", origin);
@@ -511,6 +544,7 @@ export function registerAdminOAuthRoutes(
     for (const cookie of clearRefreshCookies(
       request.url,
       cookieDomain(request.url),
+      sessionOriginFromRequest(request),
     )) {
       headers.append("set-cookie", cookie);
     }
@@ -755,7 +789,12 @@ export function registerAdminOAuthRoutes(
     );
     headers.append(
       "set-cookie",
-      refreshCookie(nextRefreshToken, context.req.url, domain),
+      refreshCookie(
+        nextRefreshToken,
+        context.req.url,
+        domain,
+        transaction.initiatedOrigin,
+      ),
     );
     return Response.json(
       {
@@ -767,6 +806,34 @@ export function registerAdminOAuthRoutes(
   });
 
   app.post("/api/auth/admin/refresh", async (context) => {
+    const currentRefreshToken = refreshTokenFromRequest(context.req.raw);
+    const origin = context.req.header("origin") ?? null;
+    // An absent browser session needs no provider lookup. Keep unfamiliar
+    // cross-origin clients on the configured client's CORS validation path.
+    if (
+      service &&
+      !currentRefreshToken &&
+      (!origin ||
+        origin === new URL(context.req.url).origin ||
+        isAllowedPublicOrigin(origin, canonicalHost))
+    ) {
+      const headers = corsHeaders(origin, undefined, canonicalHost);
+      for (const cookie of clearRefreshCookies(
+        context.req.url,
+        cookieDomain(context.req.url),
+        sessionOriginFromRequest(context.req.raw),
+      ))
+        headers.append("set-cookie", cookie);
+      return Response.json(
+        {
+          error: {
+            code: "AUTHENTICATION_REQUIRED",
+            message: "An administrator session is required",
+          },
+        },
+        { status: 401, headers },
+      );
+    }
     const client = await adminClient(service);
     if (!client)
       return error(
@@ -775,11 +842,11 @@ export function registerAdminOAuthRoutes(
         503,
       );
     const headers = cors(context.req.header("origin") ?? null, client);
-    const currentRefreshToken = refreshTokenFromRequest(context.req.raw);
     if (!currentRefreshToken) {
       for (const cookie of clearRefreshCookies(
         context.req.url,
         cookieDomain(context.req.url),
+        sessionOriginFromRequest(context.req.raw),
       )) {
         headers.append("set-cookie", cookie);
       }
@@ -853,6 +920,7 @@ export function registerAdminOAuthRoutes(
       for (const cookie of clearRefreshCookies(
         context.req.url,
         cookieDomain(context.req.url),
+        sessionOriginFromRequest(context.req.raw),
       )) {
         headers.append("set-cookie", cookie);
       }
@@ -878,6 +946,7 @@ export function registerAdminOAuthRoutes(
         nextRefreshToken,
         context.req.url,
         cookieDomain(context.req.url),
+        session.origin,
       ),
     );
     return Response.json(publicTokenResponse(token), { headers });

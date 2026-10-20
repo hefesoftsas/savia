@@ -77,3 +77,22 @@ makes the workspace inert while server sign-out and cleanup finish. The workspac
 stays mounted so pending auth work can complete. The transition adds no artificial
 delay, respects reduced motion, and releases its busy state if sign-out fails.
 Automatic access failures do not display this explicit sign-out transition.
+
+On a callback URL containing an OAuth code and state, early access-token reads
+join the single callback exchange before attempting renewal. A background read
+must not start a refresh against the canonical callback origin while a tenant
+login is being exchanged. The session still returns to the initiating tenant.
+
+When a same-origin or recognized public-origin refresh request has no renewal
+cookie, the API returns 401 without looking up OAuth client metadata from the
+auth worker. Other cross-origin clients retain configured-client CORS validation.
+This avoids a provider initialization delay before an inevitable login redirect.
+
+The auth worker reports `auth_schema`, `auth_bootstrap` and `auth_dispatch`
+durations in its `Server-Timing` response header. Compare those phases with the
+request's total time before attributing a delay to schema or bootstrap work; a
+slow response alone does not identify which phase is responsible.
+
+Protected API requests without an `Authorization` header or any `Cookie` are
+rejected before the API calls the internal session service. Requests with
+cookies still validate their session with the auth worker.

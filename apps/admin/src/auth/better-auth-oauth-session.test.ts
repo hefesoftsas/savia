@@ -136,6 +136,58 @@ describe("BetterAuthOAuthSession", () => {
     expect(fetcher).toHaveBeenCalledTimes(2);
   });
 
+  it("waits for the callback exchange before early session checks can refresh", async () => {
+    let resolveCallback!: (response: Response) => void;
+    const callbackResponse = new Promise<Response>((resolve) => {
+      resolveCallback = resolve;
+    });
+    const fetcher = vi.fn((input: RequestInfo | URL) => {
+      if (String(input).endsWith("/api/auth/admin/callback")) {
+        return callbackResponse;
+      }
+      if (String(input).endsWith("/api/auth/admin/refresh")) {
+        return Promise.resolve(
+          Response.json({ error: { message: "No session" } }, { status: 401 }),
+        );
+      }
+      throw new Error(`Unexpected request: ${String(input)}`);
+    });
+    const session = new BetterAuthOAuthSession({
+      apiUrl: "https://savia.test",
+      navigation: {
+        currentUrl: () =>
+          "https://savia.test/auth/callback?code=code-1&state=state-1",
+        redirect: vi.fn(),
+      },
+      fetcher,
+    });
+
+    const accessToken = session.getAccessToken();
+    const sessionCheck = session.checkSession();
+    const callback = session.handleCallback();
+    resolveCallback(
+      Response.json({
+        access_token: "exchanged-access-token",
+        token_type: "Bearer",
+        expires_in: 300,
+        scope: "openid savia.api.read",
+      }),
+    );
+
+    await expect(
+      Promise.all([accessToken, sessionCheck, callback]),
+    ).resolves.toEqual([
+      "exchanged-access-token",
+      undefined,
+      { returnOrigin: undefined },
+    ]);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(fetcher).toHaveBeenCalledWith(
+      "https://savia.test/api/auth/admin/callback",
+      expect.objectContaining({ method: "POST" }),
+    );
+  });
+
   it("exchanges a callback code and returns the returnOrigin if provided", async () => {
     const fetcher = vi.fn().mockResolvedValueOnce(
       new Response(
