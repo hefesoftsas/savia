@@ -616,8 +616,30 @@ jobs:
       - name: Type-check
         run: pnpm run typecheck:insurance
 
-  flows:
-    name: Flows runtime and preview readiness
+  flows-api:
+    name: Flows API tests
+    needs: changes
+    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.ci_flows == 'true')
+    timeout-minutes: 25
+    runs-on: ubuntu-24.04
+    env:
+      PNPM_CONFIG_STRICT_DEP_BUILDS: "false"
+      NODE_OPTIONS: "--max-old-space-size=1536"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.24.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Test Flows API
+        run: pnpm run flows:test:api
+
+  flows-core:
+    name: Flows core and preview readiness
     needs: changes
     if: always() && (needs.changes.result != 'success' || needs.changes.outputs.ci_flows == 'true')
     timeout-minutes: 25
@@ -636,7 +658,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - name: Verify imported source and local policy
-        run: pnpm run flows:verify && pnpm run flows:test
+        run: pnpm run flows:verify && pnpm run flows:test:core
       - name: Type-check Flows and shared executor
         env:
           NODE_OPTIONS: "--max-old-space-size=2048"
@@ -645,6 +667,22 @@ jobs:
         run: npm ci --prefix infra/pulumi --ignore-scripts
       - name: Verify infrastructure and recovery helpers offline
         run: node --test --test-concurrency=1 infra/pulumi/*.test.mjs scripts/flows-*.test.mjs scripts/flows-maintenance/*.test.mjs scripts/encrypt-flows-backup.test.mjs scripts/verify-flows-preview.test.mjs
+
+  flows:
+    name: Flows runtime and preview readiness
+    needs:
+      - changes
+      - flows-api
+      - flows-core
+    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.ci_flows == 'true')
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Require both Flows validation lanes
+        run: |
+          if [[ "${{ needs.flows-api.result }}" != "success" || "${{ needs.flows-core.result }}" != "success" ]]; then
+            echo "Flows validation failed: API=${{ needs.flows-api.result }}, core=${{ needs.flows-core.result }}"
+            exit 1
+          fi
 
   publication-safety:
     name: Public source safety

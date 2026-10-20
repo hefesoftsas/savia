@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
@@ -309,4 +310,95 @@ test("manual previews validate trusted source before executing repository code",
     preview,
     /run:[\s\S]*?\$\{\{ inputs\.(?:branch|confirm) \}\}/,
   );
+});
+
+test("Flows CI splits all seven package suites and keeps readiness fail-closed", async () => {
+  const ci = await workflow("ci.yml");
+  const packageJson = JSON.parse(
+    await readFile(new URL("../package.json", import.meta.url), "utf8"),
+  );
+  const lanes = ["flows-api", "flows-core"];
+  const laneBlocks = lanes.map((name) => {
+    const start = ci.indexOf(`  ${name}:`);
+    assert.notEqual(start, -1, `missing ${name} lane`);
+    const rest = ci.slice(start);
+    const next = rest.search(/\n  [a-z][\w-]*:\n/);
+    return rest.slice(0, next === -1 ? undefined : next);
+  });
+
+  assert.deepEqual(
+    packageJson.scripts["flows:test:api"],
+    "pnpm --filter @savia/flows-api test",
+  );
+  assert.deepEqual(
+    packageJson.scripts["flows:test:core"],
+    [
+      "pnpm --filter @savia/flows test",
+      "pnpm --filter @savia/flows-native test",
+      "pnpm --filter @savia/flows-app test",
+      "pnpm --filter @savia/flows-runtime test",
+      "pnpm --filter @savia/flows-geo test",
+      "pnpm --filter @savia/flows-utils test",
+    ].join(" && "),
+  );
+  assert.deepEqual(
+    packageJson.scripts["flows:test"],
+    "pnpm run flows:test:core && pnpm run flows:test:api",
+  );
+  assert.match(laneBlocks[0], /pnpm run flows:test:api/);
+  assert.match(laneBlocks[1], /pnpm run flows:test:core/);
+  assert.match(laneBlocks[1], /flows:verify/);
+  assert.match(laneBlocks[1], /flows:typecheck/);
+  assert.match(laneBlocks[1], /hook-executor typecheck/);
+  assert.match(laneBlocks[1], /npm ci --prefix infra\/pulumi --ignore-scripts/);
+  assert.match(laneBlocks[1], /infra\/pulumi\/\*\.test\.mjs/);
+
+  const gateStart = ci.indexOf("\n  flows:\n");
+  const gateEnd = ci.indexOf("\n  publication-safety:", gateStart);
+  const gate = ci.slice(gateStart, gateEnd);
+  assert.match(gate, /name: Flows runtime and preview readiness/);
+  assert.match(gate, /needs:\n\s+- changes\n\s+- flows-api\n\s+- flows-core/);
+  assert.match(gate, /if: always\(\)/);
+  assert.match(
+    gate,
+    /needs\.flows-api\.result }}" != "success"[\s\S]*needs\.flows-core\.result }}" != "success"/,
+  );
+  assert.match(gate, /exit 1/);
+
+  const gateScript = gate
+    .match(/        run: \|\n((?:          .*\n)+)/)?.[1]
+    ?.replace(/^          /gm, "");
+  assert.ok(
+    gateScript,
+    "aggregate gate must provide an executable shell script",
+  );
+  const results = ["success", "failure", "cancelled", "skipped"];
+  for (const apiResult of results) {
+    for (const coreResult of results) {
+      const script = gateScript
+        .replaceAll("${{ needs.flows-api.result }}", apiResult)
+        .replaceAll("${{ needs.flows-core.result }}", coreResult);
+      const result = spawnSync(
+        "bash",
+        ["-e", "-u", "-o", "pipefail", "-c", script],
+        {
+          encoding: "utf8",
+        },
+      );
+
+      assert.equal(
+        result.status,
+        apiResult === "success" && coreResult === "success" ? 0 : 1,
+        `aggregate gate result for API=${apiResult}, core=${coreResult}`,
+      );
+    }
+  }
+
+  for (const lane of laneBlocks) {
+    assert.match(lane, /needs: changes/);
+    assert.match(
+      lane,
+      /if: always\(\) && \(needs\.changes\.result != 'success' \|\| needs\.changes\.outputs\.ci_flows == 'true'\)/,
+    );
+  }
 });
