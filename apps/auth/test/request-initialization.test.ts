@@ -34,6 +34,26 @@ function resourceOperations(prepare: ReturnType<typeof vi.spyOn>) {
   ).length;
 }
 
+function schemaIntrospection(query: unknown) {
+  return /sqlite_master|pragma_(?:table_info|index_list|index_info)|\bPRAGMA\b/i.test(
+    String(query),
+  );
+}
+
+function betterAuthSchemaValidation(query: unknown) {
+  return /\bselect\s+"name",\s*"type"\s+from\s+"sqlite_master"/i.test(
+    String(query),
+  );
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
+
 it("rejects invalid deployment initialization before touching the database", async () => {
   const environment = managedEnvironment();
   const prepare = vi.spyOn(environment.AUTH_DB, "prepare");
@@ -131,6 +151,166 @@ it("loads persisted readiness without schema or bootstrap work in a fresh handle
   expect(exec).not.toHaveBeenCalled();
   prepare.mockRestore();
   exec.mockRestore();
+});
+
+it("validates schema during managed initialization and never waits on runtime introspection", async () => {
+  const revision = "6".repeat(40);
+  const environment = managedEnvironment(revision);
+  const deploymentSchemaGate = deferred<void>();
+  const deploymentValidationStarted = deferred<void>();
+  let deploymentSchemaCheckStarted = false;
+  const deploymentDatabase = new Proxy(environment.AUTH_DB, {
+    get(target, property) {
+      if (property === "prepare")
+        return (query: string) => {
+          const isSchemaCheck = betterAuthSchemaValidation(query);
+          const wrap = (statement: D1PreparedStatement): D1PreparedStatement =>
+            new Proxy(statement, {
+              get(statementTarget, statementProperty) {
+                if (statementProperty === "bind")
+                  return (...values: unknown[]) =>
+                    wrap(statementTarget.bind(...values));
+                if (
+                  statementProperty === "all" ||
+                  statementProperty === "raw" ||
+                  statementProperty === "first" ||
+                  statementProperty === "run"
+                )
+                  return async (...args: unknown[]) => {
+                    if (isSchemaCheck) {
+                      deploymentSchemaCheckStarted = true;
+                      deploymentValidationStarted.resolve();
+                      await deploymentSchemaGate.promise;
+                    }
+                    return Reflect.get(
+                      statementTarget,
+                      statementProperty,
+                      statementTarget,
+                    ).apply(statementTarget, args);
+                  };
+                const value = Reflect.get(
+                  statementTarget,
+                  statementProperty,
+                  statementTarget,
+                );
+                return typeof value === "function"
+                  ? value.bind(statementTarget)
+                  : value;
+              },
+            });
+          return wrap(target.prepare(query));
+        };
+      const value = Reflect.get(target, property, target);
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  });
+  const initializer = createAuthHandler({
+    ...environment,
+    AUTH_DB: deploymentDatabase,
+  });
+  let initializationSettled = false;
+  const initializationPromise = initializer
+    .fetch(initializeRequest(revision))
+    .then((response) => {
+      initializationSettled = true;
+      return response;
+    });
+  await Promise.race([
+    deploymentValidationStarted.promise,
+    new Promise((resolve) => setTimeout(resolve, 250)),
+  ]);
+  const deploymentWaitedForSchemaCheck =
+    deploymentSchemaCheckStarted && !initializationSettled;
+  deploymentSchemaGate.resolve();
+  const initialized = await initializationPromise;
+  expect(initialized.status).toBe(200);
+  expect(deploymentWaitedForSchemaCheck).toBe(true);
+
+  const schemaGate = deferred<void>();
+  let schemaCheckStarted = false;
+  const database = new Proxy(environment.AUTH_DB, {
+    get(target, property) {
+      if (property === "prepare")
+        return (query: string) => {
+          const isSchemaCheck = schemaIntrospection(query);
+          const wrap = (statement: D1PreparedStatement): D1PreparedStatement =>
+            new Proxy(statement, {
+              get(statementTarget, statementProperty) {
+                if (statementProperty === "bind")
+                  return (...values: unknown[]) =>
+                    wrap(statementTarget.bind(...values));
+                if (statementProperty === "all")
+                  return async (...args: unknown[]) => {
+                    if (isSchemaCheck) {
+                      schemaCheckStarted = true;
+                      await schemaGate.promise;
+                    }
+                    return statementTarget.all(...args);
+                  };
+                const value = Reflect.get(
+                  statementTarget,
+                  statementProperty,
+                  statementTarget,
+                );
+                return typeof value === "function"
+                  ? value.bind(statementTarget)
+                  : value;
+              },
+            });
+          return wrap(target.prepare(query));
+        };
+      const value = Reflect.get(target, property, target);
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  });
+  const runtime = createAuthHandler({ ...environment, AUTH_DB: database });
+  const metadata = await runtime.fetch(
+    new Request("https://savia-auth.internal/_internal/oauth/admin-client"),
+  );
+  expect(metadata.status).toBe(200);
+  const client = (await metadata.json()) as {
+    clientId: string;
+    redirectUri: string;
+    resource: string;
+    scopes: string[];
+  };
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode("runtime-schema-check-verifier"),
+  );
+  const challenge = btoa(String.fromCharCode(...new Uint8Array(digest)))
+    .replace(/=/g, "")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_");
+  const authorization = new Request(
+    `https://savia-auth.internal/api/auth/oauth2/authorize?${new URLSearchParams(
+      {
+        client_id: client.clientId,
+        code_challenge: challenge,
+        code_challenge_method: "S256",
+        redirect_uri: client.redirectUri,
+        resource: client.resource,
+        response_type: "code",
+        prompt: "login",
+        scope: client.scopes.join(" "),
+        state: "managed-schema-check-test",
+      },
+    )}`,
+    { headers: { accept: "application/json" } },
+  );
+  let authorizationSettled = false;
+  const authorizationPromise = runtime.fetch(authorization).then((response) => {
+    authorizationSettled = true;
+    return response;
+  });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  const waitedOnSchemaCheck = schemaCheckStarted && !authorizationSettled;
+  schemaGate.resolve();
+  const authorizationResponse = await authorizationPromise;
+
+  expect(schemaCheckStarted).toBe(false);
+  expect(waitedOnSchemaCheck).toBe(false);
+  expect(authorizationResponse.status).toBe(200);
 });
 
 it("does not serve a release when its readiness write fails", async () => {
