@@ -152,3 +152,7 @@ For PostgreSQL, use a dedicated test server with database creation rights and se
 `tenant-isolation-migration.test.ts` and `postgres-migrations.test.ts` files.
 These tests create and remove isolated databases. Never point them at a shared
 production server.
+
+Logout validates its caller origin and checks the stored binding before revoking
+an admin refresh session. An unsuffixed cookie belonging to another origin does
+not revoke that origin's bridge or provider session or clear its shared cookies.

@@ -536,11 +536,23 @@ export function registerAdminOAuthRoutes(
     headers: Headers,
   ): Promise<void> {
     const token = refreshTokenFromRequest(request);
-    if (token)
+    if (token) {
+      const tokenHash = await codeChallenge(token);
+      const session = await d1
+        .prepare(
+          "SELECT origin FROM admin_oauth_session_origins WHERE token_hash = ?",
+        )
+        .bind(tokenHash)
+        .first<{ origin: string }>();
+      // A shared legacy cookie can belong to another workspace's active tab.
+      // It must not let this origin revoke that tab's bridge or provider session.
+      if (session && session.origin !== sessionOriginFromRequest(request))
+        return;
       await d1
         .prepare("DELETE FROM admin_oauth_session_origins WHERE token_hash = ?")
-        .bind(await codeChallenge(token))
+        .bind(tokenHash)
         .run();
+    }
     for (const cookie of clearRefreshCookies(
       request.url,
       cookieDomain(request.url),
@@ -961,6 +973,21 @@ export function registerAdminOAuthRoutes(
         503,
       );
     const headers = cors(context.req.header("origin") ?? null, client);
+    const origin = sessionOriginFromRequest(context.req.raw);
+    if (
+      origin !== new URL(client.redirectUri).origin &&
+      !isAllowedPublicOrigin(origin, canonicalHost)
+    ) {
+      return Response.json(
+        {
+          error: {
+            code: "INVALID_ORIGIN",
+            message: "The request origin is not allowed",
+          },
+        },
+        { status: 403, headers },
+      );
+    }
     await signOutSession(context.req.raw, headers);
     return new Response(null, { status: 204, headers });
   });

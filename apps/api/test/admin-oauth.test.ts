@@ -679,6 +679,46 @@ describe("admin OAuth bridge", () => {
       ).toHaveLength(1);
     });
 
+    it("does not sign out another origin through a shared legacy cookie", async () => {
+      const f = fixture();
+      const callback = await f.signIn(tenantOrigin);
+      const pair = f.cookieFrom(callback);
+      const legacy = `savia.admin_refresh_token=${pair.slice(pair.indexOf("=") + 1)}`;
+      const response = await f.app.request(
+        `${canonicalOrigin}/api/auth/admin/logout`,
+        {
+          method: "POST",
+          headers: {
+            origin: canonicalOrigin,
+            cookie: `${legacy}; savia.session_token=other-origin-provider-session`,
+          },
+        },
+      );
+      expect(response.status).toBe(204);
+      expect(response.headers.get("set-cookie")).toBeNull();
+      expect((await f.refresh(tenantOrigin, legacy)).status).toBe(200);
+      expect(
+        f.authFetch.mock.calls.some(
+          ([request]) => new URL(request.url).pathname === "/api/auth/sign-out",
+        ),
+      ).toBe(false);
+    });
+
+    it("rejects logout from an untrusted origin without revoking the session", async () => {
+      const f = fixture();
+      const callback = await f.signIn(tenantOrigin);
+      const cookie = f.cookieFrom(callback);
+      const response = await f.app.request(
+        `${tenantOrigin}/api/auth/admin/logout`,
+        {
+          method: "POST",
+          headers: { origin: "https://evil.example", cookie },
+        },
+      );
+      expect(response.status).toBe(403);
+      expect((await f.refresh(tenantOrigin, cookie)).status).toBe(200);
+    });
+
     it("invalidates the server-side refresh binding on logout", async () => {
       const f = fixture();
       const callback = await f.signIn(tenantOrigin);
