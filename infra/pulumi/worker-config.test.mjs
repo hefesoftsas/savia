@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { flowsWorkerConfig } from "./flows-worker-config.mjs";
+import { buildSecretUploads } from "../../scripts/upload-cloudflare-secrets.mjs";
 import {
   renderProductionConfigs,
   validateTenantSubdomains,
@@ -56,6 +57,104 @@ const readConfig = async (root, app, environment = "preview") =>
       "utf8",
     ),
   );
+
+test("preview and production API secret manifests match canonical and compatibility uploads", async () => {
+  for (const deploymentEnvironment of ["preview", "production"]) {
+    for (const secretInput of [
+      { STUDIO_INTEGRATION_KEY: "canonical-studio-key" },
+      { CRM_INTEGRATION_KEY: "legacy-crm-key" },
+    ]) {
+      const root = await mkdtemp(join(tmpdir(), "savia-iac-api-secrets-"));
+      try {
+        const profile =
+          deploymentEnvironment === "preview" ? preview : production;
+        await renderProductionConfigs({
+          ...profile,
+          outputRoot: root,
+        });
+        const api = await readConfig(root, "api", deploymentEnvironment),
+          uploads = buildSecretUploads(deploymentEnvironment, {
+            BETTER_AUTH_SECRET: "better-auth-secret",
+            ASSISTANT_SETTINGS_ENCRYPTION_KEY: "assistant-settings-key",
+            EXTENSION_CONNECTIONS_ENCRYPTION_KEY: "extension-connections-key",
+            NANGO_API_KEY: "nango-api-key",
+            SAVIA_MCP_SHARED_SECRET: "mcp-shared-secret",
+            SAVIA_REQUEST_ENCRYPTION_KEY: "request-encryption-key",
+            SAVIA_BACKUP_CONTROL_SECRET: "b".repeat(32),
+            ...secretInput,
+          }).find((entry) => entry.app === "api");
+        for (const required of api.secrets.required)
+          assert.ok(
+            Object.hasOwn(uploads.secrets, required),
+            `${deploymentEnvironment} ${required} is not supplied for ${Object.keys(secretInput)[0]}`,
+          );
+        assert.equal(
+          uploads.secrets.STUDIO_INTEGRATION_KEY,
+          Object.values(secretInput)[0],
+        );
+      } finally {
+        await rm(root, { recursive: true, force: true });
+      }
+    }
+  }
+});
+
+test("final API manifests explicitly clear lifecycle flags left by quiesce and warmup", async () => {
+  const lifecycleFlags = [
+    "SAVIA_RUNTIME_BOOTSTRAP",
+    "SAVIA_RUNTIME_RETIRED",
+    "SAVIA_RUNTIME_WARMUP",
+    "SAVIA_MAINTENANCE",
+    "SAVIA_FLOWS_MAINTENANCE",
+  ];
+  for (const deploymentEnvironment of ["preview", "production"]) {
+    for (const flowsEnabled of [false, true]) {
+      const root = await mkdtemp(join(tmpdir(), "savia-iac-runtime-flags-"));
+      try {
+        const profile =
+            deploymentEnvironment === "preview" ? preview : production,
+          flowsResources = flowsEnabled
+            ? deploymentEnvironment === "preview"
+              ? flows
+              : productionFlows
+            : undefined;
+        await renderProductionConfigs({
+          ...profile,
+          flowsResources,
+          flowsExecutionEnabled: flowsEnabled,
+          outputRoot: root,
+        });
+        const api = await readConfig(root, "api", deploymentEnvironment),
+          seeded = Object.fromEntries(
+            lifecycleFlags.map((flag) => [flag, "true"]),
+          ),
+          afterQuiesce = {
+            ...seeded,
+            SAVIA_MAINTENANCE: "true",
+            SAVIA_FLOWS_MAINTENANCE: "true",
+          },
+          afterWarmup = {
+            ...afterQuiesce,
+            SAVIA_RUNTIME_BOOTSTRAP: "true",
+            SAVIA_RUNTIME_WARMUP: "true",
+            SAVIA_FLOWS_MAINTENANCE: "true",
+            PRESERVED_REMOTE_FLAG: "keep-me",
+          },
+          finalRuntimeVars = { ...afterWarmup, ...api.vars };
+        assert.equal(api.keep_vars, true);
+        for (const flag of lifecycleFlags)
+          assert.equal(
+            finalRuntimeVars[flag],
+            "false",
+            `${deploymentEnvironment} Flows=${flowsEnabled} retained ${flag}`,
+          );
+        assert.equal(finalRuntimeVars.PRESERVED_REMOTE_FLAG, "keep-me");
+      } finally {
+        await rm(root, { recursive: true, force: true });
+      }
+    }
+  }
+});
 
 test("preview preserves canonical and wildcard tenant gateway routes", async () => {
   const root = await mkdtemp(join(tmpdir(), "savia-iac-tenant-routes-"));

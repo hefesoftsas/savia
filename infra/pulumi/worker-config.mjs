@@ -163,11 +163,16 @@ function apiConfig({
       SAVIA_PUBLIC_ORIGIN: publicOrigin,
       SAVIA_MCP_URL: privateMcpUrl,
       SHLINK_SERVER_URL: "https://go.cloud.hefesoft.com",
+      SAVIA_RUNTIME_BOOTSTRAP: "false",
+      SAVIA_RUNTIME_RETIRED: "false",
+      SAVIA_RUNTIME_WARMUP: "false",
+      SAVIA_MAINTENANCE: "false",
+      SAVIA_FLOWS_MAINTENANCE: "false",
     },
     secrets: {
       required: [
         "ASSISTANT_SETTINGS_ENCRYPTION_KEY",
-        "CRM_INTEGRATION_KEY",
+        "STUDIO_INTEGRATION_KEY",
         "EXTENSION_CONNECTIONS_ENCRYPTION_KEY",
         "NANGO_API_KEY",
         "SAVIA_MCP_SHARED_SECRET",

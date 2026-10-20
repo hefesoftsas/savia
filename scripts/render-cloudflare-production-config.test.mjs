@@ -175,7 +175,7 @@ test("writes only the supported production workers and retains their runtime set
     assert.deepEqual(api.secrets, {
       required: [
         "ASSISTANT_SETTINGS_ENCRYPTION_KEY",
-        "CRM_INTEGRATION_KEY",
+        "STUDIO_INTEGRATION_KEY",
         "EXTENSION_CONNECTIONS_ENCRYPTION_KEY",
         "NANGO_API_KEY",
         "SAVIA_MCP_SHARED_SECRET",

@@ -96,6 +96,15 @@ automatic operation performed by this change.
    settings or break that deployment when configuring the application. Separate
    the application environment or migrate registry credentials in a reviewed
    change before enabling application deployment.
+   The API Worker manifest requires `STUDIO_INTEGRATION_KEY`. The secret
+   uploader accepts `CRM_INTEGRATION_KEY` as a compatibility input and maps it
+   to that canonical runtime key; when both are supplied, `STUDIO_INTEGRATION_KEY`
+   takes precedence.
+   Final API manifests set runtime bootstrap, retired, warmup, maintenance, and
+   Flows-maintenance flags to `false`. These explicit values clear flags kept by
+   Wrangler during quiesce and warmup while preserving unrelated remote vars.
+   Failed command diagnostics are encrypted with the production backup key and
+   retained for seven days; only ciphertext is uploaded to GitHub artifacts.
 5. Prepare one immutable production artifact and reviewed lifecycle plan. The
    standard first-install path verifies fresh empty persistence and starts
    paused maintenance endpoints before capturing its mandatory encrypted backup.
