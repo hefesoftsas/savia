@@ -53,6 +53,19 @@ export function createRuntimeCloudClient(
         await sleep(Math.min(remaining, 30_000));
       return request(path, { method, body }, attempt + 1, global);
     }
+    if (method === "GET" && [500, 502, 503, 504].includes(response.status)) {
+      try {
+        await response.body?.cancel();
+      } catch {
+        // A failed body cleanup must not mask the bounded request result.
+      }
+      if (attempt >= 3)
+        throw new Error(
+          `Cloudflare ${method} ${path} failed (${response.status})`,
+        );
+      await sleep(1000 * 2 ** attempt);
+      return request(path, { method, body }, attempt + 1, global);
+    }
     let payload;
     try {
       payload = await response.json();

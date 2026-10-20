@@ -205,6 +205,137 @@ test("rate limiting honors Retry-After without retrying authentication failures"
   assert.equal(unauthorized, 1);
 });
 
+test("GET retries transient Cloudflare server errors after canceling the response body", async () => {
+  const accountId = "a".repeat(32);
+  for (const status of [500, 502, 503, 504]) {
+    const events = [];
+    let attempts = 0;
+    const client = createRuntimeCloudClient(
+      { accountId, workers: [] },
+      {
+        env: { CLOUDFLARE_API_TOKEN: "credential" },
+        sleep: async (milliseconds) => events.push(`sleep:${milliseconds}`),
+        fetcher: async (_url, options) => {
+          attempts += 1;
+          assert.equal(options.method, "GET");
+          if (attempts === 1) {
+            let closeTimer;
+            return new Response(
+              new ReadableStream({
+                start(controller) {
+                  controller.enqueue(
+                    new TextEncoder().encode(
+                      JSON.stringify({ success: false }),
+                    ),
+                  );
+                  closeTimer = setTimeout(() => controller.close(), 1);
+                },
+                cancel() {
+                  clearTimeout(closeTimer);
+                  events.push("cancel");
+                },
+              }),
+              { status },
+            );
+          }
+          return Response.json({ success: true, result: ["recovered"] });
+        },
+      },
+    );
+
+    assert.deepEqual(await client.api("/queues"), ["recovered"]);
+    assert.equal(attempts, 2);
+    assert.deepEqual(events, ["cancel", "sleep:1000"]);
+  }
+});
+
+test("GET server-error retries stop after the existing bounded attempts", async () => {
+  const accountId = "a".repeat(32);
+  let attempts = 0;
+  let canceledBodies = 0;
+  const sleeps = [];
+  const client = createRuntimeCloudClient(
+    { accountId, workers: [] },
+    {
+      env: { CLOUDFLARE_API_TOKEN: "credential" },
+      sleep: async (milliseconds) => sleeps.push(milliseconds),
+      fetcher: async () => {
+        attempts += 1;
+        return new Response(
+          new ReadableStream({
+            start(controller) {
+              controller.enqueue(
+                new TextEncoder().encode(
+                  JSON.stringify({
+                    errors: [{ message: "PRIVATE_SERVER_DETAIL" }],
+                  }),
+                ),
+              );
+            },
+            cancel() {
+              canceledBodies += 1;
+            },
+          }),
+          { status: 500 },
+        );
+      },
+    },
+  );
+
+  await assert.rejects(client.api("/queues"), (error) => {
+    assert.match(error.message, /GET \/queues failed \(500\)/);
+    assert.equal(error.message.includes("PRIVATE_SERVER_DETAIL"), false);
+    return true;
+  });
+  assert.equal(attempts, 4);
+  assert.equal(canceledBodies, 4);
+  assert.deepEqual(sleeps, [1000, 2000, 4000]);
+});
+
+test("mutating requests do not retry Cloudflare server errors", async () => {
+  const accountId = "a".repeat(32);
+  let attempts = 0;
+  const sleeps = [];
+  const client = createRuntimeCloudClient(
+    { accountId, workers: [] },
+    {
+      env: { CLOUDFLARE_API_TOKEN: "credential" },
+      sleep: async (milliseconds) => sleeps.push(milliseconds),
+      fetcher: async (_url, options) => {
+        attempts += 1;
+        assert.equal(options.method, "POST");
+        return Response.json({ success: false }, { status: 502 });
+      },
+    },
+  );
+
+  await assert.rejects(
+    client.api("/queues", { method: "POST", body: {} }),
+    /502/,
+  );
+  assert.equal(attempts, 1);
+  assert.deepEqual(sleeps, []);
+});
+
+test("network errors are returned without retry", async () => {
+  const accountId = "a".repeat(32);
+  let attempts = 0;
+  const client = createRuntimeCloudClient(
+    { accountId, workers: [] },
+    {
+      env: { CLOUDFLARE_API_TOKEN: "credential" },
+      sleep: async () => assert.fail("network errors must not be retried"),
+      fetcher: async () => {
+        attempts += 1;
+        throw new Error("network failure");
+      },
+    },
+  );
+
+  await assert.rejects(client.api("/queues"), /network failure/);
+  assert.equal(attempts, 1);
+});
+
 test("route mutations verify zone custody before sending a write", async () => {
   const accountId = "a".repeat(32),
     zoneId = "c".repeat(32),
