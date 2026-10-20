@@ -1,4 +1,7 @@
-import { resolveTenantSlug, type ResolvedTenantSlug } from "../tenant-slugs";
+import {
+  resolveTenantSlugWithBranding,
+  type ResolvedTenantSlug,
+} from "../tenant-slugs";
 import { dialectFor } from "@savia/db/dialect";
 import {
   defaultTenantBranding,
@@ -39,6 +42,7 @@ export const brandingSchema = z
   })
   .strict();
 type Tenant = { id: number; name: string };
+type TenantBrandingRow = { config: string; version: number };
 export async function activeTenant(db: D1Database, id: number) {
   const tenant = await db
     .prepare(
@@ -78,7 +82,14 @@ export async function readTenantBranding(
   const row = await db
     .prepare("SELECT config,version FROM tenant_branding WHERE tenant_id=?")
     .bind(tenant.id)
-    .first<{ config: string; version: number }>();
+    .first<TenantBrandingRow>();
+  return tenantBrandingFromRow(tenant, row);
+}
+
+function tenantBrandingFromRow(
+  tenant: Tenant,
+  row: TenantBrandingRow | null,
+): TenantBrandingConfig {
   if (!row) return defaultTenantBranding(tenant.name);
   const value = JSON.parse(row.config);
   return brandingSchema.parse({ ...value, version: row.version });
@@ -109,10 +120,17 @@ export async function tenantBrandingContextForRequest(
     canonicalHost,
   );
   if (!slug) return null;
-  const tenant = await resolveTenantSlug(db, slug);
-  return tenant
-    ? { tenant, branding: await readTenantBranding(db, tenant) }
-    : null;
+  const tenant = await resolveTenantSlugWithBranding(db, slug);
+  if (!tenant) return null;
+  const { brandingConfig, brandingVersion, ...resolvedTenant } = tenant;
+  const tenantBrandingRow =
+    brandingConfig === null || brandingVersion === null
+      ? null
+      : { config: brandingConfig, version: brandingVersion };
+  return {
+    tenant: resolvedTenant,
+    branding: tenantBrandingFromRow(resolvedTenant, tenantBrandingRow),
+  };
 }
 export async function saveTenantBranding(
   db: D1Database,

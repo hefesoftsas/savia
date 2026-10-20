@@ -116,10 +116,23 @@ export async function tenantRegistrationSettingsResponse(
   if (!Number.isSafeInteger(tenantId) || tenantId <= 0)
     return json({ error: "Invalid tenant" }, 400);
   try {
-    let settings = await readTenantRegistrationSettings(env, tenantId);
-    const emailReady = await accountEmailAvailable(env, deps, tenantId).catch(
+    const settingsPromise = readTenantRegistrationSettings(env, tenantId);
+    const emailReadyPromise = accountEmailAvailable(env, deps, tenantId).catch(
       () => false,
     );
+    const passwordAllowedPromise =
+      match[2] && request.method === "GET"
+        ? adapter
+          ? registrationPasswordAllowed(adapter, tenantId)
+          : Promise.resolve(false)
+        : undefined;
+    let [settings, emailReady] = await Promise.all([
+      settingsPromise,
+      emailReadyPromise,
+    ]);
+    const passwordAllowed = passwordAllowedPromise
+      ? await passwordAllowedPromise
+      : undefined;
     if (match[2] && request.method !== "GET")
       return json({ error: "Method not allowed" }, 405);
     if (request.method === "DELETE") {
@@ -219,9 +232,7 @@ export async function tenantRegistrationSettingsResponse(
       ...(match[2]
         ? {
             secretKey,
-            passwordAllowed: adapter
-              ? await registrationPasswordAllowed(adapter, tenantId)
-              : false,
+            passwordAllowed,
           }
         : {}),
     });

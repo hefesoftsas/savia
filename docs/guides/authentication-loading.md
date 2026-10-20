@@ -122,3 +122,9 @@ the final Auth round-trip in `Server-Timing`, alongside Auth's own phases. Tenan
 resolution is reused within the request; branding, tenant validation and registration
 availability keep their existing checks. Use these measurements to distinguish
 remaining database/network time from deployment preparation.
+
+The public login context resolves the tenant and its optional branding in one
+database query, preserving canonical-slug priority, aliases and active commercial
+tenant filtering. Registration preflight runs independent settings, email
+availability and password-policy reads concurrently. These reads remain scoped
+to the request, so policy changes do not wait for a cross-request cache to expire.
