@@ -119,6 +119,12 @@ describe("admin OAuth bridge", () => {
 
     expect(authorization.status).toBe(302);
     expect(authorization.headers.get("cache-control")).toBe("no-store");
+    const timing = authorization.headers.get("server-timing");
+    expect(typeof timing).toBe("string");
+    expect(timing).toMatch(
+      /^oauth_client;dur=\d+(?:\.\d+)?, oauth_transaction;dur=\d+(?:\.\d+)?, oauth_authorize;dur=\d+(?:\.\d+)?$/,
+    );
+    expect(timing).not.toMatch(/https?:|token|cookie|state=/i);
     const location = new URL(authorization.headers.get("location") ?? "");
     expect(location.pathname).toBe("/api/auth/login");
     expect(location.searchParams.get("client_id")).toBe(adminClient.clientId);
