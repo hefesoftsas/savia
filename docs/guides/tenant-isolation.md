@@ -128,6 +128,19 @@ again. It does not revoke a valid session belonging to that other origin or
 clear shared cookies: an older tab must not sign out a newly authenticated tab.
 Missing or expired origin bindings still trigger session cleanup.
 
+Each HTTPS origin has its own HttpOnly admin refresh cookie name. The canonical
+callback writes the cookie for the origin recorded in the OAuth transaction,
+using the shared canonical cookie domain so that the tenant can receive it.
+Signing in or signing out on another origin does not replace or clear that
+origin's refresh cookie. Existing unsuffixed cookies remain readable until they
+rotate to the origin-specific name; server-side origin validation still applies.
+The origin-specific cookie takes precedence over an older unsuffixed host-only
+cookie. When the API uses a different origin, cookie selection uses the
+validated caller origin from the `Origin` header, falling back to the request
+URL for same-origin requests without that header. Browsers can send both a host-only and parent-domain cookie with the
+same name; accepting the first unsuffixed value can otherwise reject a fresh
+login and clear its session even when only one tenant is used.
+
 ## Local checks
 
 Run `node --test scripts/tenant-only-migration.test.mjs` for populated SQLite
@@ -139,3 +152,7 @@ For PostgreSQL, use a dedicated test server with database creation rights and se
 `tenant-isolation-migration.test.ts` and `postgres-migrations.test.ts` files.
 These tests create and remove isolated databases. Never point them at a shared
 production server.
+
+Logout validates its caller origin and checks the stored binding before revoking
+an admin refresh session. An unsuffixed cookie belonging to another origin does
+not revoke that origin's bridge or provider session or clear its shared cookies.

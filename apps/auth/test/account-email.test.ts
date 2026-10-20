@@ -4,6 +4,7 @@ import { deliverSmtpEmail } from "../src/smtp";
 import {
   accountEmailAvailable,
   accountEmailSettingsResponse,
+  parseTenantSMTPSettings,
   sendAccountEmail,
 } from "../src/account-email";
 
@@ -282,6 +283,15 @@ describe("tenant account email settings", () => {
       { deliverEmail: vi.fn() },
     );
     expect(badPayload?.status).toBe(400);
+  });
+
+  it("rejects sender addresses longer than 254 characters", () => {
+    expect(() =>
+      parseTenantSMTPSettings({
+        ...settings,
+        from: `${"a".repeat(251)}@x.test`,
+      }),
+    ).toThrow("Enter a valid sender email address");
   });
 
   it("uses global or existing delivery when there are no tenant settings", async () => {

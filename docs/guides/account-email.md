@@ -14,7 +14,7 @@ Savia sends account messages such as password resets and email verification thro
 
 Tenant SMTP settings are stored in the auth database as AES-GCM ciphertext, with the tenant ID authenticated as encryption context. The API never receives the saved password back: responses include `passwordConfigured`, while leaving the password field empty on save retains the current password. Send a test message to the signed-in administrator's account email to confirm delivery. Removing tenant settings returns account mail to the global SMTP configuration.
 
-Tenant SMTP connections require TLS or STARTTLS, a valid sender address, and a public host. Loopback, private, link-local and internal hostnames are rejected. Account email uses the tenant associated with the authenticated account; the test-email action cannot choose a recipient.
+Tenant SMTP connections require TLS or STARTTLS, a valid sender address, and a public host. Sender and recipient addresses are limited to 254 characters and validated with linear checks before SMTP commands are sent. Loopback, private, link-local and internal hostnames are rejected. Account email uses the tenant associated with the authenticated account; the test-email action cannot choose a recipient.
 
 ## Local Mailpit
 

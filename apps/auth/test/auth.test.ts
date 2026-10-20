@@ -86,6 +86,26 @@ it("retries auth bootstrap after a transient initialization failure", async () =
   }
 });
 
+it("reports schema, bootstrap, and dispatch timings on every auth response", async () => {
+  const handler = createAuthHandler({
+    ...env,
+    BETTER_AUTH_BOOTSTRAP_NAME: "Server timing regression test",
+  });
+  const responses = await Promise.all([
+    handler.fetch(new Request(`${origin}/_internal/session`)),
+    handler.fetch(new Request(`${origin}/not-found`)),
+  ]);
+
+  for (const response of responses) {
+    const timing = response.headers.get("server-timing");
+    expect(timing ?? "").toMatch(
+      /^auth_schema;dur=\d+(?:\.\d+)?, auth_bootstrap;dur=\d+(?:\.\d+)?, auth_dispatch;dur=\d+(?:\.\d+)?$/,
+    );
+    expect(timing).not.toContain("Server timing regression test");
+  }
+  expect(responses.map((response) => response.status)).toEqual([200, 404]);
+}, 15_000);
+
 async function authRequest(
   path: string,
   init?: RequestInit,

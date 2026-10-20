@@ -467,7 +467,7 @@ describe("admin OAuth bridge", () => {
           .getSetCookie()
           .find(
             (value) =>
-              value.startsWith("savia.admin_refresh_token=") &&
+              value.startsWith("savia.admin_refresh_token") &&
               !value.includes("Max-Age=0"),
           );
         expect(cookie).toBeDefined();
@@ -517,7 +517,11 @@ describe("admin OAuth bridge", () => {
         );
         expect(response.status).toBe(401);
         // A stale tab must not revoke the valid session shared by another tab.
-        expect(response.headers.get("set-cookie")).toBeNull();
+        expect(
+          response.headers
+            .getSetCookie()
+            .some((value) => value.startsWith(`${cookie.split("=")[0]}=`)),
+        ).toBe(false);
         expect(
           f.authFetch.mock.calls.filter(
             ([request]) =>
@@ -533,6 +537,100 @@ describe("admin OAuth bridge", () => {
         expect((await f.refresh(source, cookie)).status).toBe(200);
       },
     );
+
+    it("rejects a missing refresh cookie without waiting for the auth provider", async () => {
+      const f = fixture();
+      f.authFetch.mockResolvedValue(new Response(null, { status: 503 }));
+      const response = await f.refresh(tenantOrigin, "");
+      expect(response.status).toBe(401);
+      expect(response.headers.get("access-control-allow-origin")).toBe(
+        tenantOrigin,
+      );
+      expect(f.authFetch).not.toHaveBeenCalled();
+    });
+
+    it.each(["null", "not-an-origin"])(
+      "rejects an unauthenticated request with origin %s without crashing",
+      async (origin) => {
+        const f = fixture();
+        const response = await f.app.request(
+          `${tenantOrigin}/api/auth/admin/refresh`,
+          {
+            method: "POST",
+            headers: { origin },
+          },
+        );
+        expect(response.status).toBe(403);
+        expect(response.headers.get("access-control-allow-origin")).toBeNull();
+      },
+    );
+
+    it("restores a fresh tenant login even when an older host cookie is sent first", async () => {
+      const f = fixture();
+      const callback = await f.signIn(tenantOrigin);
+      expect(callback.status).toBe(200);
+      // Browsers can retain a host-only cookie and a parent-domain cookie with
+      // the same name. The older host cookie must not shadow the fresh login.
+      const cookie = `savia.admin_refresh_token=stale-host-token; ${f.cookieFrom(callback)}`;
+      const renewed = await f.refresh(tenantOrigin, cookie);
+      expect(renewed.status).toBe(200);
+      expect(
+        (await f.refresh(tenantOrigin, f.cookieFrom(renewed))).status,
+      ).toBe(200);
+    });
+
+    it("renews and signs out a tenant session through a different API origin", async () => {
+      const f = fixture();
+      const callback = await f.signIn(tenantOrigin);
+      expect(callback.status).toBe(200);
+      const request = (action: string, cookie: string) =>
+        f.app.request(`${canonicalOrigin}/api/auth/admin/${action}`, {
+          method: "POST",
+          headers: { origin: tenantOrigin, cookie },
+        });
+      const renewed = await request("refresh", f.cookieFrom(callback));
+      expect(renewed.status).toBe(200);
+      expect(renewed.headers.get("access-control-allow-origin")).toBe(
+        tenantOrigin,
+      );
+      const cookie = f.cookieFrom(renewed);
+      expect((await request("logout", cookie)).status).toBe(204);
+      expect((await request("refresh", cookie)).status).toBe(401);
+    });
+
+    it("keeps both workspace sessions usable when another origin signs in", async () => {
+      const f = fixture();
+      const jar = new Map<string, string>();
+      const accept = (response: Response) => {
+        for (const value of response.headers.getSetCookie()) {
+          const pair = value.split(";")[0];
+          const separator = pair.indexOf("=");
+          const name = pair.slice(0, separator);
+          if (value.includes("Max-Age=0")) jar.delete(name);
+          else jar.set(name, pair);
+        }
+      };
+      const cookies = () => [...jar.values()].join("; ");
+      accept(await f.signIn(tenantOrigin));
+      accept(await f.signIn(canonicalOrigin, cookies()));
+      const tenantRefresh = await f.refresh(tenantOrigin, cookies());
+      expect(tenantRefresh.status).toBe(200);
+      accept(tenantRefresh);
+      const canonicalRefresh = await f.refresh(canonicalOrigin, cookies());
+      expect(canonicalRefresh.status).toBe(200);
+      accept(canonicalRefresh);
+      const logout = await f.app.request(
+        `${canonicalOrigin}/api/auth/admin/logout`,
+        {
+          method: "POST",
+          headers: { origin: canonicalOrigin, cookie: cookies() },
+        },
+      );
+      expect(logout.status).toBe(204);
+      accept(logout);
+      expect((await f.refresh(tenantOrigin, cookies())).status).toBe(200);
+      expect((await f.refresh(canonicalOrigin, cookies())).status).toBe(401);
+    });
 
     it("keeps the initiating tenant through the canonical callback and token rotation", async () => {
       const f = fixture();
@@ -579,6 +677,46 @@ describe("admin OAuth bridge", () => {
             new URL(request.url).pathname === "/api/auth/oauth2/token",
         ),
       ).toHaveLength(1);
+    });
+
+    it("does not sign out another origin through a shared legacy cookie", async () => {
+      const f = fixture();
+      const callback = await f.signIn(tenantOrigin);
+      const pair = f.cookieFrom(callback);
+      const legacy = `savia.admin_refresh_token=${pair.slice(pair.indexOf("=") + 1)}`;
+      const response = await f.app.request(
+        `${canonicalOrigin}/api/auth/admin/logout`,
+        {
+          method: "POST",
+          headers: {
+            origin: canonicalOrigin,
+            cookie: `${legacy}; savia.session_token=other-origin-provider-session`,
+          },
+        },
+      );
+      expect(response.status).toBe(204);
+      expect(response.headers.get("set-cookie")).toBeNull();
+      expect((await f.refresh(tenantOrigin, legacy)).status).toBe(200);
+      expect(
+        f.authFetch.mock.calls.some(
+          ([request]) => new URL(request.url).pathname === "/api/auth/sign-out",
+        ),
+      ).toBe(false);
+    });
+
+    it("rejects logout from an untrusted origin without revoking the session", async () => {
+      const f = fixture();
+      const callback = await f.signIn(tenantOrigin);
+      const cookie = f.cookieFrom(callback);
+      const response = await f.app.request(
+        `${tenantOrigin}/api/auth/admin/logout`,
+        {
+          method: "POST",
+          headers: { origin: "https://evil.example", cookie },
+        },
+      );
+      expect(response.status).toBe(403);
+      expect((await f.refresh(tenantOrigin, cookie)).status).toBe(200);
     });
 
     it("invalidates the server-side refresh binding on logout", async () => {

@@ -240,6 +240,10 @@ export class BetterAuthOAuthSession implements AuthSession {
   }
 
   async getAccessToken(): Promise<string | null> {
+    if (!this.accessToken && this.refreshAllowed && this.isOAuthCallbackUrl()) {
+      await this.handleCallback();
+      return this.accessToken;
+    }
     if (
       (!this.accessToken || Date.now() >= this.accessTokenExpiresAt - 30_000) &&
       this.refreshAllowed
@@ -353,6 +357,19 @@ export class BetterAuthOAuthSession implements AuthSession {
         ? payload.returnOrigin
         : undefined;
     return { returnOrigin };
+  }
+
+  private isOAuthCallbackUrl(): boolean {
+    try {
+      const callback = new URL(this.navigation.currentUrl());
+      return (
+        callback.pathname === "/auth/callback" &&
+        Boolean(callback.searchParams.get("code")) &&
+        Boolean(callback.searchParams.get("state"))
+      );
+    } catch {
+      return false;
+    }
   }
 
   private async refreshAccessToken(): Promise<void> {

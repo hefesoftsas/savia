@@ -92,6 +92,39 @@ describe("SMTP delivery", () => {
     expect(connection.closed).toBe(true);
   });
 
+  it("rejects recipient addresses longer than 254 characters before SMTP commands", async () => {
+    const connection = new RecordedConnection();
+
+    await expect(
+      sendSmtpEmail(
+        settings,
+        {
+          to: `${"a".repeat(248)}@x.test`,
+          subject: "Hello",
+          text: "Test",
+        },
+        connection,
+      ),
+    ).rejects.toThrow("Invalid SMTP recipient");
+    expect(connection.commands).toEqual([]);
+    expect(connection.closed).toBe(true);
+  });
+
+  it("rejects adversarial malformed recipients without SMTP commands", async () => {
+    const connection = new RecordedConnection();
+    const recipient = `!@!.${"!.".repeat(2_048)}<`;
+
+    await expect(
+      sendSmtpEmail(
+        settings,
+        { to: recipient, subject: "Hello", text: "Test" },
+        connection,
+      ),
+    ).rejects.toThrow("Invalid SMTP recipient");
+    expect(connection.commands).toEqual([]);
+    expect(connection.closed).toBe(true);
+  });
+
   it("allows unauthenticated delivery only when both credentials are empty", async () => {
     const connection = new RecordedConnection();
     connection["responses"] = [

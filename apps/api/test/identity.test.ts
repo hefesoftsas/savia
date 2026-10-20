@@ -511,6 +511,30 @@ describe("Identity and access", () => {
     });
   });
 
+  it("rejects requests without cookies before calling the session service", async () => {
+    const fetch = vi.fn(async () => Response.json({ user: null }));
+    const app = createApp(
+      env.DB,
+      env.DOCUMENTS,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { fetch },
+    );
+
+    const response = await app.request("/v1/identity/me");
+
+    expect(response.status).toBe(401);
+    expect(await response.json()).toEqual({
+      error: {
+        code: "AUTHENTICATION_REQUIRED",
+        message: "An active session is required",
+      },
+    });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it("preserves oauth_query when proxying session-creating auth requests", async () => {
     const forwardedBodies: Array<{ path: string; body: unknown }> = [];
     const authService = {
@@ -691,7 +715,9 @@ describe("Identity and access", () => {
       authService,
     );
 
-    const response = await app.request("/v1/identity/me");
+    const response = await app.request("/v1/identity/me", {
+      headers: { cookie: "savia.session_token=session-token" },
+    });
 
     expect(response.status).toBe(403);
     expect(await response.json()).toEqual({
