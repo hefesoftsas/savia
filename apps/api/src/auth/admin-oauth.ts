@@ -276,7 +276,7 @@ function appendSetCookies(source: Headers, target: Headers): void {
 function refreshTokenFromRequest(request: Request): string | undefined {
   const cookies = request.headers.get("cookie")?.split(";") ?? [];
   const entries = cookies.map((cookie) => cookie.trim());
-  const name = refreshCookieNameForOrigin(new URL(request.url).origin);
+  const name = refreshCookieNameForOrigin(sessionOriginFromRequest(request));
   const entry =
     entries.find((cookie) => cookie.startsWith(`${name}=`)) ??
     entries.find((cookie) => cookie.startsWith(`${refreshCookieName}=`));
@@ -842,6 +842,22 @@ export function registerAdminOAuthRoutes(
         503,
       );
     const headers = cors(context.req.header("origin") ?? null, client);
+    const requestOrigin =
+      context.req.header("origin") ?? new URL(context.req.url).origin;
+    if (
+      requestOrigin !== new URL(client.redirectUri).origin &&
+      !isAllowedPublicOrigin(requestOrigin, canonicalHost)
+    ) {
+      return Response.json(
+        {
+          error: {
+            code: "INVALID_ORIGIN",
+            message: "The request origin is not allowed",
+          },
+        },
+        { status: 403, headers },
+      );
+    }
     if (!currentRefreshToken) {
       for (const cookie of clearRefreshCookies(
         context.req.url,
@@ -858,22 +874,6 @@ export function registerAdminOAuthRoutes(
           },
         },
         { status: 401, headers },
-      );
-    }
-    const requestOrigin =
-      context.req.header("origin") ?? new URL(context.req.url).origin;
-    if (
-      requestOrigin !== new URL(client.redirectUri).origin &&
-      !isAllowedPublicOrigin(requestOrigin, canonicalHost)
-    ) {
-      return Response.json(
-        {
-          error: {
-            code: "INVALID_ORIGIN",
-            message: "The request origin is not allowed",
-          },
-        },
-        { status: 403, headers },
       );
     }
     const tokenHash = await codeChallenge(currentRefreshToken);

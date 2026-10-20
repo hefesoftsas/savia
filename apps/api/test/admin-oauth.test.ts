@@ -560,7 +560,7 @@ describe("admin OAuth bridge", () => {
             headers: { origin },
           },
         );
-        expect(response.status).toBe(401);
+        expect(response.status).toBe(403);
         expect(response.headers.get("access-control-allow-origin")).toBeNull();
       },
     );
@@ -577,6 +577,25 @@ describe("admin OAuth bridge", () => {
       expect(
         (await f.refresh(tenantOrigin, f.cookieFrom(renewed))).status,
       ).toBe(200);
+    });
+
+    it("renews and signs out a tenant session through a different API origin", async () => {
+      const f = fixture();
+      const callback = await f.signIn(tenantOrigin);
+      expect(callback.status).toBe(200);
+      const request = (action: string, cookie: string) =>
+        f.app.request(`${canonicalOrigin}/api/auth/admin/${action}`, {
+          method: "POST",
+          headers: { origin: tenantOrigin, cookie },
+        });
+      const renewed = await request("refresh", f.cookieFrom(callback));
+      expect(renewed.status).toBe(200);
+      expect(renewed.headers.get("access-control-allow-origin")).toBe(
+        tenantOrigin,
+      );
+      const cookie = f.cookieFrom(renewed);
+      expect((await request("logout", cookie)).status).toBe(204);
+      expect((await request("refresh", cookie)).status).toBe(401);
     });
 
     it("keeps both workspace sessions usable when another origin signs in", async () => {

@@ -135,7 +135,9 @@ Signing in or signing out on another origin does not replace or clear that
 origin's refresh cookie. Existing unsuffixed cookies remain readable until they
 rotate to the origin-specific name; server-side origin validation still applies.
 The origin-specific cookie takes precedence over an older unsuffixed host-only
-cookie. Browsers can send both a host-only and parent-domain cookie with the
+cookie. When the API uses a different origin, cookie selection uses the
+validated caller origin from the `Origin` header, falling back to the request
+URL for same-origin requests without that header. Browsers can send both a host-only and parent-domain cookie with the
 same name; accepting the first unsuffixed value can otherwise reject a fresh
 login and clear its session even when only one tenant is used.
 
