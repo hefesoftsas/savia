@@ -99,7 +99,7 @@ test("production managed releases retain private R2 recovery before migration, w
   );
   assert.equal(
     (source.match(/uses: actions\/upload-artifact/g) ?? []).length,
-    1,
+    2,
   );
   assert.match(
     source,
@@ -108,6 +108,14 @@ test("production managed releases retain private R2 recovery before migration, w
   assert.match(
     source,
     /encrypt-flows-backup\.mjs --action encrypt --input.*production-bootstrap-custody\.tar\.gz.*--output.*production-bootstrap-custody\.enc/,
+  );
+  assert.match(
+    source,
+    /name: production-command-diagnostics\n\s+path: \$\{\{ runner.temp \}\}\/production-command-diagnostics\.enc/,
+  );
+  assert.doesNotMatch(
+    source,
+    /path:.*(?:flows-release-backup|production-backup|recovery\/)/,
   );
   assert.match(source, /R2_BACKUP_ACCESS_KEY_ID:/);
   assert.match(source, /R2_BACKUP_SECRET_ACCESS_KEY:/);

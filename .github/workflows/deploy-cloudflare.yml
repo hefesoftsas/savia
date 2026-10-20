@@ -329,6 +329,28 @@ jobs:
           SAVIA_RUNTIME_OPERATION_DIRECTORY: ${{ runner.temp }}/savia-runtime
           PRODUCTION_OPERATIONS_ENABLED: ${{ vars.PRODUCTION_OPERATIONS_ENABLED }}
 
+      - name: Encrypt private command diagnostics
+        if: ${{ always() }}
+        env:
+          SAVIA_BACKUP_KEY: ${{ secrets.SAVIA_BACKUP_KEY }}
+        run: |
+          if [ -d "$RUNNER_TEMP/savia-runtime/command-errors" ]; then
+            umask 077
+            trap 'rm -f "$RUNNER_TEMP/production-command-diagnostics.tar.gz"' EXIT
+            tar -czf "$RUNNER_TEMP/production-command-diagnostics.tar.gz" -C "$RUNNER_TEMP/savia-runtime" command-errors
+            node scripts/encrypt-flows-backup.mjs --action encrypt --input "$RUNNER_TEMP/production-command-diagnostics.tar.gz" --output "$RUNNER_TEMP/production-command-diagnostics.enc"
+            rm -f "$RUNNER_TEMP/production-command-diagnostics.tar.gz"
+          fi
+
+      - name: Retain encrypted command diagnostics
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-command-diagnostics
+          path: ${{ runner.temp }}/production-command-diagnostics.enc
+          retention-days: 7
+          if-no-files-found: ignore
+
       - name: Deploy release plugin ZIPs to all workspaces
         if: ${{ success() && !cancelled() }}
         run: node scripts/deploy-store-plugins.mjs

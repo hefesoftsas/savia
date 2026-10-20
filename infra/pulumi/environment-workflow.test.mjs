@@ -28,6 +28,28 @@ test("Preview retains only encrypted command diagnostics outside its private rec
   assert.match(diagnostics, /retention-days: 7/);
   assert.doesNotMatch(diagnostics, /path:.*(?:\.tar|savia-runtime\/)/);
 });
+test("Production retains encrypted command diagnostics using its own backup key", async () => {
+  const source = await workflow("deploy-cloudflare");
+  const start = source.indexOf("- name: Encrypt private command diagnostics");
+  assert.notEqual(start, -1);
+  const diagnostics = source.slice(
+    start,
+    source.indexOf("- name: Deploy release plugin ZIPs", start),
+  );
+  assert.match(diagnostics, /if: \$\{\{ always\(\) \}\}/);
+  assert.match(diagnostics, /-C "\$RUNNER_TEMP\/savia-runtime" command-errors/);
+  assert.match(diagnostics, /encrypt-flows-backup\.mjs --action encrypt/);
+  assert.match(
+    diagnostics,
+    /SAVIA_BACKUP_KEY: \$\{\{ secrets\.SAVIA_BACKUP_KEY \}\}/,
+  );
+  assert.match(
+    diagnostics,
+    /path: \$\{\{ runner\.temp \}\}\/production-command-diagnostics\.enc/,
+  );
+  assert.match(diagnostics, /retention-days: 7/);
+  assert.doesNotMatch(diagnostics, /path:.*(?:\.tar|savia-runtime\/)/);
+});
 test("platform and registry workflows use immutable lifecycle plans without competing publication or recovery", async () => {
   for (const [file, environment] of [
     ["deploy-preview", "preview"],
