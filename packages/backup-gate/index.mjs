@@ -256,7 +256,7 @@ function makeGateClient(namespace) {
     async leave(permit) {
       if (!validPermit(permit))
         throw new Error("backup gate permit must be a UUID");
-      await requestWithRetry("leave", { permit });
+      await discardResponseBody(await requestWithRetry("leave", { permit }));
     },
   };
   async function requestWithRetry(action, body) {
@@ -280,6 +280,7 @@ function makeGateClient(namespace) {
       }
       if (response?.ok) return response;
       if (response) {
+        await discardResponseBody(response);
         lastError = new Error(
           `backup gate ${action} failed (${response.status})`,
         );
@@ -299,6 +300,13 @@ function makeGateClient(namespace) {
       }
     }
     throw lastError ?? new Error(`backup gate ${action} failed`);
+  }
+  async function discardResponseBody(response) {
+    try {
+      await response.body?.cancel();
+    } catch {
+      // Body cleanup must not replace the gate's success or failure result.
+    }
   }
   client.identity = client;
   GATE_CLIENTS.set(namespace, client);
