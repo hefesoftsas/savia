@@ -1,6 +1,10 @@
 import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 import { createAuthHandler } from "../src/index";
+import { initializeAccountEmailSchema } from "../src/account-email";
+import { tenantRegistrationSettingsResponse } from "../src/tenant-registration-settings";
+import { initializeTenantRegistrationSettingsSchema } from "../src/tenant-registration-settings";
+import type { TenantSSOAdapter } from "../src/tenant-sso";
 
 const environment = {
   ...env,
@@ -35,6 +39,104 @@ const base = {
   siteKey: "site-key",
   secretKey: "private-captcha-secret",
 };
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
+
+it("runs effective registration preflight reads concurrently", async () => {
+  const preflightEnvironment = {
+    ...environment,
+    SAVIA_AUTH_DEPLOYMENT_REVISION: "6".repeat(40),
+  };
+  await initializeAccountEmailSchema(preflightEnvironment);
+  await initializeTenantRegistrationSettingsSchema(preflightEnvironment);
+
+  const databaseGate = deferred<void>();
+  const databaseReads: string[] = [];
+  const database = new Proxy(preflightEnvironment.AUTH_DB, {
+    get(target, property) {
+      if (property === "prepare")
+        return (query: string) => {
+          const sql = String(query);
+          const prepared = target.prepare(query);
+          const wrap = (statement: D1PreparedStatement): D1PreparedStatement =>
+            new Proxy(statement, {
+              get(statementTarget, statementProperty) {
+                if (statementProperty === "bind")
+                  return (...values: unknown[]) =>
+                    wrap(statementTarget.bind(...values));
+                if (statementProperty === "first")
+                  return async (...args: unknown[]) => {
+                    if (
+                      /FROM (tenant_registration_settings|tenant_email_settings)/i.test(
+                        sql,
+                      )
+                    ) {
+                      databaseReads.push(sql);
+                      await databaseGate.promise;
+                    }
+                    return statementTarget.first(...args);
+                  };
+                const value = Reflect.get(
+                  statementTarget,
+                  statementProperty,
+                  statementTarget,
+                );
+                return typeof value === "function"
+                  ? value.bind(statementTarget)
+                  : value;
+              },
+            });
+          return wrap(prepared);
+        };
+      const value = Reflect.get(target, property, target);
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  });
+
+  const activeGate = deferred<{ active: boolean } | null>();
+  const providerGate = deferred<{ saviaSSOOnly?: boolean } | null>();
+  const policyReads: string[] = [];
+  const adapter = {
+    async findOne({ model }: { model: string }) {
+      policyReads.push(model);
+      return model === "tenantAuthState"
+        ? activeGate.promise
+        : providerGate.promise;
+    },
+  } as unknown as TenantSSOAdapter;
+  const responsePromise = tenantRegistrationSettingsResponse(
+    new Request(
+      `https://auth.example.test/_internal/tenant-registration/${tenantId + 1000}/effective`,
+      { headers: { "x-savia-bridge-key": "registration-bridge" } },
+    ),
+    { ...preflightEnvironment, AUTH_DB: database },
+    {},
+    adapter,
+  );
+
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  const allReadsStarted =
+    databaseReads.length === 2 &&
+    policyReads.includes("tenantAuthState") &&
+    policyReads.includes("ssoProvider");
+  databaseGate.resolve();
+  activeGate.resolve({ active: true });
+  providerGate.resolve(null);
+  const response = await responsePromise;
+
+  expect(allReadsStarted).toBe(true);
+  expect(response?.status).toBe(200);
+  expect(await response?.json()).toMatchObject({
+    emailReady: false,
+    passwordAllowed: true,
+  });
+});
 
 describe("tenant registration settings", () => {
   it("defaults_registration_off and denies unauthenticated service callers", async () => {

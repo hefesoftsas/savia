@@ -1,10 +1,11 @@
 import { createTestApp } from "./test-app";
 import { env } from "cloudflare:workers";
 import { OpenAPIHono } from "@hono/zod-openapi";
-import { beforeAll, expect, it } from "vitest";
+import { beforeAll, expect, it, vi } from "vitest";
 import { authenticationMiddleware } from "../src/auth/middleware";
 import { platformAdministratorAuthenticator } from "./auth-fixtures";
 import { registerTenantBrandingRoutes } from "../src/tenant-branding/routes";
+import { tenantBrandingContextForRequest } from "../src/tenant-branding/service";
 import type { Authenticator } from "../src/auth/types";
 const migrations = Object.entries(
   import.meta.glob<string>("../../../packages/db/migrations/*.sql", {
@@ -40,6 +41,77 @@ async function tenant() {
     .run();
   return { id, slug };
 }
+
+it("resolves active tenant aliases and default branding in one query, and ignores inactive aliases", async () => {
+  const active = await tenant();
+  const customized = await tenant();
+  const inactive = await tenant();
+  await env.DB.prepare(
+    "INSERT INTO tenant_slug_aliases(slug,tenant_id) VALUES(?,?),(?,?)",
+  )
+    .bind("legacy-brand", active.id, "inactive-brand", inactive.id)
+    .run();
+  await env.DB.prepare("UPDATE tenants SET is_active=0 WHERE id=?")
+    .bind(inactive.id)
+    .run();
+  await env.DB.prepare(
+    "INSERT INTO tenant_branding(tenant_id,config,version,updated_by,updated_at) VALUES(?,?,7,1,?)",
+  )
+    .bind(
+      customized.id,
+      JSON.stringify({
+        displayName: "Custom agency",
+        loginTitle: "Welcome",
+        loginDescription: "Sign in to continue.",
+        primaryColor: "#123456",
+        accentColor: "#654321",
+        logoUrl: null,
+        coverUrl: null,
+        loginAnimationUrl: null,
+        loginAnimationRepeat: true,
+      }),
+      new Date().toISOString(),
+    )
+    .run();
+  const prepare = vi.spyOn(env.DB, "prepare");
+
+  try {
+    const aliasContext = await tenantBrandingContextForRequest(
+      env.DB,
+      new Request("https://legacy-brand.savia.test/api/auth/login"),
+      "savia.test",
+    );
+    expect(aliasContext?.tenant.id).toBe(active.id);
+    expect(aliasContext?.branding).toMatchObject({
+      displayName: "Example agency",
+      version: 0,
+    });
+    expect(prepare).toHaveBeenCalledTimes(1);
+
+    const customContext = await tenantBrandingContextForRequest(
+      env.DB,
+      new Request(`https://${customized.slug}.savia.test/api/auth/login`),
+      "savia.test",
+    );
+    expect(customContext?.tenant.id).toBe(customized.id);
+    expect(customContext?.branding).toMatchObject({
+      displayName: "Custom agency",
+      version: 7,
+    });
+    expect(prepare).toHaveBeenCalledTimes(2);
+
+    const inactiveContext = await tenantBrandingContextForRequest(
+      env.DB,
+      new Request("https://inactive-brand.savia.test/api/auth/login"),
+      "savia.test",
+    );
+    expect(inactiveContext).toBeNull();
+    expect(prepare).toHaveBeenCalledTimes(3);
+  } finally {
+    prepare.mockRestore();
+  }
+});
+
 function member(
   id: number,
   role = "tenant_admin",

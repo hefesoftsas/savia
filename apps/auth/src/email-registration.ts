@@ -64,12 +64,14 @@ export async function registrationPasswordAllowed(
   tenantId: number,
 ) {
   try {
-    await assertTenantAuthenticationActive(adapter, tenantId);
-    await assertPasswordAllowed(adapter, {
-      email: "",
-      role: "user",
-      emailTenantId: tenantId,
-    });
+    await Promise.all([
+      assertTenantAuthenticationActive(adapter, tenantId),
+      assertPasswordAllowed(adapter, {
+        email: "",
+        role: "user",
+        emailTenantId: tenantId,
+      }),
+    ]);
     return true;
   } catch {
     return false;
