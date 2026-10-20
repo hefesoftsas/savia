@@ -32,9 +32,17 @@ const CREATE_TABLE =
   "CREATE TABLE IF NOT EXISTS tenant_email_settings (tenant_id INTEGER PRIMARY KEY, ciphertext TEXT NOT NULL, updated_at TEXT NOT NULL)";
 
 function validAddress(value: string): boolean {
-  return (
-    /^[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+$/.test(value) && !/[\r\n]/.test(value)
-  );
+  if (value.length > 254 || /[\s<>]/.test(value)) return false;
+  const separator = value.indexOf("@");
+  if (
+    separator <= 0 ||
+    separator !== value.lastIndexOf("@") ||
+    separator === value.length - 1
+  )
+    return false;
+  const domain = value.slice(separator + 1);
+  const dot = domain.indexOf(".");
+  return dot > 0 && dot < domain.length - 1;
 }
 
 function validHost(host: string): boolean {
