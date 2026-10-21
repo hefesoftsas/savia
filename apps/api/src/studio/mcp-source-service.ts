@@ -79,7 +79,7 @@ export type McpSourceRow = {
 };
 type Credentials = {
   token?: string;
-  client?: OAuthClientInformation;
+  client?: OAuthClientInformation & { redirect_uris?: string[] };
   tokens?: OAuthTokens;
   tokenExpiresAt?: number;
   server?: OAuthAuthorizationServerInformation;
@@ -212,14 +212,16 @@ export function createMcpSourceService(options: {
       clientInformation: () => data.client,
       saveClientInformation: async (client) => {
         data.client = client;
-        await save(refreshLeaseOwner);
+        if (allowRedirect) await save(refreshLeaseOwner);
       },
       authorizationServerInformation: () => data.server,
       saveAuthorizationServerInformation: async (server) => {
         data.server = server;
-        await save(refreshLeaseOwner);
+        if (allowRedirect) await save(refreshLeaseOwner);
       },
       saveCodeVerifier: async (v) => {
+        if (!allowRedirect)
+          reject(401, "Authorization required. Connect this source again.");
         data.verifier = v;
         await save(refreshLeaseOwner);
       },
@@ -228,6 +230,8 @@ export function createMcpSourceService(options: {
         reject(422, "OAuth verification expired. Connect again."),
       state: () => data.state,
       saveState: async (state) => {
+        if (!allowRedirect)
+          reject(401, "Authorization required. Connect this source again.");
         data.state = state;
         await save(refreshLeaseOwner);
       },
@@ -250,6 +254,8 @@ export function createMcpSourceService(options: {
         return new URL(config.endpoint);
       },
       invalidateCredentials: async (scope) => {
+        if (!allowRedirect)
+          reject(401, "OAuth refresh failed. Connect this source again.");
         if (scope === "all" || scope === "client") {
           data.client = undefined;
           data.server = undefined;
@@ -360,6 +366,10 @@ export function createMcpSourceService(options: {
         } catch (error) {
           if (error instanceof McpAdapterError && error.status === 409)
             throw error;
+          const afterFailure = await loadCurrentSource(row);
+          assertSameSource(row, afterFailure);
+          if (afterFailure.encrypted_secret !== row.encrypted_secret)
+            reject(409, "The connection changed. Refresh and try again.");
           reject(401, "OAuth refresh failed. Connect this source again.");
         } finally {
           try {
@@ -433,20 +443,36 @@ export function createMcpSourceService(options: {
         };
       if (!data.tokens || !data.redirectUri)
         reject(401, "Authorize this MCP source before using it.");
-      let flow: Flow = { ...data, state: "", redirectUri: data.redirectUri };
+      const flow: Flow = { ...data, state: "", redirectUri: data.redirectUri };
       const save = () => persist(row, flow);
       if (data.tokenExpiresAt && data.tokenExpiresAt < Date.now() + 30000) {
         try {
-          flow = await refreshExpiredTokens(row, config, flow);
+          Object.assign(flow, await refreshExpiredTokens(row, config, flow));
         } catch (error) {
           if (error instanceof McpAdapterError) throw error;
           reject(401, "OAuth refresh failed. Connect this source again.");
         }
       }
+      const refreshAccessToken = async () => {
+        try {
+          Object.assign(
+            flow,
+            await refreshExpiredTokens(row, config, {
+              ...flow,
+              tokenExpiresAt: 0,
+            }),
+          );
+          return flow.tokens?.access_token;
+        } catch (error) {
+          if (error instanceof McpAdapterError) throw error;
+          reject(401, "OAuth refresh failed. Connect this source again.");
+        }
+      };
       const authProvider = provider(flow, config, save);
       return {
         endpoint: config.endpoint,
         authProvider,
+        refreshAccessToken,
         readOnlyTools: config.readOnlyTools,
       };
     },
@@ -456,9 +482,15 @@ export function createMcpSourceService(options: {
         reject(422, "This source does not use OAuth.");
       const data = await decode(row);
       const state = crypto.randomUUID();
+      const reusableClient =
+        config.oauth?.clientId ||
+        !data.client?.redirect_uris?.length ||
+        data.client.redirect_uris.some((uri) => String(uri) === redirectUri)
+          ? data.client
+          : undefined;
       const flow: Flow = {
-        client: data.client,
-        server: data.server,
+        client: reusableClient,
+        server: reusableClient ? data.server : undefined,
         state,
         redirectUri,
       };

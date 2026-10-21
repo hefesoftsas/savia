@@ -140,6 +140,8 @@ export class BetterAuthOAuthSession implements AuthSession {
 
   private identityPromise: Promise<SaviaIdentity> | null = null;
 
+  private identitySettled = false;
+
   private principalId: string | undefined;
 
   private avatarPromise: Promise<string | undefined> | null = null;
@@ -178,6 +180,7 @@ export class BetterAuthOAuthSession implements AuthSession {
     if (typeof window !== "undefined") {
       window.addEventListener("savia:identity-changed", () => {
         this.identityPromise = null;
+        this.identitySettled = false;
         this.avatarPromise = null;
         this.cachedAvatar = undefined;
         this.avatarLoaded = false;
@@ -220,6 +223,7 @@ export class BetterAuthOAuthSession implements AuthSession {
     this.scopes.clear();
     this.callbackPromise = null;
     this.identityPromise = null;
+    this.identitySettled = false;
     this.avatarPromise = null;
     this.cachedAvatar = undefined;
     this.avatarLoaded = false;
@@ -255,9 +259,12 @@ export class BetterAuthOAuthSession implements AuthSession {
 
   async getIdentity(): Promise<UserIdentity> {
     const accessToken = await this.requireAccessToken();
-    const identity = await this.saviaIdentity(accessToken);
+    const identityRequest = this.saviaIdentity(accessToken);
+    const avatarRequest =
+      this.principalId === undefined ? this.sessionAvatar() : null;
+    const identity = await identityRequest;
     const identityGeneration = getSessionGeneration();
-    const avatar = await this.sessionAvatar();
+    const avatar = await (avatarRequest ?? this.sessionAvatar());
     if (identityGeneration !== getSessionGeneration())
       throw new Error(
         "The authenticated session changed during the identity read.",
@@ -316,10 +323,13 @@ export class BetterAuthOAuthSession implements AuthSession {
     await this.requireAccessToken();
   }
 
-  /** Fresh server proof for offline lease renewal; never use the identity cache. */
+  /** Fresh server proof for offline lease renewal; never use a settled identity cache. */
   async verifySession(): Promise<void> {
     const token = await this.requireAccessToken();
-    this.identityPromise = null;
+    if (this.identitySettled) {
+      this.identityPromise = null;
+      this.identitySettled = false;
+    }
     this.avatarPromise = null;
     this.cachedAvatar = undefined;
     this.avatarLoaded = false;
@@ -421,6 +431,7 @@ export class BetterAuthOAuthSession implements AuthSession {
   }): void {
     if (this.accessToken !== token.accessToken) {
       this.identityPromise = null;
+      this.identitySettled = false;
       this.avatarPromise = null;
       this.cachedAvatar = undefined;
       this.avatarLoaded = false;
@@ -481,6 +492,7 @@ export class BetterAuthOAuthSession implements AuthSession {
   private async saviaIdentity(accessToken: string): Promise<SaviaIdentity> {
     if (!this.identityPromise) {
       const requestGeneration = getSessionGeneration();
+      this.identitySettled = false;
       this.identityPromise = (async () => {
         const response = await this.fetcher(
           requestUrl(this.settings.apiUrl, "/v1/identity/me"),
@@ -520,6 +532,7 @@ export class BetterAuthOAuthSession implements AuthSession {
           rotateSessionScope("principal-change");
         }
         this.principalId = identity.id;
+        this.identitySettled = true;
         return {
           id: identity.id,
           attributes: {
@@ -531,6 +544,7 @@ export class BetterAuthOAuthSession implements AuthSession {
         };
       })().catch((exception: unknown) => {
         this.identityPromise = null;
+        this.identitySettled = false;
         throw exception;
       });
     }

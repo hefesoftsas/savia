@@ -64,24 +64,11 @@ import { ReadRefreshStatus } from "@/components/admin/read-refresh-status";
 import { useSessionGeneration } from "@/auth/session-scope";
 import { isReadAccessDenied } from "@/queries/read-state";
 
+import { getEmployeeAvatarIcon, AVATAR_ICONS } from "./employee-avatar-icon";
+
+export { getEmployeeAvatarIcon, AVATAR_ICONS };
+
 type EmployeeAccessMode = "text" | "workspace";
-
-const AVATAR_ICONS: Record<string, ElementType> = {
-  briefcase: Briefcase,
-  headset: Headset,
-  shield: Shield,
-  "bar-chart-3": BarChart3,
-  sparkles: Sparkles,
-  bot: Bot,
-  "file-text": FileText,
-  calculator: Calculator,
-  "user-check": UserCheck,
-};
-
-export function getEmployeeAvatarIcon(iconName?: string | null): ElementType {
-  if (!iconName) return Bot;
-  return AVATAR_ICONS[iconName.toLowerCase()] ?? Bot;
-}
 
 export function VirtualEmployeesManagement({
   client,
