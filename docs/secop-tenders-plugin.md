@@ -185,12 +185,14 @@ attaches the file through the current user's collection permissions, and sends i
 to the workspace's existing configured AI provider. No provider key is included in
 the plugin. The shared host document-analysis capability validates the installed
 extension and its declared collection, bounds the request and decoded file size,
-and uses OpenRouter's default native file/OCR processing with the configured
-summary/chat model. The request sends the correct MIME (`application/pdf`,
+and sends the correct MIME (`application/pdf`,
 `application/vnd.openxmlformats-officedocument.wordprocessingml.document`,
-`application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`); spreadsheet
-structure (sheets, headers, key rows) is described for XLSX. OCR is selected by the provider when the model cannot read
-files natively and may incur per-page processing charges. The deprecated
+`application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`) with the configured
+summary/chat model. PDFs ride OpenRouter's `file-parser` plugin (native or OCR
+engines); spreadsheet structure (sheets, headers, key rows) is described for XLSX. Office files
+rely on the model's native file support instead, since `file-parser` handles PDFs only;
+OCR is selected for PDFs when the model cannot read
+them natively and may incur per-page processing charges. The deprecated
 `pdf-text` alias is not forced because it can lose extractable document text.
 Unreadable or insufficient files must be reported without drawing conclusions
 from filenames. Page or sheet/cell references

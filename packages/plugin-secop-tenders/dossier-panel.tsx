@@ -741,9 +741,9 @@ export function DossierPanel({
       }, new Map<string, Job[]>())
       .entries(),
   ).map(([kind, jobs]) => ({ kind, jobs }));
-  // Evita contradicción: "El trabajo terminó" solo cuando no quedan
-  // trabajos activos. Si el prepare terminó pero siguen extracts en
-  // cola, se muestra únicamente el indicador de trabajo en curso.
+  // Avoid contradiction: show the finished notice only once no active jobs
+  // remain. If prepare finished while extracts are still queued, keep only
+  // the in-progress indicator.
   const visibleNotice = activeJobs && notice === t.finishedJob ? "" : notice;
   useEffect(() => {
     if (!client || !activeJobs) return;

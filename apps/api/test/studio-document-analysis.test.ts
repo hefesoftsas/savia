@@ -95,6 +95,9 @@ describe("Studio extension document analysis", () => {
       expect(body.messages[1].content[1].file.file_data).toMatch(
         /^data:application\/vnd\.openxmlformats-officedocument\.spreadsheetml\.sheet;base64,/,
       );
+      // The PDF-only file-parser plugin must not ride Office requests;
+      // those rely on the model's native file support instead.
+      expect(body.plugins).toBeUndefined();
       return Response.json({
         choices: [{ message: { content: "Resumen" } }],
       });

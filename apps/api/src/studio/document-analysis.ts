@@ -59,7 +59,7 @@ function assertSupportedDocumentSignature(
       );
     return;
   }
-  // DOCX/XLSX son contenedores ZIP (Office Open XML): PK\x03\x04.
+  // DOCX/XLSX are Office Open XML ZIP containers: PK\x03\x04.
   if (
     binary.length < 4 ||
     binary.charCodeAt(0) !== 0x50 ||
@@ -374,6 +374,7 @@ export async function analyzeDocumentPdf(input: {
     );
 
   const file = input.existingFile ?? (await input.persist(input.input));
+  const isPdf = documentExtensionForFilename(input.input.filename) === ".pdf";
   const mime =
     documentMimeForFilename(input.input.filename) ?? "application/pdf";
   const formatHint =
@@ -413,9 +414,11 @@ export async function analyzeDocumentPdf(input: {
         model,
         max_tokens: 4000,
         temperature: 0.1,
-        // Use provider-native PDF support when available; otherwise OpenRouter
-        // selects its OCR parser. The legacy pdf-text alias can lose document text.
-        plugins: [{ id: "file-parser" }],
+        // The OpenRouter file-parser plugin only handles PDFs ("PDF Inputs").
+        // Office files ride the model's native file support instead, so the
+        // plugin is attached for PDFs only. The legacy pdf-text alias can
+        // lose document text.
+        ...(isPdf ? { plugins: [{ id: "file-parser" }] } : {}),
         messages: [
           { role: "system", content: instructions },
           {
