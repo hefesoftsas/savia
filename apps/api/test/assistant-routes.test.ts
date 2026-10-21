@@ -246,6 +246,44 @@ describe("assistant routes", () => {
     );
   });
 
+  it("forwards the active screen context to the assistant service", async () => {
+    const service = createAssistantService();
+    const activeScreenContext = {
+      route: "/studio/quotes/123",
+      entityType: "quote",
+      entityId: "123",
+      summary: "Cotización #123 en borrador",
+      metadata: { premium: 1200 },
+    };
+    const response = await createAssistantApp(service).request(
+      "http://api.savia.test/api/assistant/chat",
+      {
+        method: "POST",
+        headers: {
+          authorization: "Bearer current-user-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          messages: [
+            {
+              id: "message-1",
+              role: "user",
+              parts: [{ type: "text", text: "Explica este registro" }],
+            },
+          ],
+          activeScreenContext,
+        }),
+      },
+    );
+
+    expect(response.status).toBe(200);
+    expect(service.chat).toHaveBeenCalledWith(
+      expect.objectContaining({
+        activeScreenContext,
+      }),
+    );
+  });
+
   it("forwards the mention inference preference to the assistant service", async () => {
     const service = createAssistantService();
     const response = await createAssistantApp(service).request(

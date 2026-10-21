@@ -1,3 +1,11 @@
+export type ActiveScreenContext = {
+  route?: string;
+  entityType?: string;
+  entityId?: string;
+  summary?: string;
+  metadata?: Record<string, unknown>;
+};
+
 export type AssistantChatRequest = {
   principalId: string;
   authorization: string;
@@ -12,6 +20,7 @@ export type AssistantChatRequest = {
     title: string;
     content: string;
   };
+  activeScreenContext?: ActiveScreenContext;
 };
 
 export type AssistantActionRequest = {

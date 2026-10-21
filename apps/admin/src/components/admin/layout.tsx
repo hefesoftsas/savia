@@ -7,7 +7,7 @@ import { DeploymentUpdateNotice } from "@/pwa/deployment-recovery-ui";
 import { PwaInstallBanner } from "@/pwa";
 import { CookieConsentBanner } from "@/consent/cookie-consent-banner";
 import type { ErrorInfo } from "react";
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import type { CoreLayoutProps } from "ra-core";
 import { useTranslate } from "ra-core";
@@ -18,6 +18,7 @@ import {
   useNavigate,
   useNavigationType,
 } from "react-router-dom";
+import { useRegisterScreenContext } from "@/features/assistant/active-screen-context";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { Notification } from "@/components/admin/notification";
@@ -163,6 +164,79 @@ function LayoutSidebarTrigger() {
   );
 }
 
+function RouteScreenContextSync() {
+  const { pathname } = useLocation();
+
+  const screenContext = useMemo(() => {
+    if (pathname.startsWith("/studio") || pathname.startsWith("/crm")) {
+      return {
+        route: pathname,
+        entityType: "Studio",
+        summary: "Studio Builder and Collections workspace",
+      };
+    }
+    if (pathname.startsWith("/my-day")) {
+      return {
+        route: pathname,
+        entityType: "My Day",
+        summary: "Daily operational overview and assigned tasks",
+      };
+    }
+    if (pathname.startsWith("/bookings")) {
+      return {
+        route: pathname,
+        entityType: "Bookings",
+        summary: "Appointment booking configuration and schedule",
+      };
+    }
+    if (pathname.startsWith("/my-integrations")) {
+      return {
+        route: pathname,
+        entityType: "Integrations",
+        summary: "Personal integrations and virtual employees",
+      };
+    }
+    if (pathname.startsWith("/service-credentials")) {
+      return {
+        route: pathname,
+        entityType: "Settings",
+        summary: "Service credentials and assistant configuration",
+      };
+    }
+    if (pathname.startsWith("/companion-recordings")) {
+      return {
+        route: pathname,
+        entityType: "Companion",
+        summary: "Companion audio recordings and transcription review",
+      };
+    }
+    if (pathname.startsWith("/users")) {
+      return {
+        route: pathname,
+        entityType: "Access",
+        summary: "User directory and role management",
+      };
+    }
+    if (pathname.startsWith("/tenants")) {
+      return {
+        route: pathname,
+        entityType: "Tenants",
+        summary: "Tenant management and workspace administration",
+      };
+    }
+    if (pathname && pathname !== "/") {
+      return {
+        route: pathname,
+        summary: `Screen ${pathname}`,
+      };
+    }
+    return null;
+  }, [pathname]);
+
+  useRegisterScreenContext(screenContext);
+  return null;
+}
+
 export const Layout = (props: CoreLayoutProps) => {
   const { pathname } = useLocation();
   const hasModuleNavigation =
@@ -175,6 +249,7 @@ export const Layout = (props: CoreLayoutProps) => {
   };
   return (
     <>
+      <RouteScreenContextSync />
       <SidebarProvider
         controlsEnabled={!hasModuleNavigation}
         inert={closingSession}
