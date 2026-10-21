@@ -31,6 +31,8 @@ import { storeConfigFor } from "@savia/studio-server/plugin-store";
 import { solutionOptions } from "../solutions/catalog";
 import {
   DocumentAnalysisError,
+  documentExtensionForFilename,
+  documentMimeForFilename,
   handleStudioDocumentAnalysis,
 } from "../studio/document-analysis";
 import {
@@ -406,7 +408,8 @@ export function registerStudioRoutes(
           form.set(
             "file",
             new File([bytes.buffer], document.filename, {
-              type: "application/pdf",
+              type:
+                documentMimeForFilename(document.filename) ?? "application/pdf",
             }),
           );
           const uploaded = await gateway.fetch(
@@ -420,7 +423,7 @@ export function registerStudioRoutes(
           } | null;
           if (!uploaded.ok || !body?.data || typeof body.data !== "object")
             throw new DocumentAnalysisError(
-              "The PDF could not be saved to this record.",
+              "The document could not be saved to this record.",
               uploaded.status === 403
                 ? 403
                 : uploaded.status === 404
@@ -453,11 +456,11 @@ export function registerStudioRoutes(
             }>();
           if (
             !row ||
-            row.mime.toLowerCase() !== "application/pdf" ||
+            !documentExtensionForFilename(row.name) ||
             row.size > 5 * 1024 * 1024
           )
             throw new DocumentAnalysisError(
-              "The saved PDF could not be found for this record.",
+              "The saved document could not be found for this record.",
               404,
               "DOCUMENT_NOT_FOUND",
             );
@@ -468,23 +471,36 @@ export function registerStudioRoutes(
           );
           if (!downloaded.ok)
             throw new DocumentAnalysisError(
-              "The saved PDF could not be loaded for this record.",
+              "The saved document could not be loaded for this record.",
               downloaded.status === 403 ? 403 : 404,
               "DOCUMENT_NOT_FOUND",
             );
           const buffer = await downloaded.arrayBuffer();
           if (buffer.byteLength > 5 * 1024 * 1024)
             throw new DocumentAnalysisError(
-              "PDF files must be 5 MB or smaller.",
+              "Document files must be 5 MB or smaller.",
               413,
               "DOCUMENT_TOO_LARGE",
             );
           const content = new Uint8Array(buffer);
-          if (new TextDecoder().decode(content.subarray(0, 5)) !== "%PDF-")
+          if (documentExtensionForFilename(row.name) === ".pdf") {
+            if (new TextDecoder().decode(content.subarray(0, 5)) !== "%PDF-")
+              throw new DocumentAnalysisError(
+                "The saved file does not contain a valid PDF.",
+                415,
+                "INVALID_PDF",
+              );
+          } else if (
+            content.length < 4 ||
+            content[0] !== 0x50 ||
+            content[1] !== 0x4b ||
+            content[2] !== 0x03 ||
+            content[3] !== 0x04
+          )
             throw new DocumentAnalysisError(
-              "The saved file does not contain a valid PDF.",
+              "The saved file is not a valid Office document.",
               415,
-              "INVALID_PDF",
+              "INVALID_DOCUMENT",
             );
           let binary = "";
           for (let offset = 0; offset < content.length; offset += 0x7ffe)

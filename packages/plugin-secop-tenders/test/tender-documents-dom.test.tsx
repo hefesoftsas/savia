@@ -4,11 +4,11 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { PluginApi } from "@savia/plugin-sdk";
 import { TenderDocuments } from "../tender-documents";
-import { analyzeTenderPdf, pdfBase64 } from "../documents";
+import { analyzeTenderPdf, documentBase64 } from "../documents";
 vi.mock("../documents", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../documents")>()),
   analyzeTenderPdf: vi.fn(),
-  pdfBase64: vi.fn().mockResolvedValue("JVBERi0="),
+  documentBase64: vi.fn().mockResolvedValue("JVBERi0="),
 }));
 vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
 let root: Root;
@@ -119,7 +119,7 @@ describe("tender documents UI", () => {
       model: "configured/model",
       analyzedAt: "2026-10-15T01:00:00Z",
     });
-    await click("Analizar un PDF descargado");
+    await click("Analizar un documento descargado");
     const input = host.querySelector<HTMLInputElement>('input[type="file"]')!;
     Object.defineProperty(input, "files", {
       value: [
@@ -131,11 +131,12 @@ describe("tender documents UI", () => {
     );
     expect(
       [...host.querySelectorAll("button")].find(
-        (button) => button.textContent === "Guardar interés y analizar PDF",
+        (button) =>
+          button.textContent === "Guardar interés y analizar documento",
       )?.type,
     ).toBe("button");
-    await click("Guardar interés y analizar PDF");
-    expect(pdfBase64).toHaveBeenCalled();
+    await click("Guardar interés y analizar documento");
+    expect(documentBase64).toHaveBeenCalled();
     expect(analyzeTenderPdf).toHaveBeenCalledWith(
       expect.objectContaining({
         recordId: "interest-1",
@@ -160,7 +161,7 @@ describe("tender documents UI", () => {
       model: "configured/model",
       analyzedAt: "2026-10-15T01:00:00Z",
     });
-    await click("Analizar este PDF");
+    await click("Analizar documento");
     expect(analyzeTenderPdf).toHaveBeenCalledWith(
       expect.objectContaining({
         recordId: "interest-1",
@@ -169,7 +170,7 @@ describe("tender documents UI", () => {
         sourceUrl: documentRow.url_descarga_documento.url,
       }),
     );
-    expect(pdfBase64).not.toHaveBeenCalled();
+    expect(documentBase64).not.toHaveBeenCalled();
     expect(host.querySelector('input[type="file"]')).toBeNull();
     expect(reports.create).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -185,7 +186,7 @@ describe("tender documents UI", () => {
         code: "DOCUMENT_ACCESS_CHALLENGE",
       }),
     );
-    await click("Analizar este PDF");
+    await click("Analizar documento");
     expect(host.querySelector('[role="alert"]')?.textContent).toContain(
       "CAPTCHA",
     );
@@ -213,7 +214,7 @@ describe("tender documents UI", () => {
         fileId: "saved-file-1",
       }),
     );
-    await click("Analizar este PDF");
+    await click("Analizar documento");
     expect(host.querySelector('input[type="file"]')).toBeNull();
     vi.mocked(analyzeTenderPdf).mockResolvedValue({
       file: { id: "saved-file-1", name: "Pliego definitivo.pdf" },
@@ -240,14 +241,14 @@ describe("tender documents UI", () => {
         code: "DOCUMENT_DOWNLOAD_FAILED",
       }),
     );
-    await click("Analizar este PDF");
+    await click("Analizar documento");
     expect(host.querySelector('input[type="file"]')).toBeNull();
     expect(host.querySelector('[role="alert"]')?.textContent).toContain(
       "descargar",
     );
     expect(reports.create).not.toHaveBeenCalled();
   });
-  it("downloads non-PDF attachments without offering unsupported automatic analysis", async () => {
+  it("offers automatic analysis for Office attachments but not for images", async () => {
     await mount({
       data: [{ ...documentRow, nombre_archivo: "Anexo financiero.xlsx" }],
       hasNext: false,
@@ -255,7 +256,16 @@ describe("tender documents UI", () => {
     expect(host.querySelector('a[href*="RetrieveFile"]')).not.toBeNull();
     expect(
       [...host.querySelectorAll("button")].some(
-        (button) => button.textContent === "Analizar este PDF",
+        (button) => button.textContent === "Analizar documento",
+      ),
+    ).toBe(true);
+    await mount({
+      data: [{ ...documentRow, nombre_archivo: "foto.png" }],
+      hasNext: false,
+    });
+    expect(
+      [...host.querySelectorAll("button")].some(
+        (button) => button.textContent === "Analizar documento",
       ),
     ).toBe(false);
   });
@@ -270,7 +280,7 @@ describe("tender documents UI", () => {
       model: "model",
       analyzedAt: "2026-10-15T01:00:00Z",
     });
-    await click("Analizar este PDF");
+    await click("Analizar documento");
     const input = vi.mocked(analyzeTenderPdf).mock.calls[0][0];
     expect("filename" in input && input.filename.length).toBeLessThanOrEqual(
       200,
@@ -290,7 +300,7 @@ describe("tender documents UI", () => {
       model: "configured/model",
       analyzedAt: "2026-10-15T01:00:00Z",
     });
-    await click("Analizar un PDF descargado");
+    await click("Analizar un documento descargado");
     const input = host.querySelector<HTMLInputElement>('input[type="file"]')!;
     Object.defineProperty(input, "files", {
       value: [new File(["%PDF-1.7"], "pliego.pdf")],
@@ -298,7 +308,7 @@ describe("tender documents UI", () => {
     await act(async () =>
       input.dispatchEvent(new Event("change", { bubbles: true })),
     );
-    await click("Guardar interés y analizar PDF");
+    await click("Guardar interés y analizar documento");
     expect(host.textContent).toContain("Retained analysis");
     expect(host.querySelector<HTMLButtonElement>("button")?.disabled).toBe(
       true,

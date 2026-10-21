@@ -514,4 +514,32 @@ describe("remote document downloads", () => {
     });
     expect(fetcher).not.toHaveBeenCalled();
   });
+
+  it("downloads Office documents and rejects unsupported extensions", async () => {
+    const office = new Uint8Array([0x50, 0x4b, 0x03, 0x04, 0x00]);
+    const fetcher = fetchWith([
+      new Response(office, {
+        headers: {
+          "content-type":
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        },
+      }),
+    ]);
+    const result = await downloadRemotePdf(
+      "https://docs.example.com/anexo.xlsx",
+      "anexo.xlsx",
+      fetcher,
+      publicDownloadHosts,
+    );
+    expect(result.filename).toBe("anexo.xlsx");
+    expect(result.content).toEqual(office);
+    await expect(
+      downloadRemotePdf(
+        "https://docs.example.com/foto.png",
+        "foto.png",
+        fetchWith([]),
+        publicDownloadHosts,
+      ),
+    ).rejects.toMatchObject({ code: "INVALID_DOCUMENT" });
+  });
 });

@@ -524,6 +524,22 @@ function formatAmount(value: unknown, locale: Locale) {
   ).format(Number(value));
 }
 
+function LoadingCard({ text, lines = 3 }: { text: string; lines?: number }) {
+  return (
+    <div className="secop-loading-card" role="status">
+      <div className="secop-loading-spinner" aria-hidden="true" />
+      <div className="secop-loading-card-body">
+        <p>{text}</p>
+        <div className="secop-skeleton-lines" aria-hidden="true">
+          {Array.from({ length: lines }).map((_, index) => (
+            <span key={index} />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Screen({ savia }: { savia: PluginApi }) {
   const routeApi = savia.route;
   const locale = isLocale(savia.i18n?.locale);
@@ -991,55 +1007,75 @@ function Screen({ savia }: { savia: PluginApi }) {
             <h1>{t.title}</h1>
           </div>
         </header>
-        <p
-          className="secop-state"
-          role={routeLoad === "error" ? "alert" : "status"}
-        >
-          {routeLoad === "loading"
-            ? t.deepLinkLoading
-            : routeLoad === "not-found"
-              ? t.deepLinkNotFound
-              : t.deepLinkError}
-        </p>
-        {routeLoad === "error" && (
-          <button
-            type="button"
-            onClick={() => {
-              if (routeState === null) {
-                setRouteLoad("loading");
-                const request = ++routeRead.current;
-                const revision = routeRevision.current;
-                const writeRevision = routeWrite.current;
-                void routeApi
-                  .get()
-                  .then((state) => {
-                    if (
-                      request === routeRead.current &&
-                      revision === routeRevision.current &&
-                      writeRevision === routeWrite.current
-                    ) {
-                      setRouteState({ ...state });
-                      routeWrite.current++;
-                    }
-                  })
-                  .catch(() => {
-                    if (
-                      request === routeRead.current &&
-                      revision === routeRevision.current &&
-                      writeRevision === routeWrite.current
-                    )
-                      setRouteLoad("error");
-                  });
-              } else setRouteRetry((attempt) => attempt + 1);
-            }}
+        {routeLoad === "loading" ? (
+          <LoadingCard text={t.deepLinkLoading} />
+        ) : (
+          <div
+            className="secop-empty"
+            role={routeLoad === "error" ? "alert" : "status"}
           >
-            {t.retry}
-          </button>
+            <p>
+              {routeLoad === "not-found" ? t.deepLinkNotFound : t.deepLinkError}
+            </p>
+          </div>
         )}
-        {(routeLoad === "error" || routeLoad === "not-found") && (
-          <button type="button" onClick={leaveTender}>
-            {t.back}
-          </button>
+        {routeLoad === "error" && (
+          <div className="secop-empty-actions">
+            <button
+              type="button"
+              className="secop-primary"
+              onClick={() => {
+                if (routeState === null) {
+                  setRouteLoad("loading");
+                  const request = ++routeRead.current;
+                  const revision = routeRevision.current;
+                  const writeRevision = routeWrite.current;
+                  void routeApi
+                    .get()
+                    .then((state) => {
+                      if (
+                        request === routeRead.current &&
+                        revision === routeRevision.current &&
+                        writeRevision === routeWrite.current
+                      ) {
+                        setRouteState({ ...state });
+                        routeWrite.current++;
+                      }
+                    })
+                    .catch(() => {
+                      if (
+                        request === routeRead.current &&
+                        revision === routeRevision.current &&
+                        writeRevision === routeWrite.current
+                      )
+                        setRouteLoad("error");
+                    });
+                } else setRouteRetry((attempt) => attempt + 1);
+              }}
+            >
+              {t.retry}
+            </button>
+            {(routeLoad === "error" || routeLoad === "not-found") && (
+              <button
+                type="button"
+                className="secop-text-button"
+                onClick={leaveTender}
+              >
+                {t.back}
+              </button>
+            )}
+          </div>
+        )}
+        {routeLoad === "not-found" && (
+          <div className="secop-empty-actions">
+            <button
+              type="button"
+              className="secop-text-button"
+              onClick={leaveTender}
+            >
+              {t.back}
+            </button>
+          </div>
         )}
       </main>
     );
@@ -1086,7 +1122,19 @@ function Screen({ savia }: { savia: PluginApi }) {
       </nav>
       {notice && (
         <p className="secop-notice" role="status">
-          {notice}
+          {notice}{" "}
+          {notice === t.savedOk && (
+            <button
+              type="button"
+              className="secop-text-button"
+              onClick={() => {
+                setSurface("interests");
+                void loadInterests(1);
+              }}
+            >
+              {t.interests} →
+            </button>
+          )}
         </p>
       )}
       {surface === "search" ? (
@@ -1100,6 +1148,7 @@ function Screen({ savia }: { savia: PluginApi }) {
               <p>{t.connectionHelp}</p>
               <button
                 type="button"
+                className="secop-primary"
                 onClick={() => {
                   for (const field of CATALOG_FIELDS)
                     void loadCatalog(field, catalogGeneration.current);
@@ -1301,34 +1350,37 @@ function Screen({ savia }: { savia: PluginApi }) {
                     ))}
                 </div>
               )}
-            {searchLoading && !searchPage && (
-              <p className="secop-state secop-loading" role="status">
-                {t.loading}
-              </p>
-            )}
+            {searchLoading && !searchPage && <LoadingCard text={t.loading} />}
             {searchError && !searchPage && !connectionRequired && (
-              <p className="secop-error" role="alert">
-                {searchErrorKind === "authorization"
-                  ? t.searchAuthorization
-                  : searchErrorKind === "timeout"
-                    ? t.searchTimeout
-                    : t.searchError}
+              <div className="secop-error" role="alert">
+                <p>
+                  {searchErrorKind === "authorization"
+                    ? t.searchAuthorization
+                    : searchErrorKind === "timeout"
+                      ? t.searchTimeout
+                      : t.searchError}
+                </p>
                 <button
                   type="button"
+                  className="secop-primary"
                   onClick={() => void feed.search(criteria)}
                 >
                   {t.retry}
                 </button>
-              </p>
+              </div>
             )}
             {!searchLoading && !searchError && !searched && (
-              <p className="secop-state">{t.searchFirst}</p>
+              <div className="secop-empty" role="status">
+                <p>{t.searchFirst}</p>
+              </div>
             )}
             {!searchLoading &&
               !searchError &&
               searched &&
               searchPage?.data.length === 0 && (
-                <p className="secop-state">{t.noResults}</p>
+                <div className="secop-empty" role="status">
+                  <p>{t.noResults}</p>
+                </div>
               )}
             {!!searchPage?.data.length && (
               <div className="secop-results">
@@ -1348,7 +1400,7 @@ function Screen({ savia }: { savia: PluginApi }) {
                           {display(row.source_status, t.noData)}
                         </span>
                       </div>
-                      <dl>
+                      <dl className="secop-card-meta">
                         <div>
                           <dt>{t.entityLabel}</dt>
                           <dd>{display(row.entity, t.noData)}</dd>
@@ -1370,7 +1422,7 @@ function Screen({ savia }: { savia: PluginApi }) {
                           </dd>
                         </div>
                       </dl>
-                      <footer>
+                      <footer className="secop-card-actions">
                         <button
                           type="button"
                           className="secop-icon-action"
@@ -1447,29 +1499,32 @@ function Screen({ savia }: { savia: PluginApi }) {
             {!!searchPage?.data.length && (
               <div className="secop-load-more" ref={searchSentinel}>
                 {searchError && (
-                  <p className="secop-error" role="alert">
-                    {searchErrorKind === "authorization"
-                      ? t.searchAuthorization
-                      : searchErrorKind === "timeout"
-                        ? t.searchTimeout
-                        : t.moreError}
-                  </p>
+                  <div className="secop-error" role="alert">
+                    <p>
+                      {searchErrorKind === "authorization"
+                        ? t.searchAuthorization
+                        : searchErrorKind === "timeout"
+                          ? t.searchTimeout
+                          : t.moreError}
+                    </p>
+                  </div>
                 )}
                 {searchLoading && (
-                  <p className="secop-loading" role="status">
-                    {t.loadingMore}
-                  </p>
+                  <LoadingCard text={t.loadingMore} lines={1} />
                 )}
                 {searchPage.hasNext ? (
                   <button
                     type="button"
+                    className={searchError ? "secop-primary" : undefined}
                     disabled={searchLoading}
                     onClick={() => void feed.more()}
                   >
                     {searchError ? t.retry : t.loadMore}
                   </button>
                 ) : (
-                  <p role="status">{t.endResults}</p>
+                  <p className="secop-end-results" role="status">
+                    {t.endResults}
+                  </p>
                 )}
               </div>
             )}
@@ -1511,24 +1566,23 @@ function Screen({ savia }: { savia: PluginApi }) {
               {t.run}
             </button>
           </form>
-          {interestLoading && (
-            <p className="secop-state secop-loading" role="status">
-              {t.loadingInterests}
-            </p>
-          )}
+          {interestLoading && <LoadingCard text={t.loadingInterests} />}
           {interestError && (
-            <p className="secop-error" role="alert">
-              {t.interestsError}
+            <div className="secop-error" role="alert">
+              <p>{t.interestsError}</p>
               <button
                 type="button"
+                className="secop-primary"
                 onClick={() => void loadInterests(interestPage)}
               >
                 {t.run}
               </button>
-            </p>
+            </div>
           )}
           {!interestLoading && !interestError && interests.length === 0 && (
-            <p className="secop-state">{t.emptyInterests}</p>
+            <div className="secop-empty" role="status">
+              <p>{t.emptyInterests}</p>
+            </div>
           )}
           <div className="secop-interests">
             {interests.map((record) => {

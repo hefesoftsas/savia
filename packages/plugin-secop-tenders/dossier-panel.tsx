@@ -148,6 +148,23 @@ const copy = {
     officialFile: "Archivo oficial",
     provideText: "Aportar versión con texto",
     reviewedExtraction: "Revisé la extracción completa",
+    guideSteps: ["Guardar", "Procesar", "Evaluar", "Conversar"],
+    guideNext: "Siguiente paso",
+    guidePrepareHint:
+      "Paso 1 de 4. Guarda la licitación y deja que el sistema lea todos los archivos. Un solo clic.",
+    guideProcessingHint:
+      "Paso 2 de 4. Estamos leyendo los archivos. Puedes salir y volver; te avisamos al terminar.",
+    guideReviewHint:
+      "Paso 2 de 4. El informe cambió o aún no existe. Pulsa Actualizar para regenerarlo.",
+    guideCompanyHint:
+      "Paso 3 de 4. Elige tu empresa y sube sus evidencias para poder comparar.",
+    guideEvaluateHint:
+      "Paso 3 de 4. Ya hay empresa y documentos. Pulsa Evaluar para ver qué te falta.",
+    guideChatHint:
+      "Paso 4 de 4. Todo listo. Pregunta en el chat con citas al documento original.",
+    guideDocumentsReady: "documentos listos",
+    guideGoCompany: "Ir a Mi empresa",
+    guideGoChat: "Ir al asistente",
     assistantTitle: "Esta licitación, en el chat de Savia",
     assistantHelp:
       "Consulta las fuentes y genera un borrador de propuesta DOCX desde el chat. La licitación y la empresa seleccionadas acompañan cada acción.",
@@ -297,6 +314,23 @@ const copy = {
     officialFile: "Official file",
     provideText: "Provide a text version",
     reviewedExtraction: "I reviewed the full extraction",
+    guideSteps: ["Save", "Process", "Evaluate", "Chat"],
+    guideNext: "Next step",
+    guidePrepareHint:
+      "Step 1 of 4. Save the tender and let the system read every file. One click.",
+    guideProcessingHint:
+      "Step 2 of 4. Reading the files. You can leave and come back.",
+    guideReviewHint:
+      "Step 2 of 4. The report changed or does not exist yet. Press Refresh to rebuild it.",
+    guideCompanyHint:
+      "Step 3 of 4. Pick your company and upload its evidence to compare.",
+    guideEvaluateHint:
+      "Step 3 of 4. Company and documents ready. Press Evaluate to see what is missing.",
+    guideChatHint:
+      "Step 4 of 4. All set. Ask in the chat with quotes from the original document.",
+    guideDocumentsReady: "documents ready",
+    guideGoCompany: "Go to My company",
+    guideGoChat: "Go to the assistant",
     assistantTitle: "Discuss this tender in Savia chat",
     assistantHelp:
       "Discuss the dossier sources and generate a DOCX proposal draft from chat. The selected tender and company accompany each action.",
@@ -445,6 +479,23 @@ const copy = {
     officialFile: "Arquivo oficial",
     provideText: "Enviar versão com texto",
     reviewedExtraction: "Revisei a extração completa",
+    guideSteps: ["Salvar", "Processar", "Avaliar", "Conversar"],
+    guideNext: "Próximo passo",
+    guidePrepareHint:
+      "Passo 1 de 4. Salve a licitação e deixe o sistema ler todos os arquivos. Um clique.",
+    guideProcessingHint:
+      "Passo 2 de 4. Lendo os arquivos. Você pode sair e voltar.",
+    guideReviewHint:
+      "Passo 2 de 4. O relatório mudou ou ainda não existe. Atualize para gerar de novo.",
+    guideCompanyHint:
+      "Passo 3 de 4. Escolha sua empresa e envie as evidências para comparar.",
+    guideEvaluateHint:
+      "Passo 3 de 4. Empresa e documentos prontos. Avalie para ver o que falta.",
+    guideChatHint:
+      "Passo 4 de 4. Tudo pronto. Pergunte no chat com citações do documento original.",
+    guideDocumentsReady: "documentos prontos",
+    guideGoCompany: "Ir para Minha empresa",
+    guideGoChat: "Ir para o assistente",
     assistantTitle: "Converse sobre esta licitação no Savia",
     assistantHelp:
       "Consulte as fontes e gere um rascunho de proposta DOCX no chat. A licitação e a empresa selecionadas acompanham cada ação.",
@@ -679,6 +730,21 @@ export function DossierPanel({
         .map((job) => [job.id, job]),
     ).values(),
   );
+  const cancellableGroups = Array.from(
+    cancellableJobs
+      .reduce((groups, job) => {
+        const key = job.kind ?? job.id;
+        const list = groups.get(key) ?? [];
+        list.push(job);
+        groups.set(key, list);
+        return groups;
+      }, new Map<string, Job[]>())
+      .entries(),
+  ).map(([kind, jobs]) => ({ kind, jobs }));
+  // Avoid contradiction: show the finished notice only once no active jobs
+  // remain. If prepare finished while extracts are still queued, keep only
+  // the in-progress indicator.
+  const visibleNotice = activeJobs && notice === t.finishedJob ? "" : notice;
   useEffect(() => {
     if (!client || !activeJobs) return;
     const timer = setInterval(() => {
@@ -889,6 +955,23 @@ export function DossierPanel({
     JSON.stringify([...(assessment.value.selectedLots ?? [])].sort()) !==
       JSON.stringify(selectedLots),
   );
+  const guideTotal = snapshot?.documentTotal ?? 0;
+  const guideReady = snapshot
+    ? snapshot.documents.filter((doc) =>
+        ["ready", "review_required", "analyzed"].includes(doc.value.state),
+      ).length
+    : 0;
+  const guidePct =
+    guideTotal > 0
+      ? Math.min(100, Math.round((guideReady / guideTotal) * 100))
+      : 0;
+  const guideStage = !snapshot?.dossier
+    ? 0
+    : activeJobs || !report || stale
+      ? 1
+      : !companyId || !detail || !assessment || assessment.stale || lotsMismatch
+        ? 2
+        : 3;
   const documents = (docs: Stored<DossierDocument>[]) => (
     <ul className="secop-dossier-list">
       {docs.map((doc) => (
@@ -1000,15 +1083,34 @@ export function DossierPanel({
         <h1>{String(row.name ?? t.headingFallback)}</h1>
         <p className="secop-dossier-help">{t.help}</p>
       </header>
-      {initializing && <p role="status">{t.checking}</p>}
-      {error && (
-        <div className="secop-dossier-error" role="alert">
-          {error}
+      {initializing && (
+        <div className="secop-loading-card" role="status">
+          <div className="secop-loading-spinner" aria-hidden="true" />
+          <div>
+            <p>{t.checking}</p>
+            <div className="secop-skeleton-lines" aria-hidden="true">
+              <span />
+              <span />
+              <span />
+            </div>
+          </div>
         </div>
       )}
-      {notice && (
+      {error && (
+        <div className="secop-dossier-error" role="alert">
+          <p>{error}</p>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void run(() => refresh())}
+          >
+            {t.update}
+          </button>
+        </div>
+      )}
+      {visibleNotice && (
         <p className="secop-dossier-notice" role="status">
-          {notice}
+          {visibleNotice}
         </p>
       )}
       {!initializing && !client && (
@@ -1096,28 +1198,171 @@ export function DossierPanel({
             ))}
           </div>
           {activeJobs && (
-            <p className="secop-dossier-working" role="status">
-              <RefreshCw size={16} aria-hidden="true" /> {t.working}
-              {cancellableJobs.map((job) => (
-                <button
-                  key={job.id}
-                  type="button"
-                  aria-label={`${t.cancel} ${job.kind ?? job.id}`}
-                  disabled={busy}
-                  onClick={() =>
-                    void run(async () => {
-                      await client.call("cancel", { id: job.id });
-                      if (pendingJob?.id === job.id) setPendingJob(null);
-                      await refresh();
-                    })
-                  }
-                >
-                  {t.cancel}
-                  {cancellableJobs.length > 1 ? ` · ${job.kind ?? job.id}` : ""}
-                </button>
-              ))}
-            </p>
+            <div className="secop-dossier-working" role="status">
+              <span className="secop-dossier-working-label">
+                <RefreshCw size={16} aria-hidden="true" />
+                <span>{t.working}</span>
+              </span>
+              <div className="secop-dossier-working-actions">
+                {cancellableGroups.map(({ kind, jobs }) =>
+                  jobs.length === 1 ? (
+                    <button
+                      key={jobs[0].id}
+                      type="button"
+                      className="secop-dossier-cancel"
+                      aria-label={`${t.cancel} ${jobs[0].kind ?? jobs[0].id}`}
+                      disabled={busy}
+                      onClick={() =>
+                        void run(async () => {
+                          await client.call("cancel", { id: jobs[0].id });
+                          if (pendingJob?.id === jobs[0].id)
+                            setPendingJob(null);
+                          await refresh();
+                        })
+                      }
+                    >
+                      {t.cancel}
+                      {cancellableJobs.length > 1
+                        ? ` · ${jobs[0].kind ?? jobs[0].id}`
+                        : ""}
+                    </button>
+                  ) : (
+                    <button
+                      key={kind}
+                      type="button"
+                      className="secop-dossier-cancel"
+                      aria-label={`${t.cancel} ${jobs.length} ${kind}`}
+                      title={jobs.map((job) => job.id).join(", ")}
+                      disabled={busy}
+                      onClick={() =>
+                        void run(async () => {
+                          await Promise.all(
+                            jobs.map((job) =>
+                              client.call("cancel", { id: job.id }),
+                            ),
+                          );
+                          if (
+                            pendingJob &&
+                            jobs.some((job) => job.id === pendingJob.id)
+                          )
+                            setPendingJob(null);
+                          await refresh();
+                        })
+                      }
+                    >
+                      {t.cancel} {jobs.length} · {kind}
+                    </button>
+                  ),
+                )}
+              </div>
+            </div>
           )}
+          <section className="secop-guide" aria-label={t.guideNext}>
+            <ol>
+              {t.guideSteps.map((label, index) => (
+                <li
+                  key={label}
+                  aria-current={guideStage === index ? "step" : undefined}
+                  data-active={guideStage === index}
+                  data-done={guideStage > index}
+                >
+                  <span aria-hidden="true">{index + 1}</span> {label}
+                </li>
+              ))}
+            </ol>
+            {snapshot?.dossier && guideTotal > 0 && (
+              <div
+                className="secop-guide-progress"
+                role="status"
+                aria-label={`${guideReady} de ${guideTotal} ${t.guideDocumentsReady}`}
+              >
+                <div aria-hidden="true">
+                  <div style={{ width: `${guidePct}%` }} />
+                </div>
+                <p>
+                  {guideReady} de {guideTotal} {t.guideDocumentsReady} ·{" "}
+                  {guidePct}%
+                </p>
+              </div>
+            )}
+            <div className="secop-guide-next">
+              <strong>{t.guideNext}</strong>
+              {guideStage === 0 && (
+                <>
+                  <p>{t.guidePrepareHint}</p>
+                  <button
+                    type="button"
+                    className="secop-primary"
+                    disabled={busy || Boolean(activeJobs)}
+                    onClick={() => void prepare()}
+                  >
+                    {t.prepareDossier}
+                  </button>
+                </>
+              )}
+              {guideStage === 1 && activeJobs && (
+                <>
+                  <p>{t.guideProcessingHint}</p>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void run(() => refresh())}
+                  >
+                    {t.update}
+                  </button>
+                </>
+              )}
+              {guideStage === 1 && !activeJobs && (
+                <>
+                  <p>{t.guideReviewHint}</p>
+                  <button
+                    type="button"
+                    className="secop-primary"
+                    disabled={busy}
+                    onClick={() => void prepare()}
+                  >
+                    {t.updateDossier}
+                  </button>
+                </>
+              )}
+              {guideStage === 2 && !companyId && (
+                <>
+                  <p>{t.guideCompanyHint}</p>
+                  <button
+                    type="button"
+                    className="secop-primary"
+                    onClick={() => selectTab("company")}
+                  >
+                    {t.guideGoCompany}
+                  </button>
+                </>
+              )}
+              {guideStage === 2 && Boolean(companyId) && (
+                <>
+                  <p>{t.guideEvaluateHint}</p>
+                  <button
+                    type="button"
+                    className="secop-primary"
+                    onClick={() => selectTab("company")}
+                  >
+                    {t.evaluate}
+                  </button>
+                </>
+              )}
+              {guideStage === 3 && (
+                <>
+                  <p>{t.guideChatHint}</p>
+                  <button
+                    type="button"
+                    className="secop-primary"
+                    onClick={() => selectTab("chat")}
+                  >
+                    {t.guideGoChat}
+                  </button>
+                </>
+              )}
+            </div>
+          </section>
           {uploadLink && (
             <div className="secop-dossier-notice">
               <a href={uploadLink} target="_blank" rel="noopener noreferrer">
@@ -1319,6 +1564,14 @@ export function DossierPanel({
                     <FileText size={24} aria-hidden="true" />
                     <h3>{t.emptyDocuments}</h3>
                     <p>{t.emptyDocumentsHelp}</p>
+                    <button
+                      type="button"
+                      className="secop-primary"
+                      disabled={busy}
+                      onClick={() => void prepare()}
+                    >
+                      {snapshot?.dossier ? t.updateDossier : t.prepareDossier}
+                    </button>
                   </div>
                 ) : null}
                 {snapshot?.nextOffset !== null &&
@@ -1336,7 +1589,20 @@ export function DossierPanel({
             {tab === "requirements" && (
               <>
                 <h2>{t.sourcedRequirements}</h2>
-                {!report && <p>{t.prepareForRequirements}</p>}
+                {!report && (
+                  <div className="secop-dossier-empty" role="status">
+                    <ListChecks size={24} aria-hidden="true" />
+                    <p>{t.prepareForRequirements}</p>
+                    <button
+                      type="button"
+                      className="secop-primary"
+                      disabled={busy}
+                      onClick={() => void prepare()}
+                    >
+                      {snapshot?.dossier ? t.updateDossier : t.prepareDossier}
+                    </button>
+                  </div>
+                )}
                 <ul className="secop-dossier-list">
                   {snapshot?.requirements.map((req) => (
                     <li key={req.id}>
@@ -1684,10 +1950,7 @@ export function DossierPanel({
                     </p>
                   )}
                 {!report && (
-                  <p className="secop-dossier-help">
-                    Primero prepara el expediente para conversar con sus
-                    documentos.
-                  </p>
+                  <p className="secop-dossier-help">{t.prepareBeforeChat}</p>
                 )}
                 {!savia.assistant && (
                   <p role="status" className="secop-dossier-notice">
