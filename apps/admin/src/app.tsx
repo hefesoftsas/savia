@@ -35,6 +35,7 @@ import { tenants } from "@/features/tenants";
 import { users } from "@/features/users";
 import { PasswordResetPage } from "@/features/users/password-reset-page";
 import { AppServicesProvider } from "@/features/assistant/assistant-context";
+import { ActiveScreenContextProvider } from "@/features/assistant/active-screen-context";
 import { Admin } from "@/components/admin";
 import { AppLocaleProvider } from "@/i18n/app-locale-provider";
 import { resolveInitialAppLocale } from "@/i18n/locale-storage";
@@ -331,13 +332,15 @@ export function App({ services }: { services?: AppServices } = {}) {
   return (
     <QueryClientProvider client={queryClient}>
       <AppServicesProvider services={providedServices}>
-        <TenantBrandingProvider>
-          <AppContent
-            key={generation}
-            services={providedServices}
-            queryClient={queryClient}
-          />
-        </TenantBrandingProvider>
+        <ActiveScreenContextProvider>
+          <TenantBrandingProvider>
+            <AppContent
+              key={generation}
+              services={providedServices}
+              queryClient={queryClient}
+            />
+          </TenantBrandingProvider>
+        </ActiveScreenContextProvider>
       </AppServicesProvider>
     </QueryClientProvider>
   );

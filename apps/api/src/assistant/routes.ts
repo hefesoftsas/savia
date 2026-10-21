@@ -39,6 +39,14 @@ import {
   assistantThreadWriteSchema,
 } from "./threads";
 
+const activeScreenContextSchema = z.object({
+  route: z.string().trim().max(500).optional(),
+  entityType: z.string().trim().max(100).optional(),
+  entityId: z.string().trim().max(200).optional(),
+  summary: z.string().trim().max(2000).optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
+});
+
 const chatRequestSchema = z.object({
   messages: assistantThreadMessagesSchema,
   employeeId: z.string().optional(),
@@ -59,6 +67,7 @@ const chatRequestSchema = z.object({
     }, "An OpenRouter model must use provider/model format")
     .optional(),
   threadId: z.string().uuid().optional(),
+  activeScreenContext: activeScreenContextSchema.optional(),
 });
 
 function assertEmployeeModelAdministrator(
@@ -631,6 +640,7 @@ export function registerAssistantRoutes(
         responseMode: parsed.data.responseMode,
         model: parsed.data.model,
         trustedContext,
+        activeScreenContext: parsed.data.activeScreenContext,
       });
     } catch (chatError) {
       console.error("[Assistant Chat Error]:", chatError);

@@ -377,6 +377,35 @@ describe("SaviaAssistantService action approvals", () => {
     expect(modelRequest.system).not.toContain("insurance");
   });
 
+  it("injects active screen context into the system prompt when provided", async () => {
+    const { service } = textOnlyService(textOnlyEmployee([]));
+
+    const response = await service.chat({
+      principalId: "screen-context-user",
+      authorization: "Bearer user",
+      employeeHandle: "translator",
+      activeScreenContext: {
+        route: "/studio/claims/CLM-101",
+        entityType: "claim",
+        entityId: "CLM-101",
+        summary: "Siniestro de colisión en revisión",
+      },
+      messages: [
+        {
+          id: "screen-msg-1",
+          role: "user",
+          parts: [{ type: "text", text: "Resume este registro." }],
+        },
+      ],
+    });
+
+    expect(response.status).toBe(200);
+    const modelRequest = streamTextMock.mock.calls[0][0];
+    expect(modelRequest.system).toContain(
+      "The user is currently viewing the following screen in the application: [Route: /studio/claims/CLM-101, Entity: claim, ID: CLM-101, Summary: Siniestro de colisión en revisión].",
+    );
+  });
+
   it("uses responseMode text without MCP for employees with workspace access", async () => {
     const employee = {
       ...textOnlyEmployee(["leads"]),

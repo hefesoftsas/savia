@@ -22,6 +22,10 @@ import {
   saveActiveThreadId,
   type AssistantThreadRecord,
 } from "./assistant-thread-storage";
+import {
+  ActiveScreenContextProvider,
+  useRegisterScreenContext,
+} from "./active-screen-context";
 
 function render(ui: Parameters<typeof rtlRender>[0]) {
   return rtlRender(
@@ -740,6 +744,35 @@ describe("AssistantBar History & Thread Switching", () => {
     );
     expect(attachmentBtn).toBeVisible();
     expect(attachmentBtn).toBeDisabled();
+  });
+
+  it("renders active screen badge when screen context is provided", async () => {
+    const user = userEvent.setup();
+
+    function ScreenWithContext() {
+      useRegisterScreenContext({
+        route: "/studio/quotes/QT-999",
+        entityType: "Cotización",
+        entityId: "QT-999",
+        summary: "Póliza comercial de transportes",
+      });
+      return null;
+    }
+
+    render(
+      <AppServicesProvider services={createMockServices()}>
+        <ActiveScreenContextProvider>
+          <ScreenWithContext />
+          <AssistantBar />
+        </ActiveScreenContextProvider>
+      </AppServicesProvider>,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Abrir asistente" }));
+    const badge = await screen.findByTestId("assistant-active-screen-badge");
+    expect(badge).toBeVisible();
+    expect(badge.textContent).toContain("Cotización");
+    expect(badge.textContent).toContain("Póliza comercial de transportes");
   });
 });
 

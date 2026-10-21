@@ -84,6 +84,10 @@ import { ModelCapabilityBadges } from "@/features/assistant-configuration/model-
 import { getEmployeeAvatarIcon } from "@/features/personal-integrations/employee-avatar-icon";
 import { requestAssistantAction } from "./assistant-api";
 import { useAppServices } from "./assistant-context";
+import {
+  useActiveScreenContext,
+  type ActiveScreenContextValue,
+} from "./active-screen-context";
 import { ActiveTenantSelector } from "./active-tenant-selector";
 import {
   AssistantMarkdown,
@@ -2097,12 +2101,16 @@ export function AssistantConversation({
   }, [virtualEmployees]);
 
   const apiUrl = import.meta.env.VITE_SAVIA_API_URL ?? window.location.origin;
+  const activeScreenContext = useActiveScreenContext();
   const transport = useMemo(
     () =>
       new AssistantChatTransport({
         api: assistantApiUrl(apiUrl),
         credentials: "include",
-        body: { threadId },
+        body: {
+          threadId,
+          ...(activeScreenContext ? { activeScreenContext } : {}),
+        },
         fetch: async (input, init) => {
           const body = JSON.parse(String(init?.body ?? "{}"));
           if (Array.isArray(body.messages)) {
@@ -2119,7 +2127,7 @@ export function AssistantConversation({
           return headers;
         },
       }),
-    [apiUrl, authSession, threadId],
+    [apiUrl, authSession, threadId, activeScreenContext],
   );
   const runtime = useChatRuntime({
     transport,
@@ -2146,6 +2154,20 @@ export function AssistantConversation({
           </div>
         ) : (
           <ActiveTenantSelector client={assistantConfiguration} />
+        )}
+        {activeScreenContext?.summary && !recordingContext && (
+          <div
+            data-testid="assistant-active-screen-badge"
+            className="flex items-center gap-2 border-b bg-muted/40 px-4 py-1.5 text-xs text-muted-foreground"
+          >
+            <Sparkles className="size-3.5 shrink-0 text-primary" />
+            <span className="truncate">
+              {activeScreenContext.entityType
+                ? `${activeScreenContext.entityType}: `
+                : ""}
+              {activeScreenContext.summary}
+            </span>
+          </div>
         )}
         <ThreadPrimitive.Viewport
           className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto px-5 py-5"
