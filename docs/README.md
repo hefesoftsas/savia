@@ -32,6 +32,7 @@ Savia documentation hub. If you are new, follow the onboarding track in order.
 - [Slack and Teams sharing](guides/slack-teams-sharing.md) — personal Nango connections, channel selection, record sharing and OAuth setup.
 
 - [Workspace layout](guides/workspace-layout.md) — mobile and desktop assistant access.
+- [Assistant active screen context](guides/assistant-screen-context.md) — in-app screen context lifecycle, untrusted reference semantics, and security boundaries.
 - [Savia Companion](companion/README.md) — desktop meeting capture validation, architecture, detailed epics and cross-platform evidence gates.
 
 - [Codex orchestration](guides/codex-orchestration.md) — Astra coordination, Luna workers, and local permissions.
