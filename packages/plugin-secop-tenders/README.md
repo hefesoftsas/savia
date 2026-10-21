@@ -2,8 +2,14 @@
 
 An optional Savia tenant plugin for searching live SECOP procurement records and saving selected opportunities to a workspace collection for follow-up. Search history is not persisted. The plugin has Spanish, English, and Portuguese interface copy.
 
+Version 1.8.7 adds DOCX/XLSX document analysis alongside PDF (Office files ride
+the model's native file support; PDFs keep the file-parser plugin), a 4-step
+guided dossier flow (Save, Process, Evaluate, Chat) with a single next-step
+action and document progress, grouped job cancellation, and skeleton loading
+states.
+
 Version 1.8.6 keeps compact contextual actions icon-only with localized
-accessible names and tooltips. PDF analysis records remain persisted in the
+accessible names and tooltips. Document analysis records remain persisted in the
 `procurement_documents` collection but are hidden from the Studio sidebar;
 preparation tasks remain available in their native records screen.
 
