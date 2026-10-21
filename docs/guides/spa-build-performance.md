@@ -9,8 +9,12 @@ round-trip tests check every installed icon and variant against the source data.
 
 Do not combine all dependencies in one catch-all vendor chunk. Optional editors,
 documentation and formatting libraries must remain behind their route imports.
-The compact brand factory belongs to the shared icons chunk explicitly so the
-extension host cannot absorb it into its much larger manually selected chunk.
+Manual chunk rules match the resolved package path after the final `/node_modules/`
+segment rather than raw `.pnpm` virtual-store directory names, so peer-dependency
+suffixes such as `_react-dom@` or `_tailwindcss@` cannot pull route-only packages
+into `react-vendor` or `ui-vendor`. The compact brand factory belongs to the shared
+icons chunk explicitly so the extension host cannot absorb it into its much larger
+manually selected chunk.
 
 The gateway serves canonical asset URLs. Cloudflare negotiates transport
 compression; it does not use the former manually generated `.gz` and `.br`

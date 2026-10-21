@@ -50,3 +50,37 @@ it("keeps a dynamically imported editor out of the initial dependency closure", 
     true,
   );
 });
+
+it("matches resolved package paths rather than .pnpm peer-dependency directory names", () => {
+  expect(
+    saviaManualChunk(
+      "/repo/node_modules/.pnpm/react-dom@18.3.1_react@18.3.1/node_modules/react-dom/index.js",
+    ),
+  ).toBe("react-vendor");
+  expect(
+    saviaManualChunk(
+      "/repo/node_modules/.pnpm/platejs@52.3.15_react-dom@18.3.1_react@18.3.1/node_modules/platejs/dist/index.mjs",
+    ),
+  ).toBeUndefined();
+  expect(
+    saviaManualChunk(
+      "/repo/node_modules/.pnpm/@xyflow+react@12.10.2_@types+react-dom@18.3.7_react-dom@18.3.1_react@18.3.1/node_modules/@xyflow/react/dist/esm/index.mjs",
+    ),
+  ).toBeUndefined();
+  expect(
+    saviaManualChunk(
+      "/repo/node_modules/.pnpm/@scalar+components@0.29.0_tailwindcss@4.3.3/node_modules/@scalar/components/dist/index.js",
+    ),
+  ).toBeUndefined();
+  expect(
+    saviaManualChunk(
+      "/repo/node_modules/.pnpm/vue-sonner@2.0.9_vue@3.5.32/node_modules/vue-sonner/lib/index.mjs",
+    ),
+  ).toBeUndefined();
+  expect(
+    saviaManualChunk(
+      "/repo/node_modules/.pnpm/@radix-ui+react-dialog@1.1.15_react-dom@18.3.1_react@18.3.1/node_modules/@radix-ui/react-dialog/dist/index.mjs",
+    ),
+  ).toBe("ui-vendor");
+});
+

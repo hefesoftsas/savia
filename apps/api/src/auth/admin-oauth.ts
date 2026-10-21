@@ -339,10 +339,14 @@ async function adminClient(
   const response = await service.fetch(
     new Request("https://savia-auth.internal/_internal/oauth/admin-client"),
   );
-  if (!response.ok) return undefined;
+  if (!response.ok) {
+    await response.body?.cancel().catch(() => undefined);
+    return undefined;
+  }
   const payload = (await response.json()) as unknown;
   return validClient(payload) ? payload : undefined;
 }
+
 
 async function createTransaction(
   d1: D1Database,
@@ -523,7 +527,10 @@ async function authorizationRedirect(
   const response = await service.fetch(
     new Request(providerRequest, { headers }),
   );
-  if (!response.ok) return undefined;
+  if (!response.ok) {
+    await response.body?.cancel().catch(() => undefined);
+    return undefined;
+  }
   return providerRedirect(
     await response.json().catch(() => undefined),
     client,
@@ -545,24 +552,35 @@ export function registerAdminOAuthRoutes(
   async function signOutSession(
     request: Request,
     headers: Headers,
+    prechecked?: {
+      knownSessionRecord: { origin: string } | null;
+      tokenHash: string;
+    },
   ): Promise<void> {
     const token = refreshTokenFromRequest(request);
     if (token) {
-      const tokenHash = await codeChallenge(token);
-      const session = await d1
-        .prepare(
-          "SELECT origin FROM admin_oauth_session_origins WHERE token_hash = ?",
-        )
-        .bind(tokenHash)
-        .first<{ origin: string }>();
+      const tokenHash = prechecked?.tokenHash ?? (await codeChallenge(token));
+      const session =
+        prechecked !== undefined
+          ? prechecked.knownSessionRecord
+          : await d1
+              .prepare(
+                "SELECT origin FROM admin_oauth_session_origins WHERE token_hash = ?",
+              )
+              .bind(tokenHash)
+              .first<{ origin: string }>();
       // A shared legacy cookie can belong to another workspace's active tab.
       // It must not let this origin revoke that tab's bridge or provider session.
       if (session && session.origin !== sessionOriginFromRequest(request))
         return;
-      await d1
-        .prepare("DELETE FROM admin_oauth_session_origins WHERE token_hash = ?")
-        .bind(tokenHash)
-        .run();
+      if (session) {
+        await d1
+          .prepare(
+            "DELETE FROM admin_oauth_session_origins WHERE token_hash = ?",
+          )
+          .bind(tokenHash)
+          .run();
+      }
     }
     for (const cookie of clearRefreshCookies(
       request.url,
@@ -599,11 +617,13 @@ export function registerAdminOAuthRoutes(
         console.error("Savia Better Auth sign-out failed", signOut.status);
       }
       appendSetCookies(signOut.headers, headers);
+      await signOut.body?.cancel().catch(() => undefined);
     } catch {
       // The browser and bridge session stay signed out if the provider is unavailable.
       console.error("Savia Better Auth sign-out unavailable");
     }
   }
+
 
   app.get("/api/auth/admin/authorize", async (context) => {
     if (!service)
@@ -914,16 +934,25 @@ export function registerAdminOAuthRoutes(
       );
     }
     const tokenHash = await codeChallenge(currentRefreshToken);
-    const session = await d1
+    const nowIso = new Date().toISOString();
+    const record = await d1
       .prepare(
-        "SELECT origin FROM admin_oauth_session_origins WHERE token_hash = ? AND expires_at > ?",
+        "SELECT origin, expires_at FROM admin_oauth_session_origins WHERE token_hash = ?",
       )
-      .bind(tokenHash, new Date().toISOString())
-      .first<{ origin: string }>();
+      .bind(tokenHash)
+      .first<{ origin: string; expires_at: string }>();
+    const session =
+      record && record.expires_at > nowIso
+        ? { origin: record.origin }
+        : undefined;
     if (!session || session.origin !== requestOrigin) {
       // Another tab may have just signed in at this cookie's origin. Reject
       // this tab without revoking that valid session or clearing shared cookies.
-      if (!session) await signOutSession(context.req.raw, headers);
+      if (!session)
+        await signOutSession(context.req.raw, headers, {
+          knownSessionRecord: record ?? null,
+          tokenHash,
+        });
       return Response.json(
         {
           error: {
