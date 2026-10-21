@@ -46,7 +46,7 @@ describe("Studio extension document analysis", () => {
   it("rejects non-PDF bytes and decoded files above 5 MB", () => {
     expect(() =>
       decodeDocumentPdfRequest({ ...input, data: btoa("not a pdf") }),
-    ).toThrow("PDF");
+    ).toThrow(/PDF|document/i);
 
     const oversized = new Uint8Array(5 * 1024 * 1024 + 1);
     oversized.set(new TextEncoder().encode("%PDF-1.7"));
@@ -59,6 +59,61 @@ describe("Studio extension document analysis", () => {
         data: oversizedBase64,
       }),
     ).toThrow("5 MB");
+  });
+
+  it("accepts DOCX and XLSX uploads with Office signatures and correct MIME", async () => {
+    const officeBytes = new Uint8Array([0x50, 0x4b, 0x03, 0x04, 0x00, 0x01]);
+    let binary = "";
+    for (const byte of officeBytes) binary += String.fromCharCode(byte);
+    const officeBase64 = btoa(binary);
+    for (const filename of ["anexo.xlsx", "pliego.docx"]) {
+      const decoded = decodeDocumentPdfRequest({
+        ...input,
+        filename,
+        data: officeBase64,
+      });
+      expect(decoded.filename).toBe(filename);
+    }
+    expect(() =>
+      decodeDocumentPdfRequest({
+        ...input,
+        filename: "foto.png",
+        data: officeBase64,
+      }),
+    ).toThrow();
+    const assistantConfiguration = configuration();
+    const persist = vi.fn(async () => ({
+      id: "file-office",
+      name: "anexo.xlsx",
+      mime: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      size: officeBytes.byteLength,
+      version: 1,
+    }));
+    const fetchImpl = vi.fn(async () => {
+      const init = fetchImpl.mock.calls[0]?.[1] as RequestInit | undefined;
+      const body = JSON.parse(String(init?.body));
+      expect(body.messages[1].content[1].file.file_data).toMatch(
+        /^data:application\/vnd\.openxmlformats-officedocument\.spreadsheetml\.sheet;base64,/,
+      );
+      return Response.json({
+        choices: [{ message: { content: "Resumen" } }],
+      });
+    });
+    const decoded = decodeDocumentPdfRequest({
+      ...input,
+      filename: "anexo.xlsx",
+      data: officeBase64,
+    });
+    const result = await analyzeDocumentPdf({
+      input: decoded,
+      tenantId: 101,
+      principalId: "member-1",
+      assistantConfiguration,
+      persist,
+      fetchImpl,
+      now: () => new Date("2026-10-14T12:00:00.000Z"),
+    });
+    expect(result.file.id).toBe("file-office");
   });
 
   it("bounds the raw JSON request body even without Content-Length", async () => {
