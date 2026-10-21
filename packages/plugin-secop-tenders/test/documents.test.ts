@@ -3,6 +3,8 @@ import type { PluginApi } from "@savia/plugin-sdk";
 import {
   loadTenderDocuments,
   normalizeTenderDocument,
+  documentBase64,
+  isSupportedDocumentName,
   pdfBase64,
   documentKind,
   safeStoredFileUrl,
@@ -74,6 +76,23 @@ describe("tender documents", () => {
     ).rejects.toThrow();
     await expect(
       pdfBase64(new File([new Uint8Array(5 * 1024 * 1024 + 1)], "large.pdf")),
+    ).rejects.toThrow();
+  });
+  it("accepts Office documents and rejects unsupported uploads", async () => {
+    expect(isSupportedDocumentName("Anexo financiero.xlsx")).toBe(true);
+    expect(isSupportedDocumentName("Pliego de condiciones.docx")).toBe(true);
+    expect(isSupportedDocumentName("Pliego definitivo.pdf")).toBe(true);
+    expect(isSupportedDocumentName("foto.png")).toBe(false);
+    const xlsx = new File(
+      [new Uint8Array([0x50, 0x4b, 0x03, 0x04, 0x00])],
+      "anexo.xlsx",
+      {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      },
+    );
+    await expect(documentBase64(xlsx)).resolves.toBeDefined();
+    await expect(
+      documentBase64(new File(["texto"], "notas.txt", { type: "text/plain" })),
     ).rejects.toThrow();
   });
 });

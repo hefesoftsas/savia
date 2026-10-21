@@ -7,7 +7,8 @@ import {
   safeStoredFileUrl,
   DOCUMENTS_COLLECTION,
   loadTenderDocuments,
-  pdfBase64,
+  documentBase64,
+  isSupportedDocumentName,
   type TenderDocument,
   type DocumentAnalysis,
 } from "./documents";
@@ -19,23 +20,23 @@ const copy = {
     documents: "Documentos",
     load: "Cargando documentos del proceso…",
     empty:
-      "No hay documentos vinculados a este expediente en el catálogo público. Puedes consultar SECOP y analizar un PDF descargado.",
+      "No hay documentos vinculados a este expediente en el catálogo público. Puedes consultar SECOP y analizar un documento descargado (PDF, DOCX o XLSX).",
     error:
       "No se pudieron cargar los documentos. Reintenta o consulta el expediente en SECOP.",
     retry: "Reintentar",
     more: "Cargar más documentos",
     download: "Descargar en SECOP",
-    analyze: "Analizar este PDF",
-    upload: "Analizar un PDF descargado",
-    hint: "Analizar este PDF descarga el archivo oficial y guarda el análisis automáticamente. Solo se analiza el contenido del PDF, nunca el enlace ni su nombre.",
+    analyze: "Analizar documento",
+    upload: "Analizar un documento descargado",
+    hint: "Analizar el documento descarga el archivo oficial y guarda el análisis automáticamente. Solo se analiza el contenido del archivo (PDF, DOCX o XLSX), nunca el enlace ni su nombre.",
     challenge:
-      "SECOP solicita un CAPTCHA o una comprobación de acceso. Abre el documento, completa la comprobación y reintenta. Si continúa bloqueado, descarga el PDF allí y adjúntalo aquí.",
+      "SECOP solicita un CAPTCHA o una comprobación de acceso. Abre el documento, completa la comprobación y reintenta. Si continúa bloqueado, descarga el archivo allí y adjúntalo aquí.",
     retryDownload: "Reintentar descarga automática",
-    remoteRunning: "Descargando PDF y analizando…",
+    remoteRunning: "Descargando documento y analizando…",
     downloadFailed:
-      "No se pudo descargar el PDF. Reintenta o consulta el documento original en SECOP.",
-    file: "PDF descargado (máximo 5 MB)",
-    run: "Guardar interés y analizar PDF",
+      "No se pudo descargar el documento. Reintenta o consulta el documento original en SECOP.",
+    file: "Documento descargado: PDF, DOCX o XLSX (máximo 5 MB)",
+    run: "Guardar interés y analizar documento",
     running: "Guardando archivo y analizando…",
     history: "Análisis guardados",
     historyError: "No se pudieron cargar los análisis guardados.",
@@ -44,13 +45,13 @@ const copy = {
     saveError:
       "El análisis terminó, pero no se pudo guardar el resultado. Conserva esta vista y vuelve a intentar guardar.",
     save: "Guardar resultado",
-    invalid: "Selecciona un archivo PDF válido de hasta 5 MB.",
+    invalid: "Selecciona un archivo válido (PDF, DOCX o XLSX) de hasta 5 MB.",
     aiHint:
       "La IA puede cometer errores. Verifica los requisitos en el documento original; una referencia ausente no confirma que el requisito no exista.",
     source: "Abrir expediente en SECOP",
     selected: "Documento elegido",
     cancel: "Cancelar",
-    savedFile: "Descargar PDF guardado",
+    savedFile: "Descargar documento guardado",
     notConfigured:
       "La IA no está configurada para este espacio. Configúrala en Savia y vuelve a intentar.",
     specification: "Pliego / invitación",
@@ -67,22 +68,22 @@ const copy = {
     documents: "Documents",
     load: "Loading tender documents…",
     empty:
-      "No documents are linked to this portfolio in the public catalog. Open SECOP or analyze a downloaded PDF.",
+      "No documents are linked to this portfolio in the public catalog. Open SECOP or analyze a downloaded document (PDF, DOCX or XLSX).",
     error: "Documents could not be loaded. Retry or open the SECOP portfolio.",
     retry: "Retry",
     more: "Load more documents",
     download: "Download on SECOP",
-    analyze: "Analyze this PDF",
-    upload: "Analyze a downloaded PDF",
-    hint: "Analyze this PDF downloads the official file and saves its analysis automatically. Only the PDF content is analyzed, never the link or filename.",
+    analyze: "Analyze document",
+    upload: "Analyze a downloaded document",
+    hint: "Analyzing the document downloads the official file and saves its analysis automatically. Only the file content (PDF, DOCX or XLSX) is analyzed, never the link or filename.",
     challenge:
-      "SECOP requires a CAPTCHA or access check. Open the document, complete the check, and retry. If it remains blocked, download the PDF there and attach it here.",
+      "SECOP requires a CAPTCHA or access check. Open the document, complete the check, and retry. If it remains blocked, download the file there and attach it here.",
     retryDownload: "Retry automatic download",
-    remoteRunning: "Downloading PDF and analyzing…",
+    remoteRunning: "Downloading document and analyzing…",
     downloadFailed:
-      "The PDF could not be downloaded. Retry or open the original document on SECOP.",
-    file: "Downloaded PDF (up to 5 MB)",
-    run: "Save interest and analyze PDF",
+      "The document could not be downloaded. Retry or open the original document on SECOP.",
+    file: "Downloaded document: PDF, DOCX or XLSX (up to 5 MB)",
+    run: "Save interest and analyze document",
     running: "Saving file and analyzing…",
     history: "Saved analyses",
     historyError: "Saved analyses could not be loaded.",
@@ -91,13 +92,13 @@ const copy = {
     saveError:
       "Analysis finished, but its result could not be saved. Keep this view open and retry saving.",
     save: "Save result",
-    invalid: "Select a valid PDF up to 5 MB.",
+    invalid: "Select a valid file (PDF, DOCX or XLSX) up to 5 MB.",
     aiHint:
       "AI can make mistakes. Verify requirements in the original document; missing references do not confirm that a requirement is absent.",
     source: "Open SECOP portfolio",
     selected: "Selected document",
     cancel: "Cancel",
-    savedFile: "Download saved PDF",
+    savedFile: "Download saved document",
     notConfigured:
       "AI is not configured for this workspace. Configure it in Savia and retry.",
     specification: "Specification / invitation",
@@ -113,23 +114,23 @@ const copy = {
     documents: "Documentos",
     load: "Carregando documentos do processo…",
     empty:
-      "Não há documentos vinculados a este expediente no catálogo público. Consulte o SECOP ou analise um PDF baixado.",
+      "Não há documentos vinculados a este expediente no catálogo público. Consulte o SECOP ou analise um documento baixado (PDF, DOCX ou XLSX).",
     error:
       "Não foi possível carregar os documentos. Tente novamente ou abra o SECOP.",
     retry: "Tentar novamente",
     more: "Carregar mais documentos",
     download: "Baixar no SECOP",
-    analyze: "Analisar este PDF",
-    upload: "Analisar um PDF baixado",
-    hint: "Analisar este PDF baixa o arquivo oficial e salva a análise automaticamente. Apenas o conteúdo do PDF é analisado, nunca o link ou o nome.",
+    analyze: "Analisar documento",
+    upload: "Analisar um documento baixado",
+    hint: "Analisar o documento baixa o arquivo oficial e salva a análise automaticamente. Apenas o conteúdo do arquivo (PDF, DOCX ou XLSX) é analisado, nunca o link ou o nome.",
     challenge:
-      "O SECOP exige CAPTCHA ou verificação de acesso. Abra o documento, conclua a verificação e tente novamente. Se continuar bloqueado, baixe o PDF e anexe-o aqui.",
+      "O SECOP exige CAPTCHA ou verificação de acesso. Abra o documento, conclua a verificação e tente novamente. Se continuar bloqueado, baixe o arquivo e anexe-o aqui.",
     retryDownload: "Tentar download automático novamente",
-    remoteRunning: "Baixando PDF e analisando…",
+    remoteRunning: "Baixando documento e analisando…",
     downloadFailed:
-      "Não foi possível baixar o PDF. Tente novamente ou abra o documento original no SECOP.",
-    file: "PDF baixado (até 5 MB)",
-    run: "Salvar interesse e analisar PDF",
+      "Não foi possível baixar o documento. Tente novamente ou abra o documento original no SECOP.",
+    file: "Documento baixado: PDF, DOCX ou XLSX (até 5 MB)",
+    run: "Salvar interesse e analisar documento",
     running: "Salvando arquivo e analisando…",
     history: "Análises salvas",
     historyError: "Não foi possível carregar as análises salvas.",
@@ -138,13 +139,13 @@ const copy = {
     saveError:
       "A análise terminou, mas o resultado não foi salvo. Mantenha esta tela aberta e tente salvar novamente.",
     save: "Salvar resultado",
-    invalid: "Selecione um PDF válido de até 5 MB.",
+    invalid: "Selecione um arquivo válido (PDF, DOCX ou XLSX) de até 5 MB.",
     aiHint:
       "A IA pode cometer erros. Confira os requisitos no documento original; uma referência ausente não confirma a ausência do requisito.",
     source: "Abrir expediente no SECOP",
     selected: "Documento selecionado",
     cancel: "Cancelar",
-    savedFile: "Baixar PDF salvo",
+    savedFile: "Baixar documento salvo",
     notConfigured:
       "A IA não está configurada neste espaço. Configure-a no Savia e tente novamente.",
     specification: "Edital / convite",
@@ -286,7 +287,7 @@ export function TenderDocuments({
     try {
       let data: string | undefined;
       try {
-        if (!remote) data = await pdfBase64(file!);
+        if (!remote) data = await documentBase64(file!);
       } catch {
         setAnalysisError(t.invalid);
         return;
@@ -456,33 +457,48 @@ export function TenderDocuments({
           </div>
           <p className="secop-document-hint">{t.hint}</p>
           {loading && (
-            <p className="secop-loading" role="status">
-              {t.load}
-            </p>
+            <div className="secop-loading-card" role="status">
+              <div className="secop-loading-spinner" aria-hidden="true" />
+              <div className="secop-loading-card-body">
+                <p>{t.load}</p>
+                <div className="secop-skeleton-lines" aria-hidden="true">
+                  <span />
+                  <span />
+                </div>
+              </div>
+            </div>
           )}
           {error && (
-            <p className="secop-error" role="alert">
-              {t.error}{" "}
+            <div className="secop-error" role="alert">
+              <p>{t.error}</p>
               <button
                 type="button"
+                className="secop-primary"
                 onClick={() => void load(page ? page + 1 : 1)}
               >
                 {t.retry}
               </button>
-            </p>
+            </div>
           )}
           {!loading && !error && !documents.length && (
-            <p className="secop-state">{t.empty}</p>
+            <div className="secop-empty" role="status">
+              <p>{t.empty}</p>
+            </div>
           )}
           <ul className="secop-document-list">
             {documents.map((item) => (
-              <li key={item.id}>
-                <div>
+              <li key={item.id} className="secop-document-item">
+                <div className="secop-document-info">
                   <h3>{item.name}</h3>
-                  <p>
-                    {t[item.kind]}
-                    {item.date ? ` · ${item.date.slice(0, 10)}` : ""}
-                    {item.size ? ` · ${(item.size / 1024).toFixed(0)} KB` : ""}
+                  <p className="secop-document-meta">
+                    <span className="secop-status">{t[item.kind]}</span>
+                    {(item.date || item.size) && (
+                      <span className="secop-document-facts">
+                        {item.date ? `${item.date.slice(0, 10)}` : ""}
+                        {item.date && item.size ? " · " : ""}
+                        {item.size ? `${(item.size / 1024).toFixed(0)} KB` : ""}
+                      </span>
+                    )}
                   </p>
                 </div>
                 <div className="secop-document-actions">
@@ -496,7 +512,7 @@ export function TenderDocuments({
                   >
                     <Download size={16} aria-hidden="true" />
                   </a>
-                  {/\.pdf$/i.test(item.name) && (
+                  {isSupportedDocumentName(item.name) && (
                     <button
                       type="button"
                       disabled={busy || !!unsaved}
@@ -526,6 +542,7 @@ export function TenderDocuments({
           {selected === undefined || !manualUpload ? (
             <button
               type="button"
+              className="secop-upload-toggle"
               disabled={busy || !!unsaved}
               onClick={() => {
                 retryFile.current = null;
@@ -547,7 +564,7 @@ export function TenderDocuments({
             >
               <h3>{t.upload}</h3>
               {selected && (
-                <p>
+                <p className="secop-selected-document">
                   {t.selected}: <strong>{selected.name}</strong>
                 </p>
               )}
@@ -555,7 +572,7 @@ export function TenderDocuments({
                 {t.file}
                 <input
                   type="file"
-                  accept="application/pdf,.pdf"
+                  accept="application/pdf,.pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,.docx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,.xlsx"
                   disabled={busy}
                   onChange={(event) => {
                     retryFile.current = null;
@@ -587,9 +604,15 @@ export function TenderDocuments({
             </form>
           )}
           {busy && (
-            <p role="status" className="secop-loading">
-              {remoteBusy ? t.remoteRunning : t.running}
-            </p>
+            <div role="status" className="secop-loading-card">
+              <div className="secop-loading-spinner" aria-hidden="true" />
+              <div className="secop-loading-card-body">
+                <p>{remoteBusy ? t.remoteRunning : t.running}</p>
+                <div className="secop-skeleton-lines" aria-hidden="true">
+                  <span />
+                </div>
+              </div>
+            </div>
           )}
           {analysisError && (
             <div
@@ -610,6 +633,7 @@ export function TenderDocuments({
                   </a>
                   <button
                     type="button"
+                    className="secop-primary"
                     disabled={busy}
                     onClick={() => void analyze(selected)}
                   >
@@ -625,7 +649,11 @@ export function TenderDocuments({
               <pre className="secop-analysis-text">
                 {String(unsaved.analysis)}
               </pre>
-              <button type="button" onClick={() => void persist(unsaved)}>
+              <button
+                type="button"
+                className="secop-primary"
+                onClick={() => void persist(unsaved)}
+              >
                 {t.save}
               </button>
             </div>
@@ -633,20 +661,33 @@ export function TenderDocuments({
           <section className="secop-analysis-history" aria-label={t.history}>
             <h2>{t.history}</h2>
             {historyLoading && (
-              <p role="status" className="secop-loading">
-                {t.historyLoading}
-              </p>
+              <div role="status" className="secop-loading-card">
+                <div className="secop-loading-spinner" aria-hidden="true" />
+                <div className="secop-loading-card-body">
+                  <p>{t.historyLoading}</p>
+                  <div className="secop-skeleton-lines" aria-hidden="true">
+                    <span />
+                    <span />
+                  </div>
+                </div>
+              </div>
             )}
             {historyError && (
-              <p role="alert" className="secop-error">
-                {t.historyError}{" "}
-                <button type="button" onClick={() => void loadHistory()}>
+              <div role="alert" className="secop-error">
+                <p>{t.historyError}</p>
+                <button
+                  type="button"
+                  className="secop-primary"
+                  onClick={() => void loadHistory()}
+                >
                   {t.retry}
                 </button>
-              </p>
+              </div>
             )}
             {!historyLoading && !historyError && !reports.length && (
-              <p className="secop-document-hint">{t.noHistory}</p>
+              <div className="secop-empty" role="status">
+                <p>{t.noHistory}</p>
+              </div>
             )}
             {reports.map((report) => (
               <details key={report.id} className="secop-analysis-report" open>

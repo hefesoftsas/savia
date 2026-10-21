@@ -48,8 +48,11 @@ refused link shows recovery guidance rather than silently doing nothing.
 ## Private tender dossier and company assistant
 
 The plugin opens a dossier with Summary, Documents, Requirements, Company and
-Assistant views from the existing Documents action. It preserves the previous
-per-PDF document workflow behind **Documents and previous PDF analyses**.
+Assistant views from the existing Documents action. The dossier header shows a
+4-step guide (Save, Process, Evaluate, Chat) with a single next-step action,
+live document progress (`N of M documents ready`), and grouped cancellation
+(one button per job kind instead of one button per job). It preserves the previous
+per-document workflow behind **Documents and previous analyses**.
 
 Each tender and dossier tab has a shareable URL. Opening Documents records the
 process ID and tab through the host's generic `savia.route` bridge. Refreshing,
@@ -72,7 +75,7 @@ storage or packaged into the ZIP.
 **Save and prepare dossier** saves the interest and starts durable background
 processing. The service enumerates every available document page, records partial
 coverage, downloads permitted official files and keeps failed/CAPTCHA/unsupported
-items visible. Scanned PDFs require the configured OCR provider or a replacement PDF with selectable text; the basic Cloudflare converter does not supply complete OCR. The report and requirements cite immutable source versions and
+items visible. Scanned files require the configured OCR provider or a replacement file with selectable text; the basic Cloudflare converter does not supply complete OCR. The report and requirements cite immutable source versions and
 parser pages or sections. Source changes mark reports stale. Protected one-use
 upload links provide recovery for blocked originals and private company evidence.
 
@@ -125,7 +128,7 @@ Service setup, contracts, storage migrations and release checks are documented i
 `chibchombiano26/secop-live-worker/docs/operations.md`. Install this plugin only
 after the compatible service is deployed and the workspace credential provisioned.
 
-## Tender documents and PDF analysis
+## Tender documents and file analysis (PDF, DOCX, XLSX)
 
 Version 1.7.9 uses compact icon-only controls for contextual document, source,
 tracking and dossier actions. Each control keeps a localized accessible name and
@@ -133,7 +136,7 @@ tooltip; the search/interests navigation and document tabs retain visible text.
 The plugin's `store.json` declares one contributed screen for
 `procurement_opportunities`. Studio also exposes native collection records as
 sidebar screens, which is why the plugin previously surfaced three entries:
-opportunities, saved PDF analyses and preparation tasks. PDF analyses are
+opportunities, saved document analyses and preparation tasks. Document analyses are
 backend records used by the dossier's saved-analysis history, so their collection
 is retained but its `studio.screen.hidden` metadata hides only that sidebar
 entry. `secop_application_tasks` stays visible as a native records screen for
@@ -159,9 +162,10 @@ with retry and a link to the official process. Documents load in pages of 20 wit
 retry and load-more controls. The public file catalog covers documents since 2025;
 an empty catalog does not prove that the SECOP process has no attachments.
 
-**Analyze this PDF** downloads the official document on the server, verifies its
-PDF signature and 5 MiB limit, attaches it to the saved interest, and runs the
-configured AI analysis without a manual download or upload. The installed plugin declares `community.secop.gov.co` as its permitted download host. Public HTTPS URLs
+**Analyze document** downloads the official file on the server, verifies its
+signature (PDF `%PDF-`, Office Open XML ZIP `PK\x03\x04`) and 5 MiB limit, attaches it to the saved interest, and runs the
+configured AI analysis without a manual download or upload. Supported types are PDF, DOCX and XLSX; other
+attachments (for example images) remain download-only. The installed plugin declares `community.secop.gov.co` as its permitted download host. Public HTTPS URLs
 and every redirect are checked against that policy before fetching; credentials and browser cookies
 are never forwarded. The downloaded bytes, not the title or URL, are analyzed.
 Download errors remain distinct from AI provider errors.
@@ -169,30 +173,33 @@ Download errors remain distinct from AI provider errors.
 If the source returns a CAPTCHA or recognizable access challenge, Savia stops
 before attaching a file or invoking AI. The document stays selected and the UI
 shows the official link, **Retry automatic download**, and the existing manual
-PDF selection. Completing the challenge in the browser may not authorize the
+file selection. Completing the challenge in the browser may not authorize the
 server's separate connection; if retry remains blocked, download on SECOP and
 attach the file. Savia does not solve or bypass CAPTCHAs. **Analyze a downloaded
-PDF** remains available for manually obtained files. Non-PDF attachments remain
+document** remains available for manually obtained files. Unsupported attachments remain
 available through their original download links.
 
-**Save interest and analyze PDF** runs through an explicit React click handler,
+**Save interest and analyze document** runs through an explicit React click handler,
 so it works without enabling native form submissions in the sandbox. It saves the tender as an interest,
-attaches the PDF through the current user's collection permissions, and sends it
+attaches the file through the current user's collection permissions, and sends it
 to the workspace's existing configured AI provider. No provider key is included in
 the plugin. The shared host document-analysis capability validates the installed
-extension and its declared collection, bounds the request and decoded PDF size,
-and uses OpenRouter's default native-PDF/OCR processing with the configured
-summary/chat model. OCR is selected by the provider when the model cannot read
-PDFs natively and may incur per-page processing charges. The deprecated
+extension and its declared collection, bounds the request and decoded file size,
+and uses OpenRouter's default native file/OCR processing with the configured
+summary/chat model. The request sends the correct MIME (`application/pdf`,
+`application/vnd.openxmlformats-officedocument.wordprocessingml.document`,
+`application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`); spreadsheet
+structure (sheets, headers, key rows) is described for XLSX. OCR is selected by the provider when the model cannot read
+files natively and may incur per-page processing charges. The deprecated
 `pdf-text` alias is not forced because it can lose extractable document text.
-Unreadable or insufficient PDFs must be reported without drawing conclusions
-from filenames. Page references
+Unreadable or insufficient files must be reported without drawing conclusions
+from filenames. Page or sheet/cell references
 are requested only when supported by the parsed document. Users must verify the
 analysis against the original file.
 
 Completed results are saved in `procurement_documents`, linked to the interest,
 source document, stored file, model and analysis time. Saved analyses reload from
-the backend and provide a download of the stored PDF. Provider failures preserve
+the backend and provide a download of the stored file. Provider failures preserve
 the stored file ID for an in-place retry without another attachment. If saving a
 completed analysis fails, its text remains visible with **Save result**; returning
 is disabled until the result is saved. The saved history shows up to 50 analyses
@@ -331,8 +338,8 @@ Existing interests and their original monitoring credentials remain unchanged.
 
 After saving, **View tasks** opens the SECOP task collection in a separate tab,
 keeping the tender's connected chat and its conversation open in the original tab.
-**Open source** opens the service's PDF viewer at the cited page, with page
-navigation and a download of the original PDF. Source links expire after ten
+**Open source** opens the service's document viewer at the cited page, with page
+navigation and a download of the original file. Source links expire after ten
 minutes; return to the citation and open it again to issue a new link.
 
 The task collection deliberately has no custom plugin screen contribution. Savia

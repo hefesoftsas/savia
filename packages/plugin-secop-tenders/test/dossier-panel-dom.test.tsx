@@ -216,6 +216,15 @@ describe("tender dossier flow", () => {
     expect(api.connections.list).not.toHaveBeenCalled();
     expect(host.textContent).toContain("segundo plano");
   });
+  it("shows a foolproof guide with one next step before the dossier exists", async () => {
+    await mount();
+    expect(host.textContent).toContain("Siguiente paso");
+    expect(host.textContent).toContain("Paso 1 de 4");
+    const steps = [...host.querySelectorAll(".secop-guide ol li")];
+    expect(steps).toHaveLength(4);
+    expect(steps[0].getAttribute("aria-current")).toBe("step");
+  });
+
   it("opens the existing Savia chat with an opaque tender context and no duplicate composer", async () => {
     const { openAssistant } = await mount(true, true);
     await click("Asistente");
@@ -297,6 +306,34 @@ describe("tender dossier flow", () => {
             .id === "company-job",
       ),
     ).toBe(true);
+  });
+
+  it("groups multiple running jobs of the same kind into one cancel action", async () => {
+    const { execute } = await mount(true, false, [
+      { id: "extract-1", state: "running", kind: "extract" },
+      { id: "extract-2", state: "running", kind: "extract" },
+      { id: "extract-3", state: "queued", kind: "extract" },
+    ]);
+    const buttons = [...host.querySelectorAll("button")].filter((button) =>
+      button.textContent?.includes("Cancelar"),
+    );
+    expect(buttons).toHaveLength(1);
+    expect(buttons[0].textContent).toContain("3");
+    expect(buttons[0].textContent).toContain("extract");
+    expect(buttons[0].getAttribute("aria-label")).toBe(
+      "Cancelar trabajo 3 extract",
+    );
+    await act(async () => buttons[0].click());
+    const cancelled = execute.mock.calls
+      .filter(([, action]) => action.input.operation === "cancel")
+      .map(
+        ([, action]) =>
+          (action.input as unknown as { arguments: { id: string } }).arguments
+            .id,
+      );
+    expect(cancelled).toEqual(
+      expect.arrayContaining(["extract-1", "extract-2", "extract-3"]),
+    );
   });
 
   it.each([

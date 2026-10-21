@@ -93,16 +93,40 @@ export async function loadTenderDocuments(
       typeof output.hasNext === "boolean" ? output.hasNext : data.length === 20,
   };
 }
-export async function pdfBase64(file: File) {
-  if (!file.size || file.size > 5 * 1024 * 1024 || !/\.pdf$/i.test(file.name))
-    throw new Error("Select a PDF up to 5 MB");
+export const SUPPORTED_DOCUMENT_PATTERN = /\.(pdf|docx|xlsx)$/i;
+
+export function isSupportedDocumentName(name: string): boolean {
+  return SUPPORTED_DOCUMENT_PATTERN.test(name);
+}
+
+export async function documentBase64(file: File) {
+  if (
+    !file.size ||
+    file.size > 5 * 1024 * 1024 ||
+    !isSupportedDocumentName(file.name)
+  )
+    throw new Error("Select a PDF, DOCX or XLSX up to 5 MB");
   const bytes = new Uint8Array(await file.arrayBuffer());
-  if (new TextDecoder().decode(bytes.slice(0, 5)) !== "%PDF-")
-    throw new Error("The selected file is not a PDF");
+  if (/\.pdf$/i.test(file.name)) {
+    if (new TextDecoder().decode(bytes.slice(0, 5)) !== "%PDF-")
+      throw new Error("The selected file is not a PDF");
+  } else if (
+    bytes.length < 4 ||
+    bytes[0] !== 0x50 ||
+    bytes[1] !== 0x4b ||
+    bytes[2] !== 0x03 ||
+    bytes[3] !== 0x04
+  ) {
+    throw new Error("The selected file is not a valid Office document");
+  }
   let binary = "";
   for (let i = 0; i < bytes.length; i += 8192)
     binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
   return btoa(binary);
+}
+
+export async function pdfBase64(file: File) {
+  return documentBase64(file);
 }
 export type DocumentAnalysis = {
   file: { id: string; name: string };
