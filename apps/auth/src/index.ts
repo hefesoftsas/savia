@@ -1259,15 +1259,28 @@ export function createAuthHandler(
       }
       timings.dispatchStarted = performance.now();
       if (
+        request.method === "GET" &&
+        pathname === "/_internal/oauth/scalar-client"
+      ) {
+        return scalarOAuthClient(bootstrap.scalarClient);
+      }
+      if (
+        request.method === "GET" &&
+        pathname === "/_internal/oauth/admin-client"
+      ) {
+        return adminOAuthClient(bootstrap.adminClient);
+      }
+      if (
         request.method === "POST" &&
         pathname === "/_internal/oauth/mcp-exchange"
       )
         return exchangeMcpToken(request, oauthRuntime(environment), auth);
+      const adapter = (await auth.$context).adapter;
       const registrationSettings = await tenantRegistrationSettingsResponse(
         request,
         environment,
         dependencies,
-        (await auth.$context).adapter,
+        adapter,
       );
       if (registrationSettings) return registrationSettings;
       const emailRegistration = await emailRegistrationResponse(
@@ -1277,61 +1290,62 @@ export function createAuthHandler(
         auth,
       );
       if (emailRegistration) return emailRegistration;
-      const tenantSSO = await tenantSSOResponse(
-        request,
-        environment,
-        (await auth.$context).adapter,
-      );
+      const tenantSSO = await tenantSSOResponse(request, environment, adapter);
       if (tenantSSO) return tenantSSO;
       const social = await tenantSocialResponse(
         request,
         environment,
-        (await auth.$context).adapter,
+        adapter,
         dependencies,
       );
       if (social) return social;
       const tenantHome = await tenantHomeResponse(
         request,
         environment,
-        (await auth.$context).adapter,
+        adapter,
       );
       if (tenantHome) return tenantHome;
       const loginUiRequest =
         request.method === "GET" &&
         ["/api/auth/login", "/api/auth/forgot-password"].includes(pathname);
+      const loginTenantId = loginUiRequest
+        ? trustedAccountEmailTenantId(request, environment)
+        : undefined;
+      const checkLoginRegistration =
+        loginUiRequest &&
+        pathname === "/api/auth/login" &&
+        request.headers.get("x-savia-registration-ready") === "true" &&
+        !!parseTenantSlugFromHostname(new URL(request.url).hostname) &&
+        !!loginTenantId;
+      const [allowEmailRegistration, emailAvailable] = loginUiRequest
+        ? await Promise.all([
+            checkLoginRegistration
+              ? Promise.all([
+                  readTenantRegistrationSettings(
+                    environment,
+                    loginTenantId,
+                  ).catch(() => null),
+                  registrationPasswordAllowed(adapter, loginTenantId),
+                ]).then(
+                  ([settings, passwordAllowed]) =>
+                    !!settings?.allowEmailRegistration && passwordAllowed,
+                )
+              : Promise.resolve(false),
+            accountEmailAvailable(
+              environment,
+              dependencies,
+              loginTenantId,
+            ).catch(() => false),
+          ])
+        : [false, undefined];
       const oauthPage = oauthPageResponse(request, {
         restartUrl: adminLoginUrl(environment, request.url),
-        allowEmailRegistration:
-          loginUiRequest &&
-          pathname === "/api/auth/login" &&
-          request.headers.get("x-savia-registration-ready") === "true" &&
-          !!parseTenantSlugFromHostname(new URL(request.url).hostname) &&
-          (await (async () => {
-            const tenantId = trustedAccountEmailTenantId(request, environment);
-            if (!tenantId) return false;
-            const settings = await readTenantRegistrationSettings(
-              environment,
-              tenantId,
-            ).catch(() => null);
-            return (
-              !!settings?.allowEmailRegistration &&
-              (await registrationPasswordAllowed(
-                (await auth.$context).adapter,
-                tenantId,
-              ))
-            );
-          })()),
+        allowEmailRegistration,
         branding: tenantBrandingFromHeader(
           request.headers.get("x-savia-tenant-branding"),
         ),
-        ...(loginUiRequest
-          ? {
-              emailAvailable: await accountEmailAvailable(
-                environment,
-                dependencies,
-                trustedAccountEmailTenantId(request, environment),
-              ).catch(() => false),
-            }
+        ...(loginUiRequest && emailAvailable !== undefined
+          ? { emailAvailable }
           : {}),
       });
       if (oauthPage) return oauthPage;
@@ -1346,18 +1360,6 @@ export function createAuthHandler(
         pathname === "/.well-known/oauth-authorization-server/api/auth"
       ) {
         return auth.handler(request);
-      }
-      if (
-        request.method === "GET" &&
-        pathname === "/_internal/oauth/scalar-client"
-      ) {
-        return scalarOAuthClient(bootstrap.scalarClient);
-      }
-      if (
-        request.method === "GET" &&
-        pathname === "/_internal/oauth/admin-client"
-      ) {
-        return adminOAuthClient(bootstrap.adminClient);
       }
       const oauthManagement = await oauthManagementResponse(
         auth as unknown as OAuthManagementAuth,

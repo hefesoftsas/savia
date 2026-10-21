@@ -208,13 +208,16 @@ async function serviceJson<T>(
   if (!response.ok) {
     if (knownConflict && response.status === 409) {
       const body = (await response.json().catch(() => undefined)) as
-        { error?: { code?: unknown } } | undefined;
+        | { error?: { code?: unknown } }
+        | undefined;
       if (body?.error?.code === knownConflict.code) {
         throw new AuthenticationError(
           "IDENTITY_EMAIL_CONFLICT",
           knownConflict.message,
         );
       }
+    } else {
+      await response.body?.cancel().catch(() => undefined);
     }
     throw new AuthenticationError(
       "AUTHENTICATION_UNAVAILABLE",
@@ -489,6 +492,7 @@ export function betterAuthUserAdministrator(
         ),
       );
       if (!response.ok) {
+        await response.body?.cancel().catch(() => undefined);
         throw new AuthenticationError(
           "AUTHENTICATION_UNAVAILABLE",
           "Authentication service is unavailable",
@@ -504,6 +508,7 @@ export function betterAuthUserAdministrator(
           { method: "POST", headers: internalHeaders() },
         ),
       );
+      await response.body?.cancel().catch(() => undefined);
       if (!response.ok) {
         throw new AuthenticationError(
           "AUTHENTICATION_UNAVAILABLE",
@@ -518,6 +523,7 @@ export function betterAuthUserAdministrator(
           { method: "POST", headers: internalHeaders() },
         ),
       );
+      await response.body?.cancel().catch(() => undefined);
       if (!response.ok) {
         throw new AuthenticationError(
           "AUTHENTICATION_UNAVAILABLE",
@@ -532,6 +538,7 @@ export function betterAuthUserAdministrator(
           { method: "DELETE", headers: internalHeaders() },
         ),
       );
+      await response.body?.cancel().catch(() => undefined);
       if (!response.ok && response.status !== 404) {
         throw new AuthenticationError(
           "AUTHENTICATION_UNAVAILABLE",
@@ -592,6 +599,7 @@ export function betterAuthOAuthClientAdministrator(
           { method: "DELETE", headers: forwardedHeaders(request) },
         ),
       );
+      await response.body?.cancel().catch(() => undefined);
       if (!response.ok) {
         throw new AuthenticationError(
           "AUTHENTICATION_UNAVAILABLE",

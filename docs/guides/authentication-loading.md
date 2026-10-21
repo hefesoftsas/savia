@@ -150,13 +150,20 @@ remaining database/network time from deployment preparation.
 
 The public login context resolves the tenant and its optional branding in one
 database query, preserving canonical-slug priority, aliases and active commercial
-tenant filtering. Registration preflight runs independent settings, email
-availability and password-policy reads concurrently. These reads remain scoped
-to the request, so policy changes do not wait for a cross-request cache to expire.
+tenant filtering. Registration preflight and the Auth login page run independent
+settings, email availability and password-policy reads concurrently, and internal
+OAuth client metadata endpoints (`/_internal/oauth/admin-client` and
+`/_internal/oauth/scalar-client`) return directly from the readiness bootstrap
+before awaiting the Better Auth database adapter. These reads remain scoped to
+the request, so policy changes do not wait for a cross-request cache to expire.
 
 A temporary OAuth renewal failure (network error, rate limit, provider server
 error or malformed token response) returns `503 AUTHENTICATION_UNAVAILABLE` and
 preserves the renewal cookie and origin record. A later retry can reuse that
 session. Only a confirmed `invalid_grant` or `invalid_token` from the provider
-clears renewal state and returns 401. Deployment unavailability must not sign
-users out permanently.
+clears renewal state and returns 401. When an unmated or expired refresh cookie
+triggers session cleanup, the API reuses the single `admin_oauth_session_origins`
+lookup instead of issuing a redundant `DELETE` write when no row exists, and
+cancels unconsumed internal Auth service response streams. Deployment
+unavailability must not sign users out permanently.
+
