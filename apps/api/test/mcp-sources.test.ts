@@ -965,3 +965,61 @@ it("keeps OAuth refresh leases isolated by tenant", async () => {
       refresh_token: "rotated-refresh",
     });
 });
+
+it("preserves stored OAuth tokens when a non-interactive refresh fails with invalid_grant or server error", async () => {
+  const tenant = `mcp-refresh-preserve-${crypto.randomUUID()}`;
+  let status = 400;
+  let errorBody: Record<string, string> = { error: "invalid_grant" };
+  const fetcher: typeof fetch = async (input, init) => {
+    const url = new URL(input instanceof Request ? input.url : String(input));
+    if (
+      url.pathname === "/token" &&
+      new URLSearchParams(String(init?.body ?? "")).get("grant_type") ===
+        "refresh_token"
+    ) {
+      return Response.json(errorBody, { status });
+    }
+    if (url.hostname === "cloudflare-dns.com")
+      return Response.json({
+        Status: 0,
+        Answer: [{ type: 1, data: "104.16.1.1" }],
+      });
+    return oauthFetch(input, init);
+  };
+  const fixture = await expiredOAuthSource(
+    tenant,
+    "owner",
+    "oauth_test",
+    fetcher,
+  );
+  const originalSecret = fixture.row.encrypted_secret;
+
+  await expect(
+    fixture.service().connection({ ...fixture.row }),
+  ).rejects.toMatchObject({
+    status: 401,
+    message: "OAuth refresh failed. Connect this source again.",
+  });
+  let current = await env.DB.prepare(
+    "SELECT encrypted_secret FROM studio_collection_sources WHERE tenant_id=? AND owner_principal_id=? AND id=?",
+  )
+    .bind(tenant, "owner", "oauth_test")
+    .first<{ encrypted_secret: string }>();
+  expect(current?.encrypted_secret).toBe(originalSecret);
+
+  status = 502;
+  errorBody = { error: "temporarily_unavailable" };
+  await expect(
+    fixture.service().connection({ ...fixture.row }),
+  ).rejects.toMatchObject({
+    status: 401,
+    message: "OAuth refresh failed. Connect this source again.",
+  });
+  current = await env.DB.prepare(
+    "SELECT encrypted_secret FROM studio_collection_sources WHERE tenant_id=? AND owner_principal_id=? AND id=?",
+  )
+    .bind(tenant, "owner", "oauth_test")
+    .first<{ encrypted_secret: string }>();
+  expect(current?.encrypted_secret).toBe(originalSecret);
+});
+

@@ -32,6 +32,7 @@ export type McpConnection = {
   endpoint: string;
   token?: string;
   authProvider?: OAuthClientProvider;
+  refreshAccessToken?: () => Promise<string | undefined>;
   readOnlyTools?: string[];
 };
 
@@ -277,6 +278,7 @@ function makeSecureFetch(
   controller: AbortController,
   endpoint?: URL,
   token?: string,
+  refreshAccessToken?: () => Promise<string | undefined>,
 ): typeof fetch {
   return (async (input: RequestInfo | URL, init?: RequestInit) => {
     const rawUrl =
@@ -308,17 +310,32 @@ function makeSecureFetch(
     const signals = [controller.signal, init?.signal].filter(
       (signal): signal is AbortSignal => signal !== undefined,
     );
-    let response: Response;
-    try {
-      response = await fetcher(url, {
-        ...init,
-        headers: requestHeaders,
-        redirect: "manual",
-        ...(signals.length ? { signal: AbortSignal.any(signals) } : {}),
-      });
-    } catch (error) {
-      if (controller.signal.aborted) throw controller.signal.reason;
-      throw error;
+    const send = async () => {
+      try {
+        return await fetcher(url, {
+          ...init,
+          headers: requestHeaders,
+          redirect: "manual",
+          ...(signals.length ? { signal: AbortSignal.any(signals) } : {}),
+        });
+      } catch (error) {
+        if (controller.signal.aborted) throw controller.signal.reason;
+        throw error;
+      }
+    };
+    let response = await send();
+    if (
+      response.status === 401 &&
+      refreshAccessToken &&
+      endpoint &&
+      url.href === endpoint.href
+    ) {
+      await response.body?.cancel().catch(() => {});
+      const refreshedToken = await refreshAccessToken();
+      if (refreshedToken) {
+        requestHeaders.set("authorization", `Bearer ${refreshedToken}`);
+        response = await send();
+      }
     }
     if (
       response.redirected ||
@@ -382,6 +399,7 @@ export async function createMcpConnection(
     controller,
     endpoint,
     connection.token,
+    connection.refreshAccessToken,
   );
   try {
     await ensurePublicDns(endpoint, fetcher, controller.signal);

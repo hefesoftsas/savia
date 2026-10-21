@@ -891,20 +891,39 @@ export function registerAdminOAuthRoutes(
         { status: 401, headers },
       );
     }
+    const requestOrigin = origin ?? new URL(context.req.url).origin;
+    const prevalidatedOrigin =
+      origin === null ||
+      origin === new URL(context.req.url).origin ||
+      isAllowedPublicOrigin(origin, canonicalHost);
+    const earlySessionLookup =
+      currentRefreshToken && prevalidatedOrigin
+        ? (async () => {
+            const tokenHash = await codeChallenge(currentRefreshToken);
+            const record = await d1
+              .prepare(
+                "SELECT origin, expires_at FROM admin_oauth_session_origins WHERE token_hash = ?",
+              )
+              .bind(tokenHash)
+              .first<{ origin: string; expires_at: string }>();
+            return { tokenHash, record };
+          })()
+        : null;
     const client = await adminClient(service);
-    if (!client)
+    if (!client) {
+      await earlySessionLookup?.catch(() => undefined);
       return error(
         "AUTHENTICATION_UNAVAILABLE",
         "Authentication service is unavailable",
         503,
       );
-    const headers = cors(context.req.header("origin") ?? null, client);
-    const requestOrigin =
-      context.req.header("origin") ?? new URL(context.req.url).origin;
+    }
+    const headers = cors(origin, client);
     if (
       requestOrigin !== new URL(client.redirectUri).origin &&
       !isAllowedPublicOrigin(requestOrigin, canonicalHost)
     ) {
+      await earlySessionLookup?.catch(() => undefined);
       return Response.json(
         {
           error: {
@@ -933,14 +952,19 @@ export function registerAdminOAuthRoutes(
         { status: 401, headers },
       );
     }
-    const tokenHash = await codeChallenge(currentRefreshToken);
     const nowIso = new Date().toISOString();
-    const record = await d1
-      .prepare(
-        "SELECT origin, expires_at FROM admin_oauth_session_origins WHERE token_hash = ?",
-      )
-      .bind(tokenHash)
-      .first<{ origin: string; expires_at: string }>();
+    const { tokenHash, record } = earlySessionLookup
+      ? await earlySessionLookup
+      : await (async () => {
+          const hash = await codeChallenge(currentRefreshToken);
+          const row = await d1
+            .prepare(
+              "SELECT origin, expires_at FROM admin_oauth_session_origins WHERE token_hash = ?",
+            )
+            .bind(hash)
+            .first<{ origin: string; expires_at: string }>();
+          return { tokenHash: hash, record: row };
+        })();
     const session =
       record && record.expires_at > nowIso
         ? { origin: record.origin }

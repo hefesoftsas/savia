@@ -145,8 +145,10 @@ export function tenantHostGuard(
       await next();
       return;
     }
-    const slugs = await commercialSlugsForActor(db, actor);
-    const requestedTenant = await resolveTenantSlug(db, slug);
+    const [slugs, requestedTenant] = await Promise.all([
+      commercialSlugsForActor(db, actor),
+      resolveTenantSlug(db, slug),
+    ]);
     if (requestedTenant && slugs.has(requestedTenant.id)) {
       await next();
       return;

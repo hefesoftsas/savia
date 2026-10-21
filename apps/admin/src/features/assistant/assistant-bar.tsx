@@ -81,7 +81,7 @@ import type {
   AssistantConfigurationSummary,
 } from "@/api/assistant-configuration-client";
 import { ModelCapabilityBadges } from "@/features/assistant-configuration/model-capability-badges";
-import { getEmployeeAvatarIcon } from "@/features/personal-integrations/virtual-employees-management";
+import { getEmployeeAvatarIcon } from "@/features/personal-integrations/employee-avatar-icon";
 import { requestAssistantAction } from "./assistant-api";
 import { useAppServices } from "./assistant-context";
 import { ActiveTenantSelector } from "./active-tenant-selector";

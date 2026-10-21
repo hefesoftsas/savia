@@ -12,12 +12,16 @@ Savia consumes external Streamable HTTP MCP servers through **Sources and collec
 
 Tokens, refresh tokens, client secrets and PKCE verifiers are encrypted in backend storage using the integrations key. They are not returned by source listing. OAuth state is tenant/owner/source scoped, expires after ten minutes and is consumed once. Source management and record access enforce the creating principal and tenant. A revoked or expired remote grant may require authorization again.
 
-Expiring OAuth tokens are renewed once per source, tenant and owner using a
-database lease shared across API Workers. Concurrent reads wait for that renewal
-and use its saved credentials, so opening several catalog filters does not send
-competing refresh grants. Source changes and deletion still invalidate pending
-work. If the remote grant was already revoked, authorize the source again in
-**Sources and collections**; retrying a catalog cannot restore a revoked grant.
+Expiring OAuth tokens and reactive `401` MCP responses are renewed once per
+source, tenant and owner using a database lease shared across API Workers.
+Concurrent reads wait for that renewal and use its saved credentials, so opening
+several catalog filters does not send competing refresh grants. Failed
+non-interactive renewals reject with `401` without overwriting the stored secret
+with empty token state, and re-authorizing from a different workspace host
+re-registers dynamic OAuth clients whose callback URL changed. Source changes
+and deletion still invalidate pending work. If the remote grant was already
+revoked, authorize the source again in **Sources and collections**; retrying a
+catalog cannot restore a revoked grant.
 
 Discovery normally admits tools with `annotations.readOnlyHint: true`. Some existing servers omit annotations. An administrator who has reviewed their behavior may explicitly list those tools under **Additional read-only tool names** when creating the source. A tool explicitly annotated `readOnlyHint: false` cannot be enabled by this list. These declarations are trust decisions about the remote implementation; Savia cannot prove what a remote server does internally.
 

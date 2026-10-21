@@ -130,19 +130,22 @@ export function createLocalSession(
       }
     cached = profile;
   };
+  const renewLease = async () => {
+    if (!leasePromise) {
+      leasePromise = (async () => {
+        await verifyRemote();
+        await capture();
+      })().finally(() => {
+        leasePromise = null;
+      });
+    }
+    await leasePromise;
+  };
   const ensureLease = async () => {
     try {
       await read();
     } catch {
-      if (!leasePromise) {
-        leasePromise = (async () => {
-          await verifyRemote();
-          await capture();
-        })().finally(() => {
-          leasePromise = null;
-        });
-      }
-      await leasePromise;
+      await renewLease();
     }
   };
   const fallback = async <T>(
@@ -165,16 +168,14 @@ export function createLocalSession(
     getAccessToken: () => remote.getAccessToken(),
     handleCallback: async () => {
       const result = await remote.handleCallback();
-      await verifyRemote();
-      await capture();
+      await renewLease();
       return result;
     },
     checkSession: async () => {
       await fallback(
         async () => {
           await remote.checkSession();
-          await verifyRemote();
-          await capture();
+          await renewLease();
         },
         () => undefined,
       );

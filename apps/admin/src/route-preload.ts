@@ -38,19 +38,32 @@ export function preloadRouteModules(
     ["slow-2g", "2g"].includes(connection.effectiveType)
   )
     return;
+  const runWhenIdle = (callback: () => void) => {
+    if (typeof window !== "undefined" && "requestIdleCallback" in window) {
+      const win = window as unknown as {
+        requestIdleCallback: (
+          cb: () => void,
+          opts?: { timeout: number },
+        ) => number;
+      };
+      win.requestIdleCallback(callback, { timeout: 4000 });
+      return;
+    }
+    if (typeof setTimeout !== "undefined") {
+      setTimeout(callback, 500);
+      return;
+    }
+    callback();
+  };
   const idle =
     schedule ??
-    (typeof window !== "undefined" && "requestIdleCallback" in window
-      ? (callback: () => void) =>
-          (
-            window as Window & {
-              requestIdleCallback: (
-                cb: () => void,
-                opts?: { timeout: number },
-              ) => number;
-            }
-          ).requestIdleCallback(callback, { timeout: 4000 })
-      : (callback: () => void) => window.setTimeout(callback, 1500));
+    ((callback: () => void) => {
+      if (typeof setTimeout !== "undefined") {
+        setTimeout(() => runWhenIdle(callback), 2500);
+      } else {
+        callback();
+      }
+    });
   idle(() => {
     try {
       const permissionsPromise = services?.authSession?.getPermissions?.();
@@ -65,12 +78,19 @@ export function preloadRouteModules(
           );
           if (permissions?.canManageIdentity || managesTenant)
             jobs.push(loaders.loadSaviaRequestPage);
-          for (const job of jobs) {
-            try {
-              void job().catch(() => undefined);
-            } catch {
-              // La precarga fallida nunca bloquea la navegación.
+          const launchJobs = () => {
+            for (const job of jobs) {
+              try {
+                void job().catch(() => undefined);
+              } catch {
+                // La precarga fallida nunca bloquea la navegación.
+              }
             }
+          };
+          if (schedule) {
+            launchJobs();
+          } else {
+            runWhenIdle(launchJobs);
           }
         })
         .catch(() => undefined);
