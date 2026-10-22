@@ -21,7 +21,17 @@ async function mount(
   detailJobs: Job[] = [],
   documents: Stored<DossierDocument>[] = [],
   secondPageDocuments: Stored<DossierDocument>[] = [],
+  pagedTotal = 0,
 ) {
+  const pagedDocs =
+    pagedTotal > 0
+      ? Array.from({ length: pagedTotal }, (_, index) => ({
+          id: `paged-${index}`,
+          revision: 1,
+          updatedAt: 1,
+          value: { name: `Paged ${index}`, state: "ready" },
+        }))
+      : [];
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
@@ -99,6 +109,12 @@ async function mount(
         secondPageDocuments.length > 0
       )
         state.documents = secondPageDocuments;
+      if (input.operation === "dossier" && pagedTotal > 0) {
+        state.documents = pagedDocs.slice(pageOffset, pageOffset + 20);
+        state.documentTotal = pagedTotal;
+        state.nextOffset =
+          pageOffset + 20 < pagedTotal ? pageOffset + 20 : null;
+      }
       return {
         output: {
           status: 200,
@@ -259,6 +275,17 @@ describe("tender dossier flow", () => {
     expect(host.textContent).toContain("First");
     expect(host.textContent).toContain("Second");
     expect(host.textContent).not.toContain("Cargar más documentos");
+  });
+
+  it("retains manually loaded pages beyond the eager-load cap on refresh", async () => {
+    await mount(true, false, [], "es", [], [], [], 520);
+    await click("Documentos");
+    expect(host.textContent).toContain("Paged 499");
+    await click("Cargar más documentos y requisitos");
+    expect(host.textContent).toContain("Paged 519");
+    await click("Actualizar");
+    expect(host.textContent).toContain("Paged 519");
+    expect(host.textContent).toContain("Paged 0");
   });
 
   it("names synthesis while every catalog document is ready", async () => {

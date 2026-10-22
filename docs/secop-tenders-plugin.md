@@ -52,7 +52,12 @@ Assistant views from the existing Documents action. The dossier header shows a
 4-step guide (Save, Process, Evaluate, Chat) with a single next-step action,
 live document progress (`N of M documents ready`), and grouped cancellation
 (one button per job kind instead of one button per job). It preserves the previous
-per-document workflow behind **Documents and previous analyses**.
+per-document workflow behind **Documents and previous analyses**. Progress
+counts prefer the server-side coverage totals from the joint report when one
+exists, so paging the list never moves the percentage. The dossier loads the
+full document inventory up front (bounded to 25 pages, about 500 records);
+pages the reader appends manually through **Load more** are retained across
+background refreshes.
 
 Each tender and dossier tab has a shareable URL. Opening Documents records the
 process ID and tab through the host's generic `savia.route` bridge. Refreshing,
