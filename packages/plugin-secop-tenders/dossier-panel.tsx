@@ -715,6 +715,15 @@ export function DossierPanel({
       if (!alive.current || request !== sequence.current) return;
       setDetail(company);
       setAssessment(fit);
+      setPendingJob((current) => {
+        if (!current) return current;
+        const persisted = [...data.jobs, ...(company?.jobs ?? [])].find(
+          (job) => job.id === current.id,
+        );
+        return persisted && ["queued", "running"].includes(persisted.state)
+          ? persisted
+          : null;
+      });
     },
     [client, companyId, processId, t.invalidDossier, t.changedDuringRead],
   );
@@ -765,14 +774,18 @@ export function DossierPanel({
       pollLock.current = true;
       void (async () => {
         if (pendingJob) {
-          const job = await client.call<Job>("job", { id: pendingJob.id });
-          if (!alive.current) return;
-          if (["succeeded", "failed", "cancelled"].includes(job.state)) {
-            setPendingJob(null);
-            if (job.state === "failed")
-              setError(`${t.failedJob}${job.error ?? "processing error"}.`);
-            else setNotice(t.finishedJob);
-          } else setPendingJob(job);
+          try {
+            const job = await client.call<Job>("job", { id: pendingJob.id });
+            if (!alive.current) return;
+            if (["succeeded", "failed", "cancelled"].includes(job.state)) {
+              setPendingJob(null);
+              if (job.state === "failed")
+                setError(`${t.failedJob}${job.error ?? "processing error"}.`);
+              else setNotice(t.finishedJob);
+            } else setPendingJob(job);
+          } catch {
+            if (alive.current) setError(t.pollError);
+          }
         }
         await refresh();
       })()

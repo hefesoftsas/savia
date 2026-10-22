@@ -11,6 +11,7 @@ let host: HTMLDivElement;
 afterEach(() => {
   if (root) act(() => root.unmount());
   host?.remove();
+  vi.useRealTimers();
   vi.clearAllMocks();
 });
 async function mount(
@@ -35,6 +36,8 @@ async function mount(
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
+  const dossierJobs = { current: jobs };
+  const failJobPolling = { current: false };
   const execute = vi.fn(
     async (
       _action: string,
@@ -46,6 +49,10 @@ async function mount(
     ) => {
       const pageOffset = input.arguments?.offset ?? 0;
       if (!configured) throw new Error("La conexión no está configurada.");
+      if (input.operation === "job" && failJobPolling.current)
+        throw new Error("Temporary job lookup failure");
+      if (input.operation === "prepare")
+        dossierJobs.current = [{ id: "job", state: "queued" }];
       const state = {
         dossier: report
           ? {
@@ -99,7 +106,7 @@ async function mount(
               },
             ]
           : [],
-        jobs,
+        jobs: dossierJobs.current,
         nextOffset:
           secondPageDocuments.length > 0 && pageOffset === 0 ? 20 : null,
       };
@@ -188,7 +195,18 @@ async function mount(
       />,
     );
   });
-  return { execute, create, openAssistant, api };
+  return {
+    execute,
+    create,
+    openAssistant,
+    api,
+    setDossierJobs: (next: Job[]) => {
+      dossierJobs.current = next;
+    },
+    failJobPolling: () => {
+      failJobPolling.current = true;
+    },
+  };
 }
 async function click(label: string) {
   const button = [...host.querySelectorAll("button")].find(
@@ -375,6 +393,32 @@ describe("tender dossier flow", () => {
             .id === "restored-job",
       ),
     ).toBe(true);
+  });
+
+  it("reconciles a pending job from a fresh dossier snapshot after polling fails", async () => {
+    vi.useFakeTimers();
+    const { execute, setDossierJobs, failJobPolling } = await mount(true, true);
+    await click("Actualizar expediente");
+    const updateButton = host.querySelector<HTMLButtonElement>(
+      'button[aria-label="Actualizar expediente"]',
+    );
+    expect(updateButton?.disabled).toBe(true);
+    const dossierReads = execute.mock.calls.filter(
+      ([, action]) => action.input.operation === "dossier",
+    ).length;
+
+    setDossierJobs([{ id: "job", state: "cancelled" }]);
+    failJobPolling();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(4000);
+    });
+
+    expect(updateButton?.disabled).toBe(false);
+    expect(
+      execute.mock.calls.filter(
+        ([, action]) => action.input.operation === "dossier",
+      ),
+    ).toHaveLength(dossierReads + 1);
   });
 
   it("shows cancellation for a restored active job in the selected company detail", async () => {
