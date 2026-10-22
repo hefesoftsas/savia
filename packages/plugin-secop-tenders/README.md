@@ -2,6 +2,8 @@
 
 An optional Savia tenant plugin for searching live SECOP procurement records and saving selected opportunities to a workspace collection for follow-up. Search history is not persisted. The plugin has Spanish, English, and Portuguese interface copy.
 
+Version 1.8.8 refines the dossier guide (accurate server-side progress and a specific synthesizing state).
+
 Version 1.8.7 adds DOCX/XLSX document analysis alongside PDF (Office files ride
 the model's native file support; PDFs keep the file-parser plugin), a 4-step
 guided dossier flow (Save, Process, Evaluate, Chat) with a single next-step
