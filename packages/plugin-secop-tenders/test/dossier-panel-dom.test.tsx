@@ -20,12 +20,31 @@ async function mount(
   locale: "es" | "en" | "pt" = "es",
   detailJobs: Job[] = [],
   documents: Stored<DossierDocument>[] = [],
+  secondPageDocuments: Stored<DossierDocument>[] = [],
+  pagedTotal = 0,
 ) {
+  const pagedDocs =
+    pagedTotal > 0
+      ? Array.from({ length: pagedTotal }, (_, index) => ({
+          id: `paged-${index}`,
+          revision: 1,
+          updatedAt: 1,
+          value: { name: `Paged ${index}`, state: "ready" },
+        }))
+      : [];
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
   const execute = vi.fn(
-    async (_action: string, { input }: { input: { operation: string } }) => {
+    async (
+      _action: string,
+      {
+        input,
+      }: {
+        input: { operation: string; arguments?: { offset?: number } };
+      },
+    ) => {
+      const pageOffset = input.arguments?.offset ?? 0;
       if (!configured) throw new Error("La conexión no está configurada.");
       const state = {
         dossier: report
@@ -81,8 +100,21 @@ async function mount(
             ]
           : [],
         jobs,
-        nextOffset: null,
+        nextOffset:
+          secondPageDocuments.length > 0 && pageOffset === 0 ? 20 : null,
       };
+      if (
+        input.operation === "dossier" &&
+        pageOffset > 0 &&
+        secondPageDocuments.length > 0
+      )
+        state.documents = secondPageDocuments;
+      if (input.operation === "dossier" && pagedTotal > 0) {
+        state.documents = pagedDocs.slice(pageOffset, pageOffset + 20);
+        state.documentTotal = pagedTotal;
+        state.nextOffset =
+          pageOffset + 20 < pagedTotal ? pageOffset + 20 : null;
+      }
       return {
         output: {
           status: 200,
@@ -223,6 +255,37 @@ describe("tender dossier flow", () => {
     const steps = [...host.querySelectorAll(".secop-guide ol li")];
     expect(steps).toHaveLength(4);
     expect(steps[0].getAttribute("aria-current")).toBe("step");
+  });
+
+  it("loads every inventory page up front so progress needs no load-more", async () => {
+    const first = {
+      id: "doc-a",
+      revision: 1,
+      updatedAt: 1,
+      value: { name: "First", state: "ready" },
+    } as Stored<DossierDocument>;
+    const second = {
+      id: "doc-b",
+      revision: 1,
+      updatedAt: 1,
+      value: { name: "Second", state: "ready" },
+    } as Stored<DossierDocument>;
+    await mount(true, false, [], "es", [], [first], [second]);
+    await click("Documentos");
+    expect(host.textContent).toContain("First");
+    expect(host.textContent).toContain("Second");
+    expect(host.textContent).not.toContain("Cargar más documentos");
+  });
+
+  it("retains manually loaded pages beyond the eager-load cap on refresh", async () => {
+    await mount(true, false, [], "es", [], [], [], 520);
+    await click("Documentos");
+    expect(host.textContent).toContain("Paged 499");
+    await click("Cargar más documentos y requisitos");
+    expect(host.textContent).toContain("Paged 519");
+    await click("Actualizar");
+    expect(host.textContent).toContain("Paged 519");
+    expect(host.textContent).toContain("Paged 0");
   });
 
   it("names synthesis while every catalog document is ready", async () => {
