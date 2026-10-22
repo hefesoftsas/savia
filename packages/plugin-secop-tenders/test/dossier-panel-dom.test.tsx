@@ -52,7 +52,7 @@ async function mount(
                 conflicts: [],
                 coverage: {
                   total: 2,
-                  indexed: 1,
+                  indexed: 2,
                   pending: [{ id: "blocked" }],
                   reviewRequired: [],
                 },
@@ -223,6 +223,35 @@ describe("tender dossier flow", () => {
     const steps = [...host.querySelectorAll(".secop-guide ol li")];
     expect(steps).toHaveLength(4);
     expect(steps[0].getAttribute("aria-current")).toBe("step");
+  });
+
+  it("names synthesis while every catalog document is ready", async () => {
+    await mount(
+      true,
+      true,
+      [{ id: "synth-1", state: "running", kind: "synthesize" }],
+      "es",
+      [],
+      [
+        {
+          id: "doc-1",
+          revision: 1,
+          updatedAt: 1,
+          value: { name: "Anexo", state: "ready" } as DossierDocument,
+        },
+        {
+          id: "doc-2",
+          revision: 1,
+          updatedAt: 1,
+          value: {
+            name: "Pliego",
+            state: "review_required",
+          } as DossierDocument,
+        },
+      ],
+    );
+    expect(host.textContent).toContain("generando el informe conjunto");
+    expect(host.textContent).not.toContain("Estamos leyendo los archivos");
   });
 
   it("opens the existing Savia chat with an opaque tender context and no duplicate composer", async () => {

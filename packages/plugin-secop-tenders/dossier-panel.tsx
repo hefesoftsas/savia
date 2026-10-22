@@ -154,6 +154,8 @@ const copy = {
       "Paso 1 de 4. Guarda la licitación y deja que el sistema lea todos los archivos. Un solo clic.",
     guideProcessingHint:
       "Paso 2 de 4. Estamos leyendo los archivos. Puedes salir y volver; te avisamos al terminar.",
+    guideSynthesizingHint:
+      "Paso 2 de 4. Archivos listos. Estamos generando el informe conjunto; si tarda demasiado, cancela el trabajo de síntesis y pulsa Actualizar para relanzarlo.",
     guideReviewHint:
       "Paso 2 de 4. El informe cambió o aún no existe. Pulsa Actualizar para regenerarlo.",
     guideCompanyHint:
@@ -320,6 +322,8 @@ const copy = {
       "Step 1 of 4. Save the tender and let the system read every file. One click.",
     guideProcessingHint:
       "Step 2 of 4. Reading the files. You can leave and come back.",
+    guideSynthesizingHint:
+      "Step 2 of 4. Files ready. Generating the joint report; if it takes too long, cancel the synthesis job and press Refresh to relaunch it.",
     guideReviewHint:
       "Step 2 of 4. The report changed or does not exist yet. Press Refresh to rebuild it.",
     guideCompanyHint:
@@ -485,6 +489,8 @@ const copy = {
       "Passo 1 de 4. Salve a licitação e deixe o sistema ler todos os arquivos. Um clique.",
     guideProcessingHint:
       "Passo 2 de 4. Lendo os arquivos. Você pode sair e voltar.",
+    guideSynthesizingHint:
+      "Passo 2 de 4. Arquivos prontos. Gerando o relatório conjunto; se demorar demais, cancele o trabalho de síntese e atualize para relançar.",
     guideReviewHint:
       "Passo 2 de 4. O relatório mudou ou ainda não existe. Atualize para gerar de novo.",
     guideCompanyHint:
@@ -955,12 +961,20 @@ export function DossierPanel({
     JSON.stringify([...(assessment.value.selectedLots ?? [])].sort()) !==
       JSON.stringify(selectedLots),
   );
-  const guideTotal = snapshot?.documentTotal ?? 0;
-  const guideReady = snapshot
-    ? snapshot.documents.filter((doc) =>
-        ["ready", "review_required", "analyzed"].includes(doc.value.state),
-      ).length
-    : 0;
+  // Progress favors server-side coverage totals so paging through the
+  // document list ("cargar más") never moves the percentage by itself.
+  const guideCoverage =
+    report && typeof report.coverage.total === "number"
+      ? report.coverage
+      : null;
+  const guideTotal = guideCoverage?.total ?? snapshot?.documentTotal ?? 0;
+  const guideReady = guideCoverage
+    ? (guideCoverage.indexed ?? 0)
+    : snapshot
+      ? snapshot.documents.filter((doc) =>
+          ["ready", "review_required", "analyzed"].includes(doc.value.state),
+        ).length
+      : 0;
   const guidePct =
     guideTotal > 0
       ? Math.min(100, Math.round((guideReady / guideTotal) * 100))
@@ -1302,7 +1316,11 @@ export function DossierPanel({
               )}
               {guideStage === 1 && activeJobs && (
                 <>
-                  <p>{t.guideProcessingHint}</p>
+                  <p>
+                    {guidePct >= 100
+                      ? t.guideSynthesizingHint
+                      : t.guideProcessingHint}
+                  </p>
                   <button
                     type="button"
                     disabled={busy}
