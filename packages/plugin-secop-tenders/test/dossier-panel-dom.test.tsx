@@ -20,12 +20,21 @@ async function mount(
   locale: "es" | "en" | "pt" = "es",
   detailJobs: Job[] = [],
   documents: Stored<DossierDocument>[] = [],
+  secondPageDocuments: Stored<DossierDocument>[] = [],
 ) {
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
   const execute = vi.fn(
-    async (_action: string, { input }: { input: { operation: string } }) => {
+    async (
+      _action: string,
+      {
+        input,
+      }: {
+        input: { operation: string; arguments?: { offset?: number } };
+      },
+    ) => {
+      const pageOffset = input.arguments?.offset ?? 0;
       if (!configured) throw new Error("La conexión no está configurada.");
       const state = {
         dossier: report
@@ -81,8 +90,15 @@ async function mount(
             ]
           : [],
         jobs,
-        nextOffset: null,
+        nextOffset:
+          secondPageDocuments.length > 0 && pageOffset === 0 ? 20 : null,
       };
+      if (
+        input.operation === "dossier" &&
+        pageOffset > 0 &&
+        secondPageDocuments.length > 0
+      )
+        state.documents = secondPageDocuments;
       return {
         output: {
           status: 200,
@@ -223,6 +239,26 @@ describe("tender dossier flow", () => {
     const steps = [...host.querySelectorAll(".secop-guide ol li")];
     expect(steps).toHaveLength(4);
     expect(steps[0].getAttribute("aria-current")).toBe("step");
+  });
+
+  it("loads every inventory page up front so progress needs no load-more", async () => {
+    const first = {
+      id: "doc-a",
+      revision: 1,
+      updatedAt: 1,
+      value: { name: "First", state: "ready" },
+    } as Stored<DossierDocument>;
+    const second = {
+      id: "doc-b",
+      revision: 1,
+      updatedAt: 1,
+      value: { name: "Second", state: "ready" },
+    } as Stored<DossierDocument>;
+    await mount(true, false, [], "es", [], [first], [second]);
+    await click("Documentos");
+    expect(host.textContent).toContain("First");
+    expect(host.textContent).toContain("Second");
+    expect(host.textContent).not.toContain("Cargar más documentos");
   });
 
   it("names synthesis while every catalog document is ready", async () => {

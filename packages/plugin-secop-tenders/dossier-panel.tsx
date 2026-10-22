@@ -669,14 +669,14 @@ export function DossierPanel({
         !Array.isArray(list?.companies)
       )
         throw new Error(t.invalidDossier);
-      const loaded = Math.max(
-        snapshotRef.current?.documents.length ?? 0,
-        snapshotRef.current?.requirements.length ?? 0,
-      );
+      // Load every inventory page up front (bounded) so progress and counts
+      // never depend on the user pressing "load more". Each page is small
+      // collection metadata; polling already refetches the loaded set.
+      const MAX_DOSSIER_PAGES = 25;
       for (
-        let offset = 20;
-        offset < loaded && data.nextOffset !== null;
-        offset += 20
+        let offset = 20, pages = 1;
+        data.nextOffset !== null && pages < MAX_DOSSIER_PAGES;
+        offset += 20, pages++
       ) {
         const next = await active.call<DossierState>("dossier", {
           id: processId,
