@@ -1,0 +1,61 @@
+{
+  "guardScript": "savia-cost-guard",
+  "backupBarrierScripts": [
+    "savia-backup-coordinator",
+    "savia-backup-coordinator-preview"
+  ],
+  "scripts": [
+    {
+      "script": "savia-agencies",
+      "variables": {
+        "SAVIA_MAINTENANCE": "true",
+        "SAVIA_FLOWS_EXECUTION_ENABLED": "false",
+        "SAVIA_FLOWS_MAINTENANCE": "true"
+      }
+    },
+    {
+      "script": "savia-agencies-preview",
+      "variables": {
+        "SAVIA_MAINTENANCE": "true",
+        "SAVIA_FLOWS_EXECUTION_ENABLED": "false",
+        "SAVIA_FLOWS_MAINTENANCE": "true"
+      }
+    },
+    {
+      "script": "savia-agencies-preview-feat-secop-tender-tracke",
+      "variables": {
+        "SAVIA_MAINTENANCE": "true"
+      }
+    },
+    {
+      "script": "savia-flows-preview",
+      "variables": {
+        "SAVIA_FLOWS_EXECUTION_ENABLED": "false",
+        "SAVIA_FLOWS_MAINTENANCE": "true"
+      }
+    },
+    {
+      "script": "secop-live-worker",
+      "variables": {
+        "MODEL_SPEND_PAUSED": "true"
+      }
+    }
+  ],
+  "schedules": [
+    "savia-agencies",
+    "savia-agencies-preview",
+    "savia-agencies-preview-feat-secop-tender-tracke",
+    "savia-flows-preview",
+    "secop-live-worker",
+    "secop-dossier-validation"
+  ],
+  "queues": [
+    "ce9d059f73aa45a8a29cf869a5ed5f17",
+    "b4e2c7ca82114599887fdd359aa4dead",
+    "24d772ba41c946558a8f023f99a70910"
+  ],
+  "workflows": ["secop-dossier-processing", "savia-flows-execute-preview"],
+  "aiSearch": [],
+  "accountWide": true,
+  "denyCloudflareAi": true
+}
