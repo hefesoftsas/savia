@@ -166,15 +166,15 @@ D1 databases, `assistant_virtual_employee_chunks`, `tenant_page_search_index` an
 `tenant_page_search_index_leases` each had zero rows, and all Pages search settings
 were already disabled. No operational tables, full-text record search, original
 application documents, SECOP reports or backup files were deleted. The Pulumi
-state has not yet been reconciled. The manual `retire-vector-state` operation in
+state reconciliation uses the manual `retire-vector-state` operation in
 `pulumi.yml` generates a private candidate and permits an official stack import
 only after exact allowlisted validation. It removes the one retired resource and
 its stack/provider/runtime references, preserving encrypted fields and all other
 resources. The first CI run (40106633346) passed infrastructure tests but GitHub
 rejected the retirement job because the `preview` environment only permits
-`main`. No state was imported and no protection rule was changed. Integrate the
-reviewed change into the permitted branch before running preview-only validation,
-then the explicit apply checkbox. This retirement does not rewrite existing backups.
+`main`. That initial attempt imported no state and changed no protection rule. After
+integration into the permitted branch, run candidate validation first, then the
+explicit apply checkbox. This retirement does not rewrite existing backups.
 
 After retirement, controller version `861bf7a9-086c-4f5c-855c-5d93d58a6df8`
 completed a real check at 2026-10-24 14:58:57 UTC with `actionErrors=[]`.
@@ -197,3 +197,20 @@ minimum-runtime jobs passed. Repository-wide lint/typecheck were not run.
 The `savia-data-cleanup` cron is allowlisted through `maintenanceSchedules`; only
 its scheduled cleanup remains executable. Its public URLs and native AI bindings
 remain subject to shutdown. See [daily D1 cleanup](cloudflare-data-cleanup.md).
+
+## Integrating changes while the account is paused
+
+Disable the automatic `deploy-preview.yml` workflow and cancel any queued/running
+preview deployment before merging a maintenance change into main. Leave it
+disabled until the user deliberately resumes deployments. CI and the manual
+Pulumi state-retirement workflow can remain enabled. Do not run `pulumi up`,
+ordinary infrastructure apply, or application publication to reconcile this state.
+
+From the merged main revision, dispatch `pulumi.yml` with `stack=preview`,
+`operation=retire-vector-state` and `apply_retired_vector_state=false`. Check that
+only the retired index and its allowlisted references are removed. Then dispatch
+the same operation with `apply_retired_vector_state=true`. A successful import
+must pass the post-import export comparison. Independently verify the persisted
+checkpoint and the live account pause, including empty application routes, paused
+queues, disabled non-protected URLs and absent native AI bindings. The guard and
+backup/cleanup schedules remain executable.

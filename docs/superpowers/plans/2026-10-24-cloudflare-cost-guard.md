@@ -75,5 +75,5 @@ A private candidate generated from the saved Pulumi checkpoint passed exact
 allowlisted validation. Its manual CI job was rejected by the preview environment
 branch policy, which permits only main. No live state import occurred and no
 environment protection was changed. The index itself remains deleted, and the
-checked-in configuration no longer requests it. State reconciliation remains
-pending integration into the permitted branch.
+checked-in configuration no longer requests it. That first attempt could proceed only after integration into the permitted branch.
+Follow the runbook procedure from main with automatic preview deployment disabled.
