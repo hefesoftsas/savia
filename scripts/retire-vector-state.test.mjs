@@ -1,5 +1,15 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { execFileSync, spawnSync } from "node:child_process";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import {
   transformCheckpoint,
@@ -246,6 +256,173 @@ test("rejects an imported checkpoint that differs from the validated candidate",
       }),
     /changed the secrets provider state/,
   );
+});
+
+test("accepts imported checkpoints with only JSON object-key reordering", () => {
+  const before = exportCheckpoint();
+  const { checkpoint: candidate } = transformCheckpoint(before, { targetUrn });
+  const imported = structuredClone(candidate);
+  imported.deployment.resources = imported.deployment.resources.map(
+    (resource) => Object.fromEntries(Object.entries(resource).reverse()),
+  );
+  imported.deployment = Object.fromEntries(
+    Object.entries(imported.deployment).reverse(),
+  );
+  assert.equal(
+    validateTransformedCheckpoint(before, imported, { targetUrn }),
+    true,
+  );
+  assert.equal(
+    validateImportedCheckpoint(candidate, imported, { targetUrn }),
+    true,
+  );
+});
+
+const pulumiBinary = process.env.PULUMI_BIN ?? "pulumi";
+const pulumiVersionResult = spawnSync(pulumiBinary, ["version"], {
+  encoding: "utf8",
+});
+const pulumiVersion =
+  pulumiVersionResult.status === 0 ? pulumiVersionResult.stdout.trim() : null;
+
+test(
+  "Pulumi 3.268.0 import/export key reordering passes semantic comparison",
+  { skip: pulumiVersion !== "v3.268.0" },
+  (t) => {
+    const root = mkdtempSync(join(tmpdir(), "savia-pulumi-import-test-"));
+    t.after(() => rmSync(root, { recursive: true, force: true }));
+    const project = join(root, "project");
+    const backend = join(root, "backend");
+    const pulumiHome = join(root, "pulumi-home");
+    const candidatePath = join(root, "candidate.private.json");
+    const importedPath = join(root, "imported.private.json");
+    for (const path of [project, backend, pulumiHome])
+      mkdirSync(path, { recursive: true, mode: 0o700 });
+    writeFileSync(
+      join(project, "Pulumi.yaml"),
+      "name: savia-cloudflare\nruntime: nodejs\n",
+      { mode: 0o600 },
+    );
+    const env = {
+      // Preserve host identity; isolate only the Pulumi-specific state directory.
+      HOME: process.env.HOME,
+      USER: process.env.USER,
+      PATH: process.env.PATH,
+      PULUMI_HOME: pulumiHome,
+      PULUMI_CONFIG_PASSPHRASE: "isolated synthetic checkpoint only",
+      PULUMI_SKIP_UPDATE_CHECK: "true",
+    };
+    const runPulumi = (args) =>
+      execFileSync(pulumiBinary, args, {
+        cwd: project,
+        env,
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+
+    runPulumi(["login", `file://${backend}`]);
+    runPulumi(["stack", "init", "preview", "--non-interactive"]);
+    const emptyPath = join(root, "empty.private.json");
+    runPulumi([
+      "stack",
+      "export",
+      "--stack",
+      "preview",
+      "--file",
+      emptyPath,
+      "--non-interactive",
+    ]);
+    const candidate = JSON.parse(readFileSync(emptyPath, "utf8"));
+    candidate.deployment.resources = [
+      {
+        urn: stackUrn,
+        type: "pulumi:pulumi:Stack",
+        custom: false,
+        outputs: { vectorizeIndex: null },
+      },
+    ];
+    writeFileSync(candidatePath, `${JSON.stringify(candidate)}\n`, {
+      mode: 0o600,
+      flag: "wx",
+    });
+    runPulumi([
+      "stack",
+      "import",
+      "--file",
+      candidatePath,
+      "--stack",
+      "preview",
+      "--non-interactive",
+    ]);
+    runPulumi([
+      "stack",
+      "export",
+      "--stack",
+      "preview",
+      "--file",
+      importedPath,
+      "--non-interactive",
+    ]);
+    assert.equal(
+      validateImportedCheckpoint(
+        candidate,
+        JSON.parse(readFileSync(importedPath, "utf8")),
+      ),
+      true,
+    );
+  },
+);
+
+test("import comparison still rejects changes to nested values and array order", () => {
+  const before = exportCheckpoint();
+  const { checkpoint: candidate } = transformCheckpoint(before, { targetUrn });
+  const mutate = (change) => {
+    const imported = structuredClone(candidate);
+    change(imported);
+    assert.throws(
+      () => validateImportedCheckpoint(candidate, imported, { targetUrn }),
+      /differs from candidate|secrets provider state|deployment metadata/,
+    );
+  };
+
+  mutate((imported) => {
+    const provider = imported.deployment.resources.find(
+      (resource) => resource.urn === providerUrn,
+    );
+    provider.inputs.encryptedMarker.secure = "changed";
+  });
+  mutate((imported) => {
+    imported.deployment.resources.find(
+      (resource) => resource.urn === runtimeUrn,
+    ).id = "changed-resource-id";
+  });
+  mutate((imported) => {
+    const runtime = imported.deployment.resources.find(
+      (resource) => resource.urn === runtimeUrn,
+    );
+    runtime.dependencies = ["urn:first", "urn:second"];
+  });
+  const reorderedArrays = structuredClone(candidate);
+  const runtime = reorderedArrays.deployment.resources.find(
+    (resource) => resource.urn === runtimeUrn,
+  );
+  runtime.dependencies = ["urn:first", "urn:second"];
+  const importedWithReorderedArray = structuredClone(reorderedArrays);
+  importedWithReorderedArray.deployment.resources
+    .find((resource) => resource.urn === runtimeUrn)
+    .dependencies.reverse();
+  assert.throws(
+    () =>
+      validateImportedCheckpoint(reorderedArrays, importedWithReorderedArray, {
+        targetUrn,
+      }),
+    /differs from candidate/,
+  );
+  mutate((imported) => {
+    imported.deployment.manifest.time = "changed";
+  });
+  mutate((imported) => {
+    imported.secrets_providers.state.salt = "changed";
+  });
 });
 
 test("fixes the target and output mutation scope to one exact Pulumi URN", () => {

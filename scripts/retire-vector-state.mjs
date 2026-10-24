@@ -65,6 +65,24 @@ function readJson(path) {
   return JSON.parse(readFileSync(path, "utf8"));
 }
 
+function canonicalize(value) {
+  if (Array.isArray(value)) return value.map(canonicalize);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.keys(value)
+        .sort()
+        .map((key) => [key, canonicalize(value[key])]),
+    );
+  }
+  return value;
+}
+
+function sameJson(left, right) {
+  return (
+    JSON.stringify(canonicalize(left)) === JSON.stringify(canonicalize(right))
+  );
+}
+
 export function validateTargetInCheckpoint(
   checkpoint,
   { targetUrn = TARGET_URN } = {},
@@ -289,7 +307,7 @@ export function validateTransformedCheckpoint(
   options = {},
 ) {
   const expected = transformCheckpoint(beforeCheckpoint, options).checkpoint;
-  if (JSON.stringify(expected) !== JSON.stringify(candidate))
+  if (!sameJson(expected, candidate))
     throw new Error(
       "candidate differs from the allowlisted checkpoint transformation",
     );
@@ -310,17 +328,11 @@ export function validateImportedCheckpoint(
     state?.deployment?.secrets_providers ??
     state?.checkpoint?.latest?.secrets_providers ??
     state?.secrets_providers;
-  if (
-    JSON.stringify(providerState(candidate)) !==
-    JSON.stringify(providerState(imported))
-  )
+  if (!sameJson(providerState(candidate), providerState(imported)))
     throw new Error("imported checkpoint changed the secrets provider state");
   const deploymentManifest = (state) =>
     state?.deployment?.manifest ?? state?.checkpoint?.latest?.manifest;
-  if (
-    JSON.stringify(deploymentManifest(candidate)) !==
-    JSON.stringify(deploymentManifest(imported))
-  )
+  if (!sameJson(deploymentManifest(candidate), deploymentManifest(imported)))
     throw new Error("imported checkpoint changed deployment metadata");
   const expectedResources = getResources(candidate).toSorted((a, b) =>
     a.urn.localeCompare(b.urn),
@@ -328,7 +340,7 @@ export function validateImportedCheckpoint(
   const importedResources = getResources(imported).toSorted((a, b) =>
     a.urn.localeCompare(b.urn),
   );
-  if (JSON.stringify(expectedResources) !== JSON.stringify(importedResources))
+  if (!sameJson(expectedResources, importedResources))
     throw new Error("imported checkpoint differs from candidate");
   const withoutResources = (state) => {
     const copy = structuredClone(state);
@@ -339,10 +351,7 @@ export function validateImportedCheckpoint(
     else if (Array.isArray(copy?.resources)) delete copy.resources;
     return copy;
   };
-  if (
-    JSON.stringify(withoutResources(candidate)) !==
-    JSON.stringify(withoutResources(imported))
-  )
+  if (!sameJson(withoutResources(candidate), withoutResources(imported)))
     throw new Error(
       "imported checkpoint changed non-resource metadata or configuration",
     );
