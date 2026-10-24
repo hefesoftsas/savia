@@ -169,8 +169,10 @@ application documents, SECOP reports or backup files were deleted. The Pulumi
 state reconciliation uses the manual `retire-vector-state` operation in
 `pulumi.yml` generates a private candidate and permits an official stack import
 only after exact allowlisted validation. It removes the one retired resource and
-its stack/provider/runtime references, preserving encrypted fields and all other
-resources. The first CI run (40106633346) passed infrastructure tests but GitHub
+its stack/provider/runtime references, preserving secret values and all other
+resources. Pulumi can re-encrypt unchanged secrets with fresh nonces on import;
+verification decrypts both private snapshots in memory and compares their full
+values and metadata. Ciphertext changes alone are never silently ignored. The first CI run (40106633346) passed infrastructure tests but GitHub
 rejected the retirement job because the `preview` environment only permits
 `main`. That initial attempt imported no state and changed no protection rule. After
 integration into the permitted branch, run candidate validation first, then the
@@ -214,3 +216,24 @@ must pass the post-import export comparison. Independently verify the persisted
 checkpoint and the live account pause, including empty application routes, paused
 queues, disabled non-protected URLs and absent native AI bindings. The guard and
 backup/cleanup schedules remain executable.
+
+### Verify an import that completed before its comparison failed
+
+Do not repeat the retirement import when the live checkpoint already lacks the
+index. Pulumi keeps the previous checkpoint at
+`.pulumi/stacks/savia-cloudflare/preview.json.bak`. With automatic preview
+deployment still disabled, dispatch `pulumi.yml` on main with `stack=preview`
+and `operation=verify-retired-vector-state`. This read-only job downloads only
+that official backup and the current preview checkpoint using the existing R2
+credentials. It transforms the backup with the same exact retirement allowlist,
+authenticates and decrypts passphrase-protected secrets in memory, and requires
+complete equality with the current checkpoint. A wrong passphrase, unsupported
+secret encoding, missing retired index in the backup, or any other changed
+value fails closed. It neither imports state nor invokes a provider. Snapshots
+and plaintext are never logged or uploaded; temporary files are private and
+removed on exit.
+
+The Preview R2 credential `savia-preview-pulumi-state` is limited to Object Read
+& Write on `savia-pulumi-state-preview` and expires on 2026-11-23. Renew it with
+the same scope before future state maintenance; never restore application or
+AI inference permissions to repair backend access.

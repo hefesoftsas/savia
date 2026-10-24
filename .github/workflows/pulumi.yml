@@ -25,6 +25,7 @@ on:
             ownership-audit,
             ownership-migrate,
             retire-vector-state,
+            verify-retired-vector-state,
           ]
         default: preview
       apply_retired_vector_state:
@@ -79,7 +80,7 @@ jobs:
         run: node --test infra/pulumi/cli-preflight.integration.mjs
 
       - name: Test retired Vectorize state safeguards
-        run: node --test scripts/retire-vector-state.test.mjs
+        run: node --test scripts/retire-vector-state.test.mjs scripts/verify-retired-vector-secrets.test.mjs
 
       - name: Validate all infrastructure programs
         run: npm --prefix infra/pulumi run typecheck
@@ -305,5 +306,50 @@ jobs:
             node ../../scripts/retire-vector-state.mjs safe-error --operation "Post-import checkpoint export" --log "$custody/export-after.log"
             exit 1
           fi
-          node ../../scripts/retire-vector-state.mjs compare-import \
-            --candidate "$custody/candidate.private.json" --imported "$custody/after.private.json" --target "$target"
+          node ../../scripts/verify-retired-vector-secrets.mjs verify-import-secrets \
+            --before "$custody/before.private.json" --after "$custody/after.private.json"
+
+  verify-retired-vector-state:
+    name: Verify retired Vectorize state without mutation
+    if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.operation == 'verify-retired-vector-state' && inputs.stack == 'preview' }}
+    needs: [unit, runtime-compatibility]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: preview
+    concurrency:
+      group: savia-cloudflare-preview
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Compare the official backup with the current checkpoint privately
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_STATE_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_STATE_SECRET_ACCESS_KEY }}
+          PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
+          AWS_REGION: auto
+          AWS_EC2_METADATA_DISABLED: "true"
+        run: |
+          set -euo pipefail
+          umask 077
+          custody="$RUNNER_TEMP/savia-vector-verification"
+          install -d -m 700 "$custody"
+          trap 'rm -rf "$custody"' EXIT
+          endpoint='https://08a0d36f8b0357684f83e4bfeb6628b6.r2.cloudflarestorage.com'
+          bucket='savia-pulumi-state-preview'
+          for snapshot in before after; do
+            key='.pulumi/stacks/savia-cloudflare/preview.json'
+            if [ "$snapshot" = before ]; then key="$key.bak"; fi
+            if ! aws s3api get-object --endpoint-url "$endpoint" --bucket "$bucket" --key "$key" \
+              "$custody/$snapshot.private.json" >"$custody/$snapshot.private.log" 2>&1; then
+              node scripts/retire-vector-state.mjs safe-error --operation "Private checkpoint read" --log "$custody/$snapshot.private.log"
+              exit 1
+            fi
+          done
+          node scripts/verify-retired-vector-secrets.mjs verify-import-secrets \
+            --before "$custody/before.private.json" --after "$custody/after.private.json"
