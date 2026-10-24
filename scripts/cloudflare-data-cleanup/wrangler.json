@@ -41,5 +41,19 @@
       "database_id": "c7e95fa3-24c5-44a0-b273-207d2fe083d8"
     }
   ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "PRODUCTION_BACKUP_GATE",
+        "class_name": "BackupCoordinator",
+        "script_name": "savia-backup-coordinator"
+      },
+      {
+        "name": "PREVIEW_BACKUP_GATE",
+        "class_name": "BackupCoordinator",
+        "script_name": "savia-backup-coordinator-preview"
+      }
+    ]
+  },
   "account_id": "08a0d36f8b0357684f83e4bfeb6628b6"
 }

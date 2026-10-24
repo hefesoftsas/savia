@@ -1,3 +1,4 @@
+import { guardStorageEnvironment } from "../../packages/backup-gate/index.mjs";
 import { runCleanup } from "./cleanup.mjs";
 
 const MAX_BATCHES_PER_TARGET = 50;
@@ -14,22 +15,38 @@ export default {
       "AGENCY_BRANCH",
       "SECOP",
       "SECOP_VALIDATION",
+      "PRODUCTION_BACKUP_GATE",
+      "PREVIEW_BACKUP_GATE",
     ];
     const missingBindings = requiredBindings.filter(
       (name) => env[name] == null,
     );
     if (missingBindings.length > 0) {
-      throw new Error(`Missing D1 bindings: ${missingBindings.join(", ")}`);
+      throw new Error(
+        `Missing required bindings: ${missingBindings.join(", ")}`,
+      );
     }
+
+    const guardedDatabase = (gate, database) =>
+      guardStorageEnvironment({
+        BACKUP_GATE: gate,
+        SAVIA_BACKUP_GATE_REQUIRED: "true",
+        DB: database,
+      }).DB;
+    const productionGate = env.PRODUCTION_BACKUP_GATE;
+    const previewGate = env.PREVIEW_BACKUP_GATE;
 
     context.waitUntil(
       runCleanup(
         {
-          agencyProduction: env.AGENCY_PRODUCTION,
-          agencyPreview: env.AGENCY_PREVIEW,
-          agencyBranch: env.AGENCY_BRANCH,
-          secop: env.SECOP,
-          secopValidation: env.SECOP_VALIDATION,
+          agencyProduction: guardedDatabase(
+            productionGate,
+            env.AGENCY_PRODUCTION,
+          ),
+          agencyPreview: guardedDatabase(previewGate, env.AGENCY_PREVIEW),
+          agencyBranch: guardedDatabase(previewGate, env.AGENCY_BRANCH),
+          secop: guardedDatabase(productionGate, env.SECOP),
+          secopValidation: guardedDatabase(previewGate, env.SECOP_VALIDATION),
         },
         { maxBatches: MAX_BATCHES_PER_TARGET },
       ).then(

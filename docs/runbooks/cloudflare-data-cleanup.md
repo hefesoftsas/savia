@@ -4,9 +4,11 @@ The user authorized an initial cleanup on 2026-10-24 and recurring removal of ac
 
 ## Runtime
 
-`savia-data-cleanup` is a Cloudflare Worker scheduled at **03:15 UTC daily** (22:15 America/Bogota). It has no workers.dev URL, preview URL, HTTP maintenance endpoint, Durable Object, AI binding, runtime API token or model call. It uses five direct D1 bindings configured in [wrangler.json](../../scripts/cloudflare-data-cleanup/wrangler.json).
+`savia-data-cleanup` is a Cloudflare Worker scheduled at **03:15 UTC daily** (22:15 America/Bogota). It has no workers.dev URL, preview URL, HTTP maintenance endpoint, AI binding, runtime API token or model call. It creates no database or Durable Object. It uses five direct D1 bindings configured in [wrangler.json](../../scripts/cloudflare-data-cleanup/wrangler.json).
 
 The account spending guard explicitly preserves this cleanup schedule through `maintenanceSchedules`. The cleanup Worker remains subject to public URL shutdown, domain/route removal and native AI denial. Other application services remain paused.
+
+Cleanup mutations participate in the existing production/preview backup barriers through two cross-script bindings to the existing BackupCoordinator namespaces. Missing coordinators or a closed backup gate fail before a write; the cleanup does not weaken backup consistency or create another coordinator.
 
 ## Retention rules
 
@@ -34,4 +36,6 @@ The initial operation deleted **8,687 terminal action histories, 253 obsolete pl
 
 The preview database allocation dropped from 610,381,824 to 131,977,216 bytes at the first post-cleanup measurement. SECOP still reported its previous allocation despite zero target rows; physical allocation and dashboards update separately from logical deletion. All 11 databases remain present.
 
-The Worker deployment is version `4acbeb57-c1d8-4d20-b80a-ed5087364573`. A real scheduled execution and the final daily trigger are verified below.
+The Worker deployment is version `6c3e6840-3f28-4ebb-9636-a4e55b39c71f`. The first natural cron execution at 16:38:41 UTC removed one deliberately expired synthetic report from the validation database, with no exceptions. The backup-aware version subsequently ran at 16:39:41 UTC with `outcome=ok`, 20 ms CPU, no remaining rows and no exceptions. The synthetic record was independently verified absent. The final `15 3 * * *` schedule was read back after replacing the temporary every-minute verification trigger; both public URL flags remained false.
+
+Validation passed: 49 focused cleanup/controller/provider tests and 764 contract tests. No full monorepo lint/typecheck was run. The existing spending controller remained tripped with no action errors after the rollout.

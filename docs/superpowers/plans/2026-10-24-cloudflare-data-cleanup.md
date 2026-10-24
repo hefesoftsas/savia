@@ -13,8 +13,8 @@
 - [x] Test and implement idempotent, bounded SQL cleanup with real SQLite preservation and cutoff tests.
 - [x] Test the spending guard schedule exception without exempting public URLs or AI bindings.
 - [x] Validate exports, execute initial cleanup through the same implementation, and compare counts and preserved data.
-- [ ] Deploy the scheduled Worker with no public URLs, verify the exact Wrangler config and arm the daily trigger only after a real execution succeeds.
-- [ ] Run focused and contract checks, review the diff, document live evidence and publish the changes.
+- [x] Deploy the scheduled Worker with no public URLs, verify the exact Wrangler config and arm the daily trigger only after a real execution succeeds.
+- [x] Run focused and contract checks, review the diff, document live evidence and publish the changes.
 
 ## Verification focus
 
@@ -23,3 +23,9 @@
 - Retry and partial batches must converge without deleting protected records.
 - UTC ISO timestamps and SECOP millisecond timestamps must enforce the 24-hour cutoff.
 - The spending guard must preserve only the cleanup schedule, without restoring app access or inference.
+
+## Completion evidence
+
+Initial deletion totals: 8,687 terminal histories, 253 obsolete releases, 85 related source records and 20,984 reports/chunks. Protected installation contents, business-record counts and original dossier fingerprints matched the first snapshot across both resumable passes. The private recovery exports parsed successfully and matched their recorded hashes.
+
+The backup-aware Worker version `6c3e6840-3f28-4ebb-9636-a4e55b39c71f` completed a natural cron invocation at 16:39:41 UTC with no exceptions and 20 ms CPU. The temporary verification report was removed. The final daily schedule was read back, public URLs remained disabled, and the spending guard retained its stop latch with no action errors. Focused tests passed 49/49; contracts passed 764/764.

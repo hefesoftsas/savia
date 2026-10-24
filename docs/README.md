@@ -93,6 +93,7 @@ Savia documentation hub. If you are new, follow the onboarding track in order.
 - [custom-result-components.md](custom-result-components.md) — custom React result components.
 - [runbooks/](runbooks/) — operational procedures (each states owner and review date).
 - [Cloudflare spending circuit breaker](runbooks/cloudflare-cost-guard.md) — shutdown thresholds, AI limits, verification, and recovery.
+- [Cloudflare daily data cleanup](runbooks/cloudflare-data-cleanup.md) — retention rules, protected releases, and initial cleanup evidence.
 - [../apps/admin/src/features/studio-engine/DESIGN.md](../apps/admin/src/features/studio-engine/DESIGN.md) — Studio engine design.
 - [../packages/studio-server/API.md](../packages/studio-server/API.md) · [../packages/studio-server/INTEGRATIONS.md](../packages/studio-server/INTEGRATIONS.md) — Studio engine contract.
 
@@ -124,5 +125,3 @@ Savia documentation hub. If you are new, follow the onboarding track in order.
 
 - [Personal API keys](guides/personal-api-keys.md) — create and revoke scoped credentials for Companion.
 - [Test coverage](guides/test-coverage.md) — run the local coverage suite and inspect merged CI reports.
-
-- [Cloudflare daily data cleanup](runbooks/cloudflare-data-cleanup.md)
