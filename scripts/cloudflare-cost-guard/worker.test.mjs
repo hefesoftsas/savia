@@ -1330,3 +1330,266 @@ test("tripped guard keeps maintenance cron while disabling its public URLs", asy
     true,
   );
 });
+
+test("manual stop latches before external calls and pauses below budget without billing", async () => {
+  const h = harness({ billing: rows([1]) });
+  const fetcher = async (url, init) => {
+    assert.notEqual(new URL(url).pathname.split("/").at(-1), "billable-usage");
+    const status = JSON.parse(h.kv.get("status"));
+    assert.equal(status.tripped, true);
+    assert.equal(status.reason, "manual_stop");
+    return h.fetcher(url, init);
+  };
+  const result = await executeCheck(h.env, {
+    fetcher,
+    now: base,
+    manualStop: true,
+  });
+  assert.equal(result.tripped, true);
+  assert.equal(result.reason, "manual_stop");
+  assert.equal(result.manualStopAt, new Date(base).toISOString());
+  assert.ok(
+    result.targetResults.some(
+      (item) => item.action === "queue" && item.target === "q1" && item.ok,
+    ),
+  );
+  assert.equal(result.actionErrors.length, 0);
+  const originalSnapshot = h.kv.get("recovery:queue:q1");
+  const later = await executeCheck(h.env, {
+    fetcher: h.fetcher,
+    now: base + 1000,
+  });
+  assert.equal(later.reason, "manual_stop");
+  assert.equal(later.tripped, true);
+  assert.equal(later.manualStopAt, result.manualStopAt);
+  assert.deepEqual(h.kv.get("recovery:queue:q1"), originalSnapshot);
+});
+
+test("manual stop reports partial failures without clearing the stop latch", async () => {
+  const h = harness({ billing: rows([1]), failQueue: true });
+  const result = await executeCheck(h.env, {
+    fetcher: h.fetcher,
+    now: base,
+    manualStop: true,
+  });
+  assert.equal(result.tripped, true);
+  assert.equal(result.phase, "incomplete");
+  assert.ok(
+    result.targetResults.some(
+      (item) => item.action === "queue" && item.target === "q1" && !item.ok,
+    ),
+  );
+  assert.ok(result.actionErrors.some((item) => item.target === "q1"));
+  assert.equal(JSON.parse(h.kv.get("status")).tripped, true);
+});
+
+test("manual stop requires authentication, explicit confirmation and same-origin browser requests", async () => {
+  const { default: worker } = await import("./worker.mjs");
+  const h = harness();
+  for (const [headers, body, expected] of [
+    [{}, { confirm: "PAUSE_ALL_ENVIRONMENTS" }, 401],
+    [
+      {
+        authorization: "Bearer admin-secret",
+        "content-type": "application/json",
+      },
+      { confirm: "wrong" },
+      400,
+    ],
+    [
+      {
+        authorization: "Bearer admin-secret",
+        "content-type": "application/json",
+        origin: "https://other.example",
+      },
+      { confirm: "PAUSE_ALL_ENVIRONMENTS" },
+      403,
+    ],
+  ]) {
+    const response = await worker.fetch(
+      new Request("https://guard/stop", {
+        method: "POST",
+        headers,
+        body: JSON.stringify(body),
+      }),
+      h.env,
+    );
+    assert.equal(response.status, expected);
+    assert.equal(h.kv.has("status"), false);
+  }
+});
+
+test("manual stop remains saved when account inventory fails", async () => {
+  const h = harness({ billing: rows([1]) });
+  h.env.POLICY.accountWide = true;
+  const result = await executeCheck(h.env, {
+    fetcher: h.fetcher,
+    now: base,
+    manualStop: true,
+  });
+  assert.equal(result.tripped, true);
+  assert.equal(result.reason, "manual_stop");
+  assert.equal(result.phase, "incomplete");
+  assert.ok(
+    result.actionErrors.some((item) => item.action.startsWith("inventory-")),
+  );
+  assert.equal(JSON.parse(h.kv.get("status")).tripped, true);
+});
+
+test("authenticated stop endpoint applies the latch and protected panel responses cannot be cached", async (t) => {
+  const { default: worker } = await import("./worker.mjs");
+  const h = harness({ billing: rows([1]) });
+  t.mock.method(globalThis, "fetch", h.fetcher);
+  const response = await worker.fetch(
+    new Request("https://guard/stop", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer admin-secret",
+        "content-type": "application/json",
+        origin: "https://guard",
+      },
+      body: JSON.stringify({ confirm: "PAUSE_ALL_ENVIRONMENTS" }),
+    }),
+    h.env,
+  );
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("cache-control"), "no-store");
+  assert.equal((await response.json()).reason, "manual_stop");
+  for (const path of ["/control"]) {
+    const panel = await worker.fetch(
+      new Request(`https://guard${path}`),
+      { ...h.env, ACCESS_ADMIN_EMAILS: "owner@example.com" },
+      { access: { getIdentity: async () => ({ email: "owner@example.com" }) } },
+    );
+    assert.equal(panel.status, 200);
+    assert.match(panel.headers.get("content-type"), /^text\/html/);
+    assert.equal(panel.headers.get("cache-control"), "no-store");
+    assert.equal(panel.headers.get("x-frame-options"), "DENY");
+    const html = await panel.text();
+    const nonce = html.match(/<script nonce="([^"]+)"/)[1];
+    assert.ok(
+      panel.headers.get("content-security-policy").includes(`'nonce-${nonce}'`),
+    );
+    assert.ok(!html.includes("admin-secret"));
+    assert.ok(!html.includes("cf-secret"));
+  }
+});
+
+test("panel denies missing, forged and unauthorized Access identities before reaching controller", async () => {
+  const { default: worker } = await import("./worker.mjs");
+  let forwarded = 0;
+  const env = {
+    ACCESS_ADMIN_EMAILS: "owner@example.com",
+    CONTROLLER: {
+      idFromName: () => "id",
+      get: () => ({
+        fetch: () => {
+          forwarded++;
+          throw new Error("must not forward");
+        },
+      }),
+    },
+  };
+  for (const path of [
+    "/control",
+    "/control/",
+    "/control/status",
+    "/control/stop",
+  ]) {
+    for (const ctx of [
+      undefined,
+      {},
+      { access: { getIdentity: async () => ({ email: "other@example.com" }) } },
+      {
+        access: {
+          getIdentity: async () => {
+            throw new Error("invalid session");
+          },
+        },
+      },
+    ]) {
+      const response = await worker.fetch(
+        new Request("https://guard" + path, {
+          headers: {
+            "Cf-Access-Authenticated-User-Email": "owner@example.com",
+            authorization: "Bearer admin-secret",
+          },
+        }),
+        env,
+        ctx,
+      );
+      assert.equal(response.status, 403);
+      assert.equal(response.headers.get("cache-control"), "no-store");
+    }
+  }
+  assert.equal(forwarded, 0);
+});
+
+test("Access session forwards only known browser API routes with server-side authentication", async () => {
+  const { default: worker } = await import("./worker.mjs");
+  const captured = [];
+  const env = {
+    ACCESS_ADMIN_EMAILS: "owner@example.com",
+    GUARD_ADMIN_TOKEN: "internal-secret",
+    CONTROLLER: {
+      idFromName: () => "id",
+      get: () => ({
+        fetch: async (request) => {
+          captured.push(request);
+          return Response.json({ tripped: true });
+        },
+      }),
+    },
+  };
+  const ctx = {
+    access: { getIdentity: async () => ({ email: "OWNER@example.com" }) },
+  };
+  const redirect = await worker.fetch(new Request("https://guard/"), env);
+  assert.equal(redirect.status, 302);
+  assert.equal(redirect.headers.get("location"), "https://guard/control");
+  for (const [path, method] of [
+    ["/control/status", "GET"],
+    ["/control/stop", "POST"],
+  ]) {
+    const request = new Request("https://guard" + path, {
+      method,
+      headers: {
+        authorization: "Bearer attacker",
+        origin: "https://guard",
+        "content-type": "application/json",
+      },
+      ...(method === "POST"
+        ? { body: '{"confirm":"PAUSE_ALL_ENVIRONMENTS"}' }
+        : {}),
+    });
+    assert.equal((await worker.fetch(request, env, ctx)).status, 200);
+    const forwarded = captured.at(-1);
+    assert.equal(new URL(forwarded.url).pathname, path.replace("/control", ""));
+    assert.equal(
+      forwarded.headers.get("authorization"),
+      "Bearer internal-secret",
+    );
+    assert.equal(forwarded.headers.get("origin"), "https://guard");
+  }
+  for (const path of [
+    "/control/check",
+    "/control/recovery",
+    "/control/unknown",
+  ])
+    assert.equal(
+      (await worker.fetch(new Request("https://guard" + path), env, ctx))
+        .status,
+      404,
+    );
+  assert.equal(captured.length, 2);
+  assert.equal(
+    (
+      await worker.fetch(
+        new Request("https://guard/control"),
+        { ...env, ACCESS_ADMIN_EMAILS: "" },
+        ctx,
+      )
+    ).status,
+    403,
+  );
+});
