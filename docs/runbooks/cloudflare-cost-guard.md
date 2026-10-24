@@ -237,3 +237,47 @@ The Preview R2 credential `savia-preview-pulumi-state` is limited to Object Read
 & Write on `savia-pulumi-state-preview` and expires on 2026-11-23. Renew it with
 the same scope before future state maintenance; never restore application or
 AI inference permissions to repair backend access.
+
+## Manual emergency stop panel
+
+Open `https://savia-cost-guard.jose-douglas-dev.workers.dev/control` and sign in
+with Cloudflare. The Access application **Savia account emergency controls**
+protects `/control` and its subpaths. It accepts only the Cloudflare identity
+provider, requires membership of this Cloudflare account and the administrator
+email `jose.douglas.dev@gmail.com`, and uses a 30-minute session. The Worker also
+requires the platform-verified `ctx.access` identity and `ACCESS_ADMIN_EMAILS`
+allowlist; forged identity headers or a missing Access context are denied.
+No administrator token is entered in or sent to the browser. **Log out** clears
+the displayed state and redirects to Cloudflare Access logout. Cloudflare revokes
+the user's Access sessions across protected applications, not just this panel.
+
+Browser APIs use `/control/status` and `/control/stop`. Machine-only `/status`,
+`/check`, `/stop` and `/recovery` retain the existing bearer credential so the
+scheduled guard, deployment verification and private audits continue working.
+The root URL redirects to `/control`. The Access application is configured in
+Cloudflare; its non-secret desired configuration and resource IDs are recorded
+in `scripts/cloudflare-cost-guard/access-application.json`. The Worker, panel,
+allowlist and tests are versioned in the same repository.
+
+Choose **Pause all environments**, then **Confirm pause**. The independent
+controller records a persistent `manual_stop` latch before any external request,
+without fetching billing. It then reapplies the same account-wide discovery and
+pause policy used by the automatic cost guard. Later five-minute checks continue
+enforcing the manual latch, including newly discovered targets. The operation is
+safe to repeat and retains the original recovery snapshots. There is no resume
+control. Existing application deployments remain disabled.
+
+The panel reports each target action and incomplete discovery/action failures.
+A saved latch is distinct from completed pause actions: **STOPPING**, **PAUSE
+INCOMPLETE**, and **PAUSED** are shown separately. If a request times out, refresh
+status before assuming it failed; the latch may already have been saved. The
+same protected guard, backup coordinator and daily cleanup exceptions remain
+active. In-flight requests can finish; pausing does not delete data or retroactively
+cap billed usage.
+
+For scripted operation, send an authenticated `POST /stop` with
+`Content-Type: application/json` and body
+`{"confirm":"PAUSE_ALL_ENVIRONMENTS"}`. Browser requests must come from the
+controller's own origin. Status and panel responses use `Cache-Control: no-store`;
+the panel also blocks framing and third-party script/network sources. No new
+Cloudflare credential, binding, database, or inference permission is required.

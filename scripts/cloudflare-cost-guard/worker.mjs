@@ -1,4 +1,5 @@
 import { parsePolicy } from "./policy.mjs";
+import { renderControlPanel } from "./panel.mjs";
 
 const API = "https://api.cloudflare.com/client/v4";
 const DEFAULT_FIXED_RESERVE_USD = 5;
@@ -779,6 +780,17 @@ async function pauseAiSearch(env, target, fetcher, errors) {
 
 async function pauseTargets(env, policy, fetcher, discovered) {
   const errors = [];
+  const results = [];
+  const run = async ({ action, target, execute }) => {
+    const actionErrors = [];
+    try {
+      await execute(actionErrors);
+    } catch {
+      actionErrors.push({ ok: false, action, target });
+    }
+    errors.push(...actionErrors);
+    results.push({ action, target, ok: actionErrors.length === 0 });
+  };
   const aiScripts = policy.denyCloudflareAi
     ? [
         ...new Set([
@@ -788,7 +800,11 @@ async function pauseTargets(env, policy, fetcher, discovered) {
       ]
     : [];
   await mapLimited(aiScripts, 4, (script) =>
-    denyAiBinding(env, script, fetcher, errors),
+    run({
+      action: "ai-binding",
+      target: script,
+      execute: (failures) => denyAiBinding(env, script, fetcher, failures),
+    }),
   );
   const scriptTargets = [
     ...policy.scripts.map((target) => ({ mode: "configured", ...target })),
@@ -811,39 +827,49 @@ async function pauseTargets(env, policy, fetcher, discovered) {
   const workflows = [
     ...new Set([...policy.workflows, ...discovered.workflows]),
   ];
-  const aiSearch = aiSearchTargets(policy, discovered);
   const actions = [
-    ...queues.map((id) => () => pauseQueue(env, id, fetcher, errors)),
-    ...scriptTargets.map(
-      (target) => () =>
+    ...queues.map((id) => ({
+      action: "queue",
+      target: id,
+      execute: (failures) => pauseQueue(env, id, fetcher, failures),
+    })),
+    ...scriptTargets.map((target) => ({
+      action:
+        target.mode === "configured" ? "worker-settings" : "worker-access",
+      target: target.script,
+      execute: (failures) =>
         target.mode === "configured"
-          ? pauseScript(env, target, fetcher, errors)
-          : disableWorkerSubdomain(env, target.script, fetcher, errors),
-    ),
-    ...schedules.map(
-      (script) => () => pauseSchedule(env, script, fetcher, errors),
-    ),
-    ...workflows.map(
-      (workflow) => () =>
-        actionResult(
-          () => pauseWorkflow(env, workflow, fetcher, errors),
-          errors,
-          "workflow",
-          workflow,
-        ),
-    ),
-    ...aiSearch.map(
-      (target) => () => pauseAiSearch(env, target, fetcher, errors),
-    ),
-    ...discovered.domains.map(
-      (domain) => () => detachWorkerDomain(env, domain, fetcher, errors),
-    ),
-    ...discovered.routes.map(
-      (route) => () => disableWorkerRoute(env, route, fetcher, errors),
-    ),
+          ? pauseScript(env, target, fetcher, failures)
+          : disableWorkerSubdomain(env, target.script, fetcher, failures),
+    })),
+    ...schedules.map((script) => ({
+      action: "schedule",
+      target: script,
+      execute: (failures) => pauseSchedule(env, script, fetcher, failures),
+    })),
+    ...workflows.map((workflow) => ({
+      action: "workflow",
+      target: workflow,
+      execute: (failures) => pauseWorkflow(env, workflow, fetcher, failures),
+    })),
+    ...aiSearchTargets(policy, discovered).map((target) => ({
+      action: "ai-search",
+      target: `${target.namespace}:${target.id}`,
+      execute: (failures) => pauseAiSearch(env, target, fetcher, failures),
+    })),
+    ...discovered.domains.map((domain) => ({
+      action: "domain",
+      target: domain.hostname ?? domain.id,
+      execute: (failures) => detachWorkerDomain(env, domain, fetcher, failures),
+    })),
+    ...discovered.routes.map((route) => ({
+      action: "route",
+      target: route.pattern ?? route.id,
+      execute: (failures) => disableWorkerRoute(env, route, fetcher, failures),
+    })),
   ];
-  await mapLimited(actions, 4, (run) => run());
-  return errors;
+  await mapLimited(actions, 4, run);
+  return { errors, results };
 }
 
 function aiSearchTargets(policy, discovered) {
@@ -864,19 +890,46 @@ async function billing(env, fetcher) {
 
 export async function executeCheck(
   env,
-  { fetcher = fetch, now = Date.now() } = {},
+  { fetcher = fetch, now = Date.now(), manualStop = false } = {},
 ) {
+  let prior = await storedStatus(env.STATE);
+  const checkedAt = new Date(
+    now instanceof Date ? now.getTime() : Number(now),
+  ).toISOString();
+  if (manualStop) {
+    prior = {
+      ...prior,
+      tripped: true,
+      reason: "manual_stop",
+      manualStopAt: prior?.manualStopAt ?? checkedAt,
+      checkedAt,
+      phase: "stopping",
+      actionErrors: [],
+      targetResults: [],
+    };
+    // Persist before billing, discovery or any other external request.
+    await saveStatus(env.STATE, prior);
+  }
   const policy = parsePolicy(env.POLICY);
   let measured;
-  try {
-    measured = evaluateBillableUsage(await billing(env, fetcher), {
-      accountId: env.CF_ACCOUNT_ID,
-      now,
-    });
-  } catch {
-    measured = fail("billing_unavailable");
+  if (manualStop) {
+    measured = {
+      tripped: true,
+      reason: "manual_stop",
+      usageUsd: prior?.usageUsd ?? null,
+      totalUsd: prior?.totalUsd ?? null,
+      periodStart: prior?.periodStart ?? null,
+    };
+  } else {
+    try {
+      measured = evaluateBillableUsage(await billing(env, fetcher), {
+        accountId: env.CF_ACCOUNT_ID,
+        now,
+      });
+    } catch {
+      measured = fail("billing_unavailable");
+    }
   }
-  const prior = await storedStatus(env.STATE);
   const inventoryErrors = [];
   const discovered = await discoverAccountTargets(
     env,
@@ -895,6 +948,9 @@ export async function executeCheck(
       now instanceof Date ? now.getTime() : Number(now),
     ).toISOString(),
     actionErrors: inventoryErrors,
+    targetResults: [],
+    phase: tripped ? "stopping" : "monitoring",
+    ...(prior?.manualStopAt ? { manualStopAt: prior.manualStopAt } : {}),
   };
   if (policy.denyCloudflareAi && !tripped) {
     status.actionErrors = inventoryErrors;
@@ -914,10 +970,10 @@ export async function executeCheck(
   }
   if (tripped) {
     await saveStatus(env.STATE, status);
-    status.actionErrors = [
-      ...inventoryErrors,
-      ...(await pauseTargets(env, policy, fetcher, discovered)),
-    ];
+    const paused = await pauseTargets(env, policy, fetcher, discovered);
+    status.actionErrors = [...inventoryErrors, ...paused.errors];
+    status.targetResults = paused.results;
+    status.phase = status.actionErrors.length ? "incomplete" : "paused";
     await saveStatus(env.STATE, status);
   } else {
     await saveStatus(env.STATE, status);
@@ -955,7 +1011,7 @@ async function handleRequest(request, env) {
   if (
     (request.method === "GET" &&
       ["/status", "/recovery"].includes(url.pathname)) ||
-    (request.method === "POST" && url.pathname === "/check")
+    (request.method === "POST" && ["/check", "/stop"].includes(url.pathname))
   ) {
     if (!authorized(request, env))
       return Response.json({ error: "unauthorized" }, { status: 401 });
@@ -1014,8 +1070,39 @@ async function handleRequest(request, env) {
         );
       }
     }
+    if (url.pathname === "/stop") {
+      const origin = request.headers.get("origin");
+      if (origin && origin !== url.origin)
+        return Response.json({ error: "forbidden_origin" }, { status: 403 });
+      if (
+        request.headers.get("content-type")?.split(";")[0].trim() !==
+        "application/json"
+      )
+        return Response.json(
+          { error: "confirmation_required" },
+          { status: 400 },
+        );
+      try {
+        const text = await request.text();
+        if (
+          text.length > 128 ||
+          JSON.parse(text)?.confirm !== "PAUSE_ALL_ENVIRONMENTS"
+        )
+          return Response.json(
+            { error: "confirmation_required" },
+            { status: 400 },
+          );
+      } catch {
+        return Response.json(
+          { error: "confirmation_required" },
+          { status: 400 },
+        );
+      }
+    }
     try {
-      return Response.json(await executeCheck(env));
+      return Response.json(
+        await executeCheck(env, { manualStop: url.pathname === "/stop" }),
+      );
     } catch {
       return Response.json({ error: "check_failed" }, { status: 503 });
     }
@@ -1074,10 +1161,80 @@ async function runScheduledCheck(env) {
   return status;
 }
 
+function secureResponse(response) {
+  const headers = new Headers(response.headers);
+  headers.set("Cache-Control", "no-store");
+  headers.set("X-Content-Type-Options", "nosniff");
+  headers.set("X-Frame-Options", "DENY");
+  headers.set("Referrer-Policy", "no-referrer");
+  return new Response(response.body, { status: response.status, headers });
+}
+
+function controlPanel() {
+  const nonce = crypto.randomUUID().replaceAll("-", "");
+  return secureResponse(
+    new Response(renderControlPanel({ nonce }), {
+      headers: {
+        "Content-Type": "text/html; charset=utf-8",
+        "Content-Security-Policy": `default-src 'none'; script-src 'nonce-${nonce}'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'`,
+      },
+    }),
+  );
+}
+
 const worker = {
-  async fetch(request, env) {
-    if (env.CONTROLLER) return controller(env).fetch(request);
-    return handleRequest(request, env);
+  async fetch(request, env, ctx) {
+    const url = new URL(request.url);
+    if (url.pathname === "/" && request.method === "GET") {
+      return secureResponse(Response.redirect(new URL("/control", url), 302));
+    }
+    if (url.pathname === "/control" || url.pathname.startsWith("/control/")) {
+      // Only platform-verified Access context is trusted, never caller headers.
+      const allowed = String(env.ACCESS_ADMIN_EMAILS || "")
+        .split(",")
+        .map((email) => email.trim().toLowerCase())
+        .filter(Boolean);
+      let identity;
+      try {
+        identity = await ctx?.access?.getIdentity();
+      } catch {
+        /* Fail closed. */
+      }
+      if (!identity?.email || !allowed.includes(identity.email.toLowerCase())) {
+        return secureResponse(
+          Response.json({ error: "access_session_required" }, { status: 403 }),
+        );
+      }
+      if (
+        request.method === "GET" &&
+        ["/control", "/control/"].includes(url.pathname)
+      )
+        return controlPanel();
+      const target = {
+        "GET /control/status": "/status",
+        "POST /control/stop": "/stop",
+      }[`${request.method} ${url.pathname}`];
+      if (!target)
+        return secureResponse(new Response("not found", { status: 404 }));
+      if (!env.GUARD_ADMIN_TOKEN)
+        return secureResponse(
+          Response.json({ error: "controller_unavailable" }, { status: 503 }),
+        );
+      url.pathname = target;
+      const headers = new Headers(request.headers);
+      headers.set("Authorization", `Bearer ${env.GUARD_ADMIN_TOKEN}`);
+      request = new Request(url, {
+        method: request.method,
+        headers,
+        ...(request.method === "POST"
+          ? { body: request.body, duplex: "half" }
+          : {}),
+      });
+    }
+    const response = env.CONTROLLER
+      ? await controller(env).fetch(request)
+      : await handleRequest(request, env);
+    return secureResponse(response);
   },
   async scheduled(_event, env, ctx) {
     ctx.waitUntil(runScheduledCheck(env));
