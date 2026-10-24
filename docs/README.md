@@ -124,3 +124,5 @@ Savia documentation hub. If you are new, follow the onboarding track in order.
 
 - [Personal API keys](guides/personal-api-keys.md) — create and revoke scoped credentials for Companion.
 - [Test coverage](guides/test-coverage.md) — run the local coverage suite and inspect merged CI reports.
+
+- [Cloudflare daily data cleanup](runbooks/cloudflare-data-cleanup.md)

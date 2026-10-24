@@ -640,7 +640,8 @@ async function discoverAccountTargets(env, policy, fetcher, errors) {
     ...policy.backupBarrierScripts,
   ]);
   discovered.schedules = discovered.schedules.filter(
-    (name) => !excluded.has(name),
+    (name) =>
+      !excluded.has(name) && !policy.maintenanceSchedules.includes(name),
   );
   discovered.routes = discovered.routes.filter(
     (route) => !excluded.has(route.script),
@@ -801,7 +802,11 @@ async function pauseTargets(env, policy, fetcher, discovered) {
   ];
   const queues = [...new Set([...policy.queues, ...discovered.queues])];
   const schedules = [
-    ...new Set([...policy.schedules, ...discovered.schedules]),
+    ...new Set(
+      [...policy.schedules, ...discovered.schedules].filter(
+        (name) => !policy.maintenanceSchedules.includes(name),
+      ),
+    ),
   ];
   const workflows = [
     ...new Set([...policy.workflows, ...discovered.workflows]),

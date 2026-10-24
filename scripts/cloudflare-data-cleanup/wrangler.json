@@ -1,0 +1,45 @@
+{
+  "$schema": "https://raw.githubusercontent.com/cloudflare/workers-sdk/main/packages/wrangler/config-schema.json",
+  "name": "savia-data-cleanup",
+  "main": "worker.mjs",
+  "compatibility_date": "2026-10-24",
+  "workers_dev": false,
+  "preview_urls": false,
+  "limits": {
+    "cpu_ms": 50
+  },
+  "observability": {
+    "enabled": false
+  },
+  "triggers": {
+    "crons": ["15 3 * * *"]
+  },
+  "d1_databases": [
+    {
+      "binding": "AGENCY_PRODUCTION",
+      "database_name": "savia-agencies-local-canonical-20260913-v2",
+      "database_id": "117041f9-294a-4393-ae8f-fb36764298cd"
+    },
+    {
+      "binding": "AGENCY_PREVIEW",
+      "database_name": "savia-agencies-preview",
+      "database_id": "4c466412-e220-470e-b5d8-d23bf87e87a1"
+    },
+    {
+      "binding": "AGENCY_BRANCH",
+      "database_name": "savia-agencies-preview-feat-secop-tender-tracke",
+      "database_id": "ca83cac0-b48d-4235-b88a-c2442115ab16"
+    },
+    {
+      "binding": "SECOP",
+      "database_name": "secop-dossiers",
+      "database_id": "b3d04949-b28b-4847-bbe2-bd06fbeb182b"
+    },
+    {
+      "binding": "SECOP_VALIDATION",
+      "database_name": "secop-dossier-validation",
+      "database_id": "c7e95fa3-24c5-44a0-b273-207d2fe083d8"
+    }
+  ],
+  "account_id": "08a0d36f8b0357684f83e4bfeb6628b6"
+}

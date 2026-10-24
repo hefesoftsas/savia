@@ -38,7 +38,7 @@ At the threshold, the controller:
 
 - Applies Savia API/Flows maintenance and SECOP model pause flags.
 - Pauses all discovered queues and queued/running workflow instances.
-- Removes all discovered cron schedules except the guard and backup coordinators.
+- Removes discovered cron schedules except the guard, backup coordinators and explicitly allowlisted data cleanup schedule.
 - Disables workers.dev and preview URLs for all non-protected Workers.
 - Detaches their custom domains and unbinds zone Worker Routes (`script: null`).
 - Pauses discovered AI Search indexing.
@@ -151,7 +151,7 @@ permanently deleted, with successful API responses and empty inventory verificat
 
 - Vectorize v2 `savia-pages-search-preview` (10 vectors).
 - Vectorize v2 `secop-dossier-evidence` (66 vectors).
-- AI Search `default/synergias-pyme-minimal` (41 vectors and 5 indexed files,
+- The retired private AI Search instance in `default` (41 vectors and 5 indexed files,
   with the instance's service-managed index).
 
 Vectorize v1 also has no indexes. The `PAGES_VECTORIZE` and `DOSSIER_VECTORS`
@@ -193,3 +193,7 @@ was read back successfully at 15:18:08 UTC. The 37 controller/provider tests pas
 The new controller also ran through its natural cron at 15:20:19 UTC with no action
 errors. Final contract validation passed 752 tests; the CI infrastructure unit and
 minimum-runtime jobs passed. Repository-wide lint/typecheck were not run.
+
+The `savia-data-cleanup` cron is allowlisted through `maintenanceSchedules`; only
+its scheduled cleanup remains executable. Its public URLs and native AI bindings
+remain subject to shutdown. See [daily D1 cleanup](cloudflare-data-cleanup.md).

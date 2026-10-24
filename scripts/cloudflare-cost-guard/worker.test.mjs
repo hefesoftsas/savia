@@ -1282,3 +1282,51 @@ test("reports paginated workflow backlog until the cursor reaches the end", asyn
     false,
   );
 });
+
+test("tripped guard keeps maintenance cron while disabling its public URLs", async () => {
+  const h = harness();
+  h.env.POLICY = {
+    guardScript: "cost-guard",
+    accountWide: true,
+    maintenanceSchedules: ["cleanup"],
+  };
+  const calls = [];
+  const fetcher = async (url, init = {}) => {
+    const path = new URL(url).pathname;
+    calls.push({ path, method: init.method ?? "GET" });
+    if (path.endsWith("/billable-usage")) return cloudflare(rows([10]));
+    if (path.endsWith("/workers/scripts"))
+      return cloudflare([{ id: "cleanup" }]);
+    if (
+      [
+        "/queues",
+        "/workflows",
+        "/ai-search/namespaces",
+        "/workers/domains",
+        "/zones",
+      ].some((s) => path.endsWith(s))
+    )
+      return cloudflare([]);
+    if (path.endsWith("/cleanup/subdomain"))
+      return cloudflare({
+        enabled: init.method !== "POST",
+        previews_enabled: init.method !== "POST",
+      });
+    if (path.endsWith("/cleanup/schedules"))
+      return cloudflare({ schedules: [{ cron: "15 3 * * *" }] });
+    return new Response("unexpected", { status: 404 });
+  };
+  const result = await executeCheck(h.env, { fetcher, now: base });
+  assert.equal(result.tripped, true);
+  assert.deepEqual(result.actionErrors, []);
+  assert.equal(
+    calls.some((c) => c.path.endsWith("/cleanup/schedules")),
+    false,
+  );
+  assert.equal(
+    calls.some(
+      (c) => c.path.endsWith("/cleanup/subdomain") && c.method === "POST",
+    ),
+    true,
+  );
+});

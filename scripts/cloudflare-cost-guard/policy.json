@@ -57,5 +57,6 @@
   "workflows": ["secop-dossier-processing", "savia-flows-execute-preview"],
   "aiSearch": [],
   "accountWide": true,
-  "denyCloudflareAi": true
+  "denyCloudflareAi": true,
+  "maintenanceSchedules": ["savia-data-cleanup"]
 }

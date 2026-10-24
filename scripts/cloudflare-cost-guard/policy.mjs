@@ -27,6 +27,10 @@ export function parsePolicy(input) {
     raw.backupBarrierScripts,
     "backup barrier script",
   );
+  const maintenanceSchedules = list(
+    raw.maintenanceSchedules,
+    "maintenance schedule",
+  );
   const scripts = raw.scripts === undefined ? [] : raw.scripts;
   if (!Array.isArray(scripts)) throw new TypeError("scripts must be an array");
   const seenScripts = new Set();
@@ -74,6 +78,7 @@ export function parsePolicy(input) {
   return {
     guardScript,
     backupBarrierScripts,
+    maintenanceSchedules,
     scripts: normalizedScripts,
     queues,
     schedules,

@@ -90,3 +90,24 @@ test("requires explicit boolean account-wide policy flags", () => {
     );
   }
 });
+
+test("preserves explicit maintenance schedules without protecting their public endpoints", () => {
+  const parsed = parsePolicy({
+    guardScript: "guard",
+    maintenanceSchedules: ["cleanup"],
+  });
+  assert.deepEqual(parsed.maintenanceSchedules, ["cleanup"]);
+  assert.deepEqual(parsed.backupBarrierScripts, []);
+  assert.throws(
+    () => parsePolicy({ guardScript: "guard", maintenanceSchedules: ["*"] }),
+    /invalid/,
+  );
+  assert.throws(
+    () =>
+      parsePolicy({
+        guardScript: "guard",
+        maintenanceSchedules: ["cleanup", "cleanup"],
+      }),
+    /duplicate/,
+  );
+});
