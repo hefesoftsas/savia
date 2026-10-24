@@ -29,6 +29,7 @@
     }
   ],
   "vars": {
-    "CF_ACCOUNT_ID": "08a0d36f8b0357684f83e4bfeb6628b6"
+    "CF_ACCOUNT_ID": "08a0d36f8b0357684f83e4bfeb6628b6",
+    "ACCESS_ADMIN_EMAILS": "jose.douglas.dev@gmail.com"
   }
 }

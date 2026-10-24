@@ -4,9 +4,12 @@ Provide an independent control panel on the existing Cloudflare cost guard at
 `/control`. The operator chose the protected Cloudflare panel over GitHub Actions
 to avoid runner queues and keep the control reachable when applications stop.
 
-The panel uses the existing guard administrator credential, held only in page
-memory and sent through Authorization headers over HTTPS. It never embeds keys,
-places them in links, persists them in browser storage, or creates new access.
+The panel requires Cloudflare Access with the Cloudflare identity provider,
+account membership and the administrator email allowlist. The Worker trusts only
+platform-verified `ctx.access`, never identity headers from callers. Browser
+requests use same-origin sessions at `/control/status` and `/control/stop`; the
+server supplies the existing administrator credential only on internal forwarding.
+The credential never reaches the browser. Machine APIs retain bearer access.
 The authoritative stop state stays in the existing singleton Durable Object.
 
 An authenticated, explicitly confirmed POST `/stop` persists a manual stop latch

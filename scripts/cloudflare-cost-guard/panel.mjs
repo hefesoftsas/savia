@@ -13,20 +13,18 @@ const escapeHtml = (value) =>
 const panelScript = String.raw`
 (() => {
   const byId = (id) => document.getElementById(id);
-  const login = byId('login-form');
-  const keyInput = byId('admin-key');
-  const loginError = byId('login-error');
-  const loginButton = byId('login-button');
   const workspace = byId('workspace');
-  const disconnect = byId('disconnect');
+  const sessionError = byId('session-error');
+  const logout = byId('logout');
   const pauseButton = byId('pause-button');
+  const refreshButton = byId('refresh-button');
   const dialog = byId('confirm-dialog');
   const cancelButton = byId('cancel-stop');
   const confirmButton = byId('confirm-stop');
   const message = byId('action-message');
-  const key = { value: '' };
   let busy = false;
   let sessionGeneration = 0;
+  let sessionExpired = false;
 
   const setText = (id, value) => { byId(id).textContent = value ?? '—'; };
   const dateText = (value) => {
@@ -37,19 +35,33 @@ const panelScript = String.raw`
   const request = async (path, options = {}) => {
     const response = await fetch(path, {
       ...options,
-      credentials: 'omit',
+      credentials: 'same-origin',
       signal: AbortSignal.timeout(90000),
       headers: {
-        Authorization: 'Bearer ' + key.value,
-        ...(options.body ? { 'Content-Type': 'application/json' } : {}),
         ...options.headers,
+        'X-Requested-With': 'XMLHttpRequest',
+        ...(options.body ? { 'Content-Type': 'application/json' } : {}),
       },
     });
     let body;
-    try { body = await response.json(); } catch { body = {}; }
+    try {
+      body = await response.json();
+    } catch {
+      const responseUrl = String(response.url || '');
+      const redirectedToLogin = response.redirected === true && responseUrl.includes('/cdn-cgi/access/login');
+      const returnedHtml = /text\/html/i.test(response.headers?.get?.('content-type') || '');
+      if (response.ok && (redirectedToLogin || returnedHtml || !responseUrl)) {
+        const error = new Error('Cloudflare Access session expired or returned an HTML sign-in page.');
+        error.accessExpired = true;
+        throw error;
+      }
+      body = {};
+    }
     if (!response.ok) {
       const reason = body && typeof body.error === 'string' ? body.error : 'Request failed';
-      throw new Error(response.status === 401 ? 'The administrator key was not accepted.' : reason);
+      const error = new Error(reason);
+      error.accessExpired = response.status === 401 || response.status === 403 || reason === 'session_expired';
+      throw error;
     }
     return body;
   };
@@ -57,8 +69,32 @@ const panelScript = String.raw`
     busy = value;
     pauseButton.disabled = value;
     confirmButton.disabled = value;
-    loginButton.disabled = value;
+    refreshButton.disabled = value;
     if (value) setText('action-message', 'Request in progress…');
+  };
+  const clearStatus = () => {
+    byId('status-view').hidden = true;
+    setText('status-indicator', '—');
+    setText('stop-reason', '—');
+    setText('manual-stop-at', '—');
+    setText('checked-at', '—');
+    byId('incomplete-summary').textContent = '';
+    byId('action-errors').replaceChildren();
+    byId('target-results').replaceChildren();
+    message.textContent = '';
+    message.className = 'action-message';
+  };
+  const expireSession = () => {
+    sessionExpired = true;
+    sessionGeneration += 1;
+    setBusy(false);
+    dialog.close();
+    clearStatus();
+    workspace.hidden = true;
+    pauseButton.disabled = true;
+    refreshButton.disabled = true;
+    sessionError.hidden = false;
+    sessionError.textContent = 'Cloudflare Access session expired or access was denied. Sign in again to continue.';
   };
   const actionLabels = { 'worker-access': 'Public access', 'worker-settings': 'Application settings', queue: 'Queue', schedule: 'Scheduled task', workflow: 'Workflow', 'ai-binding': 'AI access', 'ai-search': 'AI Search', domain: 'Custom domain', route: 'Domain route' };
   const labelAction = (action) => actionLabels[action] || action;
@@ -135,52 +171,33 @@ const panelScript = String.raw`
     byId('status-view').hidden = false;
   };
   const refresh = async (generation) => {
-    const status = await request('/status');
+    const status = await request('/control/status');
     if (generation !== sessionGeneration) return false;
     renderStatus(status);
     return true;
   };
 
-  login.addEventListener('submit', async (event) => {
-    event.preventDefault();
-    if (busy) return;
-    key.value = keyInput.value;
-    if (!key.value) {
-      loginError.textContent = 'Enter the administrator key to continue.';
-      return;
-    }
-    const generation = ++sessionGeneration;
-    setBusy(true);
-    loginError.textContent = '';
-    try {
-      if (!await refresh(generation)) return;
-      workspace.hidden = false;
-      login.hidden = true;
-      keyInput.value = '';
-      message.textContent = 'Status refreshed.';
-    } catch (error) {
-      if (generation !== sessionGeneration) return;
-      key.value = '';
-      loginError.textContent = error.message || 'Unable to load guard status.';
-    } finally { if (generation === sessionGeneration) setBusy(false); }
-  });
-  byId('refresh-button').addEventListener('click', async () => {
-    if (busy) return;
+  refreshButton.addEventListener('click', async () => {
+    if (busy || sessionExpired) return;
     const generation = sessionGeneration;
     setBusy(true);
     try { if (await refresh(generation)) message.textContent = 'Status refreshed.'; }
-    catch (error) { if (generation === sessionGeneration) message.textContent = error.message || 'Unable to refresh status.'; }
+    catch (error) {
+      if (generation !== sessionGeneration) return;
+      if (error.accessExpired) expireSession();
+      else message.textContent = error.message || 'Unable to refresh status.';
+    }
     finally { if (generation === sessionGeneration) setBusy(false); }
   });
-  pauseButton.addEventListener('click', () => { if (!busy) dialog.showModal(); });
+  pauseButton.addEventListener('click', () => { if (!busy && !sessionExpired) dialog.showModal(); });
   cancelButton.addEventListener('click', () => dialog.close());
   confirmButton.addEventListener('click', async () => {
-    if (busy) return;
+    if (busy || sessionExpired) return;
     const generation = sessionGeneration;
     setBusy(true);
     message.className = 'action-message';
     try {
-      const result = await request('/stop', {
+      const result = await request('/control/stop', {
         method: 'POST',
         body: JSON.stringify({ confirm: 'PAUSE_ALL_ENVIRONMENTS' }),
       });
@@ -194,29 +211,48 @@ const panelScript = String.raw`
       dialog.close();
     } catch (error) {
       if (generation !== sessionGeneration) return;
+      if (error.accessExpired) {
+        expireSession();
+        return;
+      }
       message.textContent = 'Unable to confirm pause completion. The pause may already be saved. Refresh status to check. ' + (error.message || 'Request unavailable');
       message.className = 'action-message is-error';
     } finally { if (generation === sessionGeneration) setBusy(false); }
   });
-  disconnect.addEventListener('click', () => {
+  logout.addEventListener('click', () => {
     sessionGeneration += 1;
+    sessionExpired = true;
     setBusy(false);
     dialog.close();
-    key.value = '';
-    keyInput.value = '';
-    byId('status-view').hidden = true;
-    setText('status-indicator', '—');
-    setText('stop-reason', '—');
-    setText('manual-stop-at', '—');
-    setText('checked-at', '—');
-    byId('incomplete-summary').textContent = '';
-    byId('action-errors').replaceChildren();
-    byId('target-results').replaceChildren();
+    clearStatus();
     workspace.hidden = true;
-    login.hidden = false;
-    loginError.textContent = '';
-    message.textContent = '';
-    loginButton.focus();
+    sessionError.hidden = false;
+    sessionError.textContent = 'You have signed out of the control panel.';
+    location.assign('/cdn-cgi/access/logout');
+  });
+
+  const generation = ++sessionGeneration;
+  setBusy(true);
+  request('/control/status').then((status) => {
+    if (generation !== sessionGeneration) return;
+    renderStatus(status);
+    sessionExpired = false;
+    sessionError.hidden = true;
+    sessionError.textContent = '';
+    workspace.hidden = false;
+    message.textContent = 'Status refreshed.';
+  }).catch((error) => {
+    if (generation !== sessionGeneration) return;
+    if (error.accessExpired) {
+      expireSession();
+      return;
+    }
+    clearStatus();
+    workspace.hidden = true;
+    sessionError.hidden = false;
+    sessionError.textContent = error.message || 'Unable to load guard status.';
+  }).finally(() => {
+    if (generation === sessionGeneration) setBusy(false);
   });
 })();
 `;
@@ -224,7 +260,7 @@ const panelScript = String.raw`
 export function renderControlPanel({ nonce } = {}) {
   const safeNonce = escapeHtml(nonce);
   return `<!doctype html>
-<!-- THESIS: An operator must be able to pause every environment from the guard itself, with partial completion visible. OWN-WORLD: Savia's cool white and gray operations surfaces, system sans, green for live state, red for the stop action. STORY: Authenticate with the existing key, inspect the server state, then explicitly confirm the account-wide pause. FIRST VIEWPORT: Status and the main stop action share the top operational region; target outcomes and failures follow immediately. FORM: A compact operations console built for quick scanning and safe execution. -->
+<!-- THESIS: An operator must be able to pause every environment from the guard itself, with partial completion visible. OWN-WORLD: Savia's cool white and gray operations surfaces, system sans, green for live state, red for the stop action. STORY: Cloudflare Access establishes the session, then the operator inspects server state and explicitly confirms the account-wide pause. FIRST VIEWPORT: Status and the main stop action share the top operational region; target outcomes and failures follow immediately. FORM: A compact operations console built for quick scanning and safe execution. -->
 <html lang="en">
 <head>
   <meta charset="utf-8">
@@ -233,7 +269,7 @@ export function renderControlPanel({ nonce } = {}) {
   <title>Cloudflare account controls · Savia</title>
   <style>
     :root{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#202925;background:#f3f6f4;font-synthesis:none;text-rendering:optimizeLegibility;line-height:1.45;font-weight:400;--ink:#202925;--muted:#59665f;--line:#dce4df;--surface:#fff;--soft:#f5f8f6;--green:#176647;--green-wash:#eaf4ee;--red:#a53839;--red-dark:#842d2e;--amber:#7a5312;--amber-wash:#fff6e2}
-    *{box-sizing:border-box}[hidden]{display:none!important}html,body{min-width:320px;min-height:100%;margin:0}body{min-height:100vh;min-height:100dvh}button,input{font:inherit}button{cursor:pointer}button:disabled{cursor:wait;opacity:.6}button:focus-visible,input:focus-visible{outline:3px solid #4d9874;outline-offset:3px}.shell{max-width:1120px;margin:0 auto;padding:24px 28px 56px}.topbar{display:flex;align-items:center;justify-content:space-between;padding-bottom:22px;border-bottom:1px solid var(--line)}.brand{display:flex;align-items:center;gap:11px;font-size:14px;font-weight:650;letter-spacing:-.01em}.mark{display:grid;width:34px;height:34px;place-items:center;border-radius:9px;background:var(--green);color:#fff;font-size:18px;font-weight:700}.environment{font-size:12px;color:var(--muted);padding:6px 10px;border:1px solid var(--line);border-radius:999px;background:#fff}.intro{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;margin:38px 0 26px}.intro h1{margin:0;font-size:30px;line-height:1.15;letter-spacing:-.025em}.intro p{max-width:62ch;margin:9px 0 0;color:var(--muted);font-size:14px}.intro-meta{color:var(--muted);font-size:12px;white-space:nowrap}.login{max-width:480px;padding:24px;background:var(--surface);border:1px solid var(--line);border-radius:12px}.login h2{margin:0 0 6px;font-size:17px}.login p{margin:0 0 18px;color:var(--muted);font-size:13px}.field-label{display:block;margin-bottom:6px;font-size:13px;font-weight:600}.field-row{display:flex;gap:9px}.key-input{min-width:0;flex:1;height:42px;padding:0 12px;border:1px solid #b9c6be;border-radius:7px;background:#fff;color:var(--ink)}.button{min-height:40px;padding:9px 15px;border:1px solid transparent;border-radius:7px;font-size:13px;font-weight:650;transition:background-color .16s ease,border-color .16s ease}.button-primary{background:var(--green);color:#fff}.button-primary:hover{background:#105438}.button-secondary{background:#fff;color:var(--ink);border-color:var(--line)}.button-secondary:hover{background:var(--soft)}.button-danger{background:var(--red);color:white}.button-danger:hover{background:var(--red-dark)}.text-button{border:0;background:transparent;color:var(--muted);font-size:12px;text-decoration:underline;text-underline-offset:3px}.text-button:hover{color:var(--ink)}.error-text{min-height:20px;margin-top:9px;color:#8a2829;font-size:13px}.workspace{display:grid;grid-template-columns:minmax(0,1fr) 290px;gap:16px}.main-column,.side-column{min-width:0}.section{padding:20px 22px;margin-bottom:14px;border:1px solid var(--line);border-radius:12px;background:var(--surface)}.section-heading{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:16px}.section-heading h2{margin:0;font-size:16px;letter-spacing:-.01em}.status-row{display:flex;align-items:center;gap:11px}.state{display:inline-flex;align-items:center;gap:7px;padding:5px 9px;border-radius:999px;font-size:11px;font-weight:750;letter-spacing:.04em}.state:before{width:7px;height:7px;border-radius:50%;background:currentColor;content:""}.state-running{background:var(--green-wash);color:#155b3d}.state-paused{background:#faeaea;color:#8d3031}.state-incomplete{background:var(--amber-wash);color:#654710}.state-stopping{background:#faeaea;color:#8d3031}.status-detail{margin-top:12px;color:var(--muted);font-size:13px}.detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:15px;margin-top:16px;padding-top:14px;border-top:1px solid #e9eeeb}.detail-label{display:block;margin-bottom:3px;color:var(--muted);font-size:11px}.detail-value{font-size:13px;font-weight:600;overflow-wrap:anywhere}.stop-section{background:#fffafa;border-color:#ead3d3}.stop-section p{max-width:66ch;margin:0 0 17px;color:#5e4e4e;font-size:13px}.warning{padding:11px 13px;border:1px solid #edcfce;border-radius:8px;background:#fff3f2;color:#713536;font-size:12px;line-height:1.5}.warning strong{font-weight:700}.protected-list{margin:0;padding:0;list-style:none}.protected-list li{display:flex;align-items:center;gap:9px;padding:10px 0;border-bottom:1px solid #edf1ee;font-size:13px}.protected-list li:last-child{border:0;padding-bottom:0}.protected-list li:before{width:7px;height:7px;flex:0 0 7px;border-radius:50%;background:#688175;content:""}.small-note{margin:14px 0 0;color:var(--muted);font-size:12px}.result-list,.error-list{margin:0;padding:0;list-style:none}.result-row{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;padding:10px 0;border-bottom:1px solid #edf1ee;font-size:12px}.result-row:last-child{border:0}.result-row>span:first-child{overflow-wrap:anywhere}.result-ok{flex:0 0 auto;color:var(--green);font-weight:650}.result-failed{flex:0 0 auto;color:#9a3132;font-weight:650}.empty-result{color:var(--muted);font-size:12px}.inline-alert{margin:0 0 13px;color:var(--muted);font-size:12px}.alert-warning{color:#7a5312}.error-list{margin-top:8px}.error-list li{padding:8px 10px;margin-top:6px;border-radius:6px;background:var(--amber-wash);color:#654710;font-size:12px;overflow-wrap:anywhere}.action-message{min-height:20px;margin-top:12px;font-size:13px}.is-success{color:var(--green)}.is-warning{color:var(--amber)}.is-error{color:#8a2829}.side-column .section{padding:18px}.side-column .section-heading{margin-bottom:12px}.dialog{width:min(480px,calc(100vw - 32px));padding:25px;border:1px solid #d8dfda;border-radius:12px;background:#fff;color:var(--ink);box-shadow:0 18px 56px rgb(22 39 29 / 22%)}.dialog::backdrop{background:rgb(20 31 25 / 52%)}.dialog h2{margin:0 0 8px;font-size:19px}.dialog p{margin:0 0 18px;color:var(--muted);font-size:13px}.dialog-actions{display:flex;justify-content:flex-end;gap:9px}.footer{margin-top:12px;color:var(--muted);font-size:12px}.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+    *{box-sizing:border-box}[hidden]{display:none!important}html,body{min-width:320px;min-height:100%;margin:0}body{min-height:100vh;min-height:100dvh}button,input{font:inherit}button{cursor:pointer}button:disabled{cursor:wait;opacity:.6}button:focus-visible,input:focus-visible{outline:3px solid #4d9874;outline-offset:3px}.shell{max-width:1120px;margin:0 auto;padding:24px 28px 56px}.topbar{display:flex;align-items:center;justify-content:space-between;padding-bottom:22px;border-bottom:1px solid var(--line)}.brand{display:flex;align-items:center;gap:11px;font-size:14px;font-weight:650;letter-spacing:-.01em}.mark{display:grid;width:34px;height:34px;place-items:center;border-radius:9px;background:var(--green);color:#fff;font-size:18px;font-weight:700}.environment{font-size:12px;color:var(--muted);padding:6px 10px;border:1px solid var(--line);border-radius:999px;background:#fff}.intro{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;margin:38px 0 26px}.intro h1{margin:0;font-size:30px;line-height:1.15;letter-spacing:-.025em}.intro p{max-width:62ch;margin:9px 0 0;color:var(--muted);font-size:14px}.intro-meta{color:var(--muted);font-size:12px;white-space:nowrap}.session-error{max-width:720px;padding:14px 16px;margin-bottom:18px;border:1px solid #edcfce;border-radius:8px;background:#fff3f2;color:#713536;font-size:13px}.button{min-height:40px;padding:9px 15px;border:1px solid transparent;border-radius:7px;font-size:13px;font-weight:650;transition:background-color .16s ease,border-color .16s ease}.button-primary{background:var(--green);color:#fff}.button-primary:hover{background:#105438}.button-secondary{background:#fff;color:var(--ink);border-color:var(--line)}.button-secondary:hover{background:var(--soft)}.button-danger{background:var(--red);color:white}.button-danger:hover{background:var(--red-dark)}.text-button{border:0;background:transparent;color:var(--muted);font-size:12px;text-decoration:underline;text-underline-offset:3px}.text-button:hover{color:var(--ink)}.error-text{min-height:20px;margin-top:9px;color:#8a2829;font-size:13px}.workspace{display:grid;grid-template-columns:minmax(0,1fr) 290px;gap:16px}.main-column,.side-column{min-width:0}.section{padding:20px 22px;margin-bottom:14px;border:1px solid var(--line);border-radius:12px;background:var(--surface)}.section-heading{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:16px}.section-heading h2{margin:0;font-size:16px;letter-spacing:-.01em}.status-row{display:flex;align-items:center;gap:11px}.state{display:inline-flex;align-items:center;gap:7px;padding:5px 9px;border-radius:999px;font-size:11px;font-weight:750;letter-spacing:.04em}.state:before{width:7px;height:7px;border-radius:50%;background:currentColor;content:""}.state-running{background:var(--green-wash);color:#155b3d}.state-paused{background:#faeaea;color:#8d3031}.state-incomplete{background:var(--amber-wash);color:#654710}.state-stopping{background:#faeaea;color:#8d3031}.status-detail{margin-top:12px;color:var(--muted);font-size:13px}.detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:15px;margin-top:16px;padding-top:14px;border-top:1px solid #e9eeeb}.detail-label{display:block;margin-bottom:3px;color:var(--muted);font-size:11px}.detail-value{font-size:13px;font-weight:600;overflow-wrap:anywhere}.stop-section{background:#fffafa;border-color:#ead3d3}.stop-section p{max-width:66ch;margin:0 0 17px;color:#5e4e4e;font-size:13px}.warning{padding:11px 13px;border:1px solid #edcfce;border-radius:8px;background:#fff3f2;color:#713536;font-size:12px;line-height:1.5}.warning strong{font-weight:700}.protected-list{margin:0;padding:0;list-style:none}.protected-list li{display:flex;align-items:center;gap:9px;padding:10px 0;border-bottom:1px solid #edf1ee;font-size:13px}.protected-list li:last-child{border:0;padding-bottom:0}.protected-list li:before{width:7px;height:7px;flex:0 0 7px;border-radius:50%;background:#688175;content:""}.small-note{margin:14px 0 0;color:var(--muted);font-size:12px}.result-list,.error-list{margin:0;padding:0;list-style:none}.result-row{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;padding:10px 0;border-bottom:1px solid #edf1ee;font-size:12px}.result-row:last-child{border:0}.result-row>span:first-child{overflow-wrap:anywhere}.result-ok{flex:0 0 auto;color:var(--green);font-weight:650}.result-failed{flex:0 0 auto;color:#9a3132;font-weight:650}.empty-result{color:var(--muted);font-size:12px}.inline-alert{margin:0 0 13px;color:var(--muted);font-size:12px}.alert-warning{color:#7a5312}.error-list{margin-top:8px}.error-list li{padding:8px 10px;margin-top:6px;border-radius:6px;background:var(--amber-wash);color:#654710;font-size:12px;overflow-wrap:anywhere}.action-message{min-height:20px;margin-top:12px;font-size:13px}.is-success{color:var(--green)}.is-warning{color:var(--amber)}.is-error{color:#8a2829}.side-column .section{padding:18px}.side-column .section-heading{margin-bottom:12px}.dialog{width:min(480px,calc(100vw - 32px));padding:25px;border:1px solid #d8dfda;border-radius:12px;background:#fff;color:var(--ink);box-shadow:0 18px 56px rgb(22 39 29 / 22%)}.dialog::backdrop{background:rgb(20 31 25 / 52%)}.dialog h2{margin:0 0 8px;font-size:19px}.dialog p{margin:0 0 18px;color:var(--muted);font-size:13px}.dialog-actions{display:flex;justify-content:flex-end;gap:9px}.footer{margin-top:12px;color:var(--muted);font-size:12px}.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
     @media(max-width:760px){.shell{padding:16px 16px 38px}.intro{align-items:flex-start;flex-direction:column;gap:8px;margin:28px 0 20px}.intro h1{font-size:26px}.intro-meta{white-space:normal}.workspace{grid-template-columns:1fr}.side-column{display:grid;grid-template-columns:1fr 1fr;gap:12px}.side-column .section{margin:0}.field-row{align-items:stretch;flex-direction:column}.field-row .button{width:100%}}
     @media(max-width:480px){.topbar{padding-bottom:16px}.environment{font-size:11px}.section{padding:17px 16px}.side-column{grid-template-columns:1fr}.detail-grid{grid-template-columns:1fr}.section-heading{align-items:flex-start}.dialog-actions{flex-direction:column-reverse}.dialog-actions .button{width:100%}}
     @media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;transition:none!important}}
@@ -241,12 +277,9 @@ export function renderControlPanel({ nonce } = {}) {
 </head>
 <body>
   <main class="shell">
-    <header class="topbar"><div class="brand"><span class="mark" aria-hidden="true">S</span><span>Savia operations</span></div><span class="environment">CLOUDFLARE ACCOUNT · CONTROL</span></header>
+    <header class="topbar"><div class="brand"><span class="mark" aria-hidden="true">S</span><span>Savia operations</span></div><div class="status-row"><span class="environment">CLOUDFLARE ACCOUNT · CONTROL</span><button id="logout" class="button button-secondary" type="button">Log out</button></div></header>
     <section class="intro" aria-labelledby="page-title"><div><h1 id="page-title">Account controls</h1><p>Inspect the cost guard and pause every discovered environment from this independent control surface.</p></div><div class="intro-meta">Applications can stop; this guard remains reachable.</div></section>
-    <form id="login-form" class="login" autocomplete="off">
-      <h2>Administrator access</h2><p>Use the existing guard administrator key. It stays in this page's memory and is cleared when you disconnect or leave.</p>
-      <label class="field-label" for="admin-key">Administrator key</label><div class="field-row"><input id="admin-key" class="key-input" type="password" autocomplete="off" spellcheck="false" required><button id="login-button" class="button button-primary" type="submit">Connect</button></div><div id="login-error" class="error-text" role="alert" aria-live="polite"></div>
-    </form>
+    <div id="session-error" class="session-error" role="alert" aria-live="polite" hidden></div>
     <section id="workspace" class="workspace" hidden aria-label="Account guard controls">
       <div class="main-column">
         <section class="section" id="status-view" hidden aria-labelledby="status-heading">
@@ -256,9 +289,9 @@ export function renderControlPanel({ nonce } = {}) {
           <div id="incomplete-summary" class="inline-alert" role="status" aria-live="polite"></div><ul id="action-errors" class="error-list" aria-label="Incomplete actions"></ul>
         </section>
         <section class="section stop-section" aria-labelledby="pause-heading"><div class="section-heading"><h2 id="pause-heading">Emergency stop</h2></div><p>Pause public access, queues and scheduled jobs across every environment. Repeat this action to reapply the pause.</p><div class="warning"><strong>Requests already in flight may finish.</strong> This action does not cap billing, delete resources, or restore applications.</div><p style="margin:16px 0 0"><button id="pause-button" class="button button-danger" type="button">Pause all environments</button></p><div id="action-message" class="action-message" role="status" aria-live="polite"></div></section>
-        <section class="section" aria-labelledby="results-heading"><div class="section-heading"><h2 id="results-heading">Target action outcomes</h2></div><ul id="target-results" class="result-list"><li class="empty-result">Connect to load the latest status.</li></ul></section>
+        <section class="section" aria-labelledby="results-heading"><div class="section-heading"><h2 id="results-heading">Target action outcomes</h2></div><ul id="target-results" class="result-list"><li class="empty-result">Loading the latest status…</li></ul></section>
       </div>
-      <aside class="side-column" aria-label="Protected services and session"><section class="section"><div class="section-heading"><h2>Protected services</h2></div><ul class="protected-list"><li>Cost guard enforcement</li><li>Backup coordinators</li><li>Daily cleanup</li></ul><p class="small-note">These maintenance services remain available to support recovery and cleanup.</p></section><section class="section"><div class="section-heading"><h2>Session</h2></div><p class="small-note" style="margin-top:0">Disconnect clears the administrator key and the displayed account status from this page.</p><button id="disconnect" class="button button-secondary" type="button">Disconnect</button><div class="footer">No resume control is available here.</div></section></aside>
+      <aside class="side-column" aria-label="Protected services and session"><section class="section"><div class="section-heading"><h2>Protected services</h2></div><ul class="protected-list"><li>Cost guard enforcement</li><li>Backup coordinators</li><li>Daily cleanup</li></ul><p class="small-note">These maintenance services remain available to support recovery and cleanup.</p></section><section class="section"><div class="section-heading"><h2>Session</h2></div><p class="small-note" style="margin-top:0">Cloudflare Access protects this control surface. Logging out clears the displayed account status before ending the session.</p><div class="footer">No resume control is available here.</div></section></aside>
     </section>
     <dialog id="confirm-dialog" class="dialog" aria-labelledby="confirm-title" aria-describedby="confirm-description"><h2 id="confirm-title">Pause all environments?</h2><p id="confirm-description">This saves the pause and applies it to every environment the controller discovers. Applications will remain paused until an operator recovers them. In-flight requests may still finish.</p><div class="dialog-actions"><button id="cancel-stop" class="button button-secondary" type="button">Cancel</button><button id="confirm-stop" class="button button-danger" type="button">Confirm pause</button></div></dialog>
   </main>

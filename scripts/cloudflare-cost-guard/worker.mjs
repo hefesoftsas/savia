@@ -1183,12 +1183,54 @@ function controlPanel() {
 }
 
 const worker = {
-  async fetch(request, env) {
-    if (
-      request.method === "GET" &&
-      ["/", "/control"].includes(new URL(request.url).pathname)
-    )
-      return controlPanel();
+  async fetch(request, env, ctx) {
+    const url = new URL(request.url);
+    if (url.pathname === "/" && request.method === "GET") {
+      return secureResponse(Response.redirect(new URL("/control", url), 302));
+    }
+    if (url.pathname === "/control" || url.pathname.startsWith("/control/")) {
+      // Only platform-verified Access context is trusted, never caller headers.
+      const allowed = String(env.ACCESS_ADMIN_EMAILS || "")
+        .split(",")
+        .map((email) => email.trim().toLowerCase())
+        .filter(Boolean);
+      let identity;
+      try {
+        identity = await ctx?.access?.getIdentity();
+      } catch {
+        /* Fail closed. */
+      }
+      if (!identity?.email || !allowed.includes(identity.email.toLowerCase())) {
+        return secureResponse(
+          Response.json({ error: "access_session_required" }, { status: 403 }),
+        );
+      }
+      if (
+        request.method === "GET" &&
+        ["/control", "/control/"].includes(url.pathname)
+      )
+        return controlPanel();
+      const target = {
+        "GET /control/status": "/status",
+        "POST /control/stop": "/stop",
+      }[`${request.method} ${url.pathname}`];
+      if (!target)
+        return secureResponse(new Response("not found", { status: 404 }));
+      if (!env.GUARD_ADMIN_TOKEN)
+        return secureResponse(
+          Response.json({ error: "controller_unavailable" }, { status: 503 }),
+        );
+      url.pathname = target;
+      const headers = new Headers(request.headers);
+      headers.set("Authorization", `Bearer ${env.GUARD_ADMIN_TOKEN}`);
+      request = new Request(url, {
+        method: request.method,
+        headers,
+        ...(request.method === "POST"
+          ? { body: request.body, duplex: "half" }
+          : {}),
+      });
+    }
     const response = env.CONTROLLER
       ? await controller(env).fetch(request)
       : await handleRequest(request, env);

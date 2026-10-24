@@ -6,6 +6,7 @@ import { renderControlPanel } from "./panel.mjs";
 
 function makeHarness(fetcher) {
   const elements = new Map();
+  const navigations = [];
   const makeElement = (id = "") => ({
     id,
     value: "",
@@ -35,12 +36,9 @@ function makeHarness(fetcher) {
     },
   });
   const ids = [
-    "login-form",
-    "admin-key",
-    "login-error",
-    "login-button",
+    "session-error",
     "workspace",
-    "disconnect",
+    "logout",
     "pause-button",
     "confirm-dialog",
     "cancel-stop",
@@ -66,6 +64,7 @@ function makeHarness(fetcher) {
       createElement: () => makeElement(),
     },
     fetch: fetcher,
+    location: { assign: (url) => navigations.push(url) },
     Date,
     JSON,
     Error,
@@ -79,7 +78,7 @@ function makeHarness(fetcher) {
   assert.ok(script, "panel contains its inline controller");
   vm.runInNewContext(script, context);
   const event = (extra = {}) => ({ preventDefault() {}, ...extra });
-  return { elements, event };
+  return { elements, event, navigations };
 }
 
 const response = (status, body) => ({
@@ -88,15 +87,21 @@ const response = (status, body) => ({
   json: async () => body,
 });
 
+const tick = () => new Promise((resolve) => setImmediate(resolve));
+
 test("panel output is static, nonce-safe, and contains no browser persistence or remote assets", async () => {
   const html = renderControlPanel({ nonce: `x" onload="alert(1)&` });
   assert.match(html, /nonce="x&quot; onload=&quot;alert\(1\)&amp;"/);
-  assert.match(html, /<form id="login-form"/);
-  assert.match(html, /type="password"/);
+  assert.doesNotMatch(
+    html,
+    /<form|type="password"|admin-key|administrator key/i,
+  );
+  assert.match(html, /Cloudflare Access/);
   assert.match(html, /Pause all environments/);
   assert.match(html, /Confirm pause/);
   assert.match(html, /Backup coordinators/);
   assert.match(html, /Daily cleanup/);
+  assert.match(html, /cdn-cgi\/access\/logout/);
   assert.doesNotMatch(
     html,
     /(?:localStorage|sessionStorage|indexedDB|caches\.|CacheStorage)/i,
@@ -112,11 +117,11 @@ test("panel output is static, nonce-safe, and contains no browser persistence or
   );
   assert.doesNotMatch(
     source,
-    /\b(?:localStorage|sessionStorage|indexedDB|caches\.)/i,
+    /(?:localStorage|sessionStorage|indexedDB|caches\.)/i,
   );
 });
 
-test("login keeps key in memory, loads status, and confirmation gates POST /stop", async () => {
+test("Access session auto-loads status and confirmation gates same-origin POST /control/stop", async () => {
   const calls = [];
   const h = makeHarness(async (path, options) => {
     calls.push({ path, options });
@@ -126,24 +131,16 @@ test("login keeps key in memory, loads status, and confirmation gates POST /stop
       checkedAt: "2026-10-24T12:00:00Z",
     });
   });
-  h.elements.get("admin-key").value = "existing-admin-key";
-  await h.elements.get("login-form").handlers.submit(h.event());
+  await tick();
 
   assert.equal(calls.length, 1);
-  assert.equal(calls[0].path, "/status");
-  assert.equal(
-    calls[0].options.headers.Authorization,
-    "Bearer existing-admin-key",
-  );
-  assert.equal(calls[0].options.credentials, "omit");
+  assert.equal(calls[0].path, "/control/status");
+  assert.equal(calls[0].options.credentials, "same-origin");
+  assert.equal(calls[0].options.headers["X-Requested-With"], "XMLHttpRequest");
+  assert.equal(calls[0].options.headers.Authorization, undefined);
   assert.equal(calls[0].options.signal.milliseconds, 90000);
-  assert.equal(h.elements.get("admin-key").value, "");
   assert.equal(h.elements.get("workspace").hidden, false);
   assert.equal(h.elements.get("status-indicator").textContent, "ACTIVE");
-  assert.equal(
-    h.elements.get("pause-button").handlers.click !== undefined,
-    true,
-  );
 
   h.elements.get("pause-button").handlers.click();
   assert.equal(h.elements.get("confirm-dialog").open, true);
@@ -153,22 +150,17 @@ test("login keeps key in memory, loads status, and confirmation gates POST /stop
     "opening confirmation does not send a stop request",
   );
   h.elements.get("confirm-stop").handlers.click();
-  await new Promise((resolve) => setImmediate(resolve));
+  await tick();
   assert.equal(calls.length, 2);
-  assert.equal(calls[1].path, "/stop");
+  assert.equal(calls[1].path, "/control/stop");
   assert.equal(calls[1].options.method, "POST");
-  assert.equal(
-    calls[1].options.headers.Authorization,
-    "Bearer existing-admin-key",
-  );
+  assert.equal(calls[1].options.credentials, "same-origin");
+  assert.equal(calls[1].options.headers.Authorization, undefined);
+  assert.equal(calls[1].options.headers["X-Requested-With"], "XMLHttpRequest");
+  assert.equal(calls[1].options.headers["Content-Type"], "application/json");
   assert.deepEqual(JSON.parse(calls[1].options.body), {
     confirm: "PAUSE_ALL_ENVIRONMENTS",
   });
-  h.elements.get("disconnect").handlers.click();
-  assert.equal(h.elements.get("workspace").hidden, true);
-  assert.equal(h.elements.get("status-indicator").textContent, "—");
-  assert.equal(h.elements.get("target-results").children.length, 0);
-  assert.equal(h.elements.get("login-form").hidden, false);
 });
 
 test("partial stop results and action errors remain visible as text", async () => {
@@ -194,11 +186,10 @@ test("partial stop results and action errors remain visible as text", async () =
       ],
     });
   });
-  h.elements.get("admin-key").value = "session-secret";
-  await h.elements.get("login-form").handlers.submit(h.event());
+  await tick();
   h.elements.get("pause-button").handlers.click();
   h.elements.get("confirm-stop").handlers.click();
-  await new Promise((resolve) => setImmediate(resolve));
+  await tick();
 
   assert.equal(
     h.elements.get("status-indicator").textContent,
@@ -229,44 +220,133 @@ test("partial stop results and action errors remain visible as text", async () =
   );
 });
 
-test("failed status authentication and failed stop requests explain recovery", async () => {
-  let statusDenied = true;
-  const h = makeHarness(async (path) => {
-    if (path === "/status" && statusDenied) {
-      statusDenied = false;
-      return response(401, { error: "unauthorized" });
-    }
-    if (path === "/status") return response(200, { tripped: false });
-    return response(503, { error: "stop_unavailable" });
-  });
-  h.elements.get("admin-key").value = "bad-key";
-  await h.elements.get("login-form").handlers.submit(h.event());
-  assert.match(h.elements.get("login-error").textContent, /not accepted/);
-  assert.equal(h.elements.get("admin-key").value, "bad-key");
-  assert.equal(h.elements.get("workspace").hidden, true);
-
-  h.elements.get("admin-key").value = "good-key";
-  await h.elements.get("login-form").handlers.submit(h.event());
+test("ordinary stop failure keeps status and confirmation visible for recovery", async () => {
+  const h = makeHarness(async (path) =>
+    path === "/control/status"
+      ? response(200, { tripped: false })
+      : response(503, { error: "stop_unavailable" }),
+  );
+  await tick();
   h.elements.get("pause-button").handlers.click();
   await h.elements.get("confirm-stop").handlers.click();
-  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(h.elements.get("workspace").hidden, false);
+  assert.equal(h.elements.get("status-indicator").textContent, "ACTIVE");
+  assert.equal(h.elements.get("confirm-dialog").open, true);
   assert.match(
     h.elements.get("action-message").textContent,
     /Unable to confirm pause completion/,
   );
   assert.match(
     h.elements.get("action-message").textContent,
-    /pause may already be saved/,
-  );
-  assert.match(
-    h.elements.get("action-message").textContent,
-    /Refresh status to check/,
-  );
-  assert.match(
-    h.elements.get("action-message").textContent,
     /stop_unavailable/,
   );
-  assert.equal(h.elements.get("confirm-dialog").open, true);
+});
+
+test("403 during a stop clears prior status and partial outcomes", async () => {
+  let stopRequested = false;
+  const h = makeHarness(async (path) => {
+    if (path === "/control/status") {
+      return response(200, {
+        tripped: true,
+        phase: "incomplete",
+        actionErrors: [{ action: "queue", target: "private-queue" }],
+        targetResults: [
+          { action: "queue", target: "private-queue", ok: false },
+        ],
+      });
+    }
+    stopRequested = true;
+    return response(403, { error: "session_expired" });
+  });
+  await tick();
+  assert.equal(h.elements.get("action-errors").children.length, 1);
+  assert.equal(h.elements.get("target-results").children.length, 1);
+  h.elements.get("pause-button").handlers.click();
+  await h.elements.get("confirm-stop").handlers.click();
+
+  assert.equal(stopRequested, true);
+  assert.match(h.elements.get("session-error").textContent, /session expired/i);
+  assert.equal(h.elements.get("workspace").hidden, true);
+  assert.equal(h.elements.get("action-errors").children.length, 0);
+  assert.equal(h.elements.get("target-results").children.length, 0);
+  assert.equal(h.elements.get("status-indicator").textContent, "—");
+});
+
+test("403 marks the Access session expired and fails closed", async () => {
+  const h = makeHarness(async () => response(403, { error: "access_denied" }));
+  await tick();
+  assert.match(h.elements.get("session-error").textContent, /session expired/i);
+  assert.equal(h.elements.get("workspace").hidden, true);
+  assert.equal(h.elements.get("status-indicator").textContent, "—");
+  assert.equal(h.elements.get("target-results").children.length, 0);
+  assert.equal(h.elements.get("pause-button").disabled, true);
+});
+
+test("401 on refresh clears the loaded status and marks the Access session expired", async () => {
+  let statusCount = 0;
+  const h = makeHarness(async () => {
+    statusCount += 1;
+    return statusCount === 1
+      ? response(200, {
+          tripped: true,
+          phase: "incomplete",
+          actionErrors: [{ action: "queue", target: "private-queue" }],
+          targetResults: [
+            { action: "queue", target: "private-queue", ok: false },
+          ],
+        })
+      : response(401, { error: "unauthorized" });
+  });
+  await tick();
+  assert.equal(h.elements.get("action-errors").children.length, 1);
+  assert.equal(h.elements.get("target-results").children.length, 1);
+
+  await h.elements.get("refresh-button").handlers.click();
+
+  assert.match(h.elements.get("session-error").textContent, /session expired/i);
+  assert.equal(h.elements.get("workspace").hidden, true);
+  assert.equal(h.elements.get("action-errors").children.length, 0);
+  assert.equal(h.elements.get("target-results").children.length, 0);
+  assert.equal(h.elements.get("status-indicator").textContent, "—");
+});
+
+test("redirected HTML sign-in response clears loaded status as an expired session", async () => {
+  let statusCount = 0;
+  const h = makeHarness(async () => {
+    statusCount += 1;
+    if (statusCount === 1) {
+      return response(200, {
+        tripped: true,
+        phase: "incomplete",
+        actionErrors: [{ action: "queue", target: "private-queue" }],
+        targetResults: [
+          { action: "queue", target: "private-queue", ok: false },
+        ],
+      });
+    }
+    return {
+      ok: true,
+      status: 200,
+      redirected: true,
+      url: "https://guard.example/cdn-cgi/access/login",
+      headers: { get: () => "text/html; charset=utf-8" },
+      json: async () => {
+        throw new SyntaxError("Unexpected token '<'");
+      },
+    };
+  });
+  await tick();
+  assert.equal(h.elements.get("action-errors").children.length, 1);
+  assert.equal(h.elements.get("target-results").children.length, 1);
+
+  await h.elements.get("refresh-button").handlers.click();
+
+  assert.match(h.elements.get("session-error").textContent, /session expired/i);
+  assert.equal(h.elements.get("workspace").hidden, true);
+  assert.equal(h.elements.get("action-errors").children.length, 0);
+  assert.equal(h.elements.get("target-results").children.length, 0);
+  assert.equal(h.elements.get("status-indicator").textContent, "—");
 });
 
 test("status badge follows guard phase and malformed status never appears active", async () => {
@@ -276,8 +356,7 @@ test("status badge follows guard phase and malformed status never appears active
     { tripped: true },
   ];
   const h = makeHarness(async () => response(200, statuses.shift()));
-  h.elements.get("admin-key").value = "session-key";
-  await h.elements.get("login-form").handlers.submit(h.event());
+  await tick();
   assert.equal(h.elements.get("status-indicator").textContent, "STOPPING");
   await h.elements.get("refresh-button").handlers.click();
   assert.equal(h.elements.get("status-indicator").textContent, "PAUSED");
@@ -287,29 +366,34 @@ test("status badge follows guard phase and malformed status never appears active
   const malformed = makeHarness(async () =>
     response(200, { phase: "monitoring" }),
   );
-  malformed.elements.get("admin-key").value = "session-key";
-  await malformed.elements.get("login-form").handlers.submit(h.event());
+  await tick();
   assert.match(
-    malformed.elements.get("login-error").textContent,
-    /invalid status/,
+    malformed.elements.get("session-error").textContent,
+    /invalid status/i,
   );
   assert.equal(malformed.elements.get("status-indicator").textContent, "—");
   assert.equal(malformed.elements.get("status-view").hidden, true);
 });
 
-test("disconnect ignores an older in-flight stop response", async () => {
+test("logout clears the panel before navigation and ignores an older stop response", async () => {
   let resolveStop;
   const pending = new Promise((resolve) => {
     resolveStop = resolve;
   });
   const h = makeHarness(async (path) =>
-    path === "/stop" ? pending : response(200, { tripped: false }),
+    path === "/control/stop" ? pending : response(200, { tripped: false }),
   );
-  h.elements.get("admin-key").value = "session-key";
-  await h.elements.get("login-form").handlers.submit(h.event());
+  await tick();
   h.elements.get("pause-button").handlers.click();
   const stopping = h.elements.get("confirm-stop").handlers.click();
-  h.elements.get("disconnect").handlers.click();
+  h.elements.get("logout").handlers.click();
+  assert.deepEqual(h.navigations, ["/cdn-cgi/access/logout"]);
+  assert.equal(h.elements.get("workspace").hidden, true);
+  assert.equal(h.elements.get("status-view").hidden, true);
+  assert.equal(h.elements.get("target-results").children.length, 0);
+  assert.equal(h.elements.get("status-indicator").textContent, "—");
+  assert.equal(h.elements.get("confirm-dialog").open, false);
+
   resolveStop(
     response(200, {
       tripped: true,
@@ -320,9 +404,6 @@ test("disconnect ignores an older in-flight stop response", async () => {
   );
   await stopping;
   assert.equal(h.elements.get("workspace").hidden, true);
-  assert.equal(h.elements.get("status-view").hidden, true);
   assert.equal(h.elements.get("target-results").children.length, 0);
   assert.equal(h.elements.get("status-indicator").textContent, "—");
-  assert.equal(h.elements.get("admin-key").value, "");
-  assert.equal(h.elements.get("confirm-dialog").open, false);
 });

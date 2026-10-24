@@ -1,0 +1,21 @@
+{
+  "account_id": "08a0d36f8b0357684f83e4bfeb6628b6",
+  "application_id": "53eae89a-2ff1-46f8-a3e2-75895c34eda4",
+  "name": "Savia account emergency controls",
+  "type": "self_hosted",
+  "domain": "savia-cost-guard.jose-douglas-dev.workers.dev/control",
+  "session_duration": "30m",
+  "identity_provider": "Cloudflare",
+  "accept_all_identity_providers": false,
+  "policy": {
+    "id": "12e1247c-6662-4736-968d-1b0a4d50acaa",
+    "decision": "allow",
+    "include": {
+      "cloudflare_account_member": "08a0d36f8b0357684f83e4bfeb6628b6"
+    },
+    "require": {
+      "email": "jose.douglas.dev@gmail.com"
+    }
+  },
+  "management": "Configured in Cloudflare Access; this file records desired settings, not an automatic provisioner."
+}

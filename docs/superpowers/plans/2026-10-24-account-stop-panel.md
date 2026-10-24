@@ -54,3 +54,13 @@
 - [ ] Publish a reviewable PR, show the live panel and report verification evidence.
 
 Execution evidence: deployed only the guard, exercised the real browser button, and verified 120 successful actions with zero errors. The independent account audit confirmed all six queues paused, no application public routes/crons/native AI bindings, and the protected guard/backup/cleanup services retained. All 782 contracts passed.
+
+## Cloudflare Access follow-up
+
+- Replace browser administrator-key entry with a Cloudflare Access session.
+- Protect `/control` and subpaths using the Cloudflare identity provider, account
+  membership and administrator email, with a 30-minute session.
+- Fail closed in the Worker without verified platform context and an allowed email.
+- Preserve machine bearer endpoints and internal scheduled enforcement.
+- Record the external Access application settings and IDs in the repository.
+- Verify anonymous redirects, authenticated status and stop, tests, and paused services.

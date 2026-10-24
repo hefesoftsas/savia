@@ -240,12 +240,24 @@ AI inference permissions to repair backend access.
 
 ## Manual emergency stop panel
 
-Open `https://savia-cost-guard.jose-douglas-dev.workers.dev/control` and connect
-using the existing `GUARD_ADMIN_TOKEN` from the private administrator credential
-store. The page keeps this credential in memory only; refreshing or disconnecting
-requires connecting again. Never put the key in a URL, a public message, or a
-committed file. The public page contains no account state or credential; every
-status and stop request requires the administrator Authorization header.
+Open `https://savia-cost-guard.jose-douglas-dev.workers.dev/control` and sign in
+with Cloudflare. The Access application **Savia account emergency controls**
+protects `/control` and its subpaths. It accepts only the Cloudflare identity
+provider, requires membership of this Cloudflare account and the administrator
+email `jose.douglas.dev@gmail.com`, and uses a 30-minute session. The Worker also
+requires the platform-verified `ctx.access` identity and `ACCESS_ADMIN_EMAILS`
+allowlist; forged identity headers or a missing Access context are denied.
+No administrator token is entered in or sent to the browser. **Log out** clears
+the displayed state and redirects to Cloudflare Access logout. Cloudflare revokes
+the user's Access sessions across protected applications, not just this panel.
+
+Browser APIs use `/control/status` and `/control/stop`. Machine-only `/status`,
+`/check`, `/stop` and `/recovery` retain the existing bearer credential so the
+scheduled guard, deployment verification and private audits continue working.
+The root URL redirects to `/control`. The Access application is configured in
+Cloudflare; its non-secret desired configuration and resource IDs are recorded
+in `scripts/cloudflare-cost-guard/access-application.json`. The Worker, panel,
+allowlist and tests are versioned in the same repository.
 
 Choose **Pause all environments**, then **Confirm pause**. The independent
 controller records a persistent `manual_stop` latch before any external request,

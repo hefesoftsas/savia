@@ -1455,10 +1455,11 @@ test("authenticated stop endpoint applies the latch and protected panel response
   assert.equal(response.status, 200);
   assert.equal(response.headers.get("cache-control"), "no-store");
   assert.equal((await response.json()).reason, "manual_stop");
-  for (const path of ["/", "/control"]) {
+  for (const path of ["/control"]) {
     const panel = await worker.fetch(
       new Request(`https://guard${path}`),
-      h.env,
+      { ...h.env, ACCESS_ADMIN_EMAILS: "owner@example.com" },
+      { access: { getIdentity: async () => ({ email: "owner@example.com" }) } },
     );
     assert.equal(panel.status, 200);
     assert.match(panel.headers.get("content-type"), /^text\/html/);
@@ -1472,4 +1473,123 @@ test("authenticated stop endpoint applies the latch and protected panel response
     assert.ok(!html.includes("admin-secret"));
     assert.ok(!html.includes("cf-secret"));
   }
+});
+
+test("panel denies missing, forged and unauthorized Access identities before reaching controller", async () => {
+  const { default: worker } = await import("./worker.mjs");
+  let forwarded = 0;
+  const env = {
+    ACCESS_ADMIN_EMAILS: "owner@example.com",
+    CONTROLLER: {
+      idFromName: () => "id",
+      get: () => ({
+        fetch: () => {
+          forwarded++;
+          throw new Error("must not forward");
+        },
+      }),
+    },
+  };
+  for (const path of [
+    "/control",
+    "/control/",
+    "/control/status",
+    "/control/stop",
+  ]) {
+    for (const ctx of [
+      undefined,
+      {},
+      { access: { getIdentity: async () => ({ email: "other@example.com" }) } },
+      {
+        access: {
+          getIdentity: async () => {
+            throw new Error("invalid session");
+          },
+        },
+      },
+    ]) {
+      const response = await worker.fetch(
+        new Request("https://guard" + path, {
+          headers: {
+            "Cf-Access-Authenticated-User-Email": "owner@example.com",
+            authorization: "Bearer admin-secret",
+          },
+        }),
+        env,
+        ctx,
+      );
+      assert.equal(response.status, 403);
+      assert.equal(response.headers.get("cache-control"), "no-store");
+    }
+  }
+  assert.equal(forwarded, 0);
+});
+
+test("Access session forwards only known browser API routes with server-side authentication", async () => {
+  const { default: worker } = await import("./worker.mjs");
+  const captured = [];
+  const env = {
+    ACCESS_ADMIN_EMAILS: "owner@example.com",
+    GUARD_ADMIN_TOKEN: "internal-secret",
+    CONTROLLER: {
+      idFromName: () => "id",
+      get: () => ({
+        fetch: async (request) => {
+          captured.push(request);
+          return Response.json({ tripped: true });
+        },
+      }),
+    },
+  };
+  const ctx = {
+    access: { getIdentity: async () => ({ email: "OWNER@example.com" }) },
+  };
+  const redirect = await worker.fetch(new Request("https://guard/"), env);
+  assert.equal(redirect.status, 302);
+  assert.equal(redirect.headers.get("location"), "https://guard/control");
+  for (const [path, method] of [
+    ["/control/status", "GET"],
+    ["/control/stop", "POST"],
+  ]) {
+    const request = new Request("https://guard" + path, {
+      method,
+      headers: {
+        authorization: "Bearer attacker",
+        origin: "https://guard",
+        "content-type": "application/json",
+      },
+      ...(method === "POST"
+        ? { body: '{"confirm":"PAUSE_ALL_ENVIRONMENTS"}' }
+        : {}),
+    });
+    assert.equal((await worker.fetch(request, env, ctx)).status, 200);
+    const forwarded = captured.at(-1);
+    assert.equal(new URL(forwarded.url).pathname, path.replace("/control", ""));
+    assert.equal(
+      forwarded.headers.get("authorization"),
+      "Bearer internal-secret",
+    );
+    assert.equal(forwarded.headers.get("origin"), "https://guard");
+  }
+  for (const path of [
+    "/control/check",
+    "/control/recovery",
+    "/control/unknown",
+  ])
+    assert.equal(
+      (await worker.fetch(new Request("https://guard" + path), env, ctx))
+        .status,
+      404,
+    );
+  assert.equal(captured.length, 2);
+  assert.equal(
+    (
+      await worker.fetch(
+        new Request("https://guard/control"),
+        { ...env, ACCESS_ADMIN_EMAILS: "" },
+        ctx,
+      )
+    ).status,
+    403,
+  );
 });
