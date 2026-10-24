@@ -57,7 +57,9 @@ counts prefer the server-side coverage totals from the joint report when one
 exists, so paging the list never moves the percentage. The dossier loads the
 full document inventory up front (bounded to 25 pages, about 500 records);
 pages the reader appends manually through **Load more** are retained across
-background refreshes.
+background refreshes. If an individual job-status request fails, the panel still
+refreshes the dossier snapshot; a terminal or absent job in that fresh snapshot
+clears its local pending state so the user can retry.
 
 Each tender and dossier tab has a shareable URL. Opening Documents records the
 process ID and tab through the host's generic `savia.route` bridge. Refreshing,
