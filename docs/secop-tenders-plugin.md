@@ -79,6 +79,40 @@ never copy it to another workspace. Configure it through the dossier connection
 form or existing plugin connection management; it is not persisted in browser
 storage or packaged into the ZIP.
 
+The live dossier analysis uses OpenRouter with `MODEL_NAME=openai/gpt-oss-120b`
+and `MODEL_URL=https://openrouter.ai/api/v1/chat/completions`. Leave
+`MODEL_TRANSPORT` unset: `workers_ai` overrides that URL and routes analysis
+directly to Cloudflare, bypassing OpenRouter's price filters. The configured
+`MODEL_MAX_PRICE_PROMPT=0.15` and `MODEL_MAX_PRICE_COMPLETION=0.75` are sent as
+`provider.max_price`, in USD per million tokens. They cap provider token rates,
+not total daily spending. Native Cloudflare AI bindings have been removed. Document conversion, embeddings
+and other inference must use OpenRouter under the configured cap; unsupported
+capabilities remain blocked.
+
+Analysis is configured for the HTTP OpenRouter route through AI Gateway `default`
+without a native Workers AI binding. The dedicated `CF_AIG_TOKEN` secret was configured
+on 2026-10-24 with only AI Gateway Run and expires on 2027-01-22. Missing or expired
+credentials fail closed. The gateway has shared USD 1/day and
+USD 5/month sliding spend limits. `MODEL_SPEND_PAUSED=true` blocks generation
+while the account spending guard is tripped. See the
+[Cloudflare spending circuit breaker runbook](runbooks/cloudflare-cost-guard.md)
+for shutdown coverage and explicit recovery steps.
+
+On October 24, 2026, the Cloudflare `secop-dossier-evidence` Vectorize index
+and the `DOSSIER_VECTORS` binding were removed at the user's request. Cloudflare
+vector retrieval is retired; existing dossier databases, source files and reports
+are retained. See the [cost guard runbook](runbooks/cloudflare-cost-guard.md)
+for the complete RAG retirement inventory.
+
+As of October 24, 2026, background processing is paused for both
+`secop-live-worker` and `secop-dossier-validation`: delivery is paused on
+`secop-dossiers-jobs` and `secop-dossier-validation-jobs`, and their minute cron
+triggers are disabled. Verification found no queued/running dossier jobs, no
+active SECOP workflow instances, and zero messages in either processing queue.
+Existing documents and reports are retained. Resuming processing requires
+explicitly restoring queue delivery and the saved cron schedules; the model
+transport change alone does not resume these services.
+
 **Save and prepare dossier** saves the interest and starts durable background
 processing. The service enumerates every available document page, records partial
 coverage, downloads permitted official files and keeps failed/CAPTCHA/unsupported

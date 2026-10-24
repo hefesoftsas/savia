@@ -1,0 +1,34 @@
+{
+  "name": "savia-cost-guard",
+  "main": "worker.mjs",
+  "account_id": "08a0d36f8b0357684f83e4bfeb6628b6",
+  "compatibility_date": "2026-10-24",
+  "workers_dev": true,
+  "preview_urls": false,
+  "limits": {
+    "cpu_ms": 50
+  },
+  "observability": {
+    "enabled": false
+  },
+  "triggers": {
+    "crons": ["*/5 * * * *"]
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "CONTROLLER",
+        "class_name": "CostGuard"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["CostGuard"]
+    }
+  ],
+  "vars": {
+    "CF_ACCOUNT_ID": "08a0d36f8b0357684f83e4bfeb6628b6"
+  }
+}

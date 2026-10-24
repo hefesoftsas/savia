@@ -16,10 +16,22 @@ on:
         options: [preview, production]
         default: preview
       operation:
-        description: Preview or apply the saved infrastructure plan
+        description: Preview, apply, audit, migrate ownership, or retire preview vector state
         type: choice
-        options: [preview, apply, ownership-audit, ownership-migrate]
+        options:
+          [
+            preview,
+            apply,
+            ownership-audit,
+            ownership-migrate,
+            retire-vector-state,
+          ]
         default: preview
+      apply_retired_vector_state:
+        description: Apply the validated targeted preview-stack state refresh (otherwise preview only)
+        required: true
+        type: boolean
+        default: false
       audit_run_id:
         description: Successful ownership-audit run for this exact main commit (migration only)
         required: false
@@ -66,6 +78,9 @@ jobs:
       - name: Verify real CLI behavior without cloud access
         run: node --test infra/pulumi/cli-preflight.integration.mjs
 
+      - name: Test retired Vectorize state safeguards
+        run: node --test scripts/retire-vector-state.test.mjs
+
       - name: Validate all infrastructure programs
         run: npm --prefix infra/pulumi run typecheck
 
@@ -78,7 +93,7 @@ jobs:
     if: ${{ github.event_name == 'workflow_dispatch' && (inputs.operation == 'preview' || inputs.operation == 'apply') && (inputs.stack == 'preview' || (inputs.stack == 'production' && vars.PRODUCTION_OPERATIONS_ENABLED == 'true' && github.ref == 'refs/heads/main')) }}
     runs-on: ubuntu-24.04
     concurrency:
-      group: savia-${{ inputs.stack }}
+      group: savia-cloudflare-${{ inputs.stack }}
       cancel-in-progress: false
     environment: ${{ inputs.stack == 'production' && 'production-app' || 'preview' }}
     env:
@@ -131,7 +146,7 @@ jobs:
       contents: read
       actions: write
     concurrency:
-      group: savia-environment-ownership
+      group: savia-cloudflare-preview
       cancel-in-progress: false
     env:
       PNPM_CONFIG_STRICT_DEP_BUILDS: "false"
@@ -211,3 +226,84 @@ jobs:
           path: ${{ runner.temp }}/savia-ownership.enc
           retention-days: 7
           if-no-files-found: ignore
+
+  retire-vector-state:
+    name: Retire preview Vectorize state from Pulumi
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.operation == 'retire-vector-state' }}
+    needs: [unit, runtime-compatibility]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment: preview
+    concurrency:
+      group: savia-cloudflare-preview
+      cancel-in-progress: false
+    steps:
+      - name: Require the fixed preview stack
+        env:
+          CHOSEN_STACK: ${{ inputs.stack }}
+        run: |
+          set -euo pipefail
+          test "$CHOSEN_STACK" = preview
+
+      - name: Check out requested revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install pinned Pulumi CLI
+        run: |
+          curl -fsSL https://get.pulumi.com | sh -s -- --version 3.268.0
+          echo "$HOME/.pulumi/bin" >> "$GITHUB_PATH"
+
+      - name: Build private candidate and import only when selected
+        working-directory: infra/pulumi
+        env:
+          PULUMI_BACKEND_URL: ${{ secrets.PULUMI_BACKEND_URL }}
+          PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_STATE_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_STATE_SECRET_ACCESS_KEY }}
+          PULUMI_DIY_BACKEND_DISABLE_CHECKPOINT_BACKUPS: "false"
+          APPLY_RETIRED_VECTOR_STATE: ${{ inputs.apply_retired_vector_state }}
+        run: |
+          set -euo pipefail
+          umask 077
+          custody="$RUNNER_TEMP/savia-vector-state"
+          install -d -m 700 "$custody"
+          target='urn:pulumi:preview::savia-cloudflare::pulumi-nodejs:dynamic/vectorize:Index::pages-search'
+          stack='organization/savia-cloudflare/preview'
+
+          if ! pulumi stack select "$stack" --non-interactive >"$custody/select.log" 2>&1; then
+            node ../../scripts/retire-vector-state.mjs safe-error --operation "Pulumi stack selection" --log "$custody/select.log"
+            exit 1
+          fi
+          if ! pulumi stack export --stack "$stack" --file "$custody/before.private.json" --non-interactive \
+            >"$custody/export-before.log" 2>&1; then
+            node ../../scripts/retire-vector-state.mjs safe-error --operation "Private checkpoint export" --log "$custody/export-before.log"
+            exit 1
+          fi
+          node ../../scripts/retire-vector-state.mjs transform \
+            --checkpoint "$custody/before.private.json" --output "$custody/candidate.private.json" --target "$target"
+
+          if [ "$APPLY_RETIRED_VECTOR_STATE" != "true" ]; then
+            echo "The private candidate passed validation; no state was imported."
+            exit 0
+          fi
+
+          if ! pulumi stack import --file "$custody/candidate.private.json" --stack "$stack" --non-interactive \
+            >"$custody/import.private.log" 2>&1; then
+            node ../../scripts/retire-vector-state.mjs safe-error --operation "Validated checkpoint import" --log "$custody/import.private.log"
+            exit 1
+          fi
+          if ! pulumi stack export --stack "$stack" --file "$custody/after.private.json" --non-interactive \
+            >"$custody/export-after.log" 2>&1; then
+            node ../../scripts/retire-vector-state.mjs safe-error --operation "Post-import checkpoint export" --log "$custody/export-after.log"
+            exit 1
+          fi
+          node ../../scripts/retire-vector-state.mjs compare-import \
+            --candidate "$custody/candidate.private.json" --imported "$custody/after.private.json" --target "$target"

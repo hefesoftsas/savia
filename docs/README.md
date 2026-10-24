@@ -92,6 +92,8 @@ Savia documentation hub. If you are new, follow the onboarding track in order.
 - [legacy-api.md](legacy-api.md) — core API vs legacy API boundary.
 - [custom-result-components.md](custom-result-components.md) — custom React result components.
 - [runbooks/](runbooks/) — operational procedures (each states owner and review date).
+- [Cloudflare spending circuit breaker](runbooks/cloudflare-cost-guard.md) — shutdown thresholds, AI limits, verification, and recovery.
+- [Cloudflare daily data cleanup](runbooks/cloudflare-data-cleanup.md) — retention rules, protected releases, and initial cleanup evidence.
 - [../apps/admin/src/features/studio-engine/DESIGN.md](../apps/admin/src/features/studio-engine/DESIGN.md) — Studio engine design.
 - [../packages/studio-server/API.md](../packages/studio-server/API.md) · [../packages/studio-server/INTEGRATIONS.md](../packages/studio-server/INTEGRATIONS.md) — Studio engine contract.
 
