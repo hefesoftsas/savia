@@ -62,3 +62,18 @@ both are now disabled and API confirmation is required. Final contracts passed
 741 main tests plus 5 boundary tests; the focused controller/provider suite has
 36 tests. The global hook has 18 passing behavioral cases and persisted trusted
 state from the `/hooks` review.
+
+## Final publication and state reconciliation
+
+The changes are published in draft PR #388. The dedicated Gateway token is active
+and stored as a SECOP secret; the service remains paused with public URLs disabled.
+Controller version `277e09b2-f0a0-4aa7-ba50-b80e0d72b35e` also pauses AI Search
+below the billing threshold; its natural cron ran at 15:20:19 UTC without errors.
+Final contract validation passed 752 tests.
+
+A private candidate generated from the saved Pulumi checkpoint passed exact
+allowlisted validation. Its manual CI job was rejected by the preview environment
+branch policy, which permits only main. No live state import occurred and no
+environment protection was changed. The index itself remains deleted, and the
+checked-in configuration no longer requests it. State reconciliation remains
+pending integration into the permitted branch.

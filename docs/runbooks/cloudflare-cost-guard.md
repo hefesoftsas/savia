@@ -166,8 +166,15 @@ D1 databases, `assistant_virtual_employee_chunks`, `tenant_page_search_index` an
 `tenant_page_search_index_leases` each had zero rows, and all Pages search settings
 were already disabled. No operational tables, full-text record search, original
 application documents, SECOP reports or backup files were deleted. The Pulumi
-state was not refreshed or deployed; review its next refresh/preview before any
-infrastructure rollout. This retirement does not rewrite existing backups.
+state has not yet been reconciled. The manual `retire-vector-state` operation in
+`pulumi.yml` generates a private candidate and permits an official stack import
+only after exact allowlisted validation. It removes the one retired resource and
+its stack/provider/runtime references, preserving encrypted fields and all other
+resources. The first CI run (40106633346) passed infrastructure tests but GitHub
+rejected the retirement job because the `preview` environment only permits
+`main`. No state was imported and no protection rule was changed. Integrate the
+reviewed change into the permitted branch before running preview-only validation,
+then the explicit apply checkbox. This retirement does not rewrite existing backups.
 
 After retirement, controller version `861bf7a9-086c-4f5c-855c-5d93d58a6df8`
 completed a real check at 2026-10-24 14:58:57 UTC with `actionErrors=[]`.
@@ -182,3 +189,7 @@ Controller version `277e09b2-f0a0-4aa7-ba50-b80e0d72b35e` adds AI Search
 pausing below the threshold when `denyCloudflareAi` is enabled. A real check
 at 15:17:51 UTC completed with no action errors, and the five-minute schedule
 was read back successfully at 15:18:08 UTC. The 37 controller/provider tests pass.
+
+The new controller also ran through its natural cron at 15:20:19 UTC with no action
+errors. Final contract validation passed 752 tests; the CI infrastructure unit and
+minimum-runtime jobs passed. Repository-wide lint/typecheck were not run.
