@@ -237,3 +237,35 @@ The Preview R2 credential `savia-preview-pulumi-state` is limited to Object Read
 & Write on `savia-pulumi-state-preview` and expires on 2026-11-23. Renew it with
 the same scope before future state maintenance; never restore application or
 AI inference permissions to repair backend access.
+
+## Manual emergency stop panel
+
+Open `https://savia-cost-guard.jose-douglas-dev.workers.dev/control` and connect
+using the existing `GUARD_ADMIN_TOKEN` from the private administrator credential
+store. The page keeps this credential in memory only; refreshing or disconnecting
+requires connecting again. Never put the key in a URL, a public message, or a
+committed file. The public page contains no account state or credential; every
+status and stop request requires the administrator Authorization header.
+
+Choose **Pause all environments**, then **Confirm pause**. The independent
+controller records a persistent `manual_stop` latch before any external request,
+without fetching billing. It then reapplies the same account-wide discovery and
+pause policy used by the automatic cost guard. Later five-minute checks continue
+enforcing the manual latch, including newly discovered targets. The operation is
+safe to repeat and retains the original recovery snapshots. There is no resume
+control. Existing application deployments remain disabled.
+
+The panel reports each target action and incomplete discovery/action failures.
+A saved latch is distinct from completed pause actions: **STOPPING**, **PAUSE
+INCOMPLETE**, and **PAUSED** are shown separately. If a request times out, refresh
+status before assuming it failed; the latch may already have been saved. The
+same protected guard, backup coordinator and daily cleanup exceptions remain
+active. In-flight requests can finish; pausing does not delete data or retroactively
+cap billed usage.
+
+For scripted operation, send an authenticated `POST /stop` with
+`Content-Type: application/json` and body
+`{"confirm":"PAUSE_ALL_ENVIRONMENTS"}`. Browser requests must come from the
+controller's own origin. Status and panel responses use `Cache-Control: no-store`;
+the panel also blocks framing and third-party script/network sources. No new
+Cloudflare credential, binding, database, or inference permission is required.

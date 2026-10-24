@@ -1330,3 +1330,146 @@ test("tripped guard keeps maintenance cron while disabling its public URLs", asy
     true,
   );
 });
+
+test("manual stop latches before external calls and pauses below budget without billing", async () => {
+  const h = harness({ billing: rows([1]) });
+  const fetcher = async (url, init) => {
+    assert.notEqual(new URL(url).pathname.split("/").at(-1), "billable-usage");
+    const status = JSON.parse(h.kv.get("status"));
+    assert.equal(status.tripped, true);
+    assert.equal(status.reason, "manual_stop");
+    return h.fetcher(url, init);
+  };
+  const result = await executeCheck(h.env, {
+    fetcher,
+    now: base,
+    manualStop: true,
+  });
+  assert.equal(result.tripped, true);
+  assert.equal(result.reason, "manual_stop");
+  assert.equal(result.manualStopAt, new Date(base).toISOString());
+  assert.ok(
+    result.targetResults.some(
+      (item) => item.action === "queue" && item.target === "q1" && item.ok,
+    ),
+  );
+  assert.equal(result.actionErrors.length, 0);
+  const originalSnapshot = h.kv.get("recovery:queue:q1");
+  const later = await executeCheck(h.env, {
+    fetcher: h.fetcher,
+    now: base + 1000,
+  });
+  assert.equal(later.reason, "manual_stop");
+  assert.equal(later.tripped, true);
+  assert.equal(later.manualStopAt, result.manualStopAt);
+  assert.deepEqual(h.kv.get("recovery:queue:q1"), originalSnapshot);
+});
+
+test("manual stop reports partial failures without clearing the stop latch", async () => {
+  const h = harness({ billing: rows([1]), failQueue: true });
+  const result = await executeCheck(h.env, {
+    fetcher: h.fetcher,
+    now: base,
+    manualStop: true,
+  });
+  assert.equal(result.tripped, true);
+  assert.equal(result.phase, "incomplete");
+  assert.ok(
+    result.targetResults.some(
+      (item) => item.action === "queue" && item.target === "q1" && !item.ok,
+    ),
+  );
+  assert.ok(result.actionErrors.some((item) => item.target === "q1"));
+  assert.equal(JSON.parse(h.kv.get("status")).tripped, true);
+});
+
+test("manual stop requires authentication, explicit confirmation and same-origin browser requests", async () => {
+  const { default: worker } = await import("./worker.mjs");
+  const h = harness();
+  for (const [headers, body, expected] of [
+    [{}, { confirm: "PAUSE_ALL_ENVIRONMENTS" }, 401],
+    [
+      {
+        authorization: "Bearer admin-secret",
+        "content-type": "application/json",
+      },
+      { confirm: "wrong" },
+      400,
+    ],
+    [
+      {
+        authorization: "Bearer admin-secret",
+        "content-type": "application/json",
+        origin: "https://other.example",
+      },
+      { confirm: "PAUSE_ALL_ENVIRONMENTS" },
+      403,
+    ],
+  ]) {
+    const response = await worker.fetch(
+      new Request("https://guard/stop", {
+        method: "POST",
+        headers,
+        body: JSON.stringify(body),
+      }),
+      h.env,
+    );
+    assert.equal(response.status, expected);
+    assert.equal(h.kv.has("status"), false);
+  }
+});
+
+test("manual stop remains saved when account inventory fails", async () => {
+  const h = harness({ billing: rows([1]) });
+  h.env.POLICY.accountWide = true;
+  const result = await executeCheck(h.env, {
+    fetcher: h.fetcher,
+    now: base,
+    manualStop: true,
+  });
+  assert.equal(result.tripped, true);
+  assert.equal(result.reason, "manual_stop");
+  assert.equal(result.phase, "incomplete");
+  assert.ok(
+    result.actionErrors.some((item) => item.action.startsWith("inventory-")),
+  );
+  assert.equal(JSON.parse(h.kv.get("status")).tripped, true);
+});
+
+test("authenticated stop endpoint applies the latch and protected panel responses cannot be cached", async (t) => {
+  const { default: worker } = await import("./worker.mjs");
+  const h = harness({ billing: rows([1]) });
+  t.mock.method(globalThis, "fetch", h.fetcher);
+  const response = await worker.fetch(
+    new Request("https://guard/stop", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer admin-secret",
+        "content-type": "application/json",
+        origin: "https://guard",
+      },
+      body: JSON.stringify({ confirm: "PAUSE_ALL_ENVIRONMENTS" }),
+    }),
+    h.env,
+  );
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("cache-control"), "no-store");
+  assert.equal((await response.json()).reason, "manual_stop");
+  for (const path of ["/", "/control"]) {
+    const panel = await worker.fetch(
+      new Request(`https://guard${path}`),
+      h.env,
+    );
+    assert.equal(panel.status, 200);
+    assert.match(panel.headers.get("content-type"), /^text\/html/);
+    assert.equal(panel.headers.get("cache-control"), "no-store");
+    assert.equal(panel.headers.get("x-frame-options"), "DENY");
+    const html = await panel.text();
+    const nonce = html.match(/<script nonce="([^"]+)"/)[1];
+    assert.ok(
+      panel.headers.get("content-security-policy").includes(`'nonce-${nonce}'`),
+    );
+    assert.ok(!html.includes("admin-secret"));
+    assert.ok(!html.includes("cf-secret"));
+  }
+});
