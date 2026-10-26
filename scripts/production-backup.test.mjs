@@ -458,3 +458,35 @@ test("CLI reports a safe category when required path arguments are missing", asy
     },
   );
 });
+
+test("reports fixed backup barrier failures while redacting untrusted suffixes", () => {
+  const cases = [
+    [
+      "Backup barrier drain timed out",
+      "Backup controller could not drain outstanding writers before the deadline.",
+    ],
+    [
+      "Backup lease ownership, expiry or drain proof is invalid",
+      "Backup controller returned an invalid lease or drain proof.",
+    ],
+    [
+      "Backup lease expired during capture",
+      "Backup controller lease expired during capture.",
+    ],
+    [
+      "Backup lease lost its drained state",
+      "Backup controller detected writers during capture.",
+    ],
+    [
+      "Backup exceeded its maximum maintenance window",
+      "Backup capture exceeded its bounded maintenance window.",
+    ],
+  ];
+  for (const [message, expected] of cases) {
+    assert.equal(classifyProductionBackupFailure(new Error(message)), expected);
+    assert.equal(
+      classifyProductionBackupFailure(new Error(message + " secret-value")),
+      "Capture failed; details withheld to protect credentials.",
+    );
+  }
+});

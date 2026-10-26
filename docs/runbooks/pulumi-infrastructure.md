@@ -533,6 +533,12 @@ The authenticated controller's `status` action accepts `includePermits: true`
 for operator inspection of outstanding permit IDs and creation times. Inspection
 does not remove or age out permits. Treat an unresolved permit as a blocked
 drain until its storage operation is proven finished; age alone is insufficient.
+The daily backup reports fixed, credential-free failure categories for a drain
+timeout, invalid lease proof, expired lease, writers observed during capture, or
+an exceeded maintenance window. A drain timeout means capture never started;
+inspect outstanding permits and prove their operations finished before recovery.
+Unrecognized errors and messages with extra provider text remain redacted.
+
 Flows is currently absent from production; unattended capture fails closed if its
 independent persistence is provisioned until its pause lifecycle is integrated.
 
