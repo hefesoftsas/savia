@@ -58,6 +58,30 @@ export function classifyProductionBackupFailure(error) {
   if (controller)
     return `Backup controller ${controller[1]} request failed (HTTP ${controller[2]}).`;
 
+  const barrierFailures = new Map([
+    [
+      "Backup barrier drain timed out",
+      "Backup controller could not drain outstanding writers before the deadline.",
+    ],
+    [
+      "Backup lease ownership, expiry or drain proof is invalid",
+      "Backup controller returned an invalid lease or drain proof.",
+    ],
+    [
+      "Backup lease expired during capture",
+      "Backup controller lease expired during capture.",
+    ],
+    [
+      "Backup lease lost its drained state",
+      "Backup controller detected writers during capture.",
+    ],
+    [
+      "Backup exceeded its maximum maintenance window",
+      "Backup capture exceeded its bounded maintenance window.",
+    ],
+  ]);
+  if (barrierFailures.has(message)) return barrierFailures.get(message);
+
   const d1Provider =
     /^D1 query failed \(([1-5]\d{2})\):/.exec(message) ??
     /^D1 recovery verification failed \(HTTP ([1-5]\d{2})\)$/.exec(message);
