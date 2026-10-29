@@ -2200,40 +2200,6 @@ importers:
         specifier: ^4.1.11
         version: 4.1.11(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(@vitest/coverage-istanbul@4.1.11)(@vitest/coverage-v8@4.1.11)(jsdom@28.1.0(@noble/hashes@2.4.0)(supports-color@10.2.2))(vite@8.2.4(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.13)(yaml@2.9.0))
 
-  packages/plugin-secop-tenders:
-    dependencies:
-      '@savia/plugin-sdk':
-        specifier: workspace:*
-        version: link:../plugin-sdk
-      '@savia/plugin-ui':
-        specifier: workspace:*
-        version: link:../plugin-ui
-      lucide-react:
-        specifier: ^1.39.0
-        version: 1.39.0(react@19.2.8)
-      react:
-        specifier: ^19.2.8
-        version: 19.2.8
-      react-dom:
-        specifier: ^19.2.8
-        version: 19.2.8(react@19.2.8)
-    devDependencies:
-      '@types/react':
-        specifier: ^19.2.18
-        version: 19.2.18
-      '@types/react-dom':
-        specifier: ^19.2.3
-        version: 19.3.0(@types/react@19.2.18)
-      jsdom:
-        specifier: ^28.1.0
-        version: 28.1.0(@noble/hashes@2.4.0)(supports-color@10.2.2)
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
-      vitest:
-        specifier: ^4.1.11
-        version: 4.1.11(@opentelemetry/api@1.9.0)(@types/node@24.13.3)(@vitest/coverage-istanbul@4.1.11)(@vitest/coverage-v8@4.1.11)(jsdom@28.1.0(@noble/hashes@2.4.0)(supports-color@10.2.2))(vite@8.2.4(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.13)(yaml@2.9.0))
-
   packages/plugin-ui:
     dependencies:
       '@savia/studio-shared':

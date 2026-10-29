@@ -13,8 +13,6 @@ export default {
       "AGENCY_PRODUCTION",
       "AGENCY_PREVIEW",
       "AGENCY_BRANCH",
-      "SECOP",
-      "SECOP_VALIDATION",
       "PRODUCTION_BACKUP_GATE",
       "PREVIEW_BACKUP_GATE",
     ];
@@ -45,8 +43,6 @@ export default {
           ),
           agencyPreview: guardedDatabase(previewGate, env.AGENCY_PREVIEW),
           agencyBranch: guardedDatabase(previewGate, env.AGENCY_BRANCH),
-          secop: guardedDatabase(productionGate, env.SECOP),
-          secopValidation: guardedDatabase(previewGate, env.SECOP_VALIDATION),
         },
         { maxBatches: MAX_BATCHES_PER_TARGET },
       ).then(

@@ -1,7 +1,16 @@
 import { env } from "cloudflare:workers";
 import { beforeAll, beforeEach, expect, it } from "vitest";
-import manifest from "../../../packages/plugin-secop-tenders/savia-extension.json";
-import store from "../../../packages/plugin-secop-tenders/store.json";
+const manifest = {
+  format: "savia.extension",
+  formatVersion: 1,
+  id: "test.monitored-items",
+  version: "1.0.0",
+  label: "Monitored items",
+  description: "Independent monitor contract fixture",
+  requires: [],
+  apiVersion: 1,
+};
+import store from "./fixtures/plugin-monitor-store.json";
 import { runPluginMonitors } from "../src/studio/plugin-monitors";
 import {
   upsertPrincipal,
@@ -85,7 +94,7 @@ beforeEach(async () => {
     .run();
   await db
     .prepare(
-      "INSERT OR REPLACE INTO studio_collection_sources(tenant_id,owner_principal_id,id,label,kind,config,encrypted_secret) VALUES(?,?,'secop_live','Fixture','mcp',?,'encrypted-test-source')",
+      "INSERT OR REPLACE INTO studio_collection_sources(tenant_id,owner_principal_id,id,label,kind,config,encrypted_secret) VALUES(?,?,'fixture_source','Fixture','mcp',?,'encrypted-test-source')",
     )
     .bind(
       tenant,
@@ -161,7 +170,7 @@ it("checks as creator, atomically refreshes source facts and delivers deduplicat
       calls++;
       expect(request.principalId).toBe(owner);
       expect(request.tenantId).toBe(tenant);
-      expect(request.action.tool).toBe("detalle_licitacion");
+      expect(request.action.tool).toBe("read_item");
       expect(request.input.id_del_proceso).toBe("process-1");
       return read();
     },
@@ -326,7 +335,7 @@ it("discards results if the exact owner's source is revoked or replaced during a
     );
     await db
       .prepare(
-        "INSERT OR REPLACE INTO studio_collection_sources(tenant_id,owner_principal_id,id,label,kind,config,encrypted_secret) VALUES(?,?,'secop_live','Fixture','mcp',?,'encrypted-test-source')",
+        "INSERT OR REPLACE INTO studio_collection_sources(tenant_id,owner_principal_id,id,label,kind,config,encrypted_secret) VALUES(?,?,'fixture_source','Fixture','mcp',?,'encrypted-test-source')",
       )
       .bind(
         tenant,

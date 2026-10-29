@@ -63,7 +63,6 @@ RUN mkdir -p \
     /workspace/packages/plugin-authoring/node_modules \
     /workspace/packages/plugin-example-tasks/node_modules \
     /workspace/packages/plugin-sdk/node_modules \
-    /workspace/packages/plugin-secop-tenders/node_modules \
     /workspace/packages/plugin-ui/node_modules \
     /workspace/packages/provider-contracts/node_modules \
     /workspace/packages/release-catalog/node_modules \

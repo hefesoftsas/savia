@@ -26,6 +26,10 @@ and saved as the SECOP `CF_AIG_TOKEN` secret on 2026-10-24. It expires on
 2027-01-22. Its account-wide Gateway scope does not grant Workers AI or AI Search
 inference. SECOP remains paused and both public URLs remain disabled. Missing or
 expired credentials fail closed; never bypass the authenticated Gateway or its spend limits.
+The SECOP service remains separately owned; Savia's scheduled cleanup no longer
+targets its databases. The Savia-specific bundle-patching utility and its model
+fixture have been removed. The guard continues to apply the SECOP pause flag and
+protect its schedules, queues, and workflow while that service remains deployed.
 
 ## Shutdown coverage
 

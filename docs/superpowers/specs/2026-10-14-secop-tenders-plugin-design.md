@@ -1,5 +1,7 @@
 # SECOP tenders plugin
 
+> Historical design: the SECOP integration was retired. See [retirement notes](../../secop-tenders-plugin.md).
+
 The user requested an installable Savia plugin that searches SECOP using the external MCP, saves selected tenders as interests, and tracks them. The selected destination is preview. The plugin is optional and tenant-scoped; procurement is not a platform-core assumption.
 
 ## User flow

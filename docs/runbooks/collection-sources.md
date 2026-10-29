@@ -81,4 +81,4 @@ when needed.
 
 ## MCP sources
 
-External read-only MCP tools are supported through the existing manager, with backend OAuth and explicit collection mapping. See [MCP collection sources](../mcp-collection-sources.md) for setup, security boundaries, SECOP configuration, deployment, and current limits.
+External read-only MCP tools are supported through the existing manager, with backend OAuth and explicit collection mapping. See [MCP collection sources](../mcp-collection-sources.md) for setup, security boundaries, deployment, and current limits.

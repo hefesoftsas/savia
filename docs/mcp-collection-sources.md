@@ -36,20 +36,6 @@ Only supported Studio field names appear during analysis. Unsupported remote nam
 
 This version supports listing and refreshing records. It does not provide record-detail lookup, create, update, delete, schema writes, relationships, free-text UI search, UI filters, or UI sorting. Fixed search arguments belong to the binding. Only capabilities actually implemented are advertised. Generic operation mappings cannot enable MCP writes.
 
-## SECOP Live
-
-The **SECOP Live** preset supplies:
-
-- Endpoint: `https://secop-live-worker.jose-douglas-dev.workers.dev/mcp`.
-- OAuth scopes: `mcp:read offline_access`.
-- Reviewed unannotated read tools: `buscar_licitaciones`, `detalle_licitacion`, `buscar_documentos`.
-
-The deployed Worker source was inspected through the authenticated Cloudflare API on 2026-10-14. These tools query Socrata and do not mutate records. Its protected-resource and authorization-server discovery endpoints were also verified live. A live authorization-code + S256 PKCE flow, token exchange, MCP tool discovery, and one `buscar_licitaciones` read were subsequently verified with a dedicated verification client. This does not establish deployment or authorization of the Savia source-manager connection.
-
-Start with `buscar_licitaciones`, arguments `{}`, items pointer `/data`, identifier `:id`, limit argument `limit`, and offset argument `offset`. The same procurement process can appear in several rows, so `id_del_proceso` is not assumed unique. `buscar_documentos` requires a `q` argument. `detalle_licitacion` returns rows under `/filas` and requires `id_del_proceso`; it is a fixed query, not the collection's record-detail operation.
-
-SECOP's authorization page asks for an access key and checks it against the Worker's `API_KEYS` secret binding. On 2026-10-14, this binding was replaced with a new random key at the user's request. The local copy is in the gitignored `infra/secrets/secop-live.env` file with owner-only permissions. Replacing this binding invalidates previous API keys; existing OAuth grants are independent of that key check. Cloudflare's settings API lists the binding name but cannot recover an existing secret's value. Enter the existing key directly on SECOP's authorization page. Do not put it in a collection's arguments, source URL, repository files, or chat. Savia receives the resulting OAuth grant rather than the access key.
-
 ## Deployment and checks
 
 Apply migration `0048_mcp_collection_sources.sql` before deploying API and Admin. It preserves existing sources while extending the source kind and adds expiring OAuth flows. Existing installations must retain their integrations encryption key. Do not edit the generated API reference; the tenant's OpenAPI/Scalar surface derives the new endpoints and payloads from runtime schemas.
@@ -58,7 +44,7 @@ Apply `0059_mcp_oauth_refresh_leases.sql` before deploying the coordinated OAuth
 refresh implementation. The lease table stores only source identity, a random
 lease identifier and expiry; OAuth credentials remain encrypted in the source.
 
-Run the MCP adapter/source API tests, existing database-source regressions, the collection source panel tests, and API/Admin/shared TypeScript checks. Mocked protocol tests do not prove that SECOP's real consent page has been completed. Network calls require public HTTPS DNS targets, reject redirects, bound responses to 1 MB, and use a 15-second operation budget.
+Run the MCP adapter/source API tests, existing database-source regressions, the collection source panel tests, and API/Admin/shared TypeScript checks. Mocked protocol tests do not prove that a remote server’s real consent page has been completed. Network calls require public HTTPS DNS targets, reject redirects, bound responses to 1 MB, and use a 15-second operation budget.
 
 ## Cloudflare deployment
 

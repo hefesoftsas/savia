@@ -29,16 +29,6 @@
       "binding": "AGENCY_BRANCH",
       "database_name": "savia-agencies-preview-feat-secop-tender-tracke",
       "database_id": "ca83cac0-b48d-4235-b88a-c2442115ab16"
-    },
-    {
-      "binding": "SECOP",
-      "database_name": "secop-dossiers",
-      "database_id": "b3d04949-b28b-4847-bbe2-bd06fbeb182b"
-    },
-    {
-      "binding": "SECOP_VALIDATION",
-      "database_name": "secop-dossier-validation",
-      "database_id": "c7e95fa3-24c5-44a0-b273-207d2fe083d8"
     }
   ],
   "durable_objects": {

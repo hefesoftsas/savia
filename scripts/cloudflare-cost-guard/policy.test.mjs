@@ -7,14 +7,14 @@ test("accepts explicit pause targets and guard exclusions", () => {
     guardScript: "cost-guard",
     backupBarrierScripts: ["backup-barrier"],
     scripts: [
-      { script: "secop-worker", variables: { COST_GUARD_PAUSED: "true" } },
+      { script: "application-worker", variables: { COST_GUARD_PAUSED: "true" } },
     ],
     schedules: ["agency-api"],
     queues: ["queue-123"],
     workflows: ["pipeline"],
     aiSearch: [{ namespace: "docs", id: "kb-main" }],
   });
-  assert.equal(policy.scripts[0].script, "secop-worker");
+  assert.equal(policy.scripts[0].script, "application-worker");
   assert.deepEqual(policy.queues, ["queue-123"]);
   assert.deepEqual(policy.workflows, ["pipeline"]);
   assert.deepEqual(policy.aiSearch, [{ namespace: "docs", id: "kb-main" }]);
