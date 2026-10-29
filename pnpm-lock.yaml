@@ -1307,8 +1307,8 @@ importers:
         specifier: ^4.13.11
         version: 4.13.11
       nodemailer:
-        specifier: 10.0.14
-        version: 10.0.14
+        specifier: 10.1.4
+        version: 10.1.4
       pg:
         specifier: ^8.18.0
         version: 8.23.0
@@ -10714,8 +10714,8 @@ packages:
     resolution: {integrity: sha512-tGnJW6OKRii9u/b2WiUViTJS+h7Apxx17qsMUjsUeNDiMMX5ZFf8F8Fcz7PAQ6omvOxHZtvDTmOYKJQwmfpjeg==}
     engines: {node: '>=20'}
 
-  nodemailer@10.0.14:
-    resolution: {integrity: sha512-eJoLFKg55fesSlzUekmfOv/SBXh4KUYT8oiQc2RLP0tfG0rbNMJBK7wgHJwXTJwqyKlSJMz9UzDZ4v+aHEvo8g==}
+  nodemailer@10.1.4:
+    resolution: {integrity: sha512-EsMnOR2oRv4LGnWvHgcVYkkQ4O2j8KO4WTw6l+PHR4sOXo8SAgIraxtEnGDmotjbhv0hDsu3IuDIFZm8iXwO4A==}
     engines: {node: '>=20.0.0'}
 
   normalize-package-data@6.0.2:
@@ -23615,7 +23615,7 @@ snapshots:
       '@types/sarif': 2.1.7
       fs-extra: 11.4.0
 
-  nodemailer@10.0.14: {}
+  nodemailer@10.1.4: {}
 
   normalize-package-data@6.0.2:
     dependencies:
