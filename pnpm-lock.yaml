@@ -1203,7 +1203,7 @@ importers:
     dependencies:
       '@prefecthq/fastmcp-ts':
         specifier: ^1.7.0
-        version: 1.7.0(@anthropic-ai/sdk@0.71.2(zod@4.5.4))(@google/genai@1.52.0(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@10.2.2)(zod@4.5.4))(supports-color@10.2.2))(hono@4.13.11)(openai@6.49.0(@aws-sdk/credential-provider-node@3.972.83)(@smithy/signature-v4@5.7.3)(ws@8.21.0)(zod@4.5.4))(supports-color@10.2.2)
+        version: 1.7.0(@anthropic-ai/sdk@0.71.2(zod@4.5.4))(@google/genai@1.52.0(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@10.2.2)(zod@4.5.4))(supports-color@10.2.2))(openai@6.49.0(@aws-sdk/credential-provider-node@3.972.83)(@smithy/signature-v4@5.7.3)(ws@8.21.0)(zod@4.5.4))(supports-color@10.2.2)
       '@savia/release-catalog':
         specifier: workspace:*
         version: link:../../packages/release-catalog
@@ -4910,15 +4910,11 @@ packages:
     resolution: {integrity: sha512-z8QBKqdfXLPzkLQuG4xp8hrVEMm1PZ1IgxMN2sMbJiFiAKOWXnAzogXn2W4aqIBlP1ea6U5yiqVquvUNM1Cj6Q==}
     engines: {node: '>=20'}
 
-  '@modelcontextprotocol/node@2.0.0':
-    resolution: {integrity: sha512-Y4hAC2XdGDUdDOCbLDOCA4+aL3NUldjsOWlDL/YwpAxrPhRm1xHd7lZ+mLacvZ9t3PaH28wgNoaLQGrIk1P2pg==}
+  '@modelcontextprotocol/node@2.1.2':
+    resolution: {integrity: sha512-IIcIqBpr6NCQQs5DgJTgvbSOAw+3iaR/uquqg+e0nXCdudfjPg/80x0TseUnQx14AUAtE4fsJCEpJKPyb6WPVA==}
     engines: {node: '>=20'}
     peerDependencies:
-      '@modelcontextprotocol/server': ^2.0.0
-      hono: ^4.11.4
-    peerDependenciesMeta:
-      hono:
-        optional: true
+      '@modelcontextprotocol/server': ^2.4.0
 
   '@modelcontextprotocol/sdk@1.30.0':
     resolution: {integrity: sha512-xKd8OIzlqNzcqcNumGAa6g+PW2kjD5vrpcKOnfldAUPP3j7lnqMPwlTXQm8gF+UwH72z0lqaRbjr9hqGz0eITA==}
@@ -15917,11 +15913,10 @@ snapshots:
     dependencies:
       zod: 4.5.4
 
-  '@modelcontextprotocol/node@2.0.0(@modelcontextprotocol/server@2.0.0)(hono@4.13.11)':
+  '@modelcontextprotocol/node@2.1.2(@modelcontextprotocol/server@2.0.0)':
     dependencies:
       '@hono/node-server': 1.19.17(hono@4.13.11)
       '@modelcontextprotocol/server': 2.0.0
-    optionalDependencies:
       hono: 4.13.11
 
   '@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@10.2.2)(zod@4.5.4)':
@@ -16259,12 +16254,12 @@ snapshots:
 
   '@poppinss/exception@1.2.3': {}
 
-  '@prefecthq/fastmcp-ts@1.7.0(@anthropic-ai/sdk@0.71.2(zod@4.5.4))(@google/genai@1.52.0(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@10.2.2)(zod@4.5.4))(supports-color@10.2.2))(hono@4.13.11)(openai@6.49.0(@aws-sdk/credential-provider-node@3.972.83)(@smithy/signature-v4@5.7.3)(ws@8.21.0)(zod@4.5.4))(supports-color@10.2.2)':
+  '@prefecthq/fastmcp-ts@1.7.0(@anthropic-ai/sdk@0.71.2(zod@4.5.4))(@google/genai@1.52.0(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@10.2.2)(zod@4.5.4))(supports-color@10.2.2))(openai@6.49.0(@aws-sdk/credential-provider-node@3.972.83)(@smithy/signature-v4@5.7.3)(ws@8.21.0)(zod@4.5.4))(supports-color@10.2.2)':
     dependencies:
       '@clack/prompts': 1.7.0
       '@modelcontextprotocol/client': 2.3.1
       '@modelcontextprotocol/core': 2.0.0
-      '@modelcontextprotocol/node': 2.0.0(@modelcontextprotocol/server@2.0.0)(hono@4.13.11)
+      '@modelcontextprotocol/node': 2.1.2(@modelcontextprotocol/server@2.0.0)
       '@modelcontextprotocol/server': 2.0.0
       '@modelcontextprotocol/server-legacy': 2.4.0(express@5.2.1(supports-color@10.2.2))(supports-color@10.2.2)
       '@standard-schema/spec': 1.1.0
@@ -16284,7 +16279,6 @@ snapshots:
       '@google/genai': 1.52.0(@modelcontextprotocol/sdk@1.30.0(@cfworker/json-schema@4.1.1)(supports-color@10.2.2)(zod@4.5.4))(supports-color@10.2.2)
       openai: 6.49.0(@aws-sdk/credential-provider-node@3.972.83)(@smithy/signature-v4@5.7.3)(ws@8.21.0)(zod@4.5.4)
     transitivePeerDependencies:
-      - hono
       - supports-color
 
   '@protobufjs/aspromise@1.1.2': {}
