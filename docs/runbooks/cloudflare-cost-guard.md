@@ -255,8 +255,9 @@ No administrator token is entered in or sent to the browser. **Log out** clears
 the displayed state and redirects to Cloudflare Access logout. Cloudflare revokes
 the user's Access sessions across protected applications, not just this panel.
 
-Browser APIs use `/control/status` and `/control/stop`. Machine-only `/status`,
-`/check`, `/stop` and `/recovery` retain the existing bearer credential so the
+Browser APIs use `/control/status`, `/control/stop`, and
+`/control/resume-preview`. Machine-only `/status`, `/check`, `/stop`,
+`/resume-preview` and `/recovery` retain the existing bearer credential so the
 scheduled guard, deployment verification and private audits continue working.
 The root URL redirects to `/control`. The Access application is configured in
 Cloudflare; its non-secret desired configuration and resource IDs are recorded
@@ -268,8 +269,20 @@ controller records a persistent `manual_stop` latch before any external request,
 without fetching billing. It then reapplies the same account-wide discovery and
 pause policy used by the automatic cost guard. Later five-minute checks continue
 enforcing the manual latch, including newly discovered targets. The operation is
-safe to repeat and retains the original recovery snapshots. There is no resume
-control. Existing application deployments remain disabled.
+safe to repeat and retains the original recovery snapshots. The panel also offers
+**Approve Savia preview only** after the full pause has completed. This records a
+durable approval timestamp and exempts only the fixed Savia preview worker set,
+the two preview Flows queues, the `savia-flows-execute-preview` workflow, the
+`savia-agencies-preview` and `savia-flows-preview` schedules, and the exact
+`savia-preview.hefesoft.com` domain/route from later pause checks. Similar names,
+SECOP workers, queues, workflows, schedules, domains and routes remain covered by
+the account-wide pause. The endpoint does not clear the manual stop or cost
+threshold latch and does not restore prior resources; use the authorized preview
+deployment/recovery procedure to activate preview services. The approval has no
+automatic expiry and remains until a later **Pause all environments** action,
+which records a new manual-stop timestamp and revokes it. The preview exception
+does not exempt native Workers AI binding removal or AI Search pausing; OpenRouter
+routing and existing Gateway/model price caps remain unchanged.
 
 The panel reports each target action and incomplete discovery/action failures.
 A saved latch is distinct from completed pause actions: **STOPPING**, **PAUSE
@@ -285,3 +298,8 @@ For scripted operation, send an authenticated `POST /stop` with
 controller's own origin. Status and panel responses use `Cache-Control: no-store`;
 the panel also blocks framing and third-party script/network sources. No new
 Cloudflare credential, binding, database, or inference permission is required.
+The explicit preview approval uses authenticated `POST /resume-preview` with
+`{"confirm":"RESUME_SAVIA_PREVIEW_ONLY"}`. It succeeds only after the guard
+reports a completed paused state with no action errors. A new `/stop` always
+revokes that approval; approval does not reset billing, the USD 15 latch, the USD
+20 monthly ceiling, or Gateway/OpenRouter spend limits.

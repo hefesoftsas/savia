@@ -40,6 +40,7 @@ function makeHarness(fetcher) {
     "workspace",
     "logout",
     "pause-button",
+    "preview-button",
     "confirm-dialog",
     "cancel-stop",
     "confirm-stop",
@@ -48,6 +49,7 @@ function makeHarness(fetcher) {
     "stop-reason",
     "manual-stop-at",
     "checked-at",
+    "preview-approved-at",
     "incomplete-summary",
     "action-errors",
     "target-results",
@@ -65,6 +67,7 @@ function makeHarness(fetcher) {
     },
     fetch: fetcher,
     location: { assign: (url) => navigations.push(url) },
+    window: { confirm: () => true },
     Date,
     JSON,
     Error,
@@ -98,6 +101,7 @@ test("panel output is static, nonce-safe, and contains no browser persistence or
   );
   assert.match(html, /Cloudflare Access/);
   assert.match(html, /Pause all environments/);
+  assert.match(html, /Approve Savia preview only/);
   assert.match(html, /Confirm pause/);
   assert.match(html, /Backup coordinators/);
   assert.match(html, /Daily cleanup/);
@@ -119,6 +123,77 @@ test("panel output is static, nonce-safe, and contains no browser persistence or
     source,
     /(?:localStorage|sessionStorage|indexedDB|caches\.)/i,
   );
+});
+
+test("preview approval appears only after a complete pause and submits one confirmed request", async () => {
+  let resolveApproval;
+  const calls = [];
+  const h = makeHarness((path, options) => {
+    calls.push({ path, options });
+    if (path === "/control/status")
+      return response(200, {
+        tripped: true,
+        phase: "paused",
+        actionErrors: [],
+      });
+    return new Promise((resolve) => {
+      resolveApproval = resolve;
+    });
+  });
+  await tick();
+  const preview = h.elements.get("preview-button");
+  assert.equal(preview.hidden, false);
+
+  const approval = preview.handlers.click();
+  assert.equal(
+    preview.disabled,
+    true,
+    "the pending request disables duplicate approval",
+  );
+  assert.equal(calls.length, 2);
+  assert.equal(calls[1].path, "/control/resume-preview");
+  assert.equal(calls[1].options.method, "POST");
+  assert.equal(calls[1].options.credentials, "same-origin");
+  assert.equal(calls[1].options.headers.Authorization, undefined);
+  assert.deepEqual(JSON.parse(calls[1].options.body), {
+    confirm: "RESUME_SAVIA_PREVIEW_ONLY",
+  });
+  await preview.handlers.click();
+  assert.equal(
+    calls.length,
+    2,
+    "a pending preview approval cannot be repeated",
+  );
+
+  resolveApproval(
+    response(200, {
+      tripped: true,
+      phase: "paused",
+      previewApproved: true,
+      previewApproval: { approvedAt: "2026-10-24T12:00:00Z" },
+      manualStopAt: "2026-10-24T11:00:00Z",
+      actionErrors: [],
+    }),
+  );
+  await approval;
+  assert.equal(preview.hidden, true);
+  assert.notEqual(h.elements.get("preview-approved-at").textContent, "—");
+  assert.match(
+    h.elements.get("action-message").textContent,
+    /SECOP stays paused/,
+  );
+});
+
+test("preview approval stays hidden unless the account-wide pause completed cleanly", async () => {
+  for (const status of [
+    { tripped: false, phase: "monitoring" },
+    { tripped: true, phase: "incomplete", actionErrors: [] },
+    { tripped: true, phase: "paused", actionErrors: [{ action: "queue" }] },
+  ]) {
+    const h = makeHarness(async () => response(200, status));
+    await tick();
+    assert.equal(h.elements.get("preview-button").hidden, true);
+  }
 });
 
 test("Access session auto-loads status and confirmation gates same-origin POST /control/stop", async () => {

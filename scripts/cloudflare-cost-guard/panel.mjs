@@ -17,6 +17,7 @@ const panelScript = String.raw`
   const sessionError = byId('session-error');
   const logout = byId('logout');
   const pauseButton = byId('pause-button');
+  const previewButton = byId('preview-button');
   const refreshButton = byId('refresh-button');
   const dialog = byId('confirm-dialog');
   const cancelButton = byId('cancel-stop');
@@ -68,6 +69,7 @@ const panelScript = String.raw`
   const setBusy = (value) => {
     busy = value;
     pauseButton.disabled = value;
+    previewButton.disabled = value;
     confirmButton.disabled = value;
     refreshButton.disabled = value;
     if (value) setText('action-message', 'Request in progress…');
@@ -152,6 +154,9 @@ const panelScript = String.raw`
     setText('stop-reason', reason || (status.tripped ? 'Pause is active' : 'No stop condition recorded'));
     setText('manual-stop-at', dateText(status.manualStopAt));
     setText('checked-at', dateText(status.checkedAt));
+    setText('preview-approved-at', dateText(status.previewApproval?.approvedAt));
+    previewButton.hidden = status.previewApproved === true ||
+      status.tripped !== true || phase !== 'paused' || errors.length > 0;
     const errorSummary = byId('incomplete-summary');
     errorSummary.textContent = errors.length
       ? errors.length + ' incomplete action' + (errors.length === 1 ? '' : 's') + ' need attention.'
@@ -190,6 +195,28 @@ const panelScript = String.raw`
     finally { if (generation === sessionGeneration) setBusy(false); }
   });
   pauseButton.addEventListener('click', () => { if (!busy && !sessionExpired) dialog.showModal(); });
+  previewButton.addEventListener('click', async () => {
+    if (busy || sessionExpired) return;
+    if (!window.confirm('Approve Savia preview only? This leaves the account stop latch and spending limit unchanged. SECOP and all other services remain paused. A later “Pause all environments” action revokes this approval.')) return;
+    const generation = sessionGeneration;
+    setBusy(true);
+    message.className = 'action-message';
+    try {
+      const result = await request('/control/resume-preview', {
+        method: 'POST',
+        body: JSON.stringify({ confirm: 'RESUME_SAVIA_PREVIEW_ONLY' }),
+      });
+      if (generation !== sessionGeneration) return;
+      renderStatus(result);
+      message.textContent = 'Preview approval recorded. The account stop latch and spending limits remain active; SECOP stays paused.';
+      message.className = 'action-message is-success';
+    } catch (error) {
+      if (generation !== sessionGeneration) return;
+      if (error.accessExpired) expireSession();
+      else message.textContent = error.message || 'Preview approval was not applied.';
+      message.className = 'action-message is-error';
+    } finally { if (generation === sessionGeneration) setBusy(false); }
+  });
   cancelButton.addEventListener('click', () => dialog.close());
   confirmButton.addEventListener('click', async () => {
     if (busy || sessionExpired) return;
@@ -286,12 +313,13 @@ export function renderControlPanel({ nonce } = {}) {
           <div class="section-heading"><h2 id="status-heading">Guard status</h2><div class="status-row"><span id="status-indicator" class="state">—</span><button id="refresh-button" class="button button-secondary" type="button">Refresh status</button></div></div>
           <div class="status-detail">Reason: <strong id="stop-reason">—</strong></div>
           <div class="detail-grid"><div><span class="detail-label">Manual stop recorded</span><span class="detail-value" id="manual-stop-at">—</span></div><div><span class="detail-label">Last checked</span><span class="detail-value" id="checked-at">—</span></div></div>
+          <p class="small-note">Preview-only approval recorded: <strong id="preview-approved-at">—</strong></p>
           <div id="incomplete-summary" class="inline-alert" role="status" aria-live="polite"></div><ul id="action-errors" class="error-list" aria-label="Incomplete actions"></ul>
         </section>
-        <section class="section stop-section" aria-labelledby="pause-heading"><div class="section-heading"><h2 id="pause-heading">Emergency stop</h2></div><p>Pause public access, queues and scheduled jobs across every environment. Repeat this action to reapply the pause.</p><div class="warning"><strong>Requests already in flight may finish.</strong> This action does not cap billing, delete resources, or restore applications.</div><p style="margin:16px 0 0"><button id="pause-button" class="button button-danger" type="button">Pause all environments</button></p><div id="action-message" class="action-message" role="status" aria-live="polite"></div></section>
+        <section class="section stop-section" aria-labelledby="pause-heading"><div class="section-heading"><h2 id="pause-heading">Emergency stop</h2></div><p>Pause public access, queues and scheduled jobs across every environment. Repeat this action to reapply the pause.</p><div class="warning"><strong>Requests already in flight may finish.</strong> This action does not cap billing, delete resources, or restore applications.</div><p style="margin:16px 0 0"><button id="pause-button" class="button button-danger" type="button">Pause all environments</button> <button id="preview-button" class="button button-primary" type="button" hidden>Approve Savia preview only</button></p><div id="action-message" class="action-message" role="status" aria-live="polite"></div></section>
         <section class="section" aria-labelledby="results-heading"><div class="section-heading"><h2 id="results-heading">Target action outcomes</h2></div><ul id="target-results" class="result-list"><li class="empty-result">Loading the latest status…</li></ul></section>
       </div>
-      <aside class="side-column" aria-label="Protected services and session"><section class="section"><div class="section-heading"><h2>Protected services</h2></div><ul class="protected-list"><li>Cost guard enforcement</li><li>Backup coordinators</li><li>Daily cleanup</li></ul><p class="small-note">These maintenance services remain available to support recovery and cleanup.</p></section><section class="section"><div class="section-heading"><h2>Session</h2></div><p class="small-note" style="margin-top:0">Cloudflare Access protects this control surface. Logging out clears the displayed account status before ending the session.</p><div class="footer">No resume control is available here.</div></section></aside>
+      <aside class="side-column" aria-label="Protected services and session"><section class="section"><div class="section-heading"><h2>Protected services</h2></div><ul class="protected-list"><li>Cost guard enforcement</li><li>Backup coordinators</li><li>Daily cleanup</li></ul><p class="small-note">These maintenance services remain available to support recovery and cleanup.</p></section><section class="section"><div class="section-heading"><h2>Session</h2></div><p class="small-note" style="margin-top:0">Cloudflare Access protects this control surface. Logging out clears the displayed account status before ending the session.</p><div class="footer">Preview approval is explicit and remains active until a later account-wide pause.</div></section></aside>
     </section>
     <dialog id="confirm-dialog" class="dialog" aria-labelledby="confirm-title" aria-describedby="confirm-description"><h2 id="confirm-title">Pause all environments?</h2><p id="confirm-description">This saves the pause and applies it to every environment the controller discovers. Applications will remain paused until an operator recovers them. In-flight requests may still finish.</p><div class="dialog-actions"><button id="cancel-stop" class="button button-secondary" type="button">Cancel</button><button id="confirm-stop" class="button button-danger" type="button">Confirm pause</button></div></dialog>
   </main>
