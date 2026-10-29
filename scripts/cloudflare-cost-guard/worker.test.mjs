@@ -1,6 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { executeCheck, evaluateBillableUsage } from "./worker.mjs";
+import {
+  executeCheck,
+  evaluateBillableUsage,
+  pauseTargets,
+} from "./worker.mjs";
 
 const base = Date.parse("2026-10-24T12:00:00Z");
 const cloudflare = (result) => Response.json({ success: true, result });
@@ -1365,6 +1369,253 @@ test("manual stop latches before external calls and pauses below budget without 
   assert.deepEqual(h.kv.get("recovery:queue:q1"), originalSnapshot);
 });
 
+test("a later manual stop revokes preview approval and records its own timestamp", async () => {
+  const h = harness({ billing: rows([1]) });
+  await h.env.STATE.put(
+    "status",
+    JSON.stringify({
+      tripped: true,
+      reason: "manual_stop",
+      phase: "paused",
+      manualStopAt: new Date(base).toISOString(),
+      previewApproval: { approvedAt: new Date(base + 1_000).toISOString() },
+    }),
+  );
+  const stopped = await executeCheck(h.env, {
+    fetcher: h.fetcher,
+    now: base + 2_000,
+    manualStop: true,
+  });
+  assert.equal(stopped.manualStopAt, new Date(base + 2_000).toISOString());
+  assert.equal(stopped.previewApproved, false);
+  assert.equal(stopped.previewApproval.revokedAt, stopped.manualStopAt);
+});
+
+test("preview approval exempts only exact Savia preview targets and never exempts AI denial", async () => {
+  const h = harness();
+  const previewQueue = "ce9d059f73aa45a8a29cf869a5ed5f17";
+  const previewDlq = "1e9d40c222c64135bb05f67722e3324e";
+  const secopQueue = "b4e2c7ca82114599887fdd359aa4dead";
+  const calls = [];
+  const fetcher = async (url, init = {}) => {
+    const u = new URL(url);
+    const path = u.pathname;
+    calls.push({ path, method: init.method ?? "GET" });
+    if (path.endsWith("/settings") && (!init.method || init.method === "GET"))
+      return cloudflare({ bindings: [{ type: "ai", name: "AI" }] });
+    if (
+      path.endsWith("/queues/" + previewQueue) ||
+      path.endsWith("/queues/" + previewDlq)
+    )
+      return cloudflare({ settings: { delivery_paused: false } });
+    if (path.endsWith("/queues/" + secopQueue))
+      return cloudflare({ settings: { delivery_paused: false } });
+    if (path.endsWith("/workers/scripts/secop-live-worker/subdomain"))
+      return cloudflare(
+        init.method === "POST"
+          ? { enabled: false, previews_enabled: false }
+          : { enabled: true, previews_enabled: true },
+      );
+    if (path.endsWith("/workers/scripts/secop-live-worker/schedules"))
+      return cloudflare({ schedules: [{ cron: "* * * * *" }] });
+    if (path.includes("/workflows/") && path.endsWith("/instances"))
+      return cloudflare([]);
+    if (path.endsWith("/workers/domains/secop-domain")) return cloudflare({});
+    if (path.endsWith("/workers/routes/secop-route")) return cloudflare({});
+    return cloudflare({});
+  };
+  const policy = {
+    guardScript: "savia-cost-guard",
+    backupBarrierScripts: ["savia-backup-coordinator-preview"],
+    maintenanceSchedules: [],
+    denyCloudflareAi: true,
+    scripts: [
+      {
+        script: "savia-agencies-preview",
+        variables: { SAVIA_MAINTENANCE: "true" },
+      },
+      {
+        script: "secop-live-worker",
+        variables: { MODEL_SPEND_PAUSED: "true" },
+      },
+    ],
+    queues: [previewQueue, previewDlq, secopQueue],
+    schedules: [
+      "savia-agencies-preview",
+      "savia-flows-preview",
+      "secop-live-worker",
+    ],
+    workflows: ["savia-flows-execute-preview", "secop-dossier-processing"],
+    aiSearch: [],
+  };
+  const discovered = {
+    scripts: ["savia-auth-preview", "secop-live-worker"],
+    queues: [],
+    schedules: [],
+    workflows: [],
+    aiSearch: [],
+    domains: [
+      {
+        id: "preview-domain",
+        hostname: "savia-preview.hefesoft.com",
+        service: "savia-preview",
+      },
+      {
+        id: "secop-domain",
+        hostname: "secop.example.test",
+        service: "secop-live-worker",
+      },
+      {
+        id: "lookalike-domain",
+        hostname: "savia-preview.hefesoft.com",
+        service: "secop-live-worker",
+      },
+    ],
+    routes: [
+      {
+        id: "preview-route",
+        zoneId: "zone",
+        pattern: "*.savia-preview.hefesoft.com/*",
+        script: "savia-preview",
+      },
+      {
+        id: "secop-route",
+        zoneId: "zone",
+        pattern: "secop.example.test/*",
+        script: "secop-live-worker",
+      },
+      {
+        id: "lookalike-route",
+        zoneId: "zone",
+        pattern: "*.savia-preview.hefesoft.com/*",
+        script: "secop-live-worker",
+      },
+    ],
+  };
+  const result = await pauseTargets(h.env, policy, fetcher, discovered, true);
+  assert.deepEqual(result.errors, []);
+  const targets = result.results.map(
+    ({ action, target }) => `${action}:${target}`,
+  );
+  for (const target of [
+    `queue:${previewQueue}`,
+    `queue:${previewDlq}`,
+    "worker-settings:savia-agencies-preview",
+    "worker-access:savia-auth-preview",
+    "schedule:savia-agencies-preview",
+    "schedule:savia-flows-preview",
+    "workflow:savia-flows-execute-preview",
+  ])
+    assert.equal(targets.includes(target), false, target);
+  for (const target of [
+    `queue:${secopQueue}`,
+    "worker-settings:secop-live-worker",
+    "worker-access:secop-live-worker",
+    "schedule:secop-live-worker",
+    "workflow:secop-dossier-processing",
+    "domain:secop.example.test",
+    "route:secop.example.test/*",
+  ])
+    assert.equal(targets.includes(target), true, target);
+  assert.ok(targets.includes("ai-binding:savia-auth-preview"));
+  assert.ok(targets.includes("ai-binding:savia-agencies-preview"));
+  assert.ok(
+    calls.some((call) =>
+      call.path.endsWith("/workers/scripts/savia-auth-preview/settings"),
+    ),
+  );
+  assert.equal(
+    calls.some((call) => call.path.endsWith("/workers/domains/preview-domain")),
+    false,
+  );
+  assert.ok(
+    calls.some((call) =>
+      call.path.endsWith("/workers/domains/lookalike-domain"),
+    ),
+  );
+  assert.equal(
+    calls.some((call) => call.path.endsWith("/workers/routes/preview-route")),
+    false,
+  );
+  assert.ok(
+    calls.some((call) => call.path.endsWith("/workers/routes/lookalike-route")),
+  );
+});
+
+test("preview approval endpoint requires auth, exact confirmation and a completed pause", async (t) => {
+  const { default: worker } = await import("./worker.mjs");
+  const h = harness();
+  t.mock.method(globalThis, "fetch", h.fetcher);
+  const request = (
+    headers = {},
+    body = { confirm: "RESUME_SAVIA_PREVIEW_ONLY" },
+  ) =>
+    worker.fetch(
+      new Request("https://guard/resume-preview", {
+        method: "POST",
+        headers: { "content-type": "application/json", ...headers },
+        body: JSON.stringify(body),
+      }),
+      h.env,
+    );
+  assert.equal((await request()).status, 401);
+  assert.equal(
+    (
+      await request(
+        { authorization: "Bearer admin-secret" },
+        { confirm: "wrong" },
+      )
+    ).status,
+    400,
+  );
+  assert.equal(
+    (await request({ authorization: "Bearer admin-secret" })).status,
+    409,
+  );
+  for (const actionErrors of [undefined, null, {}, "", ["incomplete"]]) {
+    const incomplete = {
+      tripped: true,
+      reason: "manual_stop",
+      phase: "paused",
+      manualStopAt: new Date(base).toISOString(),
+      ...(actionErrors === undefined ? {} : { actionErrors }),
+    };
+    await h.env.STATE.put("status", JSON.stringify(incomplete));
+    assert.equal(
+      (await request({ authorization: "Bearer admin-secret" })).status,
+      409,
+      `actionErrors=${String(actionErrors)} must fail closed`,
+    );
+    assert.equal((await h.env.STATE.get("status")).previewApproval, undefined);
+  }
+  await h.env.STATE.put(
+    "status",
+    JSON.stringify({
+      tripped: true,
+      reason: "manual_stop",
+      phase: "paused",
+      actionErrors: [],
+      manualStopAt: new Date(base).toISOString(),
+    }),
+  );
+  const denied = await request({
+    authorization: "Bearer admin-secret",
+    origin: "https://other.example",
+  });
+  assert.equal(denied.status, 403);
+  assert.equal((await h.env.STATE.get("status")).previewApproval, undefined);
+  const approved = await request({
+    authorization: "Bearer admin-secret",
+    origin: "https://guard",
+  });
+  assert.equal(approved.status, 200);
+  const result = await approved.json();
+  assert.equal(result.tripped, true);
+  assert.equal(result.previewApproved, true);
+  assert.ok(result.previewApproval.approvedAt);
+  assert.equal(result.manualStopAt, new Date(base).toISOString());
+});
+
 test("manual stop reports partial failures without clearing the stop latch", async () => {
   const h = harness({ billing: rows([1]), failQueue: true });
   const result = await executeCheck(h.env, {
@@ -1495,6 +1746,7 @@ test("panel denies missing, forged and unauthorized Access identities before rea
     "/control/",
     "/control/status",
     "/control/stop",
+    "/control/resume-preview",
   ]) {
     for (const ctx of [
       undefined,
@@ -1550,6 +1802,7 @@ test("Access session forwards only known browser API routes with server-side aut
   for (const [path, method] of [
     ["/control/status", "GET"],
     ["/control/stop", "POST"],
+    ["/control/resume-preview", "POST"],
   ]) {
     const request = new Request("https://guard" + path, {
       method,
@@ -1559,7 +1812,11 @@ test("Access session forwards only known browser API routes with server-side aut
         "content-type": "application/json",
       },
       ...(method === "POST"
-        ? { body: '{"confirm":"PAUSE_ALL_ENVIRONMENTS"}' }
+        ? {
+            body: path.endsWith("resume-preview")
+              ? '{"confirm":"RESUME_SAVIA_PREVIEW_ONLY"}'
+              : '{"confirm":"PAUSE_ALL_ENVIRONMENTS"}',
+          }
         : {}),
     });
     assert.equal((await worker.fetch(request, env, ctx)).status, 200);
@@ -1581,7 +1838,7 @@ test("Access session forwards only known browser API routes with server-side aut
         .status,
       404,
     );
-  assert.equal(captured.length, 2);
+  assert.equal(captured.length, 3);
   assert.equal(
     (
       await worker.fetch(

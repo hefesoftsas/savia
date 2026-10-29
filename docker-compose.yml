@@ -85,7 +85,6 @@ services:
       - packages_plugin_authoring_modules:/workspace/packages/plugin-authoring/node_modules
       - packages_plugin_example_tasks_modules:/workspace/packages/plugin-example-tasks/node_modules
       - packages_plugin_sdk_modules:/workspace/packages/plugin-sdk/node_modules
-      - packages_plugin_secop_tenders_modules:/workspace/packages/plugin-secop-tenders/node_modules
       - packages_plugin_ui_modules:/workspace/packages/plugin-ui/node_modules
       - packages_provider_contracts_modules:/workspace/packages/provider-contracts/node_modules
       - packages_release_catalog_modules:/workspace/packages/release-catalog/node_modules
@@ -195,7 +194,6 @@ volumes:
   packages_plugin_authoring_modules:
   packages_plugin_example_tasks_modules:
   packages_plugin_sdk_modules:
-  packages_plugin_secop_tenders_modules:
   packages_plugin_ui_modules:
   packages_provider_contracts_modules:
   packages_release_catalog_modules:

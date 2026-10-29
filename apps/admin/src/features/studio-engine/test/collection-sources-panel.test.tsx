@@ -555,46 +555,46 @@ it("labels CRM bindings with their provider", async () => {
   fireEvent.click(screen.getByRole("tab", { name: "Vinculadas" }));
   expect(await screen.findByText("Salesforce · contacts")).toBeVisible();
 });
-it("creates and authorizes an MCP source, then maps only a read-only tool", async () => {
+it("creates and authorizes a generic MCP source, then maps only a read-only tool", async () => {
   const mcpSource = {
-    id: "secop_live",
-    label: "SECOP",
+    id: "inventory_mcp",
+    label: "Inventory MCP",
     kind: "mcp",
-    endpoint: "https://secop-live-worker.jose-douglas-dev.workers.dev/mcp",
+    endpoint: "https://mcp.example.test/mcp",
     authMode: "oauth",
     hasToken: false,
   };
   const linked = {
-    name: "secop_contracts",
-    label: "Contratos SECOP",
-    sourceId: "secop_live",
-    resource: "buscar_licitaciones",
+    name: "inventory_records",
+    label: "Inventory records",
+    sourceId: "inventory_mcp",
+    resource: "list_records",
     kind: "mcp",
   };
   const readonlyTool = {
-    name: "buscar_licitaciones",
-    description: "List public contract records",
+    name: "list_records",
+    description: "List inventory records",
     inputSchema: {
       type: "object",
       properties: { status: { type: "string" }, limit: { type: "integer" } },
     },
     outputSchema: {
       type: "object",
-      properties: { contracts: { type: "array" } },
+      properties: { items: { type: "array" } },
     },
-    // The SECOP adapter approves this name from the source allowlist because
-    // the upstream tool has no annotations.
+    // The source allowlist can approve a read-only tool when the upstream
+    // server does not provide annotations.
   };
   const transport = vi.fn(async (path: string, init?: RequestInit) => {
     const body = init?.body ? JSON.parse(String(init.body)) : undefined;
-    if (path === "/api/sources/secop_live/oauth/start")
+    if (path === "/api/sources/inventory_mcp/oauth/start")
       return Response.json({
         data: {
           authorizationUrl: "https://auth.example.test/authorize?state=test",
         },
       });
     if (
-      path === "/api/sources/secop_live/inspect" &&
+      path === "/api/sources/inventory_mcp/inspect" &&
       init?.method === "POST"
     )
       return Response.json({
@@ -609,8 +609,8 @@ it("creates and authorizes an MCP source, then maps only a read-only tool", asyn
               tools: [
                 readonlyTool,
                 {
-                  name: "delete_contract",
-                  description: "Delete a contract",
+                  name: "delete_record",
+                  description: "Delete a record",
                   annotations: { readOnlyHint: false },
                 },
               ],
@@ -651,9 +651,14 @@ it("creates and authorizes an MCP source, then maps only a read-only tool", asyn
   fireEvent.change(screen.getByLabelText("Tipo de fuente"), {
     target: { value: "mcp" },
   });
-  fireEvent.click(
-    screen.getByRole("button", { name: "Usar configuración de SECOP" }),
-  );
+  for (const [label, value] of [
+    ["Identificador de la fuente", "inventory_mcp"],
+    ["Nombre de la fuente", "Inventory MCP"],
+    ["Endpoint MCP HTTPS", "https://mcp.example.test/mcp"],
+    ["Alcance OAuth (opcional)", "read offline_access"],
+    ["Herramientas adicionales de solo lectura", "list_records"],
+  ])
+    fireEvent.change(screen.getByLabelText(label), { target: { value } });
   for (const [label, value] of [
     ["ID de cliente OAuth (opcional)", "savia-client"],
     ["Secreto de cliente OAuth (opcional)", "client-secret"],
@@ -665,19 +670,15 @@ it("creates and authorizes an MCP source, then maps only a read-only tool", asyn
     ([path, init]) => path === "/api/sources" && init?.method === "POST",
   );
   expect(JSON.parse(String(createCall?.[1]?.body))).toMatchObject({
-    id: "secop_live",
+    id: "inventory_mcp",
     kind: "mcp",
     authMode: "oauth",
-    endpoint: "https://secop-live-worker.jose-douglas-dev.workers.dev/mcp",
-    readOnlyTools: [
-      "buscar_licitaciones",
-      "detalle_licitacion",
-      "buscar_documentos",
-    ],
+    endpoint: "https://mcp.example.test/mcp",
+    readOnlyTools: ["list_records"],
     oauth: {
       clientId: "savia-client",
       clientSecret: "client-secret",
-      scope: "mcp:read offline_access",
+      scope: "read offline_access",
     },
   });
   expect(screen.queryByText("client-secret")).not.toBeInTheDocument();
@@ -691,11 +692,11 @@ it("creates and authorizes an MCP source, then maps only a read-only tool", asyn
     "https://auth.example.test/authorize?state=test",
   );
   expect(transport).toHaveBeenCalledWith(
-    "/api/sources/secop_live/oauth/start",
+    "/api/sources/inventory_mcp/oauth/start",
     expect.objectContaining({
       method: "POST",
       body: JSON.stringify({
-        redirectUri: `${window.location.origin}/v1/studio/acme/api/sources/secop_live/oauth/callback`,
+        redirectUri: `${window.location.origin}/v1/studio/acme/api/sources/inventory_mcp/oauth/callback`,
       }),
     }),
   );
@@ -705,30 +706,36 @@ it("creates and authorizes an MCP source, then maps only a read-only tool", asyn
     target: { value: "mcp" },
   });
   fireEvent.click(screen.getByRole("button", { name: "Datos" }));
-  await screen.findByRole("option", { name: "SECOP" });
+  await screen.findByRole("option", { name: "Inventory MCP" });
   fireEvent.change(screen.getByLabelText("Fuente"), {
-    target: { value: "secop_live" },
+    target: { value: "inventory_mcp" },
   });
   fireEvent.click(
     screen.getByRole("button", {
       name: "Descubrir herramientas de solo lectura",
     }),
   );
-  await screen.findByRole("option", { name: "buscar_licitaciones" });
+  await screen.findByRole("option", { name: "list_records" });
   expect(
-    screen.queryByRole("option", { name: "delete_contract" }),
+    screen.queryByRole("option", { name: "delete_record" }),
   ).not.toBeInTheDocument();
   fireEvent.change(screen.getByLabelText("Herramienta MCP"), {
-    target: { value: "buscar_licitaciones" },
+    target: { value: "list_records" },
   });
-  expect(screen.getByLabelText("Ruta JSON de los elementos")).toHaveValue(
-    "/filas",
-  );
-  expect(screen.getByLabelText("Campo identificador")).toHaveValue(":id");
-  expect(screen.getByLabelText("Argumento para límite")).toHaveValue("limit");
-  expect(screen.getByLabelText("Argumento para desplazamiento")).toHaveValue(
-    "offset",
-  );
+  expect(screen.getByLabelText("Ruta JSON de los elementos")).toHaveValue("");
+  expect(screen.getByLabelText("Campo identificador")).toHaveValue("id");
+  fireEvent.change(screen.getByLabelText("Ruta JSON de los elementos"), {
+    target: { value: "/data/items" },
+  });
+  fireEvent.change(screen.getByLabelText("Campo identificador"), {
+    target: { value: "record_id" },
+  });
+  fireEvent.change(screen.getByLabelText("Argumento para límite"), {
+    target: { value: "limit" },
+  });
+  fireEvent.change(screen.getByLabelText("Argumento para desplazamiento"), {
+    target: { value: "offset" },
+  });
   fireEvent.change(screen.getByLabelText("Argumentos estáticos MCP (JSON)"), {
     target: { value: '{"status":"published"}' },
   });
@@ -746,7 +753,8 @@ it("creates and authorizes an MCP source, then maps only a read-only tool", asyn
   expect(
     transport.mock.calls.filter(
       ([path, init]) =>
-        path === "/api/sources/secop_live/inspect" && init?.method === "POST",
+        path === "/api/sources/inventory_mcp/inspect" &&
+        init?.method === "POST",
     ),
   ).toHaveLength(1);
   fireEvent.change(screen.getByLabelText("Argumento para desplazamiento"), {
@@ -766,7 +774,8 @@ it("creates and authorizes an MCP source, then maps only a read-only tool", asyn
   expect(
     transport.mock.calls.filter(
       ([path, init]) =>
-        path === "/api/sources/secop_live/inspect" && init?.method === "POST",
+        path === "/api/sources/inventory_mcp/inspect" &&
+        init?.method === "POST",
     ),
   ).toHaveLength(1);
   fireEvent.change(screen.getByLabelText("Argumento para límite"), {
@@ -778,15 +787,15 @@ it("creates and authorizes an MCP source, then maps only a read-only tool", asyn
   await screen.findByLabelText("Campos de la colección (JSON)");
   await waitFor(() =>
     expect(transport).toHaveBeenCalledWith(
-      "/api/sources/secop_live/inspect",
+      "/api/sources/inventory_mcp/inspect",
       expect.objectContaining({
         method: "POST",
         body: JSON.stringify({
-          resource: "buscar_licitaciones",
+          resource: "list_records",
           mcp: {
             arguments: { status: "published" },
-            itemsPointer: "/filas",
-            idField: ":id",
+            itemsPointer: "/data/items",
+            idField: "record_id",
             pagination: { limitArgument: "limit", offsetArgument: "offset" },
           },
         }),
@@ -799,10 +808,10 @@ it("creates and authorizes an MCP source, then maps only a read-only tool", asyn
   });
   fireEvent.click(screen.getByRole("button", { name: "Pantalla" }));
   fireEvent.change(screen.getByLabelText("Identificador de la pantalla"), {
-    target: { value: "secop_contracts" },
+    target: { value: "inventory_records" },
   });
   fireEvent.change(screen.getByLabelText("Nombre de la pantalla"), {
-    target: { value: "Contratos SECOP" },
+    target: { value: "Inventory records" },
   });
   fireEvent.click(screen.getByRole("button", { name: "Vincular colección" }));
   expect(
@@ -819,7 +828,7 @@ it("creates and authorizes an MCP source, then maps only a read-only tool", asyn
 
   fireEvent.click(screen.getByRole("button", { name: "Datos" }));
   fireEvent.change(screen.getByLabelText("Ruta JSON de los elementos"), {
-    target: { value: "/filas" },
+    target: { value: "/data/items" },
   });
   fireEvent.click(
     screen.getByRole("button", { name: "Analizar herramienta MCP" }),
@@ -828,7 +837,7 @@ it("creates and authorizes an MCP source, then maps only a read-only tool", asyn
     expect(
       transport.mock.calls.filter(
         ([path, init]) =>
-          path === "/api/sources/secop_live/inspect" &&
+          path === "/api/sources/inventory_mcp/inspect" &&
           init?.method === "POST",
       ),
     ).toHaveLength(3),
@@ -836,10 +845,10 @@ it("creates and authorizes an MCP source, then maps only a read-only tool", asyn
 
   fireEvent.click(screen.getByRole("button", { name: "Pantalla" }));
   fireEvent.change(screen.getByLabelText("Identificador de la pantalla"), {
-    target: { value: "secop_contracts" },
+    target: { value: "inventory_records" },
   });
   fireEvent.change(screen.getByLabelText("Nombre de la pantalla"), {
-    target: { value: "Contratos SECOP" },
+    target: { value: "Inventory records" },
   });
   fireEvent.click(screen.getByRole("button", { name: "Vincular colección" }));
   await waitFor(() => expect(bound).toHaveBeenCalledWith(linked));
@@ -848,12 +857,12 @@ it("creates and authorizes an MCP source, then maps only a read-only tool", asyn
       path === "/api/collection-bindings" && init?.method === "POST",
   );
   expect(JSON.parse(String(bindingCall?.[1]?.body))).toMatchObject({
-    sourceId: "secop_live",
-    resource: "buscar_licitaciones",
+    sourceId: "inventory_mcp",
+    resource: "list_records",
     mcp: {
       arguments: { status: "published" },
-      itemsPointer: "/filas",
-      idField: ":id",
+      itemsPointer: "/data/items",
+      idField: "record_id",
       pagination: { limitArgument: "limit", offsetArgument: "offset" },
     },
     fields: { id: { type: "Textbox", label: "ID" } },
@@ -862,7 +871,7 @@ it("creates and authorizes an MCP source, then maps only a read-only tool", asyn
     "capabilities",
   );
   fireEvent.click(screen.getByRole("tab", { name: "Vinculadas" }));
-  await screen.findByText("secop_live · buscar_licitaciones");
+  await screen.findByText("inventory_mcp · list_records");
   expect(
     screen.queryByRole("button", { name: "Operaciones", exact: true }),
   ).not.toBeInTheDocument();

@@ -1,5 +1,7 @@
 # Complete SECOP filter catalogs
 
+> Historical design: the SECOP integration was retired. See [retirement notes](../../secop-tenders-plugin.md).
+
 **Goal:** Load department, entity and modality options from the complete SECOP dataset, independently of tender search criteria and loaded result pages.
 
 **Design:** Add a read-only `opciones_licitaciones` tool to the existing SECOP provider. It aggregates distinct allowlisted columns and returns a verified complete catalog, cached on the backend for six hours. Three fixed plugin actions request one catalog each through the existing OAuth source. The UI loads them independently on entry, reports loading/failure per catalog and permits retry. Autocomplete matches against all values and progressively renders options for browsing; it does not truncate the searchable catalog.

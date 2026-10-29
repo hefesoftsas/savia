@@ -656,15 +656,15 @@ A plugin may declare an MCP action that reuses an OAuth-enabled source from
 {
   "id": "search",
   "kind": "mcp",
-  "sourceId": "secop_live",
-  "tool": "buscar_licitaciones",
+  "sourceId": "inventory",
+  "tool": "list_records",
   "mapping": {
     "arguments": {},
     "itemsPointer": "/data",
     "idField": ":id",
     "pagination": { "limitArgument": "limit", "offsetArgument": "offset" }
   },
-  "inputArguments": ["q", "estado", "entidad", "modalidad", "departamento"]
+  "inputArguments": ["q", "status", "category"]
 }
 ```
 
@@ -698,8 +698,8 @@ Reminder thresholds default to 168, 72 and 24 hours, and templates accept only
 the literal placeholders `{name}`, `{previous}`, `{current}`, `{deadline}` and
 `{hours}`. A monitor's MCP source is resolved for the immutable creator of the
 record, so a tenant member's OAuth grant cannot be reused for another creator.
-For a complete declaration and end-user behavior, see the
-[SECOP tenders plugin guide](secop-tenders-plugin.md).
+The monitor integration tests use an independent fixture package to exercise this
+contract. The former SECOP package has been [retired](secop-tenders-plugin.md).
 
 ## PDF analysis from installed plugins
 

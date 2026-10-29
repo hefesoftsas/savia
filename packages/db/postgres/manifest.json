@@ -265,6 +265,10 @@
     {
       "filename": "0060_office_document_source.sql",
       "sha256": "5d64913ffeba55d1689d14a8b8e16b72f647629bf6e497ba7a65b555f721e6f1"
+    },
+    {
+      "filename": "0061_retire_secop_plugin.sql",
+      "sha256": "a5ecfae80aff4d3a96f116a1d5a12171aa01302c20acccff0346a4ac942eb6d3"
     }
   ],
   "sqliteOnlyDerivedTables": [
@@ -2054,6 +2058,21 @@
       "type": "trigger",
       "name": "savia_flows_collection_events_update",
       "table": "studio_records"
+    },
+    {
+      "type": "table",
+      "name": "retired_secop_artifacts",
+      "table": "retired_secop_artifacts"
+    },
+    {
+      "type": "table",
+      "name": "retired_secop_installations",
+      "table": "retired_secop_installations"
+    },
+    {
+      "type": "table",
+      "name": "retired_secop_sources",
+      "table": "retired_secop_sources"
     }
   ],
   "tables": [
@@ -18338,6 +18357,217 @@
           "origin": "pk"
         }
       ],
+      "checkCount": 0
+    },
+    {
+      "name": "retired_secop_artifacts",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "tenant_id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 1,
+          "name": "id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "version",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "manifest",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "entry_js",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "sha256",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 6,
+          "name": "size_bytes",
+          "type": "INT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 7,
+          "name": "created_by",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 8,
+          "name": "created_at",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 9,
+          "name": "updated_at",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 10,
+          "name": "store_json",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [],
+      "seedRows": 0,
+      "uniqueKeys": [],
+      "checkCount": 0
+    },
+    {
+      "name": "retired_secop_installations",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "tenant_id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 1,
+          "name": "id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "version",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "enabled",
+          "type": "INT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "manifest",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "installed_at",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 6,
+          "name": "updated_at",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [],
+      "seedRows": 0,
+      "uniqueKeys": [],
+      "checkCount": 0
+    },
+    {
+      "name": "retired_secop_sources",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "tenant_id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 1,
+          "name": "id",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "version",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "files",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "created_at",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [],
+      "seedRows": 0,
+      "uniqueKeys": [],
       "checkCount": 0
     }
   ],

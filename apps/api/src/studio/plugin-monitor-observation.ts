@@ -192,7 +192,7 @@ function makeAlert(
   };
 }
 
-/** Compare a saved interest with the single exact SECOP lookup result. */
+/** Compare a saved interest with the single exact remote lookup result. */
 export function planMonitorCheck(args: {
   monitor: StoreRecordMonitor;
   record: Record<string, unknown>;

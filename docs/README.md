@@ -44,7 +44,7 @@ Savia documentation hub. If you are new, follow the onboarding track in order.
 
 - [Self-hosted Docker](guides/self-hosted-docker.md) — optional native deployment alongside Cloudflare, setup, persistence and operational limits.
 
-- [SECOP tenders plugin](secop-tenders-plugin.md): search live tenders, save selected interests and track follow-up in Savia.
+- [SECOP tenders plugin](secop-tenders-plugin.md): retirement and retained historical data.
 - [MCP collection sources](mcp-collection-sources.md): consume external read-only MCP tools as connected collections, with OAuth.
 - [Remote MCP](remote-mcp.md): connect Claude and ChatGPT to authorized collections and AI employees using OAuth.
 - [Virtual AI employees](guides/virtual-employees.md) — tenant ownership, employee access, files and collection scope.

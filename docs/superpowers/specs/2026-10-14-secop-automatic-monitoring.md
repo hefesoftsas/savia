@@ -1,5 +1,7 @@
 # SECOP automatic interest monitoring
 
+> Historical design: the SECOP integration was retired. See [retirement notes](../../secop-tenders-plugin.md).
+
 Extend the installed SECOP plugin with server-side hourly checks of saved interests and in-app notifications for changes to SECOP status and upcoming closing dates. The user selected reminders at 168, 72 and 24 hours. Recipient is the immutable record creator, whose own tenant-bound OAuth source is used. Local workflow status, assignee and notes remain independent of remote source facts.
 
 ## Architecture

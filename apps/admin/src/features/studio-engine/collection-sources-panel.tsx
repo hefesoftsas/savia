@@ -1205,36 +1205,6 @@ export default function CollectionSourcesPanel({
                       <legend className="px-1 text-sm font-semibold">
                         {t("Servidor MCP")}
                       </legend>
-                      {!editingSource && (
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <p className="text-xs text-muted-foreground">
-                            {t("SECOP preset")}
-                          </p>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            onClick={() => {
-                              if (!sourceId.trim()) setSourceId("secop_live");
-                              if (!sourceLabel.trim()) setSourceLabel("SECOP");
-                              setMcpEndpoint(
-                                "https://secop-live-worker.jose-douglas-dev.workers.dev/mcp",
-                              );
-                              setMcpAuthMode("oauth");
-                              setMcpScope("mcp:read offline_access");
-                              setMcpReadOnlyTools(
-                                "buscar_licitaciones, detalle_licitacion, buscar_documentos",
-                              );
-                              setMcpItemsPointer("/filas");
-                              setMcpIdField(":id");
-                              setMcpLimitArgument("limit");
-                              setMcpOffsetArgument("offset");
-                            }}
-                          >
-                            {t("Usar configuración de SECOP")}
-                          </Button>
-                        </div>
-                      )}
                       {editingSource ? (
                         <p className="break-all font-mono text-xs text-muted-foreground">
                           {mcpEndpoint}
@@ -1373,9 +1343,7 @@ export default function CollectionSourcesPanel({
                             onChange={(event) =>
                               setMcpReadOnlyTools(event.target.value)
                             }
-                            placeholder={t(
-                              "buscar_licitaciones, detalle_licitacion",
-                            )}
+                            placeholder={t("list_records, get_record")}
                           />
                           <p className="text-xs leading-5 text-muted-foreground">
                             {t(

@@ -1,5 +1,7 @@
 # SECOP Automatic Monitoring Implementation Plan
 
+> Historical design: the SECOP integration was retired. See [retirement notes](../../secop-tenders-plugin.md).
+
 > **For agentic workers:** Use bounded native workers with disjoint file ownership; coordinator integrates and reviews.
 
 **Goal:** Hourly remote checks and durable in-app status/deadline alerts for saved SECOP interests.

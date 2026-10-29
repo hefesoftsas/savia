@@ -593,11 +593,13 @@ it("queues Zoom conference generation only from the assigned professional's pinn
   )
     .bind(reservation.id)
     .run();
+  const from = new Date(Date.parse(reservation.startsAt) - 60_000).toISOString();
+  const to = new Date(Date.parse(reservation.endsAt) + 60_000).toISOString();
   const list = async () =>
     (
       (await (
         await f.app.request(
-          `${f.base}/reservations?from=2026-10-01T00:00:00Z&to=2026-11-01T00:00:00Z`,
+          `${f.base}/reservations?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
         )
       ).json()) as any
     ).data;

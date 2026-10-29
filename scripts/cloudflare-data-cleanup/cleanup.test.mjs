@@ -27,11 +27,6 @@ function d1() {
       FOREIGN KEY (tenant_id, id, version)
         REFERENCES plugin_store_artifacts(tenant_id, id, version) ON DELETE CASCADE
     );
-    CREATE TABLE dossier_records (
-      owner_id TEXT NOT NULL, kind TEXT NOT NULL, id TEXT NOT NULL,
-      revision INTEGER NOT NULL, value TEXT NOT NULL, updated_at INTEGER NOT NULL,
-      PRIMARY KEY (owner_id, kind, id)
-    );
   `);
   database.exec("PRAGMA foreign_keys=ON");
   return {
@@ -262,91 +257,6 @@ test("invalid plugin versions are retained rather than guessed", async () => {
   assert.equal(
     result.targets.agencyPreview.pluginArtifacts.invalidVersionGroups,
     1,
-  );
-});
-
-test("initial cleanup removes report/chunk records but preserves source records", async () => {
-  const db = d1();
-  for (const kind of [
-    "report",
-    "chunk",
-    "dossier",
-    "document",
-    "requirement",
-    "job",
-  ])
-    insert(
-      db,
-      "INSERT INTO dossier_records VALUES(?,?,?,?,?,?)",
-      "owner-a",
-      kind,
-      `${kind}-1`,
-      1,
-      "{}",
-      1_792_600_000_000,
-    );
-  const result = await runCleanup(
-    { secop: db },
-    { initial: true, maxBatches: 5 },
-  );
-  assert.equal(result.targets.secop.dossierRecords.deleted, 2);
-  assert.deepEqual(
-    db.database
-      .prepare("SELECT kind FROM dossier_records ORDER BY kind")
-      .all()
-      .map((row) => row.kind),
-    ["document", "dossier", "job", "requirement"],
-  );
-});
-
-test("daily SECOP cleanup uses millisecond cutoff and bounded batches", async () => {
-  const db = d1();
-  const now = 1_792_800_000_000;
-  for (const [kind, id, updatedAt] of [
-    ["report", "old-1", now - 86_400_001],
-    ["chunk", "old-2", now - 86_400_002],
-    ["chunk", "new", now - 86_400_000],
-    ["report", "other-owner", now - 86_400_002],
-  ])
-    insert(
-      db,
-      "INSERT INTO dossier_records VALUES(?,?,?,?,?,?)",
-      id === "other-owner" ? "owner-b" : "owner-a",
-      kind,
-      id,
-      1,
-      "{}",
-      updatedAt,
-    );
-  const result = await runCleanup(
-    { secopValidation: db },
-    {
-      now,
-      maxBatches: 1,
-      batchSize: 1,
-    },
-  );
-  assert.equal(result.targets.secopValidation.dossierRecords.deleted, 1);
-  assert.equal(result.targets.secopValidation.dossierRecords.remaining, true);
-  const continuation = await runCleanup(
-    { secopValidation: db },
-    {
-      now,
-      maxBatches: 5,
-      batchSize: 1,
-    },
-  );
-  assert.equal(continuation.targets.secopValidation.dossierRecords.deleted, 2);
-  assert.equal(
-    continuation.targets.secopValidation.dossierRecords.remaining,
-    false,
-  );
-  assert.deepEqual(
-    db.database
-      .prepare("SELECT id FROM dossier_records ORDER BY id")
-      .all()
-      .map((row) => row.id),
-    ["new"],
   );
 });
 

@@ -1,18 +1,9 @@
 const TERMINAL_RUNS = "status IN ('succeeded', 'failed', 'expired')";
-const REPORT_CHUNK_KINDS = "kind IN ('report', 'chunk')";
 const DEFAULT_BATCH_SIZE = 100;
 const DEFAULT_MAX_BATCHES = 10;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-const AGENCY_TARGETS = [
-  ["agencyProduction", "agency"],
-  ["agencyPreview", "agency"],
-  ["agencyBranch", "agency"],
-];
-const SECOP_TARGETS = [
-  ["secop", "secop"],
-  ["secopValidation", "secop"],
-];
+const AGENCY_TARGETS = ["agencyProduction", "agencyPreview", "agencyBranch"];
 
 function parseSemver(version) {
   if (typeof version !== "string") return null;
@@ -236,37 +227,6 @@ async function cleanupPluginArtifacts(database, options) {
   return { deleted, invalidVersionGroups, remaining };
 }
 
-async function cleanDossierRecords(database, options) {
-  const cutoff = cutoffOptions({
-    ...options,
-    field: "updated_at",
-    timestamp: "ms",
-  });
-  const sql = `DELETE FROM dossier_records WHERE rowid IN (
-    SELECT rowid FROM dossier_records
-    WHERE ${REPORT_CHUNK_KINDS}${cutoff.sql}
-    ORDER BY updated_at, rowid LIMIT ?
-  )`;
-  let deleted = 0;
-  for (let batch = 0; batch < options.maxBatches; batch += 1) {
-    const changes = await run(
-      database,
-      sql,
-      ...cutoff.values,
-      options.batchSize,
-    );
-    deleted += changes;
-    if (changes < options.batchSize) break;
-  }
-  const remaining = await database
-    .prepare(
-      `SELECT 1 AS found FROM dossier_records WHERE ${REPORT_CHUNK_KINDS}${cutoff.sql} LIMIT 1`,
-    )
-    .bind(...cutoff.values)
-    .first();
-  return { deleted, remaining: Boolean(remaining) };
-}
-
 function validateOptions(options) {
   const batchSize = options.batchSize ?? DEFAULT_BATCH_SIZE;
   const maxBatches = options.maxBatches ?? DEFAULT_MAX_BATCHES;
@@ -300,21 +260,15 @@ function validateOptions(options) {
 export async function runCleanup(env, options = {}) {
   const validated = validateOptions(options);
   const targets = {};
-  for (const [binding, type] of [...AGENCY_TARGETS, ...SECOP_TARGETS]) {
+  for (const binding of AGENCY_TARGETS) {
     const database = env[binding];
     if (database == null) continue;
     if (typeof database.prepare !== "function") {
       throw new TypeError(`D1 binding ${binding} is not a database`);
     }
-    if (type === "agency") {
-      const extensionRuns = await cleanActionRuns(database, validated);
-      const pluginArtifacts = await cleanupPluginArtifacts(database, validated);
-      targets[binding] = { extensionRuns, pluginArtifacts };
-    } else {
-      targets[binding] = {
-        dossierRecords: await cleanDossierRecords(database, validated),
-      };
-    }
+    const extensionRuns = await cleanActionRuns(database, validated);
+    const pluginArtifacts = await cleanupPluginArtifacts(database, validated);
+    targets[binding] = { extensionRuns, pluginArtifacts };
   }
   return {
     mode: validated.initial ? "initial" : "daily",

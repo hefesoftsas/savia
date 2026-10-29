@@ -1,0 +1,395 @@
+{
+  "format": "savia.store",
+  "formatVersion": 1,
+  "actions": [
+    {
+      "id": "detail",
+      "kind": "mcp",
+      "sourceId": "fixture_source",
+      "tool": "read_item",
+      "mapping": {
+        "arguments": {},
+        "itemsPointer": "/filas",
+        "idField": ":id"
+      },
+      "inputArguments": ["id_del_proceso"]
+    }
+  ],
+  "monitors": [
+    {
+      "id": "tracking",
+      "collection": "procurement_opportunities",
+      "actionId": "detail",
+      "lookup": {
+        "field": "process_id",
+        "argument": "id_del_proceso"
+      },
+      "matchField": "source_id",
+      "status": {
+        "field": "source_status",
+        "resultFields": [
+          "estado_del_procedimiento",
+          "estado_proceso",
+          "estado",
+          "source_status"
+        ]
+      },
+      "deadline": {
+        "field": "deadline",
+        "resultFields": ["fecha_de_recepcion_de", "fecha_limite", "deadline"]
+      },
+      "enabledField": "monitoring_enabled",
+      "checkedAtField": "monitoring_checked_at",
+      "errorField": "monitoring_error",
+      "titleField": "name",
+      "intervalMinutes": 60,
+      "reminderHours": [168, 72, 24],
+      "timeZone": "America/Bogota",
+      "pauseWhen": {
+        "field": "status",
+        "values": ["awarded", "discarded"]
+      },
+      "notifications": {
+        "changedTitle": "Cambi\u00f3 el estado remote source: {name}",
+        "changedBody": "Estado anterior: {previous}. Estado actual: {current}.",
+        "closingTitle": "Cierre pr\u00f3ximo: {name}",
+        "closingBody": "Cierre de {name}: {deadline}. Aviso dentro de las {hours} horas previas.",
+        "connectionTitle": "No se pudo revisar: {name}",
+        "connectionBody": "Autoriza de nuevo tu conexi\u00f3n remote source para continuar el monitoreo de {name}."
+      }
+    }
+  ],
+  "collections": [
+    {
+      "object": {
+        "name": "procurement_opportunities",
+        "label": "remote source opportunities",
+        "description": "Opportunities intentionally saved by workspace users for follow-up.",
+        "config": {
+          "version": 2,
+          "fields": {
+            "name": {
+              "type": "Textbox",
+              "label": "Opportunity",
+              "required": true,
+              "labels": {
+                "es": "Oportunidad",
+                "en": "Opportunity",
+                "pt": "Oportunidade"
+              }
+            },
+            "source_id": {
+              "type": "Textbox",
+              "label": "remote source source ID",
+              "required": true,
+              "config": {
+                "unique": true
+              },
+              "labels": {
+                "es": "ID de origen remote source",
+                "en": "remote source source ID",
+                "pt": "ID de origem remote source"
+              }
+            },
+            "process_id": {
+              "type": "Textbox",
+              "label": "Process ID",
+              "labels": {
+                "es": "ID del proceso",
+                "en": "Process ID",
+                "pt": "ID do processo"
+              }
+            },
+            "entity": {
+              "type": "Textbox",
+              "label": "Entity",
+              "labels": {
+                "es": "Entidad",
+                "en": "Entity",
+                "pt": "Entidade"
+              }
+            },
+            "department": {
+              "type": "Textbox",
+              "label": "Department",
+              "labels": {
+                "es": "Departamento",
+                "en": "Department",
+                "pt": "Departamento"
+              }
+            },
+            "modality": {
+              "type": "Textbox",
+              "label": "Procurement modality",
+              "labels": {
+                "es": "Modalidad de contrataci\u00f3n",
+                "en": "Procurement modality",
+                "pt": "Modalidade de contrata\u00e7\u00e3o"
+              }
+            },
+            "amount": {
+              "type": "Number",
+              "label": "Base value",
+              "labels": {
+                "es": "Valor base",
+                "en": "Base value",
+                "pt": "Valor base"
+              }
+            },
+            "publication_date": {
+              "type": "Textbox",
+              "label": "Publication date",
+              "labels": {
+                "es": "Fecha de publicaci\u00f3n",
+                "en": "Publication date",
+                "pt": "Data de publica\u00e7\u00e3o"
+              }
+            },
+            "deadline": {
+              "type": "Textbox",
+              "label": "Submission deadline",
+              "labels": {
+                "es": "Fecha l\u00edmite de presentaci\u00f3n",
+                "en": "Submission deadline",
+                "pt": "Prazo para apresenta\u00e7\u00e3o"
+              }
+            },
+            "source_status": {
+              "type": "Textbox",
+              "label": "remote source status",
+              "labels": {
+                "es": "Estado en remote source",
+                "en": "remote source status",
+                "pt": "Status no remote source"
+              }
+            },
+            "monitoring_enabled": {
+              "type": "Toggle",
+              "label": "Monitor remote source",
+              "defaultValue": true,
+              "labels": {
+                "es": "Monitorear remote source",
+                "en": "Monitor remote source",
+                "pt": "Monitorar remote source"
+              }
+            },
+            "monitoring_checked_at": {
+              "type": "Textbox",
+              "label": "\u00daltima revisi\u00f3n remote source",
+              "labels": {
+                "es": "\u00daltima revisi\u00f3n remote source",
+                "en": "Last remote source check",
+                "pt": "\u00daltima verifica\u00e7\u00e3o remote source"
+              }
+            },
+            "monitoring_error": {
+              "type": "Textbox",
+              "label": "Estado del monitor",
+              "labels": {
+                "es": "Estado del monitor",
+                "en": "Monitor status",
+                "pt": "Estado do monitor"
+              }
+            },
+            "source_url": {
+              "type": "Url",
+              "label": "remote source source URL",
+              "labels": {
+                "es": "Enlace de remote source",
+                "en": "remote source source URL",
+                "pt": "Link do remote source"
+              }
+            },
+            "status": {
+              "type": "Dropdown",
+              "label": "Tracking status",
+              "required": true,
+              "options": [
+                {
+                  "value": "interested",
+                  "label": "Interested",
+                  "labels": {
+                    "es": "Interesada",
+                    "en": "Interested",
+                    "pt": "Interessada"
+                  }
+                },
+                {
+                  "value": "evaluating",
+                  "label": "Evaluating",
+                  "labels": {
+                    "es": "En evaluaci\u00f3n",
+                    "en": "Evaluating",
+                    "pt": "Em avalia\u00e7\u00e3o"
+                  }
+                },
+                {
+                  "value": "preparing",
+                  "label": "Preparing bid",
+                  "labels": {
+                    "es": "Preparando oferta",
+                    "en": "Preparing bid",
+                    "pt": "Preparando proposta"
+                  }
+                },
+                {
+                  "value": "submitted",
+                  "label": "Submitted",
+                  "labels": {
+                    "es": "Presentada",
+                    "en": "Submitted",
+                    "pt": "Apresentada"
+                  }
+                },
+                {
+                  "value": "awarded",
+                  "label": "Awarded",
+                  "labels": {
+                    "es": "Adjudicada",
+                    "en": "Awarded",
+                    "pt": "Adjudicada"
+                  }
+                },
+                {
+                  "value": "discarded",
+                  "label": "Discarded",
+                  "labels": {
+                    "es": "Descartada",
+                    "en": "Discarded",
+                    "pt": "Descartada"
+                  }
+                }
+              ],
+              "labels": {
+                "es": "Estado de seguimiento",
+                "en": "Tracking status",
+                "pt": "Status de acompanhamento"
+              }
+            },
+            "priority": {
+              "type": "Dropdown",
+              "label": "Priority",
+              "required": true,
+              "options": [
+                {
+                  "value": "low",
+                  "label": "Low",
+                  "labels": {
+                    "es": "Baja",
+                    "en": "Low",
+                    "pt": "Baixa"
+                  }
+                },
+                {
+                  "value": "normal",
+                  "label": "Normal",
+                  "labels": {
+                    "es": "Normal",
+                    "en": "Normal",
+                    "pt": "Normal"
+                  }
+                },
+                {
+                  "value": "high",
+                  "label": "High",
+                  "labels": {
+                    "es": "Alta",
+                    "en": "High",
+                    "pt": "Alta"
+                  }
+                }
+              ],
+              "labels": {
+                "es": "Prioridad",
+                "en": "Priority",
+                "pt": "Prioridade"
+              }
+            },
+            "owner": {
+              "type": "Textbox",
+              "label": "Owner",
+              "labels": {
+                "es": "Responsable",
+                "en": "Owner",
+                "pt": "Respons\u00e1vel"
+              }
+            },
+            "next_follow_up": {
+              "type": "DateControl",
+              "label": "Next follow-up",
+              "labels": {
+                "es": "Pr\u00f3ximo seguimiento",
+                "en": "Next follow-up",
+                "pt": "Pr\u00f3ximo acompanhamento"
+              }
+            },
+            "notes": {
+              "type": "Textarea",
+              "label": "Notes",
+              "labels": {
+                "es": "Notas",
+                "en": "Notes",
+                "pt": "Notas"
+              }
+            },
+            "snapshot": {
+              "type": "Textarea",
+              "label": "Source snapshot",
+              "labels": {
+                "es": "Datos de origen",
+                "en": "Source snapshot",
+                "pt": "Dados de origem"
+              }
+            }
+          },
+          "fieldOrder": [
+            "name",
+            "source_id",
+            "process_id",
+            "entity",
+            "department",
+            "modality",
+            "amount",
+            "publication_date",
+            "deadline",
+            "source_status",
+            "monitoring_enabled",
+            "monitoring_checked_at",
+            "monitoring_error",
+            "source_url",
+            "status",
+            "priority",
+            "owner",
+            "next_follow_up",
+            "notes",
+            "snapshot"
+          ]
+        },
+        "labels": {
+          "es": "Oportunidades remote source",
+          "en": "remote source opportunities",
+          "pt": "Oportunidades remote source"
+        },
+        "descriptions": {
+          "es": "Oportunidades que el equipo guarda para seguimiento.",
+          "en": "Opportunities intentionally saved by workspace users for follow-up.",
+          "pt": "Oportunidades que a equipe salva para acompanhamento."
+        }
+      },
+      "requiredFields": {
+        "name": {
+          "types": ["Textbox"]
+        },
+        "source_id": {
+          "types": ["Textbox"]
+        },
+        "status": {
+          "types": ["Dropdown"]
+        },
+        "priority": {
+          "types": ["Dropdown"]
+        }
+      }
+    }
+  ]
+}

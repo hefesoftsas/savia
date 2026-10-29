@@ -6,6 +6,41 @@ const DEFAULT_FIXED_RESERVE_USD = 5;
 const DEFAULT_STOP_TOTAL_USD = 15;
 const MAX_BILLING_AGE_MS = 48 * 60 * 60 * 1000;
 
+// This deliberately fixed allowlist is the complete Savia preview surface.
+// AI binding denial remains outside this exception.
+const PREVIEW_RESUME = Object.freeze({
+  scripts: new Set([
+    "savia-agencies-preview",
+    "savia-auth-preview",
+    "savia-preview",
+    "savia-mcp-preview",
+    "savia-request-preview",
+    "savia-connectors-preview",
+    "savia-hook-executor-preview",
+    "savia-flows-preview",
+    "savia-plugin-editor-preview",
+  ]),
+  schedules: new Set(["savia-agencies-preview", "savia-flows-preview"]),
+  queues: new Set([
+    "ce9d059f73aa45a8a29cf869a5ed5f17",
+    "1e9d40c222c64135bb05f67722e3324e",
+  ]),
+  workflows: new Set(["savia-flows-execute-preview"]),
+  domain: { hostname: "savia-preview.hefesoft.com", service: "savia-preview" },
+  route: { pattern: "*.savia-preview.hefesoft.com/*", script: "savia-preview" },
+});
+
+function previewApprovalActive(status) {
+  const approvedAt = timestamp(status?.previewApproval?.approvedAt);
+  const revokedAt = timestamp(status?.previewApproval?.revokedAt);
+  const manualStopAt = timestamp(status?.manualStopAt);
+  return (
+    approvedAt !== null &&
+    revokedAt === null &&
+    (manualStopAt === null || approvedAt > manualStopAt)
+  );
+}
+
 function timestamp(value) {
   if (typeof value !== "string" || !Number.isFinite(Date.parse(value)))
     return null;
@@ -778,7 +813,13 @@ async function pauseAiSearch(env, target, fetcher, errors) {
   );
 }
 
-async function pauseTargets(env, policy, fetcher, discovered) {
+export async function pauseTargets(
+  env,
+  policy,
+  fetcher,
+  discovered,
+  previewApproved,
+) {
   const errors = [];
   const results = [];
   const run = async ({ action, target, execute }) => {
@@ -807,26 +848,38 @@ async function pauseTargets(env, policy, fetcher, discovered) {
     }),
   );
   const scriptTargets = [
-    ...policy.scripts.map((target) => ({ mode: "configured", ...target })),
+    ...policy.scripts
+      .filter(
+        ({ script }) =>
+          !(previewApproved && PREVIEW_RESUME.scripts.has(script)),
+      )
+      .map((target) => ({ mode: "configured", ...target })),
     ...discovered.scripts
       .filter(
         (script) =>
           script !== policy.guardScript &&
-          !policy.backupBarrierScripts.includes(script),
+          !policy.backupBarrierScripts.includes(script) &&
+          !(previewApproved && PREVIEW_RESUME.scripts.has(script)),
       )
       .map((script) => ({ mode: "account", script })),
   ];
-  const queues = [...new Set([...policy.queues, ...discovered.queues])];
+  const queues = [...new Set([...policy.queues, ...discovered.queues])].filter(
+    (queue) => !(previewApproved && PREVIEW_RESUME.queues.has(queue)),
+  );
   const schedules = [
     ...new Set(
       [...policy.schedules, ...discovered.schedules].filter(
-        (name) => !policy.maintenanceSchedules.includes(name),
+        (name) =>
+          !policy.maintenanceSchedules.includes(name) &&
+          !(previewApproved && PREVIEW_RESUME.schedules.has(name)),
       ),
     ),
   ];
   const workflows = [
     ...new Set([...policy.workflows, ...discovered.workflows]),
-  ];
+  ].filter(
+    (workflow) => !(previewApproved && PREVIEW_RESUME.workflows.has(workflow)),
+  );
   const actions = [
     ...queues.map((id) => ({
       action: "queue",
@@ -857,16 +910,36 @@ async function pauseTargets(env, policy, fetcher, discovered) {
       target: `${target.namespace}:${target.id}`,
       execute: (failures) => pauseAiSearch(env, target, fetcher, failures),
     })),
-    ...discovered.domains.map((domain) => ({
-      action: "domain",
-      target: domain.hostname ?? domain.id,
-      execute: (failures) => detachWorkerDomain(env, domain, fetcher, failures),
-    })),
-    ...discovered.routes.map((route) => ({
-      action: "route",
-      target: route.pattern ?? route.id,
-      execute: (failures) => disableWorkerRoute(env, route, fetcher, failures),
-    })),
+    ...discovered.domains
+      .filter(
+        (domain) =>
+          !(
+            previewApproved &&
+            domain.hostname === PREVIEW_RESUME.domain.hostname &&
+            domain.service === PREVIEW_RESUME.domain.service
+          ),
+      )
+      .map((domain) => ({
+        action: "domain",
+        target: domain.hostname ?? domain.id,
+        execute: (failures) =>
+          detachWorkerDomain(env, domain, fetcher, failures),
+      })),
+    ...discovered.routes
+      .filter(
+        (route) =>
+          !(
+            previewApproved &&
+            route.pattern === PREVIEW_RESUME.route.pattern &&
+            route.script === PREVIEW_RESUME.route.script
+          ),
+      )
+      .map((route) => ({
+        action: "route",
+        target: route.pattern ?? route.id,
+        execute: (failures) =>
+          disableWorkerRoute(env, route, fetcher, failures),
+      })),
   ];
   await mapLimited(actions, 4, run);
   return { errors, results };
@@ -901,7 +974,13 @@ export async function executeCheck(
       ...prior,
       tripped: true,
       reason: "manual_stop",
-      manualStopAt: prior?.manualStopAt ?? checkedAt,
+      manualStopAt: checkedAt,
+      previewApproval: {
+        ...(prior?.previewApproval?.approvedAt
+          ? { approvedAt: prior.previewApproval.approvedAt }
+          : {}),
+        revokedAt: checkedAt,
+      },
       checkedAt,
       phase: "stopping",
       actionErrors: [],
@@ -951,6 +1030,10 @@ export async function executeCheck(
     targetResults: [],
     phase: tripped ? "stopping" : "monitoring",
     ...(prior?.manualStopAt ? { manualStopAt: prior.manualStopAt } : {}),
+    ...(prior?.previewApproval
+      ? { previewApproval: prior.previewApproval }
+      : {}),
+    previewApproved: previewApprovalActive(prior),
   };
   if (policy.denyCloudflareAi && !tripped) {
     status.actionErrors = inventoryErrors;
@@ -970,7 +1053,13 @@ export async function executeCheck(
   }
   if (tripped) {
     await saveStatus(env.STATE, status);
-    const paused = await pauseTargets(env, policy, fetcher, discovered);
+    const paused = await pauseTargets(
+      env,
+      policy,
+      fetcher,
+      discovered,
+      status.previewApproved,
+    );
     status.actionErrors = [...inventoryErrors, ...paused.errors];
     status.targetResults = paused.results;
     status.phase = status.actionErrors.length ? "incomplete" : "paused";
@@ -1011,7 +1100,8 @@ async function handleRequest(request, env) {
   if (
     (request.method === "GET" &&
       ["/status", "/recovery"].includes(url.pathname)) ||
-    (request.method === "POST" && ["/check", "/stop"].includes(url.pathname))
+    (request.method === "POST" &&
+      ["/check", "/stop", "/resume-preview"].includes(url.pathname))
   ) {
     if (!authorized(request, env))
       return Response.json({ error: "unauthorized" }, { status: 401 });
@@ -1070,7 +1160,7 @@ async function handleRequest(request, env) {
         );
       }
     }
-    if (url.pathname === "/stop") {
+    if (["/stop", "/resume-preview"].includes(url.pathname)) {
       const origin = request.headers.get("origin");
       if (origin && origin !== url.origin)
         return Response.json({ error: "forbidden_origin" }, { status: 403 });
@@ -1086,7 +1176,10 @@ async function handleRequest(request, env) {
         const text = await request.text();
         if (
           text.length > 128 ||
-          JSON.parse(text)?.confirm !== "PAUSE_ALL_ENVIRONMENTS"
+          JSON.parse(text)?.confirm !==
+            (url.pathname === "/stop"
+              ? "PAUSE_ALL_ENVIRONMENTS"
+              : "RESUME_SAVIA_PREVIEW_ONLY")
         )
           return Response.json(
             { error: "confirmation_required" },
@@ -1100,6 +1193,30 @@ async function handleRequest(request, env) {
       }
     }
     try {
+      if (url.pathname === "/resume-preview") {
+        const prior = await storedStatus(env.STATE);
+        if (
+          !prior?.tripped ||
+          prior.phase !== "paused" ||
+          !Array.isArray(prior.actionErrors) ||
+          prior.actionErrors.length !== 0
+        )
+          return Response.json(
+            { error: "guard_not_fully_paused" },
+            { status: 409 },
+          );
+        if (previewApprovalActive(prior)) return Response.json(prior);
+        const approvedAt = new Date().toISOString();
+        const approved = {
+          ...prior,
+          previewApproval: { approvedAt },
+          previewApproved: true,
+        };
+        // Persist the narrow, auditable approval before checks can run.
+        await saveStatus(env.STATE, approved);
+        const result = await executeCheck(env, { now: Date.parse(approvedAt) });
+        return Response.json(result);
+      }
       return Response.json(
         await executeCheck(env, { manualStop: url.pathname === "/stop" }),
       );
@@ -1213,6 +1330,7 @@ const worker = {
       const target = {
         "GET /control/status": "/status",
         "POST /control/stop": "/stop",
+        "POST /control/resume-preview": "/resume-preview",
       }[`${request.method} ${url.pathname}`];
       if (!target)
         return secureResponse(new Response("not found", { status: 404 }));

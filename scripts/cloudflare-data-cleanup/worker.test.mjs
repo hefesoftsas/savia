@@ -81,8 +81,6 @@ function environment({ closed = false } = {}) {
     AGENCY_PRODUCTION: d1(),
     AGENCY_PREVIEW: d1(),
     AGENCY_BRANCH: d1(),
-    SECOP: d1(),
-    SECOP_VALIDATION: d1(),
   };
   return {
     ...databases,

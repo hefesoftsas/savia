@@ -1,5 +1,7 @@
 # SECOP filters and infinite loading implementation plan
 
+> Historical design: the SECOP integration was retired. See [retirement notes](../../secop-tenders-plugin.md).
+
 **Goal:** Make SECOP search filters immediately available and append remote results as the user scrolls in the existing shared-preview workspace.
 
 **Architecture:** Keep the change inside the optional procurement plugin. A tested search feed owns pagination, request ordering, deduplication and retry state. React observes the feed and an implicit-root intersection sentinel requests the next page. Existing MCP inputs and permissions remain sufficient.
