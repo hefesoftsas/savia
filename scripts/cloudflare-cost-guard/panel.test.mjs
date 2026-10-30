@@ -41,6 +41,7 @@ function makeHarness(fetcher) {
     "logout",
     "pause-button",
     "preview-button",
+    "production-button",
     "confirm-dialog",
     "cancel-stop",
     "confirm-stop",
@@ -50,6 +51,7 @@ function makeHarness(fetcher) {
     "manual-stop-at",
     "checked-at",
     "preview-approved-at",
+    "production-approved-at",
     "incomplete-summary",
     "action-errors",
     "target-results",
@@ -193,6 +195,64 @@ test("preview approval stays hidden unless the account-wide pause completed clea
     const h = makeHarness(async () => response(200, status));
     await tick();
     assert.equal(h.elements.get("preview-button").hidden, true);
+  }
+});
+
+test("production approval is separate and sends the scoped confirmation", async () => {
+  const calls = [];
+  const h = makeHarness(async (path, options) => {
+    calls.push({ path, options });
+    return response(200, {
+      tripped: true,
+      phase: "paused",
+      reason: "manual_stop",
+      manualStopAt: "2026-10-24T11:00:00Z",
+      actionErrors: [],
+      ...(path === "/control/resume-production"
+        ? {
+            productionApproved: true,
+            productionApproval: { approvedAt: "2026-10-29T00:00:00Z" },
+          }
+        : {}),
+    });
+  });
+  await tick();
+  const button = h.elements.get("production-button");
+  assert.equal(button.hidden, false);
+  await button.handlers.click();
+  assert.equal(calls[1].path, "/control/resume-production");
+  assert.equal(calls[1].options.credentials, "same-origin");
+  assert.deepEqual(JSON.parse(calls[1].options.body), {
+    confirm: "RESUME_SAVIA_PRODUCTION_ONLY",
+  });
+  assert.equal(button.hidden, true);
+  assert.notEqual(h.elements.get("production-approved-at").textContent, "—");
+});
+
+test("production approval is unavailable until a clean pause is complete", async () => {
+  for (const status of [
+    { tripped: false, phase: "monitoring" },
+    { tripped: true, phase: "incomplete", actionErrors: [] },
+    { tripped: true, phase: "paused", actionErrors: [{ action: "queue" }] },
+    {
+      tripped: true,
+      phase: "paused",
+      actionErrors: [],
+      reason: "threshold",
+      manualStopAt: "2026-10-24T11:00:00Z",
+    },
+    {
+      tripped: true,
+      phase: "paused",
+      actionErrors: [],
+      reason: "manual_stop",
+      manualStopAt: "invalid",
+    },
+    { tripped: true, phase: "paused", actionErrors: [], reason: "manual_stop" },
+  ]) {
+    const h = makeHarness(async () => response(200, status));
+    await tick();
+    assert.equal(h.elements.get("production-button").hidden, true);
   }
 });
 

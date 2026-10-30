@@ -535,6 +535,11 @@ The authenticated controller's `status` action accepts `includePermits: true`
 for operator inspection of outstanding permit IDs and creation times. Inspection
 does not remove or age out permits. Treat an unresolved permit as a blocked
 drain until its storage operation is proven finished; age alone is insufficient.
+When the coordinator cannot be reached from an operator's machine, dispatch
+**Inspect Savia production backup gate** on `main`. The serialized,
+`production-backup`-environment job reports only permit counts and creation
+times, without exposing the control secret or permit IDs. The status endpoint
+may clear an already-expired backup lease; it does not remove writer permits.
 The daily backup reports fixed, credential-free failure categories for a drain
 timeout, invalid lease proof, expired lease, writers observed during capture, or
 an exceeded maintenance window. A drain timeout means capture never started;

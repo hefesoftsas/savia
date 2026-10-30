@@ -1369,7 +1369,7 @@ test("manual stop latches before external calls and pauses below budget without 
   assert.deepEqual(h.kv.get("recovery:queue:q1"), originalSnapshot);
 });
 
-test("a later manual stop revokes preview approval and records its own timestamp", async () => {
+test("a later manual stop revokes both approvals and records its own timestamp", async () => {
   const h = harness({ billing: rows([1]) });
   await h.env.STATE.put(
     "status",
@@ -1539,6 +1539,311 @@ test("preview approval exempts only exact Savia preview targets and never exempt
   );
   assert.ok(
     calls.some((call) => call.path.endsWith("/workers/routes/lookalike-route")),
+  );
+});
+
+test("production approval exempts only exact Savia production targets and keeps preview and AI policy independent", async () => {
+  const h = harness();
+  const calls = [];
+  const fetcher = async (url, init = {}) => {
+    const u = new URL(url);
+    calls.push({ path: u.pathname, method: init.method ?? "GET" });
+    if (
+      u.pathname.endsWith("/settings") &&
+      (!init.method || init.method === "GET")
+    )
+      return cloudflare({ bindings: [{ type: "ai", name: "AI" }] });
+    if (u.pathname.includes("/queues/"))
+      return cloudflare({
+        settings: { delivery_paused: false, message_retention_period: 86400 },
+      });
+    if (u.pathname.endsWith("/subdomain"))
+      return cloudflare(
+        init.method === "POST"
+          ? { enabled: false, previews_enabled: false }
+          : { enabled: true, previews_enabled: true },
+      );
+    if (u.pathname.endsWith("/schedules"))
+      return cloudflare(
+        init.method === "PUT"
+          ? { schedules: [] }
+          : { schedules: [{ cron: "* * * * *" }] },
+      );
+    if (u.pathname.includes("/workflows/") && u.pathname.endsWith("/instances"))
+      return cloudflare([]);
+    if (u.pathname.includes("/ai-search/"))
+      return cloudflare(
+        init.method === "PUT" ? { paused: true } : { paused: false },
+      );
+    return cloudflare({});
+  };
+  const policy = {
+    guardScript: "savia-cost-guard",
+    backupBarrierScripts: ["savia-backup-coordinator"],
+    maintenanceSchedules: [],
+    denyCloudflareAi: true,
+    scripts: [
+      { script: "savia-agencies", variables: { SAVIA_MAINTENANCE: "true" } },
+      {
+        script: "savia-agencies-preview",
+        variables: { SAVIA_MAINTENANCE: "true" },
+      },
+      { script: "other-app", variables: { SAVIA_MAINTENANCE: "true" } },
+    ],
+    queues: ["production-queue-id", "preview-queue-id", "other-queue-id"],
+    schedules: ["savia-agencies", "savia-agencies-preview", "other-app"],
+    workflows: ["production-workflow", "preview-workflow", "other-workflow"],
+    aiSearch: [{ namespace: "default", id: "savia-search" }],
+  };
+  const discovered = {
+    scripts: [
+      "savia",
+      "savia-auth",
+      "savia-request",
+      "savia-hook-executor",
+      "savia-connectors",
+      "savia-mcp",
+      "savia-preview",
+      "savia-auth-preview",
+      "other-app",
+    ],
+    queues: [],
+    schedules: [],
+    workflows: [],
+    aiSearch: [],
+    domains: [
+      { id: "domain-prod", hostname: "savia.hefesoft.com", service: "savia" },
+      {
+        id: "domain-tenant",
+        hostname: "savia-team.savia.hefesoft.com",
+        service: "savia",
+      },
+      {
+        id: "domain-lookalike",
+        hostname: "savia.hefesoft.com",
+        service: "savia-agencies",
+      },
+      {
+        id: "domain-preview",
+        hostname: "savia-preview.hefesoft.com",
+        service: "savia-preview",
+      },
+    ],
+    routes: [
+      {
+        id: "route-prod",
+        zoneId: "zone",
+        pattern: "savia.hefesoft.com/*",
+        script: "savia",
+      },
+      {
+        id: "route-tenant",
+        zoneId: "zone",
+        pattern: "*.savia.hefesoft.com/*",
+        script: "savia",
+      },
+      {
+        id: "route-lookalike",
+        zoneId: "zone",
+        pattern: "savia.hefesoft.com/*",
+        script: "savia-agencies",
+      },
+      {
+        id: "route-preview",
+        zoneId: "zone",
+        pattern: "*.savia-preview.hefesoft.com/*",
+        script: "savia-preview",
+      },
+    ],
+  };
+
+  const result = await pauseTargets(
+    h.env,
+    policy,
+    fetcher,
+    discovered,
+    false,
+    true,
+  );
+  assert.deepEqual(result.errors, []);
+  const targets = result.results.map(
+    ({ action, target }) => `${action}:${target}`,
+  );
+  for (const target of [
+    "worker-access:savia",
+    "worker-access:savia-auth",
+    "worker-access:savia-request",
+    "worker-access:savia-hook-executor",
+    "worker-access:savia-connectors",
+    "worker-access:savia-mcp",
+    "worker-settings:savia-agencies",
+    "schedule:savia-agencies",
+  ])
+    assert.equal(targets.includes(target), false, target);
+  for (const target of [
+    "worker-settings:savia-agencies-preview",
+    "worker-access:savia-preview",
+    "worker-access:savia-auth-preview",
+    "schedule:savia-agencies-preview",
+    "queue:preview-queue-id",
+    "workflow:preview-workflow",
+    "domain:savia-preview.hefesoft.com",
+    "route:*.savia-preview.hefesoft.com/*",
+    "worker-settings:other-app",
+    "worker-access:other-app",
+    "schedule:other-app",
+    "queue:other-queue-id",
+    "workflow:other-workflow",
+  ])
+    assert.equal(targets.includes(target), true, target);
+  assert.equal(targets.includes("queue:production-queue-id"), true);
+  assert.equal(targets.includes("workflow:production-workflow"), true);
+  assert.ok(targets.includes("ai-binding:savia"));
+  assert.ok(targets.includes("ai-binding:savia-agencies"));
+  assert.ok(targets.includes("ai-binding:savia-preview"));
+  assert.ok(targets.includes("ai-search:default:savia-search"));
+  assert.equal(
+    calls.some((call) => call.path.endsWith("/workers/domains/domain-prod")),
+    false,
+  );
+  assert.equal(
+    calls.some((call) => call.path.endsWith("/workers/domains/domain-tenant")),
+    false,
+  );
+  assert.ok(
+    calls.some((call) =>
+      call.path.endsWith("/workers/domains/domain-lookalike"),
+    ),
+  );
+  assert.equal(
+    calls.some((call) => call.path.endsWith("/workers/routes/route-prod")),
+    false,
+  );
+  assert.equal(
+    calls.some((call) => call.path.endsWith("/workers/routes/route-tenant")),
+    false,
+  );
+  assert.ok(
+    calls.some((call) => call.path.endsWith("/workers/routes/route-lookalike")),
+  );
+});
+
+test("manual stop revokes production approval as well as preview approval", async () => {
+  const h = harness();
+  await h.env.STATE.put(
+    "status",
+    JSON.stringify({
+      tripped: true,
+      reason: "manual_stop",
+      phase: "paused",
+      manualStopAt: new Date(base).toISOString(),
+      previewApproval: { approvedAt: new Date(base + 1_000).toISOString() },
+      productionApproval: { approvedAt: new Date(base + 1_000).toISOString() },
+    }),
+  );
+  const stopped = await executeCheck(h.env, {
+    fetcher: h.fetcher,
+    now: base + 2_000,
+    manualStop: true,
+  });
+  assert.equal(stopped.previewApproved, false);
+  assert.equal(stopped.productionApproved, false);
+  assert.equal(stopped.previewApproval.revokedAt, stopped.manualStopAt);
+  assert.equal(stopped.productionApproval.revokedAt, stopped.manualStopAt);
+});
+
+test("production approval endpoint requires auth, exact confirmation and a completed pause", async (t) => {
+  const { default: worker } = await import("./worker.mjs");
+  const h = harness();
+  t.mock.method(globalThis, "fetch", h.fetcher);
+  const request = (
+    headers = {},
+    body = { confirm: "RESUME_SAVIA_PRODUCTION_ONLY" },
+  ) =>
+    worker.fetch(
+      new Request("https://guard/resume-production", {
+        method: "POST",
+        headers: { "content-type": "application/json", ...headers },
+        body: JSON.stringify(body),
+      }),
+      h.env,
+    );
+  assert.equal((await request()).status, 401);
+  assert.equal(
+    (
+      await request(
+        { authorization: "Bearer admin-secret" },
+        { confirm: "wrong" },
+      )
+    ).status,
+    400,
+  );
+  assert.equal(
+    (await request({ authorization: "Bearer admin-secret" })).status,
+    409,
+  );
+  for (const [reason, manualStopAt] of [
+    ["threshold", new Date(base).toISOString()],
+    ["billing_unavailable", new Date(base).toISOString()],
+    ["manual_stop", undefined],
+    ["manual_stop", "not-a-timestamp"],
+  ]) {
+    await h.env.STATE.put(
+      "status",
+      JSON.stringify({
+        tripped: true,
+        reason,
+        phase: "paused",
+        actionErrors: [],
+        ...(manualStopAt === undefined ? {} : { manualStopAt }),
+      }),
+    );
+    assert.equal(
+      (await request({ authorization: "Bearer admin-secret" })).status,
+      409,
+      `${reason} with manualStopAt=${String(manualStopAt)} must be rejected`,
+    );
+    assert.equal(
+      (await h.env.STATE.get("status")).productionApproval,
+      undefined,
+    );
+  }
+  await h.env.STATE.put(
+    "status",
+    JSON.stringify({
+      tripped: true,
+      reason: "manual_stop",
+      phase: "paused",
+      actionErrors: [],
+      manualStopAt: new Date(base).toISOString(),
+    }),
+  );
+  assert.equal(
+    (
+      await request({
+        authorization: "Bearer admin-secret",
+        origin: "https://other.example",
+      })
+    ).status,
+    403,
+  );
+  const response = await request({
+    authorization: "Bearer admin-secret",
+    origin: "https://guard",
+  });
+  assert.equal(response.status, 200);
+  const result = await response.json();
+  assert.equal(result.productionApproved, true);
+  assert.equal(result.previewApproved, false);
+  assert.ok(result.productionApproval.approvedAt);
+  const checked = await executeCheck(h.env, {
+    fetcher: h.fetcher,
+    now: Date.parse(result.productionApproval.approvedAt) + 1_000,
+  });
+  assert.equal(checked.productionApproved, true);
+  assert.equal(
+    checked.productionApproval.approvedAt,
+    result.productionApproval.approvedAt,
   );
 });
 
@@ -1747,6 +2052,7 @@ test("panel denies missing, forged and unauthorized Access identities before rea
     "/control/status",
     "/control/stop",
     "/control/resume-preview",
+    "/control/resume-production",
   ]) {
     for (const ctx of [
       undefined,
@@ -1803,6 +2109,7 @@ test("Access session forwards only known browser API routes with server-side aut
     ["/control/status", "GET"],
     ["/control/stop", "POST"],
     ["/control/resume-preview", "POST"],
+    ["/control/resume-production", "POST"],
   ]) {
     const request = new Request("https://guard" + path, {
       method,
@@ -1815,7 +2122,9 @@ test("Access session forwards only known browser API routes with server-side aut
         ? {
             body: path.endsWith("resume-preview")
               ? '{"confirm":"RESUME_SAVIA_PREVIEW_ONLY"}'
-              : '{"confirm":"PAUSE_ALL_ENVIRONMENTS"}',
+              : path.endsWith("resume-production")
+                ? '{"confirm":"RESUME_SAVIA_PRODUCTION_ONLY"}'
+                : '{"confirm":"PAUSE_ALL_ENVIRONMENTS"}',
           }
         : {}),
     });
@@ -1838,7 +2147,7 @@ test("Access session forwards only known browser API routes with server-side aut
         .status,
       404,
     );
-  assert.equal(captured.length, 3);
+  assert.equal(captured.length, 4);
   assert.equal(
     (
       await worker.fetch(
