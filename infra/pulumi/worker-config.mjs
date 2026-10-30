@@ -469,11 +469,7 @@ export async function renderProductionConfigs({
   if (deploymentEnvironment === "production")
     configs.api.secrets.required.push("SAVIA_BACKUP_CONTROL_SECRET");
   if (openrouterModel) configs.api.vars.OPENROUTER_MODEL = openrouterModel;
-  const searchIndex =
-    pagesSearchIndex?.trim() ||
-    (deploymentEnvironment === "preview"
-      ? "savia-pages-search-preview"
-      : undefined);
+  const searchIndex = pagesSearchIndex?.trim();
   if (searchIndex) {
     if (
       deploymentEnvironment === "preview" &&
@@ -485,7 +481,6 @@ export async function renderProductionConfigs({
       searchIndex === "savia-pages-search-preview"
     )
       throw new Error("Production cannot use the preview Pages search index");
-    configs.api.ai = { binding: "AI" };
     configs.api.ratelimits.push({
       name: "PAGES_SEARCH_RATE_LIMITER",
       namespace_id: deploymentEnvironment === "preview" ? "879104" : "879103",

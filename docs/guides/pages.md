@@ -173,69 +173,29 @@ Local FlexSearch search has been removed. Existing derived browser indexes are
 removed on a best-effort basis when Pages opens; page content remains canonical
 in the backend.
 
-Cloudflare semantic search is disabled by default for every tenant. A platform
-administrator grants the capability in the tenant administration screen. The
-tenant administrator can then activate or deactivate it in **Page search** in
-the tenant settings. Revoking the grant also turns activation off; granting it
-again does not reactivate it. Ordinary members cannot change either setting.
-Both controls are enforced by the API, including indexing and querying.
+Semantic search grants and activation controls remain in the tenant
+administration screens. A platform administrator grants the capability, then a
+tenant administrator can activate or deactivate it in **Page search**. Revoking
+the grant turns activation off; granting it again does not reactivate it.
+Ordinary members cannot change either setting. These controls do not provide a
+search backend or enable indexing and queries while semantic search is
+unavailable.
 
-When enabled and available, the Pages search box adds semantic matches backed by
-Cloudflare Workers AI (`@cf/baai/bge-m3`) and a dedicated Vectorize index.
-Docker installations can instead run the same authorized semantic-search flow
-with local Ollama `bge-m3` embeddings and Qdrant; see
-[local Pages semantic search](self-hosted-docker.md#local-pages-semantic-search)
-for startup, tenant activation and backup requirements. Cloudflare bindings are
-not required for that deployment. Text
-search remains available when semantic search is disabled or unavailable. Pages
-automatically catches up older saved versions when you open the workspace, with
-visible progress and controls to pause or resume. The information icon beside the
-search field opens a tooltip with indexing totals and the automatic indexing
-explanation; these details stay hidden during normal browsing. New, saved and restored pages
-are submitted for background indexing on a best-effort basis. Imports submit up
-to five pages in the background; other pending pages catch up the next time you
-open Pages. A failed catch-up batch stops until you choose **Retry indexing**; it
-does not loop through the same failure. If another request is already indexing a
-page, Pages waits and checks status again instead of submitting duplicate work.
-The catch-up uses the first 200 accessible page summaries, skips folders, and
-includes titles and saved rich-text leaves.
-Attachments, embedded collection records and external provider data are excluded.
-Vectorize submissions are asynchronous; new results may take a few seconds to
-become searchable.
-
-Semantic results include an excerpt from the matched content chunk when available,
-or a short excerpt around the query. Excerpts are derived from the current
-authorized page rather than stored vector metadata. An empty result message is
-shown only after a search completes, not while stale results are cleared. Returning
-to the window or changing a page refreshes the current semantic query, retaining
-the search text and the normal debounce and permission checks.
-
-Vectors use a tenant namespace. Search returns only pages that the caller can
-currently read in that tenant, checks the indexed version, and reads titles from
-the authorized backend document. Vector metadata contains page IDs and versions,
-not document bodies. Removing access or deleting a page prevents its appearance
-in results even while an older vector remains in Cloudflare. Turning search off
-stops new indexing and querying; it does not erase previously submitted vectors.
-A platform administrator can also activate or deactivate an already granted
-capability directly in the tenant editor. Changing activation preserves the
-existing grant; revocation still disables activation.
-
-The ordinary server title and content search remains available in all cases. Deployed
-semantic queries are limited to 30 per minute per tenant to bound repeated AI
-requests; the browser also debounces typing.
-
-Preview binds the isolated `savia-pages-search-preview` Vectorize index
-(1024 dimensions, cosine) with Workers AI. Bootstrap this index once before the
-first deployment using `node scripts/ensure-preview-pages-search.mjs` with
-`CLOUDFLARE_ACCOUNT_ID` and a `CLOUDFLARE_API_TOKEN` that has Vectorize Write
-permissions, or `wrangler vectorize create savia-pages-search-preview
---dimensions=1024 --metric=cosine`. Routine deployments bind the existing index;
-they do not need to provision it or broaden the Worker deployment token.
-Production search remains unavailable unless
-`SAVIA_PAGES_SEARCH_INDEX` is set to a separately provisioned production index
-when rendering the Worker configuration. No search consumption is incurred by
-tenants whose capability or activation is disabled. Cloudflare usage quotas and
-charges still apply when tenants enable the feature.
+Semantic Pages search is currently unavailable in managed Cloudflare and
+self-hosted deployments. The runtime does not attach native Cloudflare inference,
+and no supported OpenRouter-backed embedding path is implemented yet. The tenant
+grant and activation controls remain visible, but enabling them does not make
+semantic indexing or queries available. Any future implementation must route
+inference through the configured OpenRouter provider and preserve its price cap.
+Text search remains available. Although the semantic-search design enforces
+current page permissions and indexed-version checks, those protections do not
+provide an inference path. Worker rendering does not invent a preview Vectorize
+index; an explicitly configured index may be bound only when its identity is
+present in the reviewed environment manifest. That binding provides storage
+only and does not enable inference or semantic search. Do not add native Workers
+AI bindings to enable this feature. A future implementation must route embeddings
+through OpenRouter under the configured model and price cap before tenant
+activation can make semantic search available.
 
 The new editor dependencies (`platejs`, `@platejs/basic-nodes`, `@platejs/link`) use MIT licenses. Their attribution notice ships at `/licenses/plate.txt`. Existing Nango is an external service accepted for this integration; this implementation does not claim that Nango itself is MIT/Apache licensed.
 
