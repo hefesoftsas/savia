@@ -784,6 +784,9 @@ without initializing or migrating their schemas before that backup. A partially
 initialized first installation fails closed and requires explicit reconciliation;
 retrying does not authorize overwriting existing schemas or changing keys.
 
+A runtime snapshot reads flags and bindings from the version receiving 100% of
+Worker traffic, not the latest uploaded script settings. Traffic-split
+deployments fail closed until the snapshot can preserve their full distribution.
 A refresh reports maintenance when a persisted Flows execution pause remains in
 D1. Intentional execution-disabled profiles remain valid. The temporary backup
 pause and final publication use distinct policy generations within one frozen

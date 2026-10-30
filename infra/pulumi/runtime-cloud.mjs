@@ -178,11 +178,17 @@ export function createRuntimeCloudClient(
       workerVersions.push({ ...worker, versionId: versions[0].version_id });
       // Settings can contain secrets and variables. Inspect them in memory only;
       // never spread the response into a return value or error message.
-      const settings = await api(`${path}/settings`);
-      if (settings.bindings?.some((binding) => binding.type === "secret_text"))
+      // Read runtime flags and bindings from the serving version. The latest
+      // uploaded script settings can belong to an unpublished or rolled-back
+      // version and are not evidence of what currently receives traffic.
+      const version = await api(`${path}/versions/${versions[0].version_id}`);
+      const bindings = version.resources?.bindings;
+      if (!Array.isArray(bindings))
+        throw new Error("Runtime serving version bindings are unavailable");
+      if (bindings.some((binding) => binding.type === "secret_text"))
         secretWorkerNames.push(worker.name);
       const flags = Object.fromEntries(
-        (settings.bindings ?? [])
+        bindings
           .filter((binding) => binding.type === "plain_text")
           .map((binding) => [binding.name, binding.text]),
       );
@@ -198,13 +204,14 @@ export function createRuntimeCloudClient(
         flags.SAVIA_FLOWS_EXECUTION_ENABLED === "true" &&
         !maintenance
       ) {
-        const database = settings.bindings?.find(
+        const database = bindings.find(
           (binding) => binding.type === "d1" && binding.name === "DB",
         );
-        if (!database || !/^[a-f\d-]{36}$/.test(database.id))
+        const databaseId = database?.database_id ?? database?.id;
+        if (!/^[a-f\d-]{36}$/.test(databaseId ?? ""))
           throw new Error("Flows policy database identity is unavailable");
         const query = async (sql) => {
-          const result = await api(`/d1/database/${database.id}/query`, {
+          const result = await api(`/d1/database/${databaseId}/query`, {
             method: "POST",
             body: { sql },
           });
