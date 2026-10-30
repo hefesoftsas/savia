@@ -47,6 +47,10 @@ import {
 } from "../../scripts/preview-environment.mjs";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
+export const previewRefreshFlags = (environment, operation) =>
+  environment === "preview" && operation === "release"
+    ? ["--run-program", "--parallel", "1"]
+    : [];
 const hash = (value) =>
   createHash("sha256")
     .update(
@@ -836,6 +840,7 @@ export function createEnvironmentDependencies({
           "--stack",
           descriptor.stack,
           "--refresh",
+          ...previewRefreshFlags(descriptor.environment, operation),
           "--non-interactive",
           "--save-plan",
           pulumiPlanPath,
