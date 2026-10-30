@@ -643,6 +643,14 @@ node ../../scripts/production-backup-gate.mjs --stack production --apply --skip-
 node backup.mjs --stack preview --apply --confirm-quiescent preview
 ```
 
+Preview runtime releases set `SAVIA_BACKUP_R2_FORCE_API=true` on the apply
+step because that step captures the documents bucket before deploying. The job's
+`AWS_*` values are scoped to the Pulumi state backend; the forced API path uses
+the verified per-object downloader and its isolated token-derived S3 credentials
+for R2 object reads. Keep this selector enabled for preview captures rather
+than expanding the state credential's bucket scope. The Cloudflare API token
+must retain the R2 list/read access required for the selected stack's buckets.
+
 Databases with FTS5 virtual tables cannot use `wrangler d1 export`
 ([Cloudflare limitation](https://developers.cloudflare.com/d1/best-practices/import-export-data/)).
 Preview can use the table dump after `--confirm-quiescent preview`.
