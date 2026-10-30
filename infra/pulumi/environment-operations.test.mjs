@@ -2,10 +2,20 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   assertProvisionPlan,
+  previewRefreshFlags,
   verifySavedEnvironmentPlan,
 } from "./environment-operations.mjs";
 import { productionBackupLifecycleRule, stateBackendUrl } from "./naming.mjs";
 const accountId = "a".repeat(32);
+test("preview release refresh uses current provider credentials and limits concurrency", () => {
+  assert.deepEqual(previewRefreshFlags("preview", "release"), [
+    "--run-program",
+    "--parallel",
+    "1",
+  ]);
+  assert.deepEqual(previewRefreshFlags("production", "release"), []);
+  assert.deepEqual(previewRefreshFlags("preview", "retire"), []);
+});
 const plan = {
   accountId: "a".repeat(32),
   environment: "preview",

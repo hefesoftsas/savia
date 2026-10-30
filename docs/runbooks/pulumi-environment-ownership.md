@@ -103,6 +103,13 @@ Provider recovery handles publication failures; CI never starts a competing
 restore. Flows policy refresh observes persisted pauses after recovery. An
 intentionally execution-disabled profile remains valid.
 
+For the standard Preview release only, the saved-plan refresh runs the current
+Pulumi program to obtain current provider inputs, so a rotated Cloudflare token
+is used instead of stale checkpoint credentials. Resource operations are
+serialized to reduce Cloudflare API rate limiting. The refreshed plan still
+passes the same validation and exact-plan apply checks. Production, branch and
+retirement operations do not use this Preview-specific refresh behavior.
+
 Standard Preview/production deployment jobs defer normal GitHub cancellation
 once their exact runtime plan has succeeded: the guarded apply step finishes
 publication or provider recovery before stopping. Cancellation before or during
