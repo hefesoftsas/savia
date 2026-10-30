@@ -30,9 +30,37 @@ const PREVIEW_RESUME = Object.freeze({
   route: { pattern: "*.savia-preview.hefesoft.com/*", script: "savia-preview" },
 });
 
+const PRODUCTION_RESUME = Object.freeze({
+  scripts: new Set([
+    "savia",
+    "savia-agencies",
+    "savia-auth",
+    "savia-request",
+    "savia-hook-executor",
+    "savia-connectors",
+    "savia-mcp",
+  ]),
+  schedules: new Set(["savia-agencies"]),
+  domains: new Set(["savia.hefesoft.com", "savia-team.savia.hefesoft.com"]),
+  routes: new Set(["savia.hefesoft.com/*", "*.savia.hefesoft.com/*"]),
+  service: "savia",
+  script: "savia",
+});
+
 function previewApprovalActive(status) {
   const approvedAt = timestamp(status?.previewApproval?.approvedAt);
   const revokedAt = timestamp(status?.previewApproval?.revokedAt);
+  const manualStopAt = timestamp(status?.manualStopAt);
+  return (
+    approvedAt !== null &&
+    revokedAt === null &&
+    (manualStopAt === null || approvedAt > manualStopAt)
+  );
+}
+
+function productionApprovalActive(status) {
+  const approvedAt = timestamp(status?.productionApproval?.approvedAt);
+  const revokedAt = timestamp(status?.productionApproval?.revokedAt);
   const manualStopAt = timestamp(status?.manualStopAt);
   return (
     approvedAt !== null &&
@@ -819,6 +847,7 @@ export async function pauseTargets(
   fetcher,
   discovered,
   previewApproved,
+  productionApproved = false,
 ) {
   const errors = [];
   const results = [];
@@ -851,7 +880,10 @@ export async function pauseTargets(
     ...policy.scripts
       .filter(
         ({ script }) =>
-          !(previewApproved && PREVIEW_RESUME.scripts.has(script)),
+          !(
+            (previewApproved && PREVIEW_RESUME.scripts.has(script)) ||
+            (productionApproved && PRODUCTION_RESUME.scripts.has(script))
+          ),
       )
       .map((target) => ({ mode: "configured", ...target })),
     ...discovered.scripts
@@ -859,7 +891,10 @@ export async function pauseTargets(
         (script) =>
           script !== policy.guardScript &&
           !policy.backupBarrierScripts.includes(script) &&
-          !(previewApproved && PREVIEW_RESUME.scripts.has(script)),
+          !(
+            (previewApproved && PREVIEW_RESUME.scripts.has(script)) ||
+            (productionApproved && PRODUCTION_RESUME.scripts.has(script))
+          ),
       )
       .map((script) => ({ mode: "account", script })),
   ];
@@ -871,7 +906,10 @@ export async function pauseTargets(
       [...policy.schedules, ...discovered.schedules].filter(
         (name) =>
           !policy.maintenanceSchedules.includes(name) &&
-          !(previewApproved && PREVIEW_RESUME.schedules.has(name)),
+          !(
+            (previewApproved && PREVIEW_RESUME.schedules.has(name)) ||
+            (productionApproved && PRODUCTION_RESUME.schedules.has(name))
+          ),
       ),
     ),
   ];
@@ -917,6 +955,11 @@ export async function pauseTargets(
             previewApproved &&
             domain.hostname === PREVIEW_RESUME.domain.hostname &&
             domain.service === PREVIEW_RESUME.domain.service
+          ) &&
+          !(
+            productionApproved &&
+            PRODUCTION_RESUME.domains.has(domain.hostname) &&
+            domain.service === PRODUCTION_RESUME.service
           ),
       )
       .map((domain) => ({
@@ -932,6 +975,11 @@ export async function pauseTargets(
             previewApproved &&
             route.pattern === PREVIEW_RESUME.route.pattern &&
             route.script === PREVIEW_RESUME.route.script
+          ) &&
+          !(
+            productionApproved &&
+            PRODUCTION_RESUME.routes.has(route.pattern) &&
+            route.script === PRODUCTION_RESUME.script
           ),
       )
       .map((route) => ({
@@ -978,6 +1026,12 @@ export async function executeCheck(
       previewApproval: {
         ...(prior?.previewApproval?.approvedAt
           ? { approvedAt: prior.previewApproval.approvedAt }
+          : {}),
+        revokedAt: checkedAt,
+      },
+      productionApproval: {
+        ...(prior?.productionApproval?.approvedAt
+          ? { approvedAt: prior.productionApproval.approvedAt }
           : {}),
         revokedAt: checkedAt,
       },
@@ -1033,7 +1087,11 @@ export async function executeCheck(
     ...(prior?.previewApproval
       ? { previewApproval: prior.previewApproval }
       : {}),
+    ...(prior?.productionApproval
+      ? { productionApproval: prior.productionApproval }
+      : {}),
     previewApproved: previewApprovalActive(prior),
+    productionApproved: productionApprovalActive(prior),
   };
   if (policy.denyCloudflareAi && !tripped) {
     status.actionErrors = inventoryErrors;
@@ -1059,6 +1117,7 @@ export async function executeCheck(
       fetcher,
       discovered,
       status.previewApproved,
+      status.productionApproved,
     );
     status.actionErrors = [...inventoryErrors, ...paused.errors];
     status.targetResults = paused.results;
@@ -1101,7 +1160,9 @@ async function handleRequest(request, env) {
     (request.method === "GET" &&
       ["/status", "/recovery"].includes(url.pathname)) ||
     (request.method === "POST" &&
-      ["/check", "/stop", "/resume-preview"].includes(url.pathname))
+      ["/check", "/stop", "/resume-preview", "/resume-production"].includes(
+        url.pathname,
+      ))
   ) {
     if (!authorized(request, env))
       return Response.json({ error: "unauthorized" }, { status: 401 });
@@ -1160,7 +1221,9 @@ async function handleRequest(request, env) {
         );
       }
     }
-    if (["/stop", "/resume-preview"].includes(url.pathname)) {
+    if (
+      ["/stop", "/resume-preview", "/resume-production"].includes(url.pathname)
+    ) {
       const origin = request.headers.get("origin");
       if (origin && origin !== url.origin)
         return Response.json({ error: "forbidden_origin" }, { status: 403 });
@@ -1179,7 +1242,9 @@ async function handleRequest(request, env) {
           JSON.parse(text)?.confirm !==
             (url.pathname === "/stop"
               ? "PAUSE_ALL_ENVIRONMENTS"
-              : "RESUME_SAVIA_PREVIEW_ONLY")
+              : url.pathname === "/resume-preview"
+                ? "RESUME_SAVIA_PREVIEW_ONLY"
+                : "RESUME_SAVIA_PRODUCTION_ONLY")
         )
           return Response.json(
             { error: "confirmation_required" },
@@ -1193,7 +1258,7 @@ async function handleRequest(request, env) {
       }
     }
     try {
-      if (url.pathname === "/resume-preview") {
+      if (["/resume-preview", "/resume-production"].includes(url.pathname)) {
         const prior = await storedStatus(env.STATE);
         if (
           !prior?.tripped ||
@@ -1205,12 +1270,22 @@ async function handleRequest(request, env) {
             { error: "guard_not_fully_paused" },
             { status: 409 },
           );
-        if (previewApprovalActive(prior)) return Response.json(prior);
+        const production = url.pathname === "/resume-production";
+        if (
+          production
+            ? productionApprovalActive(prior)
+            : previewApprovalActive(prior)
+        )
+          return Response.json(prior);
         const approvedAt = new Date().toISOString();
         const approved = {
           ...prior,
-          previewApproval: { approvedAt },
-          previewApproved: true,
+          ...(production
+            ? {
+                productionApproval: { approvedAt },
+                productionApproved: true,
+              }
+            : { previewApproval: { approvedAt }, previewApproved: true }),
         };
         // Persist the narrow, auditable approval before checks can run.
         await saveStatus(env.STATE, approved);
@@ -1331,6 +1406,7 @@ const worker = {
         "GET /control/status": "/status",
         "POST /control/stop": "/stop",
         "POST /control/resume-preview": "/resume-preview",
+        "POST /control/resume-production": "/resume-production",
       }[`${request.method} ${url.pathname}`];
       if (!target)
         return secureResponse(new Response("not found", { status: 404 }));

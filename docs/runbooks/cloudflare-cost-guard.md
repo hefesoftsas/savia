@@ -284,6 +284,17 @@ which records a new manual-stop timestamp and revokes it. The preview exception
 does not exempt native Workers AI binding removal or AI Search pausing; OpenRouter
 routing and existing Gateway/model price caps remain unchanged.
 
+**Approve Savia production only** records a separate explicit production approval
+after the full pause completes. It exempts only the fixed production Savia Worker
+set, the `savia-agencies` schedule and the approved Savia production domain and
+route identities from subsequent pause checks. Other services, the shared plugin
+registry, production Flows, unrelated queues and workflows remain subject to the
+pause and any separate approvals.
+Approval can permit new production charges while the account pause remains
+latched; it does not itself restore any Worker, route, domain or schedule. A
+later **Pause all environments** revokes both production and preview approvals.
+Native Workers AI binding removal and AI Search pausing still apply.
+
 The panel reports each target action and incomplete discovery/action failures.
 A saved latch is distinct from completed pause actions: **STOPPING**, **PAUSE
 INCOMPLETE**, and **PAUSED** are shown separately. If a request times out, refresh
@@ -303,3 +314,7 @@ The explicit preview approval uses authenticated `POST /resume-preview` with
 reports a completed paused state with no action errors. A new `/stop` always
 revokes that approval; approval does not reset billing, the USD 15 latch, the USD
 20 monthly ceiling, or Gateway/OpenRouter spend limits.
+The production approval uses authenticated `POST /resume-production` with
+`{"confirm":"RESUME_SAVIA_PRODUCTION_ONLY"}` and the same completed-pause and
+zero-action-error prerequisites. It neither clears the latch nor resumes traffic;
+use the managed deployment and recovery procedure after approval.
