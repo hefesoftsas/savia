@@ -225,6 +225,54 @@ test("disabled Flows neither adds a binding nor leaves a generated cloud manifes
   }
 });
 
+test("preview without a reviewed search index does not synthesize search bindings", async () => {
+  const root = await mkdtemp(join(tmpdir(), "savia-iac-pages-search-"));
+  try {
+    await renderProductionConfigs({ ...preview, outputRoot: root });
+    const api = await readConfig(root, "api");
+    assert.equal("vectorize" in api, false);
+    assert.equal("ai" in api, false);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("an explicitly configured search index is retained without native AI inference", async () => {
+  const root = await mkdtemp(join(tmpdir(), "savia-iac-pages-search-"));
+  try {
+    await renderProductionConfigs({
+      ...preview,
+      flowsResources: flows,
+      pagesSearchIndex: "savia-pages-search-preview",
+      outputRoot: root,
+    });
+    const api = await readConfig(root, "api");
+    assert.deepEqual(api.vectorize, [
+      { binding: "PAGES_VECTORIZE", index_name: "savia-pages-search-preview" },
+    ]);
+    const configs = await Promise.all(
+      [
+        "api",
+        "auth",
+        "savia-request",
+        "hook-executor",
+        "mcp",
+        "connector-gateway",
+        "backup-coordinator",
+        "admin",
+        "plugin-editor-runtime",
+        "flows/api",
+      ].map((app) => readConfig(root, app)),
+    );
+    assert.equal(
+      configs.some((config) => "ai" in config),
+      false,
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("Flows manifest uses stack resource IDs and isolated reciprocal bindings", async () => {
   const root = await mkdtemp(join(tmpdir(), "savia-iac-workers-"));
   try {
