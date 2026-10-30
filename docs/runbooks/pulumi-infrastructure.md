@@ -180,14 +180,16 @@ pulumi login 's3://savia-pulumi-state-preview?endpoint=<account>.r2.cloudflarest
 # passphrase from infra/secrets/ (gitignored), never committed:
 export PULUMI_CONFIG_PASSPHRASE="$(cat ../../infra/secrets/pulumi-passphrase)"
 pulumi stack select preview   # or: production
-pulumi config set --secret cloudflare:apiToken "$CLOUDFLARE_API_TOKEN"
+# Provide CLOUDFLARE_API_TOKEN through the process environment.
 ```
 
 CI uses environment secrets `PULUMI_BACKEND_URL`,
 `PULUMI_CONFIG_PASSPHRASE`, `R2_STATE_ACCESS_KEY_ID`, and
 `R2_STATE_SECRET_ACCESS_KEY`, in addition to its existing Cloudflare token.
 The S3 credentials authenticate the backend; the Cloudflare token authenticates
-the infrastructure provider. See `.github/actions/pulumi-infrastructure` and
+the infrastructure provider. Do not set `cloudflare:apiToken` in the Preview
+stack configuration: it overrides the environment credential and prevents token
+rotation in GitHub from reaching the provider. See `.github/actions/pulumi-infrastructure` and
 `.github/workflows/pulumi.yml`. Production needs its own imported stack and
 backend credentials before promotion; preview adoption does not configure it.
 
