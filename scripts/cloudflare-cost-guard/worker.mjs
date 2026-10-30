@@ -1260,17 +1260,20 @@ async function handleRequest(request, env) {
     try {
       if (["/resume-preview", "/resume-production"].includes(url.pathname)) {
         const prior = await storedStatus(env.STATE);
+        const production = url.pathname === "/resume-production";
         if (
           !prior?.tripped ||
           prior.phase !== "paused" ||
           !Array.isArray(prior.actionErrors) ||
-          prior.actionErrors.length !== 0
+          prior.actionErrors.length !== 0 ||
+          (production &&
+            (prior.reason !== "manual_stop" ||
+              timestamp(prior.manualStopAt) === null))
         )
           return Response.json(
             { error: "guard_not_fully_paused" },
             { status: 409 },
           );
-        const production = url.pathname === "/resume-production";
         if (
           production
             ? productionApprovalActive(prior)

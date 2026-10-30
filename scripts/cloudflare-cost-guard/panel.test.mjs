@@ -205,6 +205,8 @@ test("production approval is separate and sends the scoped confirmation", async 
     return response(200, {
       tripped: true,
       phase: "paused",
+      reason: "manual_stop",
+      manualStopAt: "2026-10-24T11:00:00Z",
       actionErrors: [],
       ...(path === "/control/resume-production"
         ? {
@@ -232,6 +234,21 @@ test("production approval is unavailable until a clean pause is complete", async
     { tripped: false, phase: "monitoring" },
     { tripped: true, phase: "incomplete", actionErrors: [] },
     { tripped: true, phase: "paused", actionErrors: [{ action: "queue" }] },
+    {
+      tripped: true,
+      phase: "paused",
+      actionErrors: [],
+      reason: "threshold",
+      manualStopAt: "2026-10-24T11:00:00Z",
+    },
+    {
+      tripped: true,
+      phase: "paused",
+      actionErrors: [],
+      reason: "manual_stop",
+      manualStopAt: "invalid",
+    },
+    { tripped: true, phase: "paused", actionErrors: [], reason: "manual_stop" },
   ]) {
     const h = makeHarness(async () => response(200, status));
     await tick();

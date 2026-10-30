@@ -161,7 +161,9 @@ const panelScript = String.raw`
     previewButton.hidden = status.previewApproved === true ||
       status.tripped !== true || phase !== 'paused' || errors.length > 0;
     productionButton.hidden = status.productionApproved === true ||
-      status.tripped !== true || phase !== 'paused' || errors.length > 0;
+      status.tripped !== true || phase !== 'paused' || errors.length > 0 ||
+      status.reason !== 'manual_stop' || typeof status.manualStopAt !== 'string' ||
+      !Number.isFinite(Date.parse(status.manualStopAt));
     const errorSummary = byId('incomplete-summary');
     errorSummary.textContent = errors.length
       ? errors.length + ' incomplete action' + (errors.length === 1 ? '' : 's') + ' need attention.'

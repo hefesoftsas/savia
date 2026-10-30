@@ -1782,6 +1782,32 @@ test("production approval endpoint requires auth, exact confirmation and a compl
     (await request({ authorization: "Bearer admin-secret" })).status,
     409,
   );
+  for (const [reason, manualStopAt] of [
+    ["threshold", new Date(base).toISOString()],
+    ["billing_unavailable", new Date(base).toISOString()],
+    ["manual_stop", undefined],
+    ["manual_stop", "not-a-timestamp"],
+  ]) {
+    await h.env.STATE.put(
+      "status",
+      JSON.stringify({
+        tripped: true,
+        reason,
+        phase: "paused",
+        actionErrors: [],
+        ...(manualStopAt === undefined ? {} : { manualStopAt }),
+      }),
+    );
+    assert.equal(
+      (await request({ authorization: "Bearer admin-secret" })).status,
+      409,
+      `${reason} with manualStopAt=${String(manualStopAt)} must be rejected`,
+    );
+    assert.equal(
+      (await h.env.STATE.get("status")).productionApproval,
+      undefined,
+    );
+  }
   await h.env.STATE.put(
     "status",
     JSON.stringify({
