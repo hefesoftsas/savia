@@ -42,6 +42,27 @@ test("daily production recovery captures and retains encrypted data without depl
   assert.match(runner, /GITHUB_STEP_SUMMARY/);
 });
 
+test("preview runtime releases use the R2 API downloader instead of state credentials for backup", async () => {
+  const source = await readFile(
+    new URL("../../.github/workflows/deploy-preview.yml", import.meta.url),
+    "utf8",
+  );
+  const applyStep = source.match(
+    /- name: Apply the exact managed runtime plan\n([\s\S]*?)(?=\n      - name: |$)/,
+  )?.[1];
+
+  assert.ok(applyStep, "preview runtime apply step should exist");
+  assert.match(
+    applyStep,
+    /run: node infra\/pulumi\/environment\.mjs apply --environment preview/,
+  );
+  assert.match(
+    applyStep,
+    /AWS_ACCESS_KEY_ID: \$\{\{ secrets\.R2_STATE_ACCESS_KEY_ID \}\}/,
+  );
+  assert.match(applyStep, /SAVIA_BACKUP_R2_FORCE_API: "true"/);
+});
+
 test("an independent scheduled checker fails when no fresh encrypted backup is retained", async () => {
   const source = await readFile(
     new URL(
