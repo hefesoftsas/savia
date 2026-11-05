@@ -47,6 +47,11 @@ const ERROR_CATEGORIES = [
       /cannot find (?:module|package)|err_module_not_found|module_not_found/,
   },
   {
+    code: "DNS_RESOLUTION_FAILED",
+    remediation: "CHECK_DNS",
+    pattern: /getaddrinfo\s+(?:enotfound|eai_again)\b/,
+  },
+  {
     code: "COMMAND_TIMEOUT",
     remediation: "RETRY_OR_ADJUST_TIMEOUT",
     pattern: /timed?\s*out|timeout|etimedout/,

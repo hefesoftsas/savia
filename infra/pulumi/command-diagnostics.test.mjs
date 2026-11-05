@@ -171,6 +171,18 @@ test("public failures expose only allowlisted diagnostics and safe metadata", as
       "RETRY_OR_ADJUST_TIMEOUT",
     ],
     [
+      "DNS lookup",
+      "TypeError: fetch failed [cause]: Error: getaddrinfo ENOTFOUND private.example.test",
+      "DNS_RESOLUTION_FAILED",
+      "CHECK_DNS",
+    ],
+    [
+      "unclassified network failure",
+      "TypeError: fetch failed",
+      "COMMAND_FAILED",
+      "INSPECT_PRIVATE_DIAGNOSTICS",
+    ],
+    [
       "D1 response limit",
       "Refusing to finish backup with unreadable table plugin_store_artifacts: D1 query failed (400): [{code:7500,message:D1 query result exceeded the maximum response size limit of 50 MB}]",
       "D1_RESPONSE_TOO_LARGE",

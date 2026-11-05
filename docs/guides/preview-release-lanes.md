@@ -81,6 +81,9 @@ started, so the existing failed-release recovery sequence remains necessary.
 Public command errors report only a safe diagnostic category, remediation code,
 operation and exit code. Raw command diagnostics remain encrypted for seven days
 and are not printed to the workflow log.
+The command journal preserves these codes through the lifecycle wrapper.
+`DNS_RESOLUTION_FAILED` identifies an explicit DNS lookup failure; verify the
+public hostname resolves before retrying a release that failed its health check.
 
 API-based R2 downloads use four concurrent workers by default. Set
 `--r2-concurrency 1` through `--r2-concurrency 8` on `infra/pulumi/backup.mjs` to
