@@ -118,6 +118,13 @@ without the CI option also selects full CI, allowing the first upgrade PR to be
 validated normally. A shorter CI selection does not change the release kind:
 infrastructure changes still require a platform publication through existing gates.
 
+Auth-only changes may also use a focused profile when they touch Auth source or
+tests, the explicitly listed Auth deployment helpers and their tests, and the
+preview Auth workflow; documentation may accompany them. This profile runs Auth
+tests, all three deployment-helper test files, and Auth typechecking. Shared code,
+dependencies, other workflows, unknown paths, or mixed scopes restore full CI and
+Flows checks.
+
 Before submitting infrastructure changes, run `pnpm infra:preflight` with the
 repository-pinned Pulumi CLI and installed `infra/pulumi` dependencies. See the
 [ownership runbook](../runbooks/pulumi-environment-ownership.md#local-cli-preflight)

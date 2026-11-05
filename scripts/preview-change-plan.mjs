@@ -4,6 +4,15 @@ import { fileURLToPath } from "node:url";
 
 const SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 const PLUGIN_ID = /^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$/;
+const AUTH_CI_HELPER_PATHS = new Set([
+  "scripts/auth-deployment/worker.mjs",
+  "scripts/auth-deployment/worker.test.mjs",
+  "scripts/initialize-auth-deployment.mjs",
+  "scripts/initialize-auth-deployment.test.mjs",
+  "scripts/check-auth-bridge.mjs",
+  "scripts/check-auth-bridge.test.mjs",
+  ".github/workflows/check-preview-auth.yml",
+]);
 
 function git(args, repo) {
   return execFileSync("git", args, {
@@ -251,12 +260,7 @@ export function classifyChanges({ base, head, repo = process.cwd() } = {}) {
   ]);
 }
 
-/**
- * Classify changes for CI without changing the release-facing classifier.
- * Only Pulumi project files, with optional documentation, can use the
- * infrastructure lane. Everything else keeps the existing plugin/docs
- * behavior or runs full platform CI.
- */
+/** Classify focused CI changes without changing release-facing classification. */
 export function classifyCiChanges({ base, head, repo = process.cwd() } = {}) {
   if (repo && typeof repo === "object") repo = repo.repo ?? process.cwd();
   const full = (reason) => ({
@@ -319,7 +323,9 @@ export function classifyCiChanges({ base, head, repo = process.cwd() } = {}) {
     runtimePaths.length > 0 &&
     runtimePaths.every(
       (path) =>
-        path.startsWith("apps/auth/src/") || path.startsWith("apps/auth/test/"),
+        path.startsWith("apps/auth/src/") ||
+        path.startsWith("apps/auth/test/") ||
+        AUTH_CI_HELPER_PATHS.has(path),
     )
   ) {
     return isolatedRuntimeProfile("auth");
