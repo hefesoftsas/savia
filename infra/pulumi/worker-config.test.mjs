@@ -273,6 +273,33 @@ test("an explicitly configured search index is retained without native AI infere
   }
 });
 
+test("preview and production API and Flows manifests keep cron schedules disabled", async () => {
+  const root = await mkdtemp(join(tmpdir(), "savia-iac-disabled-crons-"));
+  try {
+    for (const [profile, deploymentEnvironment, resources] of [
+      [preview, "preview", flows],
+      [production, "production", productionFlows],
+    ]) {
+      await renderProductionConfigs({
+        ...profile,
+        flowsResources: resources,
+        outputRoot: root,
+      });
+      const api = await readConfig(root, "api", deploymentEnvironment);
+      const flow = await readConfig(root, "flows/api", deploymentEnvironment);
+      assert.deepEqual(api.triggers.crons, [], `${deploymentEnvironment} API`);
+      assert.equal(api.vars.REALTIME_OUTBOX_RECOVERY_ENABLED, "false");
+      assert.deepEqual(
+        flow.triggers.crons,
+        [],
+        `${deploymentEnvironment} Flows`,
+      );
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("Flows manifest uses stack resource IDs and isolated reciprocal bindings", async () => {
   const root = await mkdtemp(join(tmpdir(), "savia-iac-workers-"));
   try {
@@ -309,7 +336,7 @@ test("Flows manifest uses stack resource IDs and isolated reciprocal bindings", 
     assert.equal(flow.queues.consumers[0].retry_delay, 60);
     assert.equal(flow.queues.consumers[0].max_retries, 5);
     assert.equal(flow.migrations[0].new_sqlite_classes.length, 5);
-    assert.deepEqual(flow.triggers.crons, ["* * * * *"]);
+    assert.deepEqual(flow.triggers.crons, []);
     assert.equal("worker_loaders" in flow, false);
     assert.equal(flow.vars.WEBSITE_URL, preview.publicOrigin);
     assert.equal(flow.vars.SAVIA_FLOWS_LOCAL_ONLY, "true");

@@ -32,6 +32,8 @@ import {
 } from "./rag";
 import { disabledSolutionObjects } from "@savia/studio-server/solutions";
 import { CompanionError } from "../companion/service";
+import type { RealtimeHubClient } from "../realtime/hub-client";
+import { dispatchRealtimeOutbox } from "../realtime/outbox";
 import {
   AssistantThreadConflictError,
   AssistantThreadRepository,
@@ -113,6 +115,7 @@ const createEmployeeSchema = z.object({
 const updateEmployeeSchema = createEmployeeSchema.partial();
 
 export type AssistantRouteDependencies = {
+  realtime?: RealtimeHubClient;
   db?: D1Database;
   documents?: R2Bucket;
   ragEnv?: RagEnvironment;
@@ -489,6 +492,15 @@ export function registerAssistantRoutes(
         parsed.data,
         contextTenantId,
       );
+      try {
+        await dispatchRealtimeOutbox(dependencies.db!, dependencies.realtime, {
+          principalId: actor.principal.id,
+          topic: "assistant-threads",
+          resourceId: thread.id,
+        });
+      } catch (error) {
+        console.error("REALTIME_OUTBOX_IMMEDIATE_DISPATCH_FAILED", error);
+      }
       return context.json(thread);
     } catch (error) {
       if (error instanceof AssistantThreadConflictError)
@@ -535,6 +547,15 @@ export function registerAssistantRoutes(
         context.req.param("id"),
         expectedRevision,
       );
+      try {
+        await dispatchRealtimeOutbox(dependencies.db!, dependencies.realtime, {
+          principalId: actor.principal.id,
+          topic: "assistant-threads",
+          resourceId: context.req.param("id"),
+        });
+      } catch (error) {
+        console.error("REALTIME_OUTBOX_IMMEDIATE_DISPATCH_FAILED", error);
+      }
       return context.body(null, 204);
     } catch (error) {
       if (error instanceof AssistantThreadConflictError)

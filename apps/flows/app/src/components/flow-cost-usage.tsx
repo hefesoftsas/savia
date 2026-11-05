@@ -17,7 +17,7 @@ export function FlowCostUsageCard() {
   const { data, error, isLoading, mutate } = useSWR<FlowCostUsage>(
     id ? `/${id}/usage/limits` : null,
     id ? () => makeOrgRequest<FlowCostUsage>(id, "/usage/limits", "") : null,
-    { refreshInterval: 60_000, refreshWhenHidden: false },
+    { revalidateOnFocus: true, revalidateOnReconnect: true },
   );
   return (
     <Card className="mb-6">

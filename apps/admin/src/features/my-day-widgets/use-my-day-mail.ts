@@ -82,8 +82,6 @@ const empty = {
   errors: [] as MailError[],
   newMessageCount: 0,
 };
-const REFRESH_INTERVAL_MS = 60_000;
-const MAX_RETRY_INTERVAL_MS = 300_000;
 const accountKey = (connection: MailConnection) =>
   `${connection.provider}:${connection.externalAccountLabel ?? ""}`;
 function sortedRows(rows: MailRow[]) {
@@ -110,14 +108,13 @@ export function useMyDayMail(client: PersonalMailLike | undefined): MailState {
   snapshotRef.current = snapshot;
   const [sessionRevision, setSessionRevision] = useState(0);
   const [active, setActive] = useState(canRefreshMail);
-  const [retryDelay, setRetryDelay] = useState(REFRESH_INTERVAL_MS);
   const revision = useRef(0);
   const pending = useRef<Promise<void> | null>(null);
   const knownMessages = useRef(new Map<string, Set<string>>());
   const continuations = useRef(new Map<string, string | null>());
   const history = useRef(new Map<string, MailRow[]>());
   const refresh = useCallback((): Promise<void> => {
-    // Manual, periodic, focus, and realtime refreshes share one read.
+    // Manual, focus, and realtime refreshes share one read.
     if (pending.current) return pending.current;
     const request = ++revision.current;
     if (!client) {
@@ -243,11 +240,6 @@ export function useMyDayMail(client: PersonalMailLike | undefined): MailState {
               ]
             : [],
         );
-        setRetryDelay((delay) =>
-          errors.length
-            ? Math.min(delay * 2, MAX_RETRY_INTERVAL_MS)
-            : REFRESH_INTERVAL_MS,
-        );
         setSnapshot((current) => ({
           connections,
           reconnectRequired,
@@ -266,7 +258,6 @@ export function useMyDayMail(client: PersonalMailLike | undefined): MailState {
         }));
       } catch (error) {
         if (request === revision.current) {
-          setRetryDelay((delay) => Math.min(delay * 2, MAX_RETRY_INTERVAL_MS));
           const denied =
             error instanceof ApiClientError &&
             [401, 403].includes(error.status);
@@ -388,7 +379,6 @@ export function useMyDayMail(client: PersonalMailLike | undefined): MailState {
     history.current.clear();
     snapshotRef.current = { ...empty, owner: client };
     setSnapshot(snapshotRef.current);
-    setRetryDelay(REFRESH_INTERVAL_MS);
     if (canRefreshMail()) void refresh();
     const clear = () => {
       ++revision.current;
@@ -399,7 +389,6 @@ export function useMyDayMail(client: PersonalMailLike | undefined): MailState {
       snapshotRef.current = { ...empty, owner: client };
       setSnapshot(snapshotRef.current);
       setSessionRevision((value) => value + 1);
-      setRetryDelay(REFRESH_INTERVAL_MS);
       if (canRefreshMail()) void refresh();
     };
     window.addEventListener("savia:principal-changed", clear);
@@ -428,20 +417,6 @@ export function useMyDayMail(client: PersonalMailLike | undefined): MailState {
       window.removeEventListener("focus", resume);
     };
   }, [refresh]);
-  useEffect(() => {
-    if (
-      !client ||
-      !active ||
-      snapshot.loading ||
-      snapshot.loadingMore ||
-      (!snapshot.connections.length && !snapshot.errors.length)
-    )
-      return;
-    const timer = setTimeout(() => {
-      if (canRefreshMail()) void refresh();
-    }, retryDelay);
-    return () => clearTimeout(timer);
-  }, [client, active, snapshot, retryDelay, refresh, sessionRevision]);
   useRealtimeRefresh({
     topics: ["personal-integrations"],
     enabled: Boolean(client) && active,

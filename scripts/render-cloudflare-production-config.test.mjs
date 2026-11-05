@@ -167,7 +167,7 @@ test("writes only the supported production workers and retains their runtime set
       { tag: "v1", new_sqlite_classes: ["RealtimeHub"] },
       { tag: "v2", new_sqlite_classes: ["WhatsappDispatcher"] },
     ]);
-    assert.deepEqual(api.triggers, { crons: ["* * * * *"] });
+    assert.deepEqual(api.triggers, { crons: [] });
     assert.deepEqual(api.observability, {
       enabled: true,
       head_sampling_rate: 1,
@@ -403,7 +403,7 @@ test("preview isolates worker names, bindings, origins, storage and schedules", 
       for (const binding of conf.d1_databases ?? [])
         assert.ok(binding.database_id.startsWith("preview-"));
       if (app === "api") {
-        assert.deepEqual(conf.triggers, { crons: ["* * * * *"] });
+        assert.deepEqual(conf.triggers, { crons: [] });
         assert.equal(conf.vars.SAVIA_WORKFLOW_ONLY_SCHEDULE, "true");
         assert.equal(conf.vars.WHATSAPP_PROCESSING_MODE, "events");
         assert.equal(conf.vars.COMPANION_ENABLED, "true");

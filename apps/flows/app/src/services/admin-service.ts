@@ -1189,14 +1189,13 @@ export const adminSupportAttachmentUrl = (attachmentId: string): string =>
 
 /**
  * Hook for the number of unread support threads for the current admin.
- * Polls every 30s so the sidebar badge updates without manual refresh.
+ * Call mutateUnreadCount after support activity to refresh the count.
  */
 export const useAdminSupportUnreadCount = () => {
   const key = `${ADMIN_API_ENDPOINT}/support/unread-count`;
   const { data, mutate } = useSWR<{ count: number }>(
     key,
-    async () => makeRequest<{ count: number }>(key),
-    { refreshInterval: 30_000 }
+    async () => makeRequest<{ count: number }>(key)
   );
   return {
     unreadCount: data?.count ?? 0,

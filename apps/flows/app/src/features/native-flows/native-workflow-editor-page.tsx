@@ -153,7 +153,6 @@ export function NativeWorkflowEditorPage() {
         orgId,
         `/workflows/${id}/executions`,
       ),
-    { refreshInterval: 5000 },
   );
   const inboxKey = `/savia/native/${orgId}/workflow-inbox`;
   const inboxQuery = useSWR(
@@ -162,7 +161,6 @@ export function NativeWorkflowEditorPage() {
       nativeWorkflowRequest<{
         data: { id: string; title: string; kind: string; status: string }[];
       }>(orgId, "/workflow-inbox"),
-    { refreshInterval: 10000 },
   );
   const bundlesQuery = useSWR(`/savia/native/${orgId}/workflow-bundles`, () =>
     nativeWorkflowRequest<{ data: Bundle[] }>(orgId, "/workflow-bundles"),
@@ -439,7 +437,6 @@ export function NativeWorkflowEditorPage() {
         orgId,
         `/workflow-executions/${selectedRun}`,
       ),
-    { refreshInterval: 5000 },
   );
 
   if (workflowQuery.isLoading || objectsQuery.isLoading)

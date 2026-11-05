@@ -1,4 +1,5 @@
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -27,6 +28,7 @@ vi.mock("../assistant/recording-assistant", () => ({
 }));
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
   URL.createObjectURL = originalCreateObjectURL;
@@ -56,6 +58,45 @@ const session = (id: string): RecordingSession => ({
     },
     summary: null,
   },
+});
+
+it("refreshes pending recording status on focus without polling", async () => {
+  const queued = {
+    ...session("one"),
+    job: { ...session("one").job, status: "queued" as const },
+  };
+  let detailCalls = 0;
+  const api = new ApiClient({
+    baseUrl: "https://savia.test",
+    tokenSource: { getAccessToken: async () => "test" },
+    fetcher: async (input) => {
+      const path = new URL(String(input)).pathname;
+      if (path === "/v1/companion/sessions")
+        return Response.json({ sessions: [queued], cursor: null });
+      detailCalls++;
+      return Response.json(queued);
+    },
+  });
+  render(
+    <StoreContextProvider value={memoryStore({ locale: "en" })}>
+      <RecordingSessions api={api} />
+    </StoreContextProvider>,
+  );
+  expect(
+    await screen.findByRole("heading", { name: "Interview one" }),
+  ).toBeVisible();
+  await waitFor(() => expect(detailCalls).toBeGreaterThan(0));
+  const initialDetailCalls = detailCalls;
+  vi.useFakeTimers();
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(300_000);
+  });
+  expect(detailCalls).toBe(initialDetailCalls);
+  await act(async () => {
+    window.dispatchEvent(new Event("focus"));
+    await vi.advanceTimersByTimeAsync(0);
+  });
+  expect(detailCalls).toBe(initialDetailCalls + 1);
 });
 
 it("hides sessions from the prior API scope while the new list is loading", async () => {

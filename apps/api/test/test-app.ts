@@ -40,6 +40,7 @@ export type TestAppOptions = {
   identityBridgeKey?: Param<24>;
   companion?: Param<25>;
   pagesSearch?: Param<26>;
+  realtimeOutboxRecoveryEnabled?: Param<30>;
 };
 
 /**
@@ -80,5 +81,6 @@ export function createTestApp(options: TestAppOptions = {}) {
     undefined,
     undefined,
     options.saviaFlows,
+    options.realtimeOutboxRecoveryEnabled,
   );
 }

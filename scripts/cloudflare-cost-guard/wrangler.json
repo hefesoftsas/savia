@@ -12,7 +12,7 @@
     "enabled": false
   },
   "triggers": {
-    "crons": ["*/5 * * * *"]
+    "crons": []
   },
   "durable_objects": {
     "bindings": [

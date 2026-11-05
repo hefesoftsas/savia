@@ -54,10 +54,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     {
       // Retry failed requests, but not for auth errors
       shouldRetryOnError: (error) => !(error instanceof AuthError),
-      // Refresh user data every 5 minutes when tab is focused
-      refreshInterval: 5 * 60 * 1000,
-      // Only refresh when tab is visible
-      refreshWhenHidden: false,
+      // Revalidate on focus/reconnect without periodic auth requests.
       // Validate user data structure
       onSuccess: (data) => {
         if (data && (!data.sub || !data.name)) {

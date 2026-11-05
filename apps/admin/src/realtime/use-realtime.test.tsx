@@ -63,6 +63,31 @@ afterEach(() => {
 });
 
 describe("useRealtimeTopics", () => {
+  it("keeps an idle realtime socket quiet", async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal("WebSocket", MockWebSocket);
+    const post = vi
+      .fn()
+      .mockResolvedValue({ data: { room: "platform", ticket: "ticket" } });
+    render(
+      <AppServicesProvider services={servicesWith(post)}>
+        <Probe />
+      </AppServicesProvider>,
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    const socket = MockWebSocket.instances[0];
+    await act(async () => {
+      socket.onopen?.();
+      socket.onmessage?.({ data: JSON.stringify({ v: 1, type: "connected" }) });
+      await vi.advanceTimersByTimeAsync(300_000);
+    });
+    expect(socket.sent).toEqual([]);
+    expect(post).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId("status")).toHaveTextContent("live");
+  });
+
   it("connects with a ticket and forwards change events", async () => {
     vi.stubGlobal("WebSocket", MockWebSocket);
     const post = vi.fn().mockResolvedValue({
@@ -290,6 +315,8 @@ it("shares one room socket across components and filters their topics", async ()
   const account = vi.fn();
   const notifications = vi.fn();
   const personalIntegrations = vi.fn();
+  const assistantThreads = vi.fn();
+  const requestPages = vi.fn();
   function Subscriber({
     topic,
     listener,
@@ -305,12 +332,20 @@ it("shares one room socket across components and filters their topics", async ()
     <AppServicesProvider services={services}>
       <Subscriber topic="account" listener={account} />
       <Subscriber topic="notifications" listener={notifications} />
+      <Subscriber topic="assistant-threads" listener={assistantThreads} />
+      <Subscriber topic="request-pages" listener={requestPages} />
     </AppServicesProvider>,
   );
   await waitFor(() => expect(MockWebSocket.instances).toHaveLength(1));
   expect(post).toHaveBeenCalledTimes(1);
   expect(post).toHaveBeenCalledWith("/v1/realtime/ticket", {
-    topics: ["account", "notifications", "personal-integrations"],
+    topics: [
+      "account",
+      "assistant-threads",
+      "notifications",
+      "personal-integrations",
+      "request-pages",
+    ],
   });
   const first = MockWebSocket.instances[0];
   await act(async () =>
@@ -320,6 +355,7 @@ it("shares one room socket across components and filters their topics", async ()
   );
   expect(account).toHaveBeenCalledOnce();
   expect(notifications).not.toHaveBeenCalled();
+  expect(assistantThreads).not.toHaveBeenCalled();
   rerender(
     <AppServicesProvider services={services}>
       <Subscriber topic="account" listener={account} />
@@ -328,6 +364,8 @@ it("shares one room socket across components and filters their topics", async ()
         topic="personal-integrations"
         listener={personalIntegrations}
       />
+      <Subscriber topic="assistant-threads" listener={assistantThreads} />
+      <Subscriber topic="request-pages" listener={requestPages} />
     </AppServicesProvider>,
   );
   await act(async () => Promise.resolve());
@@ -345,12 +383,26 @@ it("shares one room socket across components and filters their topics", async ()
     }),
   );
   expect(personalIntegrations).toHaveBeenCalledOnce();
+  await act(async () =>
+    first.onmessage?.({
+      data: JSON.stringify({ topic: "assistant-threads", type: "updated" }),
+    }),
+  );
+  expect(assistantThreads).toHaveBeenCalledOnce();
+  await act(async () =>
+    first.onmessage?.({
+      data: JSON.stringify({ topic: "request-pages", type: "updated" }),
+    }),
+  );
+  expect(requestPages).toHaveBeenCalledOnce();
   expect(account).toHaveBeenCalledOnce();
   expect(notifications).toHaveBeenCalledOnce();
   rerender(
     <AppServicesProvider services={services}>
       <Subscriber topic="account" listener={account} />
       <Subscriber topic="notifications" listener={notifications} />
+      <Subscriber topic="assistant-threads" listener={assistantThreads} />
+      <Subscriber topic="request-pages" listener={requestPages} />
     </AppServicesProvider>,
   );
   await act(async () => Promise.resolve());
@@ -395,7 +447,13 @@ it("does not share tickets between tenants or between tenant and personal rooms"
       { topics: ["records"], tenantId: 1 },
       { topics: ["records"], tenantId: 2 },
       {
-        topics: ["account", "notifications", "personal-integrations"],
+        topics: [
+          "account",
+          "assistant-threads",
+          "notifications",
+          "personal-integrations",
+          "request-pages",
+        ],
       },
     ]),
   );

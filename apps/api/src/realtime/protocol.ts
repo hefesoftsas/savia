@@ -21,6 +21,8 @@ export const REALTIME_TOPICS = [
   "notifications",
   "personal-integrations",
   "account",
+  "assistant-threads",
+  "request-pages",
 ] as const;
 export type RealtimeTopic = (typeof REALTIME_TOPICS)[number];
 
@@ -50,6 +52,7 @@ export function isRealtimeTopic(topic: unknown): topic is RealtimeTopic {
 
 export const realtimeEventSchema = z.object({
   v: z.literal(1),
+  eventId: z.number().int().positive().optional(),
   topic: z.enum(REALTIME_TOPICS),
   type: z.enum(["created", "updated", "deleted"]),
   collection: z.string().min(1).max(64).optional(),

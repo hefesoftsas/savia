@@ -213,13 +213,11 @@ function WorkspaceWorkflows({
     queryKey: ["workflow-history", scope, draft?.id],
     enabled: !!draft?.id,
     queryFn: () => api<{ data: Run[] }>(`/workflows/${draft!.id}/executions`),
-    refetchInterval: 5000,
   });
   const detail = useQuery({
     queryKey: ["workflow-execution", scope, runId],
     enabled: !!runId,
     queryFn: () => api<{ data: Run }>(`/workflow-executions/${runId}`),
-    refetchInterval: 5000,
   });
   const inbox = useQuery({
     queryKey: ["workflow-inbox", scope],
@@ -227,7 +225,6 @@ function WorkspaceWorkflows({
       api<{
         data: { id: string; title: string; kind: string; status: string }[];
       }>("/workflow-inbox"),
-    refetchInterval: 10000,
   });
   useEffect(() => {
     if (!draft?.id || !list.data) {

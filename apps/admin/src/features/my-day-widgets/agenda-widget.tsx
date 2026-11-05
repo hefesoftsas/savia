@@ -717,29 +717,15 @@ export function useMyDayAgenda(
 
   useEffect(() => {
     if (!personalIntegrations) return;
-    let timer: ReturnType<typeof setTimeout>;
-    let disposed = false;
     const visible = () =>
       document.visibilityState !== "hidden" && navigator.onLine;
-    const schedule = () => {
-      if (!disposed) timer = setTimeout(tick, 300000);
-    };
-    const tick = async () => {
-      clearTimeout(timer);
-      if (visible()) await refresh(true);
-      schedule();
-    };
     const resume = () => {
-      clearTimeout(timer);
-      if (visible()) void tick();
+      if (visible()) void refresh(true);
     };
-    schedule();
     window.addEventListener("focus", resume);
     window.addEventListener("online", resume);
     document.addEventListener("visibilitychange", resume);
     return () => {
-      disposed = true;
-      clearTimeout(timer);
       window.removeEventListener("focus", resume);
       window.removeEventListener("online", resume);
       document.removeEventListener("visibilitychange", resume);

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-test("daily production recovery captures and retains encrypted data without deploying code or applying IaC", async () => {
+test("manual production recovery retains encrypted data without recurring scheduling or deployment", async () => {
   const source = await readFile(
     new URL("../../.github/workflows/backup-production.yml", import.meta.url),
     "utf8",
@@ -11,7 +11,7 @@ test("daily production recovery captures and retains encrypted data without depl
     new URL("../../scripts/production-backup.mjs", import.meta.url),
     "utf8",
   );
-  assert.match(source, /schedule:\n\s+- cron:/);
+  assert.doesNotMatch(source, /^\s+schedule:|^\s+- cron:/m);
   assert.match(source, /workflow_dispatch:/);
   assert.match(
     source,
@@ -63,7 +63,7 @@ test("preview runtime releases use the R2 API downloader instead of state creden
   assert.match(applyStep, /SAVIA_BACKUP_R2_FORCE_API: "true"/);
 });
 
-test("an independent scheduled checker fails when no fresh encrypted backup is retained", async () => {
+test("the manual freshness checker remains available without recurring scheduling", async () => {
   const source = await readFile(
     new URL(
       "../../.github/workflows/check-production-backups.yml",
@@ -71,7 +71,8 @@ test("an independent scheduled checker fails when no fresh encrypted backup is r
     ),
     "utf8",
   );
-  assert.match(source, /cron: "0 \*\/6 \* \* \*"/);
+  assert.doesNotMatch(source, /^\s+schedule:|^\s+- cron:/m);
+  assert.match(source, /workflow_dispatch:/);
   assert.match(
     source,
     /if: \$\{\{ vars\.PRODUCTION_OPERATIONS_ENABLED == 'true' && github\.ref == 'refs\/heads\/main' \}\}/,

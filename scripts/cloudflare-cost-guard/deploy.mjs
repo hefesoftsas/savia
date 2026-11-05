@@ -133,8 +133,11 @@ await api(
   config.triggers.crons.map((cron) => ({ cron })),
 );
 const actual = await api(`/workers/scripts/${config.name}/schedules`);
-if (actual.schedules?.[0]?.cron !== config.triggers.crons[0])
+if (
+  JSON.stringify((actual.schedules ?? []).map((item) => item.cron).sort()) !==
+  JSON.stringify([...config.triggers.crons].sort())
+)
   throw new Error("Scheduled trigger verification failed");
 console.log(
-  "Cost guard deployed, checked, and scheduled every five minutes. No automatic resume is configured.",
+  `Cost guard deployed and checked; ${config.triggers.crons.length} scheduled triggers configured. No automatic resume is configured.`,
 );

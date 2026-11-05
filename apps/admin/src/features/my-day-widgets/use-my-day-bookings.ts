@@ -162,32 +162,16 @@ export function useMyDayBookings(
 
   useEffect(() => {
     if (!client?.listBookingAgenda) return;
-    let timer: ReturnType<typeof setTimeout>;
-    let disposed = false;
     const visible = () =>
       document.visibilityState !== "hidden" &&
       (typeof navigator === "undefined" || navigator.onLine);
-    const schedule = () => {
-      clearTimeout(timer);
-      if (!disposed) timer = setTimeout(tick, 300_000);
-    };
-    const tick = async () => {
-      clearTimeout(timer);
-      if (disposed) return;
-      if (visible()) await refresh(true);
-      schedule();
-    };
     const resume = () => {
-      clearTimeout(timer);
-      if (visible()) void tick();
+      if (visible()) void refresh(true);
     };
-    schedule();
     window.addEventListener("focus", resume);
     window.addEventListener("online", resume);
     document.addEventListener("visibilitychange", resume);
     return () => {
-      disposed = true;
-      clearTimeout(timer);
       window.removeEventListener("focus", resume);
       window.removeEventListener("online", resume);
       document.removeEventListener("visibilitychange", resume);

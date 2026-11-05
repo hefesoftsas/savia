@@ -269,6 +269,10 @@
     {
       "filename": "0061_retire_secop_plugin.sql",
       "sha256": "a5ecfae80aff4d3a96f116a1d5a12171aa01302c20acccff0346a4ac942eb6d3"
+    },
+    {
+      "filename": "0062_realtime_event_outbox.sql",
+      "sha256": "a75fc126b6806d68c6fda8e36c65454880b94a12372e77be6ccc69e65cdc7634"
     }
   ],
   "sqliteOnlyDerivedTables": [
@@ -2073,6 +2077,52 @@
       "type": "table",
       "name": "retired_secop_sources",
       "table": "retired_secop_sources"
+    }
+,
+    {
+      "type": "index",
+      "name": "realtime_event_outbox_pending",
+      "table": "realtime_event_outbox"
+    },
+    {
+      "type": "index",
+      "name": "realtime_event_outbox_principal_cursor",
+      "table": "realtime_event_outbox"
+    },
+    {
+      "type": "table",
+      "name": "realtime_event_outbox",
+      "table": "realtime_event_outbox"
+    },
+    {
+      "type": "table",
+      "name": "realtime_event_retention",
+      "table": "realtime_event_retention"
+    },
+    {
+      "type": "trigger",
+      "name": "assistant_threads_realtime_insert",
+      "table": "assistant_threads"
+    },
+    {
+      "type": "trigger",
+      "name": "assistant_threads_realtime_update",
+      "table": "assistant_threads"
+    },
+    {
+      "type": "trigger",
+      "name": "assistant_threads_realtime_delete",
+      "table": "assistant_threads"
+    },
+    {
+      "type": "trigger",
+      "name": "request_page_runs_realtime_insert",
+      "table": "request_page_runs"
+    },
+    {
+      "type": "trigger",
+      "name": "request_page_runs_realtime_status",
+      "table": "request_page_runs"
     }
   ],
   "tables": [
@@ -18568,6 +18618,135 @@
       "foreignKeys": [],
       "seedRows": 0,
       "uniqueKeys": [],
+      "checkCount": 0
+    }
+,
+    {
+      "name": "realtime_event_outbox",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "event_id",
+          "type": "INTEGER",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "principal_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 2,
+          "name": "topic",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 3,
+          "name": "type",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 4,
+          "name": "collection",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 5,
+          "name": "resource_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 6,
+          "name": "created_at",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 7,
+          "name": "published_at",
+          "type": "TEXT",
+          "notnull": 0,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 8,
+          "name": "attempts",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        },
+        {
+          "cid": 9,
+          "name": "next_attempt_at",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": [
+            "event_id"
+          ],
+          "origin": "pk"
+        }
+      ],
+      "checkCount": 2
+    },
+    {
+      "name": "realtime_event_retention",
+      "columns": [
+        {
+          "cid": 0,
+          "name": "principal_id",
+          "type": "TEXT",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 1
+        },
+        {
+          "cid": 1,
+          "name": "expired_through",
+          "type": "INTEGER",
+          "notnull": 1,
+          "dflt_value": null,
+          "pk": 0
+        }
+      ],
+      "foreignKeys": [],
+      "seedRows": 0,
+      "uniqueKeys": [
+        {
+          "columns": [
+            "principal_id"
+          ],
+          "origin": "pk"
+        }
+      ],
       "checkCount": 0
     }
   ],

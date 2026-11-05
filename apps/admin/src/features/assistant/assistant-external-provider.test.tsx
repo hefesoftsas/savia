@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { webcrypto } from "node:crypto";
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -20,7 +21,10 @@ Object.defineProperty(globalThis.crypto, "subtle", {
   configurable: true,
 });
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+});
 
 it("loads provider history, leaves the seed in the composer, then sends and renders cited answers", async () => {
   const invoke = vi.fn(async (request: PluginAssistantRequest) =>
@@ -56,7 +60,7 @@ it("loads provider history, leaves the seed in the composer, then sends and rend
     invoke,
     close: vi.fn(),
   };
-  render(
+  const view = render(
     <ExternalAssistantConversation provider={provider} onReturn={() => {}} />,
   );
 
@@ -105,7 +109,7 @@ it("preserves the draft when the external action fails", async () => {
     invoke,
     close: vi.fn(),
   };
-  render(
+  const view = render(
     <ExternalAssistantConversation provider={provider} onReturn={() => {}} />,
   );
   const composer = screen.getByLabelText("Message") as HTMLTextAreaElement;
@@ -403,6 +407,62 @@ it("reloads after a failed terminal poll and allows sending again", async () => 
   expect(
     invoke.mock.calls.filter(([request]) => request.method === "send"),
   ).toHaveLength(1);
+});
+
+it("checks a pending provider job once and again when the conversation regains focus", async () => {
+  let loadCount = 0;
+  const invoke = vi.fn(async (request: PluginAssistantRequest) => {
+    if (request.method === "load") {
+      loadCount += 1;
+      return {
+        revision: loadCount,
+        pendingJobId: "job-focus",
+        messages: [{ id: "question", role: "user" as const, text: "Question" }],
+      };
+    }
+    if (request.method === "poll") {
+      return {
+        revision: loadCount,
+        pendingJobId: "job-focus",
+        messages: [{ id: "question", role: "user" as const, text: "Question" }],
+      };
+    }
+    return { revision: loadCount, messages: [] };
+  });
+  const provider: PluginAssistantProvider = {
+    sessionId: "pending-focus-job",
+    title: "Dossier",
+    actionId: "chat",
+    context: {},
+    invoke,
+    close: vi.fn(),
+  };
+  vi.useFakeTimers();
+  const view = render(
+    <ExternalAssistantConversation provider={provider} onReturn={() => {}} />,
+  );
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(0);
+  });
+  const pollRequests = () =>
+    invoke.mock.calls.filter(([request]) => request.method === "poll");
+  expect(pollRequests()).toHaveLength(1);
+  view.rerender(
+    <ExternalAssistantConversation
+      provider={{ ...provider }}
+      onReturn={() => {}}
+    />,
+  );
+  expect(pollRequests()).toHaveLength(1);
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(300_000);
+  });
+  expect(pollRequests()).toHaveLength(1);
+  await act(async () => {
+    window.dispatchEvent(new Event("focus"));
+    await vi.advanceTimersByTimeAsync(0);
+  });
+  expect(pollRequests()).toHaveLength(2);
 });
 
 it("generates an advertised document without replacing chat history or its draft", async () => {

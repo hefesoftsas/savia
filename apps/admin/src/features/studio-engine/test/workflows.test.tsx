@@ -118,6 +118,7 @@ it("edits collection filters and clears fields when switching collections", () =
 afterEach(() => {
   cleanup();
   vi.resetAllMocks();
+  vi.useRealTimers();
   setStudioRuntime({ embedded: false });
 });
 function setup() {
@@ -155,6 +156,16 @@ it("creates a general draft, saves it on the backend, and keeps publication expl
   expect(
     vi.mocked(api).mock.calls.some(([url]) => url.includes("publish")),
   ).toBe(false);
+});
+it("does not poll the workflow inbox while the page is idle", async () => {
+  setup();
+  await waitFor(() => expect(vi.mocked(api)).toHaveBeenCalled());
+  const initialCalls = vi.mocked(api).mock.calls.length;
+  vi.useFakeTimers();
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(60_000);
+  });
+  expect(vi.mocked(api)).toHaveBeenCalledTimes(initialCalls);
 });
 it("removes cached workflow history and execution details after a 403 refresh", async () => {
   const flow = {

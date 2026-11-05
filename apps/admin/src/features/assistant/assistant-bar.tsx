@@ -196,7 +196,6 @@ export function ExternalAssistantConversation({
   const [loadedSuccessfully, setLoadedSuccessfully] = useState(false);
   const [loadedContextKey, setLoadedContextKey] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
-  const [pollTimedOut, setPollTimedOut] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copyFeedback, setCopyFeedback] = useState<
     "answer" | "conversation" | "error" | null
@@ -308,43 +307,59 @@ export function ExternalAssistantConversation({
     [currentProviderContextKey, provider, tx],
   );
 
-  useEffect(() => {
-    if (!conversation.pendingJobId) return;
-    const timer = window.setInterval(() => {
-      if (pollRunning.current || pollTimedOut) return;
-      if (Date.now() - refreshedAt.current > 180_000) {
-        setPollTimedOut(true);
+  const pollPendingJob = useCallback(
+    async (jobId: string, force = false) => {
+      if (pollRunning.current) return;
+      if (!force && Date.now() - refreshedAt.current > 180_000) {
         setError(
           tx(
             "The response is taking longer than expected. Check its status to continue.",
           ),
         );
-        return;
+      }
+      if (force) {
+        refreshedAt.current = Date.now();
+        setError(null);
       }
       pollRunning.current = true;
-      void provider
-        .invoke({ method: "poll", jobId: conversation.pendingJobId! })
-        .then((result) => {
-          if (mounted.current) {
-            setLoadedSuccessfully(true);
-            setConversation(result);
-            if (!result.pendingJobId) setError(null);
-          }
-        })
-        .catch((caught) => {
-          return recoverFromPollFailure(caught);
-        })
-        .finally(() => {
-          pollRunning.current = false;
-        });
-    }, 1_500);
-    return () => window.clearInterval(timer);
-  }, [
-    conversation.pendingJobId,
-    pollTimedOut,
-    provider,
-    recoverFromPollFailure,
-  ]);
+      try {
+        const result = await provider.invoke({ method: "poll", jobId });
+        if (mounted.current) {
+          setLoadedSuccessfully(true);
+          setConversation(result);
+          if (!result.pendingJobId) setError(null);
+        }
+      } catch (caught) {
+        await recoverFromPollFailure(caught);
+      } finally {
+        pollRunning.current = false;
+      }
+    },
+    [provider, recoverFromPollFailure, tx],
+  );
+  const pollPendingJobRef = useRef(pollPendingJob);
+  pollPendingJobRef.current = pollPendingJob;
+
+  useEffect(() => {
+    const jobId = conversation.pendingJobId;
+    if (!jobId) return;
+    const refreshVisible = () => {
+      if (
+        document.visibilityState !== "hidden" &&
+        (typeof navigator === "undefined" || navigator.onLine)
+      )
+        void pollPendingJobRef.current(jobId);
+    };
+    void pollPendingJobRef.current(jobId);
+    window.addEventListener("focus", refreshVisible);
+    window.addEventListener("online", refreshVisible);
+    document.addEventListener("visibilitychange", refreshVisible);
+    return () => {
+      window.removeEventListener("focus", refreshVisible);
+      window.removeEventListener("online", refreshVisible);
+      document.removeEventListener("visibilitychange", refreshVisible);
+    };
+  }, [conversation.pendingJobId]);
 
   useLayoutEffect(() => {
     const area = scrollArea.current;
@@ -353,26 +368,9 @@ export function ExternalAssistantConversation({
       area.scrollTop = Math.max(0, latest.offsetTop - area.offsetTop - 12);
   }, [conversation.messages.length]);
 
-  const checkStatus = async () => {
+  const checkStatus = () => {
     if (!conversation.pendingJobId || pollRunning.current) return;
-    pollRunning.current = true;
-    setError(null);
-    setPollTimedOut(false);
-    refreshedAt.current = Date.now();
-    try {
-      const result = await provider.invoke({
-        method: "poll",
-        jobId: conversation.pendingJobId,
-      });
-      if (mounted.current) {
-        setLoadedSuccessfully(true);
-        setConversation(result);
-      }
-    } catch (caught) {
-      await recoverFromPollFailure(caught);
-    } finally {
-      pollRunning.current = false;
-    }
+    void pollPendingJob(conversation.pendingJobId, true);
   };
 
   const send = async () => {
@@ -404,7 +402,6 @@ export function ExternalAssistantConversation({
         setDraft("");
       }
       sendAttempt.current = null;
-      setPollTimedOut(false);
       if (result.pendingJobId) refreshedAt.current = Date.now();
     } catch (caught) {
       if (mounted.current)
@@ -635,16 +632,14 @@ export function ExternalAssistantConversation({
             <p className="text-sm text-muted-foreground">
               {tx("Preparing a response…")}
             </p>
-            {pollTimedOut && (
-              <Button
-                type="button"
-                variant="link"
-                size="sm"
-                onClick={() => void checkStatus()}
-              >
-                {tx("Check status")}
-              </Button>
-            )}
+            <Button
+              type="button"
+              variant="link"
+              size="sm"
+              onClick={checkStatus}
+            >
+              {tx("Check status")}
+            </Button>
           </div>
         )}
         {error && (
@@ -801,7 +796,10 @@ export function AssistantActionCard({ action }: { action: PreparedAction }) {
     )
       return;
     let active = true;
+    let restoring = false;
     const restore = async () => {
+      if (restoring) return;
+      restoring = true;
       try {
         const token = await authSession.getAccessToken();
         if (!token) return;
@@ -833,13 +831,22 @@ export function AssistantActionCard({ action }: { action: PreparedAction }) {
         }
       } catch {
         /* Confirmation remains protected by the server's consume-once guard. */
+      } finally {
+        restoring = false;
       }
     };
+    const restoreVisible = () => {
+      if (document.visibilityState !== "hidden") void restore();
+    };
     void restore();
-    const timer = window.setInterval(() => void restore(), 5000);
+    window.addEventListener("focus", restoreVisible);
+    window.addEventListener("online", restoreVisible);
+    document.addEventListener("visibilitychange", restoreVisible);
     return () => {
       active = false;
-      window.clearInterval(timer);
+      window.removeEventListener("focus", restoreVisible);
+      window.removeEventListener("online", restoreVisible);
+      document.removeEventListener("visibilitychange", restoreVisible);
     };
   }, [isQuote, action.actionId, apiUrl, authSession, state]);
 

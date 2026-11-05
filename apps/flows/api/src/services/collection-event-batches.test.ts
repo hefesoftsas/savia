@@ -1,15 +1,20 @@
 import type { D1Migration } from "cloudflare:test";
 import { applyD1Migrations, env } from "cloudflare:test";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { Hono } from "hono";
 import { eq } from "drizzle-orm";
+import { SignJWT } from "jose";
 import type { SaviaCollectionEvent } from "@savia/studio-shared/savia-flows";
 import {
   createDatabase,
   organizations,
   saviaCollectionTriggers,
+  saviaCollectionEventBatchGroups,
   workflows,
 } from "../db";
-import type { Bindings } from "../context";
+import type { ApiContext, Bindings } from "../context";
+import { saviaCollectionSubscriptionRoutes } from "../routes/savia-collection-subscriptions";
+import { saviaCollectionEventRoutes } from "../routes/savia-collection-events";
 
 const batchMocks = vi.hoisted(() => ({
   authorize: vi.fn(),
@@ -50,7 +55,13 @@ import {
 } from "./collection-event-batches";
 
 const testEnv = env as Bindings & { TEST_MIGRATIONS: D1Migration[] };
-const bindings = testEnv as Bindings;
+const defaultQueueSend = vi.fn().mockResolvedValue(undefined);
+const bindings = new Proxy(testEnv, {
+  get(target, property, receiver) {
+    if (property === "WORKFLOW_QUEUE") return { send: defaultQueueSend };
+    return Reflect.get(target, property, receiver);
+  },
+}) as Bindings;
 const database = createDatabase(bindings.DB);
 const configCreatedAt = new Date("2026-10-01T00:00:00.000Z");
 const flushWithClock = flushSaviaCollectionEventBatch as unknown as (
@@ -108,6 +119,7 @@ beforeEach(async () => {
   await database
     .delete(saviaCollectionTriggers)
     .where(eq(saviaCollectionTriggers.workflowId, subscription.workflowId));
+  defaultQueueSend.mockReset().mockResolvedValue(undefined);
   batchMocks.authorize.mockReset();
   batchMocks.execute.mockReset();
   batchMocks.policyStatus.mockReset();
@@ -139,6 +151,345 @@ beforeAll(async () => {
 });
 
 describe("durable Savia collection event batching", () => {
+  it("wakes a committed batch through the queue after its batching window", async () => {
+    await configureBatchSubscription();
+    const send = vi.fn().mockResolvedValue(undefined);
+    const queueBindings = {
+      ...bindings,
+      WORKFLOW_QUEUE: { send },
+    } as unknown as Bindings;
+    const now = Date.now();
+    const queued = await enqueueSaviaCollectionEventBatch(
+      queueBindings,
+      event("queue-wakeup"),
+      subscription,
+      now,
+    );
+    expect(send).toHaveBeenCalledWith(
+      { type: "savia.collection-batch.wakeup.v1", groupKey: queued.groupKey },
+      { delaySeconds: 60 },
+    );
+    await enqueueSaviaCollectionEventBatch(
+      queueBindings,
+      event("same-batch"),
+      subscription,
+      now,
+    );
+    expect(send).toHaveBeenCalledTimes(1);
+
+    await bindings.DB.prepare(
+      "UPDATE savia_collection_event_batch_groups SET due_at = ?, next_attempt_at = ? WHERE workflow_id = ?",
+    )
+      .bind(now - 1, now - 1, subscription.workflowId)
+      .run();
+    const ack = vi.fn();
+    const retry = vi.fn();
+    const { handleQueueMessages } = await import("../queue");
+    await handleQueueMessages(
+      {
+        messages: [
+          {
+            body: send.mock.calls[0][0],
+            id: "wakeup",
+            attempts: 1,
+            ack,
+            retry,
+          },
+        ],
+      } as unknown as MessageBatch,
+      queueBindings,
+      {} as ExecutionContext,
+    );
+    const item = await bindings.DB.prepare(
+      "SELECT status FROM savia_collection_event_batch_items WHERE event_id = ? AND workflow_id = ?",
+    )
+      .bind("queue-wakeup", subscription.workflowId)
+      .first<{ status: string }>();
+    expect(item?.status).toBe("accepted");
+    expect(ack).toHaveBeenCalledOnce();
+    expect(retry).not.toHaveBeenCalled();
+  });
+
+  it("returns wakeup failures as retryable and resends the same group's signal", async () => {
+    await configureBatchSubscription();
+    const send = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("queue unavailable"))
+      .mockResolvedValue(undefined);
+    const queueBindings = {
+      ...bindings,
+      WORKFLOW_QUEUE: { send },
+    } as unknown as Bindings;
+    const now = Date.now();
+    const first = await enqueueSaviaCollectionEventBatch(
+      queueBindings,
+      event("lost-wakeup"),
+      subscription,
+      now,
+    );
+    expect(first).toMatchObject({ status: "wakeup-unavailable" });
+
+    const retry = await enqueueSaviaCollectionEventBatch(
+      queueBindings,
+      event("lost-wakeup"),
+      subscription,
+      now + 10_000,
+    );
+    expect(retry).toMatchObject({ status: "queued", groupKey: first.groupKey });
+    expect(send).toHaveBeenCalledTimes(2);
+    expect(send.mock.calls[0][0]).toEqual({
+      type: "savia.collection-batch.wakeup.v1",
+      groupKey: first.groupKey,
+    });
+    expect(send.mock.calls[1][0]).toEqual(send.mock.calls[0][0]);
+  });
+
+  it("returns retryable HTTP failure when queue wakeup publication fails", async () => {
+    await configureBatchSubscription();
+    const secret = "a-secure-local-flows-bridge-secret-that-is-long-enough";
+    const eventBody = {
+      ...event("route-wakeup-failure"),
+      before: null,
+      after: null,
+      changedFields: [],
+    };
+    const body = JSON.stringify(eventBody);
+    const digest = await crypto.subtle.digest(
+      "SHA-256",
+      new TextEncoder().encode(body),
+    );
+    const bodyDigest = Array.from(new Uint8Array(digest), (byte) =>
+      byte.toString(16).padStart(2, "0"),
+    ).join("");
+    const token = await new SignJWT({
+      tenant: eventBody.tenant,
+      eventId: eventBody.id,
+      bodyDigest,
+    })
+      .setProtectedHeader({ alg: "HS256" })
+      .setIssuer("savia")
+      .setAudience("savia-flows-collection-events")
+      .setIssuedAt()
+      .setExpirationTime("30s")
+      .sign(new TextEncoder().encode(secret));
+    const send = vi.fn().mockRejectedValue(new Error("queue unavailable"));
+    const queueBindings = {
+      ...bindings,
+      WORKFLOW_QUEUE: { send },
+      SAVIA_FLOWS_BRIDGE_SECRET: secret,
+    } as unknown as Bindings;
+    const app = new Hono<ApiContext>();
+    app.route("/internal/savia/collection-events", saviaCollectionEventRoutes);
+
+    const response = await app.request(
+      "/internal/savia/collection-events",
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-savia-flows-event": token,
+        },
+        body,
+      },
+      queueBindings,
+    );
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({
+      error: "Savia collection batch queue is unavailable; retry delivery later",
+    });
+    const admission = await bindings.DB.prepare(
+      "SELECT status FROM savia_collection_admissions WHERE event_id=? AND workflow_id=?",
+    )
+      .bind(eventBody.id, subscription.workflowId)
+      .first<{ status: string }>();
+    expect(admission?.status).toBe("wakeup_pending");
+  });
+
+  it("rejects batch admission explicitly when the workflow queue is absent", async () => {
+    await configureBatchSubscription();
+    const result = await enqueueSaviaCollectionEventBatch(
+      { DB: bindings.DB },
+      event("missing-queue"),
+      subscription,
+    );
+    expect(result.status).toBe("wakeup-unavailable");
+    const admission = await bindings.DB.prepare(
+      "SELECT status FROM savia_collection_admissions WHERE event_id = ? AND workflow_id = ?",
+    )
+      .bind("missing-queue", subscription.workflowId)
+      .first();
+    expect(admission).toBeNull();
+  });
+
+  it("enqueues targeted wakeups for manager-retried failed groups", async () => {
+    const configuredAt = await configureBatchSubscription();
+    const groupKey = "failed-group-retry-test";
+    const now = Date.now();
+    await database.insert(saviaCollectionEventBatchGroups).values({
+      groupKey,
+      bucketKey: "failed-bucket-retry-test",
+      workflowId: subscription.workflowId,
+      organizationId: subscription.organizationId,
+      configCreatedAt: configuredAt.getTime(),
+      chunkIndex: 0,
+      status: "failed",
+      dueAt: now - 60_000,
+      nextAttemptAt: now,
+      attempts: 5,
+      leaseToken: null,
+      leaseUntil: 0,
+      lastError: "failed",
+      createdAt: now - 60_000,
+      updatedAt: now - 60_000,
+      finishedAt: now - 60_000,
+    });
+    const send = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("queue temporarily unavailable"))
+      .mockResolvedValue(undefined);
+    const app = new Hono<ApiContext>();
+    app.use("*", async (c, next) => {
+      c.set("saviaBridge", true);
+      c.set("organizationId", subscription.organizationId);
+      c.set("jwtPayload", {
+        sub: "batch-admin",
+        organization: { id: subscription.organizationId, role: "admin" },
+      } as never);
+      await next();
+    });
+    app.route("/:organizationId/workflows", saviaCollectionSubscriptionRoutes);
+    const retryUrl = `/${subscription.organizationId}/workflows/${subscription.workflowId}/savia-trigger/batches/retry`;
+    const absentQueue = await app.request(
+      retryUrl,
+      { method: "POST" },
+      { DB: bindings.DB } as unknown as Bindings,
+    );
+    expect(absentQueue.status).toBe(503);
+    expect(await absentQueue.json()).toMatchObject({
+      error: "Collection batch queue is unavailable; no batches were retried",
+    });
+
+    const failedSend = await app.request(
+      retryUrl,
+      { method: "POST" },
+      { ...bindings, WORKFLOW_QUEUE: { send } } as unknown as Bindings,
+    );
+    expect(failedSend.status).toBe(503);
+    expect(await failedSend.json()).toMatchObject({ retried: 0, failed: 1 });
+    let group = await bindings.DB.prepare(
+      "SELECT status FROM savia_collection_event_batch_groups WHERE group_key = ?",
+    )
+      .bind(groupKey)
+      .first<{ status: string }>();
+    expect(group?.status).toBe("failed");
+
+    const response = await app.request(
+      retryUrl,
+      { method: "POST" },
+      { ...bindings, WORKFLOW_QUEUE: { send } } as unknown as Bindings,
+    );
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ retried: 1 });
+    expect(send).toHaveBeenCalledTimes(2);
+    expect(send.mock.calls[1]).toEqual([
+      { type: "savia.collection-batch.wakeup.v1", groupKey },
+    ]);
+    group = await bindings.DB.prepare(
+      "SELECT status FROM savia_collection_event_batch_groups WHERE group_key = ?",
+    )
+      .bind(groupKey)
+      .first<{ status: string }>();
+    expect(group?.status).toBe("pending");
+  });
+
+  it("wakes the requested batch even when another batch is older", async () => {
+    await configureBatchSubscription();
+    const now = Date.now();
+    await enqueueSaviaCollectionEventBatch(
+      bindings,
+      event("older"),
+      subscription,
+      now - 180_000,
+    );
+    const requested = await enqueueSaviaCollectionEventBatch(
+      bindings,
+      event("requested"),
+      subscription,
+      now - 120_000,
+    );
+    const ack = vi.fn();
+    const { handleQueueMessages } = await import("../queue");
+    await handleQueueMessages(
+      {
+        messages: [
+          {
+            body: {
+              type: "savia.collection-batch.wakeup.v1",
+              groupKey: requested.groupKey,
+            },
+            id: "wakeup",
+            attempts: 1,
+            ack,
+            retry: vi.fn(),
+          },
+        ],
+      } as unknown as MessageBatch,
+      bindings,
+      {} as ExecutionContext,
+    );
+    const statuses = await bindings.DB.prepare(
+      "SELECT event_id, status FROM savia_collection_event_batch_items WHERE workflow_id = ? ORDER BY event_id",
+    )
+      .bind(subscription.workflowId)
+      .all<{ event_id: string; status: string }>();
+    expect(statuses.results).toEqual([
+      { event_id: "older", status: "pending" },
+      { event_id: "requested", status: "accepted" },
+    ]);
+    expect(ack).toHaveBeenCalledOnce();
+  });
+
+  it("retries a wakeup when the batch encounters a transient failure", async () => {
+    await configureBatchSubscription();
+    const now = Date.now() - 61_000;
+    const queued = await enqueueSaviaCollectionEventBatch(
+      bindings,
+      event("retry-wakeup"),
+      subscription,
+      now,
+    );
+    batchMocks.authorize.mockRejectedValueOnce(new Error("host unavailable"));
+    const ack = vi.fn();
+    const retry = vi.fn();
+    const { handleQueueMessages } = await import("../queue");
+    await handleQueueMessages(
+      {
+        messages: [
+          {
+            body: {
+              type: "savia.collection-batch.wakeup.v1",
+              groupKey: queued.groupKey,
+            },
+            id: "wakeup",
+            attempts: 1,
+            ack,
+            retry,
+          },
+        ],
+      } as unknown as MessageBatch,
+      bindings,
+      {} as ExecutionContext,
+    );
+    expect(ack).not.toHaveBeenCalled();
+    expect(retry).toHaveBeenCalledWith({ delaySeconds: 60 });
+    const group = await bindings.DB.prepare(
+      "SELECT status FROM savia_collection_event_batch_groups WHERE workflow_id = ?",
+    )
+      .bind(subscription.workflowId)
+      .first<{ status: string }>();
+    expect(group?.status).toBe("pending");
+  });
+
   it("deduplicates concurrent source event deliveries atomically", async () => {
     expect(
       await bindings.DB.prepare("SELECT id FROM workflows WHERE id = ?")

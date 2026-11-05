@@ -92,7 +92,7 @@ function apiConfig({
     workers_dev: false,
     keep_vars: true,
     observability: { enabled: true, head_sampling_rate: 1 },
-    triggers: { crons: ["* * * * *"] },
+    triggers: { crons: [] },
     services: [
       { binding: "AUTH", service: "savia-auth" },
       { binding: "MCP", service: "savia-mcp" },
@@ -167,6 +167,7 @@ function apiConfig({
       SAVIA_RUNTIME_RETIRED: "false",
       SAVIA_RUNTIME_WARMUP: "false",
       SAVIA_MAINTENANCE: "false",
+      REALTIME_OUTBOX_RECOVERY_ENABLED: "false",
       SAVIA_FLOWS_MAINTENANCE: "false",
     },
     secrets: {
@@ -498,7 +499,7 @@ export async function renderProductionConfigs({
       config.workers_dev = false;
       config.preview_urls = false;
     }
-    configs.api.triggers = { crons: ["* * * * *"] };
+    configs.api.triggers = { crons: [] };
     configs.api.vars.CLOUDFLARE_ENV = "preview";
     configs.api.vars.SAVIA_WORKFLOW_ONLY_SCHEDULE = "true";
     configs.api.vars.SAVIA_MAINTENANCE = "false";

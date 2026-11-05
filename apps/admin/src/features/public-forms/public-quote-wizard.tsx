@@ -507,11 +507,8 @@ export function PublicQuoteForm({
     return () => window.clearInterval(timer);
   }, [controller.pending, lastStep]);
 
-  // Progressive results while providers respond: poll the anonymous status
-  // endpoint (3s keeps well under the burst limiter) and paint finished
-  // insurers as cards instead of a bare spinner. The first poll waits a full
-  // interval so fast submissions never emit one. Failures keep the last
-  // known progress; the submit response stays the source of truth.
+  // Fetch provider progress once, then refresh when the user returns to this
+  // tab. The submit response stays the source of truth.
   useEffect(() => {
     if (
       (!controller.pending && !controller.uncertain && !controller.receipt) ||
@@ -548,16 +545,19 @@ export function PublicQuoteForm({
         inFlight = false;
       }
     };
-    if (controller.receipt) {
-      void load();
-      return () => {
-        stopped = true;
-      };
-    }
-    const timer = window.setInterval(load, 3000);
+    const refreshVisible = () => {
+      if (document.visibilityState !== "hidden" && navigator.onLine)
+        void load();
+    };
+    if (!controller.pending) void load();
+    window.addEventListener("focus", refreshVisible);
+    window.addEventListener("online", refreshVisible);
+    document.addEventListener("visibilitychange", refreshVisible);
     return () => {
       stopped = true;
-      window.clearInterval(timer);
+      window.removeEventListener("focus", refreshVisible);
+      window.removeEventListener("online", refreshVisible);
+      document.removeEventListener("visibilitychange", refreshVisible);
     };
   }, [
     controller.pending,

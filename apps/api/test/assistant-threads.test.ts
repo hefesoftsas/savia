@@ -9,6 +9,7 @@ import type {
 } from "../src/assistant/contracts";
 import { registerAssistantRoutes } from "../src/assistant/routes";
 import { AssistantThreadRepository } from "../src/assistant/threads";
+import type { RealtimeHubClient } from "../src/realtime/hub-client";
 import { createCompanionAssistantContextLoader } from "../src/companion/routes";
 import { CompanionRecordings } from "../src/companion/recordings";
 import { CompanionSessions } from "../src/companion/sessions";
@@ -71,10 +72,15 @@ function assistantRouteApp(
   loadThreadContext: NonNullable<
     Parameters<typeof registerAssistantRoutes>[2]
   >["loadThreadContext"],
+  realtime?: RealtimeHubClient,
 ) {
   const app = new OpenAPIHono();
   app.use("*", authenticationMiddleware(env.DB, auth(principalId)));
-  registerAssistantRoutes(app, service, { db: env.DB, loadThreadContext });
+  registerAssistantRoutes(app, service, {
+    db: env.DB,
+    loadThreadContext,
+    realtime,
+  });
   return app;
 }
 
@@ -166,6 +172,7 @@ describe("assistant conversation persistence", () => {
   beforeEach(async () => {
     await env.DB.exec(
       `DELETE FROM assistant_threads;
+       DELETE FROM realtime_event_outbox WHERE principal_id IN ('thread-user-a', 'thread-user-b');
        DELETE FROM identity_principal WHERE id IN ('thread-user-a', 'thread-user-b');`,
     );
     await seedPrincipal("thread-user-a");
@@ -386,6 +393,64 @@ describe("assistant conversation persistence", () => {
       },
     ]);
     expect(summaryBody.threads[0]).not.toHaveProperty("messages");
+  });
+
+  it("publishes private realtime hints after an owned thread is saved or deleted", async () => {
+    const events: Array<{ room: string; event: Record<string, unknown> }> = [];
+    const realtime: RealtimeHubClient = {
+      publish: () => undefined,
+      publishConfirmed: async (room, event) => {
+        events.push({ room, event });
+        return true;
+      },
+      issue: async () => ({
+        ticket: "ticket",
+        expiresAt: new Date().toISOString(),
+      }),
+      forward: async () => new Response(),
+    };
+    const service: AssistantService = {
+      chat: async () => new Response(),
+      confirmAction: async () => ({ state: "unavailable" }),
+      cancelAction: async () => ({ state: "unavailable" }),
+    };
+    const app = assistantRouteApp(
+      "thread-user-a",
+      service,
+      contextLoader(),
+      realtime,
+    );
+    const saved = await app.request(`/api/assistant/threads/${firstThread}`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ title: "Private", messages, expectedRevision: 0 }),
+    });
+    expect(saved.status).toBe(200);
+    expect(events).toEqual([
+      {
+        room: "principal:thread-user-a",
+        event: expect.objectContaining({
+          topic: "assistant-threads",
+          type: "created",
+          collection: "threads",
+          id: firstThread,
+        }),
+      },
+    ]);
+    const deleted = await app.request(
+      `/api/assistant/threads/${firstThread}?expectedRevision=1`,
+      { method: "DELETE" },
+    );
+    expect(deleted.status).toBe(204);
+    expect(events[1]).toMatchObject({
+      room: "principal:thread-user-a",
+      event: {
+        topic: "assistant-threads",
+        type: "deleted",
+        collection: "threads",
+        id: firstThread,
+      },
+    });
   });
 
   it("keeps threads private and prevents foreign reads, updates, and deletes", async () => {

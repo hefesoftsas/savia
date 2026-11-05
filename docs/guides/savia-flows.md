@@ -103,7 +103,7 @@ and form-signing keys with file mode 0600. Both are ignored by Git. Back up
 the state and keys together: replacing the encryption key makes previously
 saved secrets unreadable, and replacing the form key invalidates old links.
 
-The runner applies 69 versioned migrations before accepting normal use. Its
+The runner applies 75 versioned migrations before accepting normal use. Its
 bootstrap endpoint is on an internal hostname, protected by a per-process
 random secret and absent from the host's proxy allowlist. It records completed
 migrations and safely skips them on restart.
@@ -115,11 +115,56 @@ waits for input. Results, files and database records survive restarting the
 local runtime with the same state directory. The local scheduler checks cron
 expressions in UTC once per minute while the process is running.
 
-Local D1 keeps terminal execution history for 30 days. Scheduled maintenance
-removes at most 500 old completed, failed, cancelled, or exhausted records per
-UTC day; idle, submitted, executing, and paused records are retained. This pass
-can run while executions are paused and is skipped during maintenance mode. It
-does not delete R2 execution objects.
+Cloud preview and production manifests currently have empty `triggers.crons`
+arrays for both the API and Flows Workers. Cloud scheduled callbacks are paused,
+so scheduled workflows will not be dispatched and cron-based recovery will not
+repair expired occurrences. Manual, queue, webhook, request, and collection
+triggers remain available. The live execution view uses the socket subscription
+and refreshes once when the socket connects/reconnects or the browser regains
+focus. It makes no periodic status requests: if reconnection is exhausted while
+the page stays open, execution status can remain stale until a focus refresh or
+a manual refresh/reopen. Restoring scheduled dispatch, recovery, backup checks,
+and periodic runtime guards is tracked as technical debt and requires an
+event-driven replacement for periodic work.
+
+When scheduled dispatch is re-enabled, it records each
+`(workflow_id, scheduled_time)` in D1 and reuses one stable execution ID for
+duplicate delivery. A claim is leased while a dispatch is in progress; a
+pre-dispatch failure releases it, and an expired claim can be retried with the
+same ID. Completed and obsolete claims are pruned in batches after 30 days. A
+synchronous Worker runtime cannot prove whether external side effects happened
+if its process stops after dispatch but before the terminal snapshot is saved,
+so the claim is marked uncertain and is not automatically redispatched. Those
+records require manual resolution and remain stored. The scheduled Worker logs
+the workflow, occurrence, and execution ID with a manual-review alert. Deleting
+the workflow does not delete its uncertain evidence. Operators can list
+unresolved claims with this D1 query:
+
+```sql
+SELECT workflow_id, scheduled_time, execution_id, attempts, updated_at
+FROM savia_scheduled_trigger_occurrences
+WHERE status = 'uncertain'
+ORDER BY updated_at ASC
+LIMIT 100;
+```
+
+Check the execution record and any external provider before taking action; do not
+reset or replay an uncertain claim until its side effects are understood.
+Recovered claims are fenced by the current schedule expression and trigger
+timestamp, workflow timestamp, and a SHA-256 fingerprint of workflow data. A
+scheduled edit or disable makes a stale occurrence obsolete. Workflow metadata
+and R2 data are saved in separate operations, so a save racing an initial
+dispatch is not an atomic snapshot. Durable Workflow retries use the stable ID
+to address the same Cloudflare Workflow instance.
+
+Local D1 keeps terminal execution history for 30 days. In the local runtime,
+scheduled maintenance removes at most 500 old completed, failed, cancelled, or
+exhausted records per UTC day; idle, submitted, executing, and paused records
+are retained. This pass can run while executions are paused and is skipped
+during maintenance mode. It does not delete R2 execution objects. Cloud preview
+and production have no cron schedule, so this cleanup and related periodic
+retention work do not run there; restoring them is part of the technical debt
+above.
 
 ## Native collections and triggers
 
@@ -448,9 +493,10 @@ concurrent runs, shared across tenants and both execution modes. They are pilot
 quotas, not capacity sized for 100 active users or an exact invoice cap.
 
 Organization managers can inspect **Execution budget** on the Flows dashboard.
-It shows their organization's admitted runs and counted steps for those runs, shared
-remaining daily/monthly capacity, and active runs. The panel refreshes once per
-minute while visible and warns at 80% and 100% of shared quotas. These counters
+It shows their organization's admitted runs and counted steps for those runs,
+shared remaining daily/monthly capacity, and active runs. The panel loads when
+opened and refreshes on focus; use the retry action if its request fails. It
+warns at 80% and 100% of shared quotas. These counters
 are operational measurements; they do not claim to measure Cloudflare CPU,
 GB-seconds, storage or dollar charges. No external notification service is used.
 
@@ -463,10 +509,18 @@ use the trigger node's `events` array and `eventCount` output to process every r
 The existing `event` output remains the first event. A batch may split further
 when projected trigger data reaches 1 MiB. Grouping is not a suppression mode:
 each permitted matching event is included in a run, rather than silently being
-replaced by the last record. Receipts are grouped by UTC minute. Dispatch starts after the first event has
-waited sixty seconds, on the next cron tick; a backlog can delay it further.
+replaced by the last record. Receipts are grouped by UTC minute. A newly created
+group schedules a delayed queue wakeup for its sixty-second batching window.
+Cloud cron recovery is paused in preview and production, so a failed wakeup
+returns a retryable error to the host outbox and later event admissions can
+resend the group's targeted queue wakeup. Managers can manually retry failed
+groups. The retry endpoint resets a group before sending its wakeup; a Worker
+crash in that gap can leave a pending group without a queue message, and no
+periodic sweep will repair it. This remains an operational limitation until
+wakeup publication and retry state are reconciled durably. A paused queue or
+backlog can delay dispatch further.
 
-Each cron tick dispatches at most one due group. Event receipts keep only bounded
+Each queue wakeup dispatches at most one due group. Event receipts keep only bounded
 routing metadata (16 KiB maximum), not duplicate record snapshots. The host
 reprojects each event using the configuring user's current access, and Flows
 rechecks the current subscription and workflow before dispatch. Child execution

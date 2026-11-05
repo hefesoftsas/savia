@@ -22,6 +22,8 @@ import {
 import { requestResultSchema } from "../request-results/contracts";
 import type { ResultNormalizer } from "../request-results/normalize";
 import { validateJsonSchema } from "@savia/studio-shared/json-schema";
+import type { RealtimeHubClient } from "../realtime/hub-client";
+import { dispatchRealtimeOutbox } from "../realtime/outbox";
 const tenantId = z.coerce.number().int().nonnegative().safe();
 const pageName = z.string().regex(/^[a-z][a-z0-9_]{0,47}$/);
 const formValues = z.record(
@@ -154,6 +156,7 @@ export function registerRequestPageRoutes(
   app: OpenAPIHono,
   db: D1Database,
   service?: SaviaRequestService,
+  realtime?: RealtimeHubClient,
   normalizersForTenant: (
     tenantId: string,
   ) => Promise<readonly ResultNormalizer[]> = async () => [],
@@ -391,6 +394,15 @@ export function registerRequestPageRoutes(
       .prepare("SELECT * FROM request_page_runs WHERE id=? AND principal_id=?")
       .bind(body.id, owner)
       .first<Row>();
+    try {
+      await dispatchRealtimeOutbox(db, realtime, {
+        principalId: owner,
+        topic: "request-pages",
+        resourceId: body.id,
+      });
+    } catch (error) {
+      console.error("REALTIME_OUTBOX_IMMEDIATE_DISPATCH_FAILED", error);
+    }
     return c.json(publicRun(saved!), 200);
   });
 }

@@ -11,7 +11,6 @@ import type {
   CreateCalendarSourceInput,
   UpdateCalendarSourceInput,
 } from "@savia/studio-shared/calendar-contracts";
-import { calendarLimits } from "@savia/studio-shared/calendar-contracts";
 
 type Snapshot = {
   sources: CalendarSource[];
@@ -271,29 +270,15 @@ export function useCalendarSources(
   }, [client, publish, refresh]);
   useEffect(() => {
     if (!client) return;
-    let timer: ReturnType<typeof setTimeout>;
-    let disposed = false;
     const visible = () =>
       document.visibilityState !== "hidden" && navigator.onLine;
-    const schedule = () => {
-      if (!disposed) timer = setTimeout(tick, calendarLimits.freshnessMs);
-    };
-    const tick = async () => {
-      clearTimeout(timer);
-      if (visible()) await refresh(false);
-      schedule();
-    };
     const resume = () => {
-      clearTimeout(timer);
-      if (visible()) void tick();
+      if (visible()) void refresh(false);
     };
-    schedule();
     document.addEventListener("visibilitychange", resume);
     window.addEventListener("online", resume);
     window.addEventListener("focus", resume);
     return () => {
-      disposed = true;
-      clearTimeout(timer);
       document.removeEventListener("visibilitychange", resume);
       window.removeEventListener("online", resume);
       window.removeEventListener("focus", resume);

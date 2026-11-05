@@ -11,10 +11,12 @@ test("cloud snapshots verify native identity and exclude binding values", async 
     "/workers/scripts/savia-preview/deployments": {
       deployments: [{ versions: [{ version_id: "v1", percentage: 100 }] }],
     },
-    "/workers/scripts/savia-preview/settings": {
-      bindings: [
-        { name: "SECRET", type: "secret_text", text: "DO_NOT_SERIALIZE" },
-      ],
+    "/workers/scripts/savia-preview/versions/v1": {
+      resources: {
+        bindings: [
+          { name: "SECRET", type: "secret_text", text: "DO_NOT_SERIALIZE" },
+        ],
+      },
     },
     "/workers/scripts/savia-preview/schedules": {
       schedules: [{ cron: "* * * * *" }],
@@ -416,7 +418,7 @@ test("a persisted Flows pause is observed without changing data or exposing cont
   const flags = [
     { type: "plain_text", name: "SAVIA_FLOWS_EXECUTION_ENABLED", text: "true" },
     { type: "plain_text", name: "SAVIA_FLOWS_MAINTENANCE", text: "false" },
-    { type: "d1", name: "DB", id: databaseId },
+    { type: "d1", name: "DB", database_id: databaseId },
   ];
   const client = createRuntimeCloudClient(
     { accountId, workers: [{ name, cloudId }] },
@@ -433,7 +435,8 @@ test("a persisted Flows pause is observed without changing data or exposing cont
               { versions: [{ version_id: "v1", percentage: 100 }] },
             ],
           };
-        else if (path.endsWith("/settings")) result = { bindings: flags };
+        else if (path.endsWith("/versions/v1"))
+          result = { resources: { bindings: flags } };
         else if (path.endsWith("/schedules")) result = { schedules: [] };
         else if (path === `/d1/database/${databaseId}/query`) {
           const { sql } = JSON.parse(options.body);
@@ -469,4 +472,155 @@ test("a persisted Flows pause is observed without changing data or exposing cont
   );
   flags[0].text = "false";
   assert.deepEqual((await client.readSnapshot()).maintenanceWorkerNames, []);
+});
+
+test("runtime maintenance comes from the deployed version, not newer script settings", async () => {
+  const accountId = "a".repeat(32),
+    cloudId = "b".repeat(32),
+    name = "savia-preview";
+  const client = createRuntimeCloudClient(
+    { accountId, workers: [{ name, cloudId }] },
+    {
+      env: { CLOUDFLARE_API_TOKEN: "test" },
+      fetcher: async (url) => {
+        const path = new URL(url).pathname.split(accountId)[1];
+        let result = [];
+        if (path === `/workers/workers/${cloudId}`)
+          result = { id: cloudId, name };
+        else if (path.endsWith("/deployments"))
+          result = {
+            deployments: [
+              { versions: [{ version_id: "serving-v1", percentage: 100 }] },
+            ],
+          };
+        else if (path.endsWith("/versions/serving-v1"))
+          result = {
+            resources: {
+              bindings: [
+                {
+                  type: "plain_text",
+                  name: "SAVIA_MAINTENANCE",
+                  text: "true",
+                },
+              ],
+            },
+          };
+        else if (path.endsWith("/settings"))
+          result = {
+            bindings: [
+              {
+                type: "plain_text",
+                name: "SAVIA_MAINTENANCE",
+                text: "false",
+              },
+            ],
+          };
+        else if (path.endsWith("/schedules")) result = { schedules: [] };
+        return Response.json({ success: true, result });
+      },
+    },
+  );
+
+  assert.deepEqual((await client.readSnapshot()).maintenanceWorkerNames, [
+    name,
+  ]);
+});
+
+test("the Flows pause latch uses the policy generation bound to serving traffic", async () => {
+  const accountId = "a".repeat(32),
+    cloudId = "b".repeat(32),
+    name = "savia-flows-preview",
+    databaseId = "11111111-1111-4111-8111-111111111111";
+  const servingBindings = [
+    { type: "plain_text", name: "SAVIA_FLOWS_EXECUTION_ENABLED", text: "true" },
+    { type: "plain_text", name: "SAVIA_FLOWS_MAINTENANCE", text: "false" },
+    { type: "plain_text", name: "SAVIA_FLOWS_POLICY_GENERATION", text: "100" },
+    { type: "d1", name: "DB", database_id: databaseId },
+  ];
+  const latestBindings = servingBindings.map((binding) =>
+    binding.name === "SAVIA_FLOWS_POLICY_GENERATION"
+      ? { ...binding, text: "101" }
+      : binding,
+  );
+  const client = createRuntimeCloudClient(
+    { accountId, workers: [{ name, cloudId }] },
+    {
+      env: { CLOUDFLARE_API_TOKEN: "test" },
+      fetcher: async (url, options) => {
+        const path = new URL(url).pathname.split(accountId)[1];
+        let result = [];
+        if (path === `/workers/workers/${cloudId}`)
+          result = { id: cloudId, name };
+        else if (path.endsWith("/deployments"))
+          result = {
+            deployments: [
+              { versions: [{ version_id: "serving-v1", percentage: 100 }] },
+            ],
+          };
+        else if (path.endsWith("/versions/serving-v1"))
+          result = { resources: { bindings: servingBindings } };
+        else if (path.endsWith("/settings"))
+          result = { bindings: latestBindings };
+        else if (path.endsWith("/schedules")) result = { schedules: [] };
+        else if (path === `/d1/database/${databaseId}/query`) {
+          const { sql } = JSON.parse(options.body);
+          result = [
+            {
+              success: true,
+              results: sql.includes("sqlite_schema")
+                ? [{ name: "savia_flows_execution_control" }]
+                : [{ paused: 1, generation: 100 }],
+            },
+          ];
+        }
+        return Response.json({ success: true, result });
+      },
+    },
+  );
+
+  assert.deepEqual(
+    (await client.readSnapshot()).maintenanceWorkerNames,
+    [name],
+    "the newer uploaded generation cannot supersede the serving version's pause",
+  );
+  servingBindings.find(
+    (binding) => binding.name === "SAVIA_FLOWS_POLICY_GENERATION",
+  ).text = "101";
+  assert.deepEqual(
+    (await client.readSnapshot()).maintenanceWorkerNames,
+    [],
+    "a newer generation on the serving version supersedes the persisted pause",
+  );
+});
+
+test("runtime snapshots continue to reject traffic-split deployments", async () => {
+  const accountId = "a".repeat(32),
+    cloudId = "b".repeat(32),
+    name = "savia-preview";
+  const client = createRuntimeCloudClient(
+    { accountId, workers: [{ name, cloudId }] },
+    {
+      env: { CLOUDFLARE_API_TOKEN: "test" },
+      fetcher: async (url) => {
+        const path = new URL(url).pathname.split(accountId)[1];
+        let result = [];
+        if (path === `/workers/workers/${cloudId}`)
+          result = { id: cloudId, name };
+        else if (path.endsWith("/deployments"))
+          result = {
+            deployments: [
+              {
+                versions: [
+                  { version_id: "serving-v1", percentage: 80 },
+                  { version_id: "serving-v2", percentage: 20 },
+                ],
+              },
+            ],
+          };
+        return Response.json({ success: true, result });
+      },
+    },
+  );
+
+  await assert.rejects(client.readSnapshot(), /one fully deployed version/);
 });

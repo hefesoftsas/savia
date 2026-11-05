@@ -11411,6 +11411,85 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/v1/realtime/events": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Replay durable private change events
+     * @description Returns assistant-thread and request-page change hints after a principal-scoped cursor. Repeating a cursor is safe; clients should deduplicate by eventId.
+     */
+    get: {
+      parameters: {
+        query?: {
+          after?: number | null;
+          limit?: number;
+        };
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Events visible to the authenticated principal */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                durable: boolean;
+                events: {
+                  eventId: number;
+                  /** @enum {string} */
+                  topic: "assistant-threads" | "request-pages";
+                  /** @enum {string} */
+                  type: "created" | "updated" | "deleted";
+                  collection: string;
+                  id: string;
+                  actor: string;
+                  /** Format: date-time */
+                  at: string;
+                }[];
+                nextCursor: number;
+                hasMore: boolean;
+              };
+            };
+          };
+        };
+        /** @description Cursor is older than retained events; refetch full state */
+        410: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                /** @enum {string} */
+                code: "REALTIME_CURSOR_EXPIRED";
+                message: string;
+                /** @enum {boolean} */
+                resyncRequired: true;
+                durable: boolean;
+                resetCursor: number;
+              };
+            };
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/v1/realtime/ticket": {
     parameters: {
       query?: never;
@@ -11446,6 +11525,8 @@ export interface paths {
               | "notifications"
               | "personal-integrations"
               | "account"
+              | "assistant-threads"
+              | "request-pages"
             )[];
             tenantId?: number;
             principalId?: string;
@@ -11475,6 +11556,8 @@ export interface paths {
                   | "notifications"
                   | "personal-integrations"
                   | "account"
+                  | "assistant-threads"
+                  | "request-pages"
                 )[];
                 /** Format: date-time */
                 expiresAt: string;
@@ -19677,6 +19760,7 @@ export interface paths {
         content: {
           "multipart/form-data": {
             file?: unknown;
+            sourceKey?: string;
           };
         };
       };
@@ -19746,6 +19830,196 @@ export interface paths {
         };
         /** @description Unsupported Office document */
         422: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+      };
+    };
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/office-documents/source": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Find the caller's private office document by source key */
+    get: {
+      parameters: {
+        query: {
+          key: string;
+        };
+        header?: never;
+        path?: never;
+        cookie?: never;
+      };
+      requestBody?: never;
+      responses: {
+        /** @description Private document summary, or null when no source is linked */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                id: string;
+                name: string;
+                mime: string;
+                size: number;
+                version: number;
+                updatedAt: string;
+                /** @enum {string} */
+                role: "owner" | "reader" | "editor";
+                ownerName: string;
+              } | null;
+            };
+          };
+        };
+        /** @description Invalid source key */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description The office suite is disabled for this tenant */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+      };
+    };
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v1/office-documents/{id}/source": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Link an existing private office document to a source key */
+    post: {
+      parameters: {
+        query?: never;
+        header?: never;
+        path: {
+          id: string;
+        };
+        cookie?: never;
+      };
+      requestBody: {
+        content: {
+          "application/json": {
+            key: string;
+          };
+        };
+      };
+      responses: {
+        /** @description Linked document or the document already using this key */
+        200: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              data: {
+                id: string;
+                name: string;
+                mime: string;
+                size: number;
+                version: number;
+                updatedAt: string;
+                /** @enum {string} */
+                role: "owner" | "reader" | "editor";
+                ownerName: string;
+              };
+            };
+          };
+        };
+        /** @description Invalid source key */
+        400: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description The office suite is disabled for this tenant */
+        403: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Document not found */
+        404: {
+          headers: {
+            [name: string]: unknown;
+          };
+          content: {
+            "application/json": {
+              error: {
+                code: string;
+                message: string;
+              };
+            };
+          };
+        };
+        /** @description Document already has a different source key */
+        409: {
           headers: {
             [name: string]: unknown;
           };

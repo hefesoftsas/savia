@@ -30,7 +30,6 @@ type TicketResponse = {
 
 const MAX_BACKOFF_MS = 60_000;
 const STABLE_CONNECTION_MS = 60_000;
-const PING_INTERVAL_MS = 25_000;
 
 function subscribeUrl(apiUrl: string, room: string, ticket: string): string {
   const base = apiUrl.replace(/^http/, "ws").replace(/\/$/, "");
@@ -69,6 +68,8 @@ const PERSONAL_TOPICS = new Set([
   "notifications",
   "personal-integrations",
   "account",
+  "assistant-threads",
+  "request-pages",
 ]);
 const PLATFORM_TOPICS = new Set(["users", "tenants"]);
 
@@ -193,7 +194,6 @@ function connectRoom(
 ): () => void {
   let stopped = false;
   let socket: WebSocket | null = null;
-  let pingTimer: ReturnType<typeof setInterval> | undefined;
   let retryTimer: ReturnType<typeof setTimeout> | undefined;
   let backoffMs = 1000;
   let openedAt: number | undefined;
@@ -248,13 +248,6 @@ function connectRoom(
     socket.onopen = () => {
       if (stopped) return;
       openedAt = Date.now();
-      pingTimer = setInterval(() => {
-        // Plain "ping" is auto-answered by the hub without waking it, so
-        // idle connections cost nothing.
-        if (socket?.readyState === WebSocket.OPEN) {
-          socket.send("ping");
-        }
-      }, PING_INTERVAL_MS);
     };
     let acknowledged = false;
     socket.onmessage = (message) => {
@@ -293,7 +286,6 @@ function connectRoom(
       )
         backoffMs = 1000;
       openedAt = undefined;
-      if (pingTimer) clearInterval(pingTimer);
       socket = null;
       if (event?.code === 1008) {
         setStatus("unavailable");
@@ -306,7 +298,6 @@ function connectRoom(
   void connect();
   return () => {
     stopped = true;
-    if (pingTimer) clearInterval(pingTimer);
     if (retryTimer) clearTimeout(retryTimer);
     socket?.close();
   };
