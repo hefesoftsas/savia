@@ -233,7 +233,8 @@ test("state-catalog command failures preserve private output and stay generic", 
     });
   try {
     await assert.rejects(deps.inventory("preview"), {
-      message: "Environment command failed: pulumi stack",
+      message:
+        "Environment command failed (diagnostic=COMMAND_FAILED; remediation=INSPECT_PRIVATE_DIAGNOSTICS; operation=environment-command; exit=29)",
     });
     const errorsDirectory = join(directory, "command-errors"),
       files = await readdir(errorsDirectory),

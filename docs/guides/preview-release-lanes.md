@@ -52,6 +52,36 @@ Worker publication and recovery sequence. Production promotion remains separate.
 The existing production gate still requires the full **Deploy preview** job; a
 plugin-only Preview publication alone does not authorize production promotion.
 
+### Retrying a failed Preview deployment
+
+The workflow retains the frozen Preview runtime bundle as a seven-day encrypted
+Actions artifact. A rerun can reuse it only from the same workflow run, tested
+main SHA, Preview environment and Cloudflare account. The workflow requires one
+unexpired artifact with matching run provenance, decrypts it with the existing
+backup key, rejects unsafe paths and links, and verifies the release manifest,
+source revision, Worker identities, artifact digest and config digest. It also
+rerenders the current Preview Worker configuration and checks its fingerprint,
+including the plugin-editor URL. If configuration has changed, the workflow
+rebuilds and replaces the same-run bundle; a missing or expired bundle also
+causes a rebuild. Corrupt, ambiguous or identity-mismatched artifacts fail
+closed. Older runs made before this retention step have no bundle to reuse.
+
+Every retry still checks the current main SHA, infrastructure outputs, Flows
+preflight and isolated Preview resources, then creates a fresh Pulumi preview
+and saved plan against the current checkpoint before applying. Runtime secrets
+come from the current protected Preview environment. The previous attempt's
+saved plan, Pulumi state and checkpoint are never restored or replayed.
+
+D1 table dumps start with bounded row pages and halve a page only when Cloudflare
+returns its explicit 50 MB response-size error, retrying the same offset until
+the page succeeds or reaches one row. A dump that still fails is discarded and
+cannot be treated as a successful backup; the release stops before data
+migrations and Worker publication. The write pause and drain may already have
+started, so the existing failed-release recovery sequence remains necessary.
+Public command errors report only a safe diagnostic category, remediation code,
+operation and exit code. Raw command diagnostics remain encrypted for seven days
+and are not printed to the workflow log.
+
 API-based R2 downloads use four concurrent workers by default. Set
 `--r2-concurrency 1` through `--r2-concurrency 8` on `infra/pulumi/backup.mjs` to
 adjust the bound. Each object retains its expected size and content encoding.
