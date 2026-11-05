@@ -151,7 +151,12 @@ test("accepted standard runtime transactions defer cancellation until Pulumi fin
     const preparation = deploy
       .split("- name: Prepare one immutable runtime release")[1]
       .split("- name:")[0];
-    assert.match(preparation, /if: \$\{\{ success\(\) && !cancelled\(\) \}\}/);
+    assert.match(
+      preparation,
+      file === "deploy-preview"
+        ? /if: \$\{\{ success\(\) && !cancelled\(\) && steps\.restore_release\.outputs\.restored != 'true' \}\}/
+        : /if: \$\{\{ success\(\) && !cancelled\(\) \}\}/,
+    );
     const apply = deploy
       .split("- name: Apply the exact managed runtime plan")[1]
       .split("- name:")[0];
