@@ -434,6 +434,7 @@ jobs:
           case "$CI_KIND" in
             auth)
               pnpm --filter @savia/auth test
+              node --test scripts/auth-deployment/worker.test.mjs scripts/initialize-auth-deployment.test.mjs scripts/check-auth-bridge.test.mjs
               pnpm --filter @savia/auth exec tsc --noEmit
               ;;
             api)

@@ -571,6 +571,51 @@ test("mixed runtime scopes and migration changes retain full CI and Flows checks
   assert.equal(plan.flows, true);
 });
 
+test("CI isolates the Auth deployment PR paths with docs and keeps mixed paths full", (t) => {
+  const f = fixture(t);
+  const authPaths = [
+    "apps/auth/src/index.ts",
+    "apps/auth/test/request-initialization.test.ts",
+    "scripts/auth-deployment/worker.mjs",
+    "scripts/auth-deployment/worker.test.mjs",
+    "scripts/initialize-auth-deployment.mjs",
+    "scripts/initialize-auth-deployment.test.mjs",
+    "scripts/check-auth-bridge.mjs",
+    "scripts/check-auth-bridge.test.mjs",
+    ".github/workflows/check-preview-auth.yml",
+  ];
+  for (const path of authPaths) f.put(path, "// baseline\n");
+  f.put("docs/guides/preview-release-lanes.md", "Auth CI guide\n");
+  const base = f.commit("base");
+
+  for (const path of authPaths)
+    f.put(path, "// updated Auth deployment path\n");
+  f.put("docs/guides/preview-release-lanes.md", "Updated Auth CI guide\n");
+  const head = f.commit("Auth deployment validation update");
+  const authPlan = classifyCiChanges({ base, head, repo: f.repo });
+  assert.equal(authPlan.kind, "auth");
+  assert.equal(authPlan.flows, false);
+
+  let scenarioBase = head;
+  for (const path of [
+    "packages/shared/src/index.ts",
+    "pnpm-lock.yaml",
+    ".github/workflows/other.yml",
+    "unknown/new-file.txt",
+  ]) {
+    f.put(path, "// mixed change\n");
+    const mixedHead = f.commit(`mixed ${path}`);
+    const mixedPlan = classifyCiChanges({
+      base: scenarioBase,
+      head: mixedHead,
+      repo: f.repo,
+    });
+    assert.equal(mixedPlan.kind, "full", `${path} must select full CI`);
+    assert.equal(mixedPlan.flows, true, `${path} must retain Flows checks`);
+    scenarioBase = mixedHead;
+  }
+});
+
 test("CI routes infrastructure contracts through the existing required gate", () => {
   const workflow = readFileSync(
     new URL("../.github/workflows/ci.yml", import.meta.url),
@@ -601,6 +646,10 @@ test("CI routes infrastructure contracts through the existing required gate", ()
   );
   assert.match(workflow, /^  runtime-profile:/m);
   assert.match(workflow, /pnpm --filter @savia\/connector-gateway typecheck/);
+  assert.match(
+    workflow,
+    /node --test scripts\/auth-deployment\/worker\.test\.mjs scripts\/initialize-auth-deployment\.test\.mjs scripts\/check-auth-bridge\.test\.mjs/,
+  );
   assert.doesNotMatch(
     workflow,
     /runs: pnpm run test:unit:workspace|typecheck:plugins && pnpm run typecheck:companion/,
