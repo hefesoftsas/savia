@@ -13,8 +13,9 @@ export default {
       request.headers.get("x-savia-probe-nonce") !== env.PROBE_NONCE
     )
       return new Response(null, { status: 403 });
+    let response;
     try {
-      const response = await env.AUTH.fetch(
+      response = await env.AUTH.fetch(
         new Request(
           "https://savia-auth.internal/_internal/deployment/initialize",
           {
@@ -27,16 +28,32 @@ export default {
           },
         ),
       );
-      if (!response.ok) throw new Error("Initialization rejected");
-      const result = await response.json();
-      if (result.status !== "ready" || result.revision !== env.AUTH_REVISION)
-        throw new Error("Readiness mismatch");
-      return Response.json({ status: "ready", revision: result.revision });
     } catch {
-      return Response.json(
-        { error: "Auth preparation failed" },
+      return Response.json({ error: "TRANSPORT_FAILED" }, { status: 502 });
+    }
+    const fail = (error) =>
+      Response.json(
+        { error, upstreamStatus: response.status },
         { status: 502 },
       );
+    if (!response.ok) {
+      const error =
+        response.status === 403
+          ? "AUTH_BRIDGE_REJECTED"
+          : response.status === 409
+            ? "REVISION_MISMATCH"
+            : response.status === 503
+              ? "INITIALIZATION_FAILED"
+              : "UPSTREAM_REJECTED";
+      return fail(error);
+    }
+    try {
+      const result = await response.json();
+      if (result.status !== "ready" || result.revision !== env.AUTH_REVISION)
+        return fail("READINESS_MISMATCH");
+      return Response.json({ status: "ready", revision: result.revision });
+    } catch {
+      return fail("INITIALIZATION_FAILED");
     }
   },
 };

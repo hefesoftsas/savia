@@ -75,3 +75,62 @@ test("probe never reports another release or a failed initialization as ready", 
     assert.doesNotMatch(await response.text(), /private details|credential/);
   }
 });
+
+test("probe returns allowlisted failure categories and upstream status without private details", async () => {
+  const cases = [
+    {
+      response: new Response("credential private", { status: 403 }),
+      category: "AUTH_BRIDGE_REJECTED",
+      status: 403,
+    },
+    {
+      response: new Response("revision private", { status: 409 }),
+      category: "REVISION_MISMATCH",
+      status: 409,
+    },
+    {
+      response: new Response("initialization private", { status: 503 }),
+      category: "INITIALIZATION_FAILED",
+      status: 503,
+    },
+    {
+      response: new Response("upstream private", { status: 400 }),
+      category: "UPSTREAM_REJECTED",
+      status: 400,
+    },
+    {
+      response: Response.json({ status: "ready", revision: "b".repeat(40) }),
+      category: "READINESS_MISMATCH",
+      status: 200,
+    },
+    {
+      fetch: async () => {
+        throw new Error("credential transport private");
+      },
+      category: "TRANSPORT_FAILED",
+    },
+  ];
+  for (const { response: upstream, fetch, category, status } of cases) {
+    const response = await worker.fetch(
+      new Request(`${base}/initialize`, {
+        method: "POST",
+        headers: {
+          "x-savia-bridge-key": "credential",
+          "x-savia-probe-nonce": "nonce",
+        },
+      }),
+      {
+        AUTH_REVISION: revision,
+        PROBE_NONCE: "nonce",
+        AUTH: { fetch: fetch ?? (async () => upstream) },
+      },
+    );
+    assert.equal(response.status, 502);
+    const body = await response.json();
+    assert.deepEqual(body, {
+      error: category,
+      ...(status === undefined ? {} : { upstreamStatus: status }),
+    });
+    assert.doesNotMatch(JSON.stringify(body), /private|credential/);
+  }
+});

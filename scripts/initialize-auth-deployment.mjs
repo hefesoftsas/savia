@@ -10,6 +10,33 @@ import { buildSecretUploads } from "./upload-cloudflare-secrets.mjs";
 import { preserveCommandFailure } from "../infra/pulumi/command-diagnostics.mjs";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
+const failureCategories = new Set([
+  "AUTH_BRIDGE_REJECTED",
+  "REVISION_MISMATCH",
+  "INITIALIZATION_FAILED",
+  "UPSTREAM_REJECTED",
+  "TRANSPORT_FAILED",
+  "READINESS_MISMATCH",
+]);
+
+async function reportInitializationFailure(response, report) {
+  let body;
+  try {
+    body = await response.json();
+  } catch {
+    body = undefined;
+  }
+  const category = failureCategories.has(body?.error)
+    ? body.error
+    : "INITIALIZATION_FAILED";
+  const status =
+    Number.isInteger(body?.upstreamStatus) &&
+    body.upstreamStatus >= 100 &&
+    body.upstreamStatus <= 599
+      ? `, upstream HTTP ${body.upstreamStatus}`
+      : "";
+  report(`Auth preparation: initialization failed (${category}${status}).`);
+}
 
 export function validateAuthDeployment(environment, config, env) {
   if (
@@ -154,24 +181,38 @@ export async function initializeAuthDeployment(
       throw new Error("Auth initialization session unavailable");
     }
     report("Auth preparation: initializing the bound source revision.");
-    const response = await request(`${base}/initialize`, {
-      method: "POST",
-      headers: {
-        "x-savia-bridge-key": credential,
-        "x-savia-probe-nonce": nonce,
-      },
-      signal: AbortSignal.timeout(120_000),
-      redirect: "error",
-    });
+    let response;
+    try {
+      response = await request(`${base}/initialize`, {
+        method: "POST",
+        headers: {
+          "x-savia-bridge-key": credential,
+          "x-savia-probe-nonce": nonce,
+        },
+        signal: AbortSignal.timeout(120_000),
+        redirect: "error",
+      });
+    } catch {
+      report("Auth preparation: initialization failed (TRANSPORT_FAILED).");
+      throw new Error("Auth initialization transport failed");
+    }
     if (!response.ok) {
-      report(
-        `Auth preparation: initialization returned HTTP ${response.status}.`,
-      );
+      await reportInitializationFailure(response, report);
       throw new Error("Auth preparation failed");
     }
-    const result = await response.json();
-    if (result.status !== "ready" || result.revision !== revision)
+    let result;
+    try {
+      result = await response.json();
+    } catch {
+      report(
+        "Auth preparation: initialization failed (INITIALIZATION_FAILED).",
+      );
+      throw new Error("Auth initialization response was invalid");
+    }
+    if (result?.status !== "ready" || result?.revision !== revision) {
+      report("Auth preparation: initialization failed (READINESS_MISMATCH).");
       throw new Error("Auth deployment readiness mismatch");
+    }
     report("Auth preparation: revision ready.");
     return { status: "ready", revision };
   } catch (error) {
