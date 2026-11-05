@@ -68,6 +68,83 @@ test("platform and registry workflows use immutable lifecycle plans without comp
     );
   }
 });
+
+test("preview retries reuse one encrypted same-run release artifact and make a fresh live-state plan", async () => {
+  const source = await workflow("deploy-preview");
+  const find = source.indexOf(
+    "- name: Find exact same-run Preview release artifact",
+  );
+  const download = source.indexOf(
+    "- name: Download exact same-run Preview release artifact",
+  );
+  const restore = source.indexOf(
+    "- name: Restore encrypted Preview release artifact",
+  );
+  const prepare = source.indexOf(
+    "- name: Prepare one immutable runtime release",
+  );
+  const plan = source.indexOf("- name: Review the saved managed runtime plan");
+  const retain = source.indexOf(
+    "- name: Encrypt immutable Preview release artifact",
+  );
+  const upload = source.indexOf(
+    "- name: Retain immutable Preview release for same-run retry",
+  );
+  const apply = source.indexOf("- name: Apply the exact managed runtime plan");
+  assert.ok(
+    find >= 0 && find < download && download < restore && restore < prepare,
+  );
+  assert.ok(
+    prepare < retain && retain < upload && upload < plan && plan < apply,
+  );
+  assert.match(source.slice(find, download), /GITHUB_RUN_ID/);
+  assert.match(source.slice(find, download), /GITHUB_SHA|APPROVED_SHA/);
+  assert.match(source.slice(find, download), /ambiguous|length > 1/);
+  assert.match(
+    source.slice(download, restore),
+    /artifact-ids: \$\{\{ steps\.find_retry_release\.outputs\.artifact_id \}\}/,
+  );
+  assert.match(source.slice(download, restore), /merge-multiple: true/);
+  const downloadedPath = source
+    .slice(download, restore)
+    .match(/path: (.+)/)?.[1];
+  const uploadedPath = source
+    .slice(upload, plan)
+    .match(/path: (.+)\/\*\.enc/)?.[1];
+  assert.ok(downloadedPath && uploadedPath);
+  assert.notEqual(
+    downloadedPath,
+    uploadedPath,
+    "A config-change rebuild must not overwrite exclusive-create retry inputs",
+  );
+  assert.match(
+    source.slice(restore, prepare),
+    /runtime-artifact-custody\.mjs restore/,
+  );
+  assert.match(
+    source.slice(restore, prepare),
+    /SAVIA_BACKUP_KEY: \$\{\{ secrets\.SAVIA_FLOWS_BACKUP_KEY \}\}/,
+  );
+  assert.match(source.slice(restore, prepare), /\.restored/);
+  assert.match(source.slice(restore, prepare), /unexpected or ambiguous files/);
+  assert.match(
+    source.slice(prepare, plan),
+    /steps\.restore_release\.outputs\.restored != 'true'/,
+  );
+  assert.match(source.slice(retain, apply), /overwrite: true/);
+  assert.match(
+    source.slice(retain, apply),
+    /SAVIA_BACKUP_KEY: \$\{\{ secrets\.SAVIA_FLOWS_BACKUP_KEY \}\}/,
+  );
+  assert.match(source.slice(retain, apply), /retention-days: 7/);
+  assert.match(source.slice(find, download), /GITHUB_TOKEN/);
+  assert.match(source.slice(find, download), /run\?\.head_sha/);
+  assert.match(source.slice(plan, apply), /environment\.mjs plan/);
+  assert.doesNotMatch(
+    source.slice(find, apply),
+    /environment\.mjs apply .*--plan.*\.pulumi\.json/,
+  );
+});
 test("branch operations preserve trusted lifecycle tooling, selected source evidence and explicit data deletion", async () => {
   const manual = await workflow("preview-environment"),
     quick = await workflow("preview-quickjs");

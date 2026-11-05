@@ -13,9 +13,147 @@ import {
   isVirtualTableExportError,
   writeDumpHeader,
   dumpTables,
+  dumpDatabase,
 } from "./d1-table-dump.mjs";
 
 describe("pulumi d1 table dump", () => {
+  it("shrinks oversized API pages without losing or duplicating rows", async () => {
+    const { DatabaseSync } = await import("node:sqlite");
+    const { mkdtemp, rm } = await import("node:fs/promises");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const root = await mkdtemp(join(tmpdir(), "adaptive-d1-dump-"));
+    const source = new DatabaseSync(":memory:");
+    const restored = new DatabaseSync(":memory:");
+    const ddl = "CREATE TABLE records(id INTEGER PRIMARY KEY, payload TEXT)";
+    source.exec(ddl);
+    restored.exec(ddl);
+    for (let id = 1; id <= 5; id++)
+      source
+        .prepare("INSERT INTO records VALUES (?, ?)")
+        .run(id, `saved '${id}`);
+    const pages = [];
+    try {
+      const outputFile = join(root, "dump.sql");
+      const summary = await dumpDatabase({
+        accountId: "a".repeat(32),
+        uuid: "fixture",
+        token: "test-only",
+        outputFile,
+        stack: "preview",
+        quiescent: true,
+        batchSize: 4,
+        fetchImpl: async (_url, options) => {
+          const { sql } = JSON.parse(options.body);
+          const page = /LIMIT (\d+) OFFSET (\d+)/.exec(sql);
+          if (page) pages.push(page.slice(1).map(Number));
+          if (
+            page &&
+            (Number(page[1]) > 2 ||
+              (Number(page[2]) === 2 && Number(page[1]) > 1))
+          )
+            return Response.json(
+              {
+                success: false,
+                errors: [
+                  {
+                    code: 7500,
+                    message:
+                      "D1 query result exceeded the maximum response size limit of 50 MB",
+                  },
+                ],
+              },
+              { status: 400 },
+            );
+          return Response.json({
+            success: true,
+            result: [{ success: true, results: source.prepare(sql).all() }],
+          });
+        },
+      });
+      assert.equal(summary.rows, 5);
+      assert.deepEqual(pages, [
+        [4, 0],
+        [2, 0],
+        [2, 2],
+        [1, 2],
+        [1, 3],
+        [1, 4],
+        [1, 5],
+      ]);
+      restored.exec(await readFile(outputFile, "utf8"));
+      assert.deepEqual(
+        restored.prepare("SELECT * FROM records ORDER BY id").all(),
+        source.prepare("SELECT * FROM records ORDER BY id").all(),
+      );
+    } finally {
+      source.close();
+      restored.close();
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("fails and removes partial dumps when one row is oversized or a query is unauthorized", async () => {
+    const { DatabaseSync } = await import("node:sqlite");
+    const { mkdtemp, rm, access } = await import("node:fs/promises");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const root = await mkdtemp(join(tmpdir(), "adaptive-d1-failure-"));
+    const source = new DatabaseSync(":memory:");
+    source.exec(
+      "CREATE TABLE records(id INTEGER PRIMARY KEY); INSERT INTO records VALUES(1)",
+    );
+    try {
+      for (const status of [400, 403]) {
+        const pages = [];
+        const outputFile = join(root, `dump-${status}.sql`);
+        await assert.rejects(
+          dumpDatabase({
+            accountId: "a".repeat(32),
+            uuid: "fixture",
+            token: "test-only",
+            outputFile,
+            stack: "preview",
+            quiescent: true,
+            batchSize: 4,
+            fetchImpl: async (_url, options) => {
+              const { sql } = JSON.parse(options.body);
+              const page = /LIMIT (\d+) OFFSET (\d+)/.exec(sql);
+              if (page) {
+                pages.push(Number(page[1]));
+                return Response.json(
+                  {
+                    success: false,
+                    errors: [
+                      {
+                        code: 7500,
+                        message:
+                          status === 400
+                            ? "D1 query result exceeded the maximum response size limit of 50 MB"
+                            : "Unauthorized",
+                      },
+                    ],
+                  },
+                  { status },
+                );
+              }
+              return Response.json({
+                success: true,
+                result: [{ success: true, results: source.prepare(sql).all() }],
+              });
+            },
+          }),
+          /unreadable table/,
+        );
+        assert.deepEqual(pages, status === 400 ? [4, 2, 1] : [4]);
+        await assert.rejects(access(outputFile));
+      }
+    } finally {
+      source.close();
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it("knows FTS5 shadow tables", () => {
     assert.ok(shadowTablesFor("search_fts").includes("search_fts_data"));
     assert.ok(shadowTablesFor("search_fts").includes("search_fts_config"));

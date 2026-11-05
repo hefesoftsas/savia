@@ -147,9 +147,20 @@ function d1Query(accountId, uuid, token, sql, fetchImpl) {
       payload.success !== true ||
       payload.result?.[0]?.success !== true
     ) {
-      throw new Error(
+      const error = new Error(
         `D1 query failed (${response.status}): ${JSON.stringify(payload.errors ?? payload).slice(0, 200)}`,
       );
+      // Only this explicit read-size failure is safe to retry with fewer rows.
+      if (
+        response.status === 400 &&
+        (payload.errors ?? []).some((item) =>
+          /D1 query result exceeded the maximum response size limit/i.test(
+            String(item?.message ?? ""),
+          ),
+        )
+      )
+        error.code = "D1_RESPONSE_TOO_LARGE";
+      throw error;
     }
     return payload.result[0];
   });
@@ -370,16 +381,25 @@ export async function dumpTables({
         flag: "a",
       });
       let offset = 0;
+      let pageSize = batchSize;
       while (true) {
-        const page = await query(
-          buildSelectPage(table, columns, batchSize, offset, orderByRowid),
-        );
+        let page;
+        try {
+          page = await query(
+            buildSelectPage(table, columns, pageSize, offset, orderByRowid),
+          );
+        } catch (error) {
+          if (error.code !== "D1_RESPONSE_TOO_LARGE" || pageSize <= 1)
+            throw error;
+          pageSize = Math.max(1, Math.floor(pageSize / 2));
+          continue;
+        }
         const rows = page.results ?? [];
         if (rows.length === 0) break;
         await appendInserts(outputFile, table, columns, rows);
         offset += rows.length;
         totalRows += rows.length;
-        if (rows.length < batchSize) break;
+        if (rows.length < pageSize) break;
       }
       if (offset !== count)
         throw new RecoveryConsistencyError(
