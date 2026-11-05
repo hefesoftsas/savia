@@ -256,6 +256,110 @@ test("state-catalog command failures preserve private output and stay generic", 
   }
 });
 
+test("environment plan surfaces allowlisted command diagnostics and keeps private output", async () => {
+  const { mkdtemp, readFile, readdir, stat, rm } =
+      await import("node:fs/promises"),
+    { tmpdir } = await import("node:os"),
+    { join } = await import("node:path"),
+    { createEnvironmentDependencies } =
+      await import("./environment-operations.mjs"),
+    { parseEnvironmentArgs, runEnvironmentOperation } =
+      await import("./environment.mjs"),
+    directory = await mkdtemp(
+      join(tmpdir(), "savia-environment-command-failure-"),
+    ),
+    bucket = "savia-pulumi-state-preview",
+    backendUrl = stateBackendUrl(accountId, bucket),
+    management = {
+      accountId,
+      backendBuckets: [bucket],
+      protected: true,
+      checkpoint: {
+        deployment: {
+          resources: [
+            { type: "pulumi:pulumi:Stack" },
+            {
+              urn: "urn:pulumi:management::savia-management::cloudflare:index/r2Bucket:R2Bucket::state-backend",
+              type: "cloudflare:index/r2Bucket:R2Bucket",
+              id: bucket,
+              protect: true,
+              inputs: { accountId, name: bucket },
+              outputs: { accountId, name: bucket },
+            },
+          ],
+        },
+      },
+    },
+    deps = createEnvironmentDependencies({
+      env: {
+        CLOUDFLARE_ACCOUNT_ID: accountId,
+        PULUMI_BACKEND_URL: backendUrl,
+        PULUMI_CONFIG_PASSPHRASE: "test-passphrase",
+        AWS_ACCESS_KEY_ID: "test-access-key",
+        AWS_SECRET_ACCESS_KEY: "test-secret-key",
+        SAVIA_RUNTIME_OPERATION_DIRECTORY: directory,
+      },
+      run: async (binary, args) => {
+        if (binary === "git") return { stdout: "reviewed-revision" };
+        if (args[0] === "stack")
+          return { stdout: JSON.stringify({ deployment: { resources: [] } }) };
+        if (args[0] === "preview") {
+          const error = new Error(
+            "permission denied /private/path with secret",
+          );
+          error.code = 42;
+          error.stdout = "safe stdout";
+          error.stderr = "permission denied /private/path with secret";
+          throw error;
+        }
+        return { stdout: "" };
+      },
+    });
+  deps.context = async () => ({
+    checkpoints: [],
+    backendUrl,
+    management,
+    qualifiedStack: "organization/savia-cloudflare/preview",
+  });
+  deps.inventory = async () => ({
+    version: 1,
+    accountId,
+    environment: "preview",
+    project: "savia-cloudflare",
+    stack: "preview",
+    profile: {},
+    resources: [],
+  });
+  try {
+    await assert.rejects(
+      runEnvironmentOperation(
+        parseEnvironmentArgs(["plan", "--environment", "preview"]),
+        deps,
+      ),
+      (error) => {
+        assert.equal(
+          error.message,
+          "Environment command failed (diagnostic=PERMISSION_DENIED; remediation=CHECK_ACCESS; operation=environment-command; exit=42)",
+        );
+        assert.equal(error.message.includes("private/path"), false);
+        assert.equal(error.message.includes("secret"), false);
+        return true;
+      },
+    );
+    const errorsDirectory = join(directory, "command-errors"),
+      files = await readdir(errorsDirectory),
+      recordPath = join(errorsDirectory, files[0]),
+      record = JSON.parse(await readFile(recordPath, "utf8"));
+    assert.equal(files.length, 1);
+    assert.equal(record.stderr, "permission denied /private/path with secret");
+    assert.equal(record.stdout, "safe stdout");
+    assert.equal((await stat(errorsDirectory)).mode & 0o777, 0o700);
+    assert.equal((await stat(recordPath)).mode & 0o777, 0o600);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test("concrete adoption saves and applies the guarded plan, then clears one-time Worker imports", async () => {
   const { mkdtemp, writeFile, rm } = await import("node:fs/promises");
   const { tmpdir } = await import("node:os");

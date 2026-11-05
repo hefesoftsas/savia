@@ -474,9 +474,11 @@ export function createEnvironmentDependencies({
       const result = await run("pulumi", args, options(descriptor));
       await recordCommand({ ...entry, status: "completed" });
       return result;
-    } catch {
+    } catch (error) {
       await recordCommand({ ...entry, status: "failed" });
-      throw new Error(`Environment command failed: pulumi ${args[0]}`);
+      // run() has already reduced subprocess output to an allowlisted public
+      // diagnostic while preserving raw stdout/stderr in the private record.
+      throw error;
     }
   };
   const setConfig = async (descriptor, key, value) =>
