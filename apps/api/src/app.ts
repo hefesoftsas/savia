@@ -164,6 +164,7 @@ export function createApp(
   whatsapp?: WhatsappRouteDependencies,
   whatsappWebhook?: WhatsappWebhookDependencies,
   saviaFlows?: SaviaFlowsOptions,
+  realtimeOutboxRecoveryEnabled = false,
 ): OpenAPIHono {
   const resolvedAuthService = serviceBinding ?? authService;
   const app = createApiShell(
@@ -247,6 +248,7 @@ export function createApp(
   registerAccessControlRoutes(app, db, realtime);
   registerAssistantRoutes(app, assistantService, {
     db,
+    realtime,
     documents,
     configuration: assistantConfiguration,
     loadThreadContext: createCompanionAssistantContextLoader(companion),
@@ -265,7 +267,7 @@ export function createApp(
       betterAuthOAuthClientAdministrator(resolvedAuthService),
     realtime,
   );
-  registerRealtimeRoutes(app, db, realtime);
+  registerRealtimeRoutes(app, db, realtime, realtimeOutboxRecoveryEnabled);
   registerSaviaRequestRoutes(app, saviaRequestService);
   registerSaviaFlowsRoutes(app, saviaFlows);
   registerSaviaCollectionHostRoutes(app, db, saviaFlows);
@@ -308,7 +310,7 @@ export function createApp(
         encryptionKey: extensionConnectionsEncryptionKey,
       }),
   });
-  registerRequestPageRoutes(app, db, saviaRequestService);
+  registerRequestPageRoutes(app, db, saviaRequestService, realtime);
   registerRequestResultRoutes(app, saviaRequestService);
   registerCrmRoutes(app, db, crm);
   registerWhatsappRoutes(app, db, whatsapp);

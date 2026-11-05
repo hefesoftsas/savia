@@ -1,4 +1,4 @@
-import { createRoute, type OpenAPIHono } from "@hono/zod-openapi";
+import { createRoute, z, type OpenAPIHono } from "@hono/zod-openapi";
 import {
   actorFromContext,
   requirePlatformAdministrator,
@@ -15,6 +15,72 @@ import {
   ticketRequestSchema,
   ticketResponseSchema,
 } from "./protocol";
+
+const eventListQuerySchema = z.object({
+  after: z.coerce.number().int().nonnegative().default(0),
+  limit: z.coerce.number().int().min(1).max(100).default(100),
+});
+const eventListResponseSchema = z.object({
+  data: z.object({
+    durable: z.boolean(),
+    events: z.array(
+      z.object({
+        eventId: z.number().int().positive(),
+        topic: z.enum(["assistant-threads", "request-pages"]),
+        type: z.enum(["created", "updated", "deleted"]),
+        collection: z.string(),
+        id: z.string(),
+        actor: z.string(),
+        at: z.string().datetime(),
+      }),
+    ),
+    nextCursor: z.number().int().nonnegative(),
+    hasMore: z.boolean(),
+  }),
+});
+
+const eventsRoute = createRoute({
+  method: "get",
+  path: "/v1/realtime/events",
+  tags: ["Realtime"],
+  summary: "Replay durable private change events",
+  description:
+    "Returns assistant-thread and request-page change hints after a principal-scoped cursor. Repeating a cursor is safe; clients should deduplicate by eventId.",
+  security: [{ oauth2: ["savia.api.read"] }],
+  request: { query: eventListQuerySchema },
+  responses: {
+    200: {
+      content: { "application/json": { schema: eventListResponseSchema } },
+      description: "Events visible to the authenticated principal",
+    },
+    410: {
+      content: {
+        "application/json": {
+          schema: z.object({
+            error: z.object({
+              code: z.literal("REALTIME_CURSOR_EXPIRED"),
+              message: z.string(),
+              resyncRequired: z.literal(true),
+              durable: z.boolean(),
+              resetCursor: z.number().int().nonnegative(),
+            }),
+          }),
+        },
+      },
+      description: "Cursor is older than retained events; refetch full state",
+    },
+  },
+});
+
+type DurableEventRow = {
+  event_id: number;
+  topic: "assistant-threads" | "request-pages";
+  type: "created" | "updated" | "deleted";
+  collection: string;
+  resource_id: string;
+  principal_id: string;
+  created_at: string;
+};
 
 const ticketRoute = createRoute({
   method: "post",
@@ -49,12 +115,15 @@ const principalOnlyTopics = new Set([
   "notifications",
   "personal-integrations",
   "account",
+  "assistant-threads",
+  "request-pages",
 ]);
 
 export function registerRealtimeRoutes(
   app: OpenAPIHono,
   db: D1Database,
   hub?: RealtimeHubClient,
+  durableOutboxRecoveryEnabled = false,
 ): void {
   app.use("/v1/realtime/*", async (c, next) => {
     const limiter = (c.env as { REALTIME_RATE_LIMITER?: RateLimit } | undefined)
@@ -79,6 +148,71 @@ export function registerRealtimeRoutes(
       );
     }
     await next();
+  });
+  app.openapi(eventsRoute, async (context) => {
+    const actor = actorFromContext(context);
+    const { after, limit } = context.req.valid("query");
+    const retention = await db
+      .prepare(
+        "SELECT expired_through FROM realtime_event_retention WHERE principal_id=?",
+      )
+      .bind(actor.principal.id)
+      .first<{ expired_through: number }>();
+    if (retention && after < retention.expired_through) {
+      const highWater = await db
+        .prepare(
+          `SELECT MAX(event_id) AS event_id FROM realtime_event_outbox
+           WHERE principal_id=?`,
+        )
+        .bind(actor.principal.id)
+        .first<{ event_id: number | null }>();
+      return context.json(
+        {
+          error: {
+            code: "REALTIME_CURSOR_EXPIRED" as const,
+            message: "Refetch current state before resuming realtime events.",
+            resyncRequired: true as const,
+            durable: durableOutboxRecoveryEnabled,
+            resetCursor: Math.max(
+              retention.expired_through,
+              highWater?.event_id ?? 0,
+            ),
+          },
+        },
+        410,
+      );
+    }
+    const { results } = await db
+      .prepare(
+        `SELECT event_id, topic, type, collection, resource_id,
+                principal_id, created_at
+         FROM realtime_event_outbox
+         WHERE principal_id = ? AND event_id > ?
+         ORDER BY event_id LIMIT ?`,
+      )
+      .bind(actor.principal.id, after, limit + 1)
+      .all<DurableEventRow>();
+    const hasMore = results.length > limit;
+    const page = results.slice(0, limit);
+    return context.json(
+      {
+        data: {
+          durable: durableOutboxRecoveryEnabled,
+          events: page.map((row) => ({
+            eventId: row.event_id,
+            topic: row.topic,
+            type: row.type,
+            collection: row.collection,
+            id: row.resource_id,
+            actor: row.principal_id,
+            at: row.created_at,
+          })),
+          nextCursor: page.at(-1)?.event_id ?? after,
+          hasMore,
+        },
+      },
+      200,
+    );
   });
   app.openapi(ticketRoute, async (context) => {
     const actor = actorFromContext(context);

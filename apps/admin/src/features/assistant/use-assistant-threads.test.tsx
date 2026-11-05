@@ -1,5 +1,5 @@
 import { act, renderHook, waitFor, cleanup } from "@testing-library/react";
-import { afterEach, expect, it } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 import type { PropsWithChildren } from "react";
 import type { AppServices } from "@/app-services";
 import { ApiClient } from "@/api/api-client";
@@ -7,9 +7,29 @@ import { AppServicesProvider } from "./assistant-context";
 import { useAssistantThreads } from "./use-assistant-threads";
 import type {
   AssistantThreadSummary,
+  RecordingContext,
   SyncedThread,
 } from "./assistant-threads-client";
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  realtimeState.durable = false;
+  realtimeState.status = "live";
+  vi.useRealTimers();
+});
+const realtimeState = vi.hoisted(() => ({
+  callbacks: null as any,
+  durable: false,
+  status: "live",
+}));
+vi.mock("@/realtime/use-realtime", () => ({
+  useRealtimeTopics: (options: any) => {
+    realtimeState.callbacks = options;
+    return { status: realtimeState.status, lastEvent: null };
+  },
+}));
+vi.mock("@/realtime/use-durable-realtime", () => ({
+  useDurableRealtime: () => realtimeState.durable,
+}));
 function server() {
   const threads = new Map<string, SyncedThread>();
   const detailGets: string[] = [];
@@ -39,6 +59,7 @@ function server() {
       }
     | undefined;
   let saveRequests = 0;
+  let listRequests = 0;
   const device = () => {
     const apiClient = new ApiClient({
       baseUrl: "https://savia.test",
@@ -90,6 +111,7 @@ function server() {
           return Response.json(next);
         }
         if (url.pathname === "/api/assistant/threads") {
+          listRequests += 1;
           if (listFailureStatus) {
             const status = listFailureStatus;
             return Response.json(
@@ -171,6 +193,9 @@ function server() {
     device,
     threads,
     detailGets,
+    get listRequests() {
+      return listRequests;
+    },
     setActiveTenantId: (tenantId: number) => {
       activeTenantId = tenantId;
     },
@@ -237,6 +262,79 @@ function server() {
     },
   };
 }
+
+it("refreshes assistant threads from private realtime hints and after reconnect", async () => {
+  localStorage.clear();
+  const api = server();
+  const initial = savedThread("thread-1", "First", messages);
+  const remote = savedThread("thread-2", "Remote", messages);
+  api.threads.set(initial.id, initial);
+  const view = renderHook(() => useAssistantThreads(true), {
+    wrapper: api.device(),
+  });
+  await waitFor(() =>
+    expect(view.result.current.activeThread?.id).toBe(initial.id),
+  );
+  expect(realtimeState.callbacks).toMatchObject({
+    topics: ["assistant-threads"],
+    enabled: true,
+  });
+
+  api.threads.set(remote.id, remote);
+  const beforeInitialCatchUp = api.listRequests;
+  await act(async () => realtimeState.callbacks.onConnected("initial"));
+  await waitFor(() =>
+    expect(
+      view.result.current.threads.some((thread) => thread.id === remote.id),
+    ).toBe(true),
+  );
+  expect(api.listRequests).toBeGreaterThan(beforeInitialCatchUp);
+
+  const eventThread = savedThread("thread-3", "Event", messages);
+  api.threads.set(eventThread.id, eventThread);
+  const beforeEvent = api.listRequests;
+  await act(async () => {
+    realtimeState.callbacks.onEvent({
+      topic: "assistant-threads",
+      type: "updated",
+      collection: "threads",
+      id: eventThread.id,
+    });
+  });
+  await waitFor(() =>
+    expect(
+      view.result.current.threads.some(
+        (thread) => thread.id === eventThread.id,
+      ),
+    ).toBe(true),
+  );
+  expect(api.listRequests).toBeGreaterThan(beforeEvent);
+
+  const beforeReconnect = api.listRequests;
+  await act(async () => realtimeState.callbacks.onConnected("recovered"));
+  await waitFor(() =>
+    expect(api.listRequests).toBeGreaterThan(beforeReconnect),
+  );
+});
+
+it.each(["live", "unavailable"])(
+  "does not poll visible assistant threads while realtime is %s",
+  async (status) => {
+  vi.useFakeTimers();
+  realtimeState.status = status;
+  const api = server();
+  renderHook(() => useAssistantThreads(true), { wrapper: api.device() });
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(0);
+  });
+  const initialRequests = api.listRequests;
+  expect(initialRequests).toBeGreaterThan(0);
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(300_000);
+  });
+  expect(api.listRequests).toBe(initialRequests);
+  },
+);
 const messages = [
   {
     id: "m1",
@@ -369,6 +467,45 @@ it("ignores an in-flight old-workspace list after the active tenant changes", as
     expect(view.result.current.activeThread?.id).toBe(second.id),
   );
   expect(api.detailGets).toEqual([first.id, second.id]);
+});
+
+it("discards an in-flight thread list when the recording context changes", async () => {
+  localStorage.clear();
+  const api = server();
+  const firstContext = {
+    kind: "recording" as const,
+    id: "recording-a",
+    title: "Recording A",
+  };
+  const secondContext = {
+    kind: "session" as const,
+    id: "session-b",
+    title: "Session B",
+  };
+  const first = {
+    ...savedThread("thread-recording-a", "Recording A", messages),
+    context: { ...firstContext, tenantId: 101 },
+  };
+  const second = {
+    ...savedThread("thread-session-b", "Session B", messages),
+    context: { ...secondContext, tenantId: 101 },
+  };
+  api.threads.set(first.id, first);
+  api.threads.set(second.id, second);
+  const gate = api.pauseNextList();
+  const view = renderHook(({ context }) => useAssistantThreads(true, context), {
+    initialProps: { context: firstContext as RecordingContext },
+    wrapper: api.device(),
+  });
+  await gate.started;
+  view.rerender({ context: secondContext });
+  gate.release();
+  await waitFor(() =>
+    expect(view.result.current.activeThread?.id).toBe(second.id),
+  );
+  expect(view.result.current.threads.map((thread) => thread.id)).toEqual([
+    second.id,
+  ]);
 });
 
 it("restores a recording conversation on a different device", async () => {

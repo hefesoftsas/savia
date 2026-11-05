@@ -97,10 +97,15 @@ export const tenantPagesSearchMessages = {
     "Catch-up paused: %{done} of %{total}",
     "Atualização pausada: %{done} de %{total}",
   ],
-  "Waiting for page indexing": [
-    "Otra solicitud está indexando estas páginas. Comprobaremos el estado de nuevo en unos segundos.",
-    "Another request is indexing these pages. Checking again in a few seconds.",
-    "Outra solicitação está indexando estas páginas. Vamos verificar novamente em alguns segundos.",
+  "Another request is indexing these pages": [
+    "Otra solicitud está indexando estas páginas. Actualiza el estado para comprobar cuándo termina.",
+    "Another request is indexing these pages. Refresh the status to check when it finishes.",
+    "Outra solicitação está indexando estas páginas. Atualize o estado para verificar quando terminar.",
+  ],
+  "Refresh index status": [
+    "Actualizar estado del índice",
+    "Refresh index status",
+    "Atualizar estado do índice",
   ],
   "Semantic search results": [
     "Resultados de búsqueda semántica",

@@ -85,3 +85,24 @@ it("coalesces two count consumers and follows an in-flight hint without refreshi
   expect(adminStatus).toHaveBeenCalledTimes(1);
   queryClient.clear();
 });
+
+it("does not periodically refetch unread counts", async () => {
+  vi.useFakeTimers();
+  const unreadCount = vi.fn().mockResolvedValue(4);
+  const client = { unreadCount } as unknown as NotificationClient;
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  renderHook(() => useUnreadNotifications(client), {
+    wrapper: wrapper(queryClient),
+  });
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(0);
+  });
+  expect(unreadCount).toHaveBeenCalledTimes(1);
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(300_000);
+  });
+  expect(unreadCount).toHaveBeenCalledTimes(1);
+  queryClient.clear();
+});

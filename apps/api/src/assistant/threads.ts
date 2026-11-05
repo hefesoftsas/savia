@@ -246,7 +246,9 @@ export class AssistantThreadRepository {
         if (isConstraintError(error)) throw new AssistantThreadConflictError();
         throw error;
       }
-      if (!result.success || result.meta.changes !== 1)
+      // D1 reports trigger writes in `meta.changes`; this statement can
+      // change at most one thread because the WHERE clause is keyed by id.
+      if (!result.success || result.meta.changes < 1)
         throw new AssistantThreadConflictError();
     }
 
@@ -277,7 +279,7 @@ export class AssistantThreadRepository {
       )
       .bind(id, userId, expectedRevision)
       .run();
-    if (!result.success || result.meta.changes !== 1)
+    if (!result.success || result.meta.changes < 1)
       throw new AssistantThreadConflictError();
   }
 }

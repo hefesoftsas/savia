@@ -1,8 +1,7 @@
 name: Check production backup freshness
 
 on:
-  schedule:
-    - cron: "0 */6 * * *"
+  # TD-EVENT-01: automatic freshness checks disabled for the on-demand rollout.
   workflow_dispatch:
 
 permissions:

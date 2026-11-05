@@ -11,6 +11,7 @@ import {
 } from "../db";
 import { callSaviaCollections } from "../nodes/savia/collection-client";
 import { WorkflowStore } from "../stores/workflow-store";
+import { sendSaviaCollectionBatchWakeup } from "../services/collection-event-batches";
 import { getAuthContext } from "../utils/auth-context";
 
 const operation = z.enum(["created", "updated", "deleted", "restored"]);
@@ -339,6 +340,12 @@ saviaCollectionSubscriptionRoutes.post(
       .orderBy(saviaCollectionEventBatchGroups.finishedAt)
       .limit(250);
     if (failedGroups.length === 0) return c.json({ retried: 0 });
+    if (!c.env.WORKFLOW_QUEUE) {
+      return c.json(
+        { error: "Collection batch queue is unavailable; no batches were retried" },
+        503,
+      );
+    }
     const retried = await db
       .update(saviaCollectionEventBatchGroups)
       .set({
@@ -368,6 +375,46 @@ saviaCollectionSubscriptionRoutes.post(
         ),
       )
       .returning({ groupKey: saviaCollectionEventBatchGroups.groupKey });
-    return c.json({ retried: retried.length });
+    let queued = 0;
+    let failed = 0;
+    for (const group of retried) {
+      try {
+        await sendSaviaCollectionBatchWakeup(
+          c.env.WORKFLOW_QUEUE,
+          group.groupKey,
+        );
+        queued += 1;
+      } catch (error) {
+        failed += 1;
+        await db
+          .update(saviaCollectionEventBatchGroups)
+          .set({
+            status: "failed",
+            lastError:
+              error instanceof Error
+                ? error.message.slice(0, 1000)
+                : "Queue wakeup failed",
+            finishedAt: now.getTime(),
+            updatedAt: now.getTime(),
+          })
+          .where(
+            and(
+              eq(saviaCollectionEventBatchGroups.groupKey, group.groupKey),
+              eq(saviaCollectionEventBatchGroups.status, "pending"),
+            ),
+          );
+      }
+    }
+    if (failed > 0) {
+      return c.json(
+        {
+          error: "Some batch wakeups could not be queued; those batches remain retryable",
+          retried: queued,
+          failed,
+        },
+        503,
+      );
+    }
+    return c.json({ retried: queued });
   },
 );

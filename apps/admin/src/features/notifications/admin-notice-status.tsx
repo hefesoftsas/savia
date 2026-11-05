@@ -31,7 +31,6 @@ export function AdminNoticeStatus({
   const status = useQuery({
     queryKey: notificationReadKey(sessionGeneration, "admin-status", eventId),
     queryFn: () => client.adminStatus(eventId),
-    refetchInterval: 15_000,
   });
 
   if (status.isPending) return <p>{t("loading")}</p>;

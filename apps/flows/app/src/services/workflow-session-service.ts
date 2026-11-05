@@ -24,6 +24,7 @@ export interface WorkflowWSOptions {
   onConnectionOpen?: () => void;
   onConnectionClose?: (event: CloseEvent) => void;
   onConnectionError?: (event: Event) => void;
+  onReconnectExhausted?: () => void;
 }
 
 export class WorkflowWebSocket {
@@ -37,6 +38,7 @@ export class WorkflowWebSocket {
   private maxReconnectAttempts = 5;
   private reconnectDelay = 1000; // Start with 1 second
   private shouldReconnect = true;
+  private reconnectExhausted = false;
   private currentState: WorkflowState | null = null;
   private activeExecutionId: string | null = null;
   private ticketPending = false;
@@ -62,6 +64,7 @@ export class WorkflowWebSocket {
         this.ws.onopen = () => {
           this.reconnectAttempts = 0;
           this.reconnectDelay = 1000;
+          this.reconnectExhausted = false;
           this.options.onConnectionOpen?.();
         };
 
@@ -76,19 +79,9 @@ export class WorkflowWebSocket {
           this.options.onConnectionClose?.(event);
 
           if (this.shouldAttemptReconnect(event)) {
-            this.reconnectAttempts++;
-            const attempt = this.reconnectAttempts;
-
-            setTimeout(() => {
-              void attempt;
-              this.connect();
-            }, this.reconnectDelay);
-
-            // Exponential backoff
-            this.reconnectDelay = Math.min(
-              this.reconnectDelay * 2,
-              WorkflowWebSocket.MAX_RECONNECT_DELAY,
-            );
+            this.scheduleReconnect();
+          } else if (this.shouldReconnect) {
+            this.notifyReconnectExhausted();
           }
         };
       })
@@ -98,6 +91,14 @@ export class WorkflowWebSocket {
         this.options.onConnectionError?.(
           new Event("error", { cancelable: false }),
         );
+        if (
+          this.shouldReconnect &&
+          this.reconnectAttempts < this.maxReconnectAttempts
+        ) {
+          this.scheduleReconnect();
+        } else if (this.shouldReconnect) {
+          this.notifyReconnectExhausted();
+        }
       });
   }
 
@@ -188,6 +189,21 @@ export class WorkflowWebSocket {
       event.code !== WorkflowWebSocket.NORMAL_CLOSURE &&
       event.code !== WorkflowWebSocket.GOING_AWAY
     );
+  }
+
+  private scheduleReconnect(): void {
+    this.reconnectAttempts++;
+    setTimeout(() => this.connect(), this.reconnectDelay);
+    this.reconnectDelay = Math.min(
+      this.reconnectDelay * 2,
+      WorkflowWebSocket.MAX_RECONNECT_DELAY,
+    );
+  }
+
+  private notifyReconnectExhausted(): void {
+    if (this.reconnectExhausted) return;
+    this.reconnectExhausted = true;
+    this.options.onReconnectExhausted?.();
   }
 
   /**
@@ -294,6 +310,10 @@ export class WorkflowWebSocket {
    */
   registerForExecutionUpdates(executionId: string): void {
     this.activeExecutionId = executionId;
+    // A caller can register before the first init arrives. In that case the
+    // init handler below sends the subscription once the server has loaded
+    // and authorized the workflow for this socket.
+    if (!this.currentState) return;
     this.sendMessage(
       {
         type: "execute",
@@ -335,6 +355,30 @@ export const connectWorkflowWS = (
   options: WorkflowWSOptions = {},
 ): WorkflowWebSocket => {
   const ws = new WorkflowWebSocket(orgId, workflowId, options);
+  ws.connect();
+  return ws;
+};
+
+/**
+ * Subscribe to an existing execution over the authenticated workflow socket.
+ * The socket remembers the execution ID and re-subscribes after each init on
+ * reconnect, allowing the server's buffered latest state to be recovered.
+ */
+export const connectWorkflowExecutionWS = (
+  orgId: string,
+  workflowId: string,
+  executionId: string,
+  onExecutionUpdate: (execution: WorkflowExecution) => void,
+  options: Pick<
+    WorkflowWSOptions,
+    "onConnectionOpen" | "onReconnectExhausted"
+  > = {},
+): WorkflowWebSocket => {
+  const ws = new WorkflowWebSocket(orgId, workflowId, {
+    ...options,
+    onExecutionUpdate,
+  });
+  ws.registerForExecutionUpdates(executionId);
   ws.connect();
   return ws;
 };

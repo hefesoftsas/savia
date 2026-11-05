@@ -30,6 +30,7 @@ export const MAX_SAVIA_COLLECTION_BATCH_RECEIPT_BYTES = 16 * 1024;
 export const MAX_PENDING_SAVIA_COLLECTION_EVENTS_PER_ORG = 5_000;
 export const SAVIA_COLLECTION_BATCH_MAX_ATTEMPTS = 5;
 export const SAVIA_COLLECTION_BATCH_MAX_RETRY_MS = 60 * 60 * 1000;
+export const SAVIA_COLLECTION_BATCH_WAKEUP = "savia.collection-batch.wakeup.v1";
 const BATCH_LEASE_MS = 5 * 60 * 1000;
 const RETENTION_MS = 90 * 24 * 60 * 60 * 1000;
 
@@ -71,17 +72,34 @@ interface AuthorizedBatchItem {
   executionId: string | null;
 }
 
+/** Queue one delayed wakeup for a specific committed batch group. */
+export async function sendSaviaCollectionBatchWakeup(
+  queue: Pick<Queue, "send"> | null | undefined,
+  groupKey: string,
+  delaySeconds = 0,
+): Promise<void> {
+  if (!queue) throw new Error("Savia collection batch queue is unavailable");
+  const message = { type: SAVIA_COLLECTION_BATCH_WAKEUP, groupKey };
+  if (delaySeconds > 0) {
+    await queue.send(message, { delaySeconds });
+  } else {
+    await queue.send(message);
+  }
+}
+
 /**
  * Persist the source admission, group item, and group receipt in one D1 batch.
  * The item INSERT computes COUNT(bucket)/50 inside the serialized write, so
  * concurrent requests cannot allocate more than fifty items to one chunk.
  */
 export async function enqueueSaviaCollectionEventBatch(
-  env: Pick<Bindings, "DB">,
+  env: Pick<Bindings, "DB"> & Partial<Pick<Bindings, "WORKFLOW_QUEUE">>,
   event: SaviaCollectionEvent,
   subscription: CollectionBatchSubscription,
   receivedAt = Date.now(),
 ): Promise<EnqueueCollectionBatchResult> {
+  if (!env.WORKFLOW_QUEUE) return { status: "wakeup-unavailable" };
+
   const configCreatedAt = subscription.configCreatedAt.getTime();
   const receiptMinute = Math.floor(receivedAt / 60_000);
   const bucketKey = await sha256(
@@ -117,7 +135,7 @@ export async function enqueueSaviaCollectionEventBatch(
     env.DB.prepare(
       `INSERT OR IGNORE INTO savia_collection_admissions
         (event_id, workflow_id, execution_id, status, updated_at)
-       SELECT ?, ?, ?, 'queued', ?
+       SELECT ?, ?, ?, 'wakeup_pending', ?
        WHERE EXISTS (
          SELECT 1 FROM savia_collection_admissions WHERE event_id = ? AND workflow_id = ?
        ) OR (
@@ -146,7 +164,7 @@ export async function enqueueSaviaCollectionEventBatch(
          'pending', ?, ?, ?, ?
        WHERE EXISTS (
          SELECT 1 FROM savia_collection_admissions
-         WHERE event_id = ? AND workflow_id = ? AND status = 'queued'
+         WHERE event_id = ? AND workflow_id = ? AND status IN ('queued', 'wakeup_pending')
        )`,
     ).bind(
       initialGroupKey,
@@ -174,7 +192,7 @@ export async function enqueueSaviaCollectionEventBatch(
          ?, 'pending', ?, ?
        WHERE EXISTS (
          SELECT 1 FROM savia_collection_admissions
-         WHERE event_id = ? AND workflow_id = ? AND status = 'queued'
+         WHERE event_id = ? AND workflow_id = ? AND status IN ('queued', 'wakeup_pending')
        )`,
     ).bind(
       event.id,
@@ -193,26 +211,82 @@ export async function enqueueSaviaCollectionEventBatch(
     ),
   ]);
 
-  const admission = await env.DB.prepare(
+  let admission = await env.DB.prepare(
     `SELECT status FROM savia_collection_admissions WHERE event_id = ? AND workflow_id = ?`,
   )
     .bind(event.id, subscription.workflowId)
     .first<{ status: string }>();
   const item = await env.DB.prepare(
-    `SELECT group_key FROM savia_collection_event_batch_items WHERE event_id = ? AND workflow_id = ?`,
+    `SELECT item.group_key, batch.due_at
+       FROM savia_collection_event_batch_items AS item
+       INNER JOIN savia_collection_event_batch_groups AS batch
+         ON batch.group_key = item.group_key
+      WHERE item.event_id = ? AND item.workflow_id = ?`,
   )
     .bind(event.id, subscription.workflowId)
-    .first<{ group_key: string }>();
+    .first<{ group_key: string; due_at: number }>();
+
+  if (admission?.status === "wakeup_pending" && item?.group_key) {
+    const existingWakeup = await env.DB.prepare(
+      `SELECT 1 AS found
+         FROM savia_collection_event_batch_items AS item
+         INNER JOIN savia_collection_admissions AS admission
+           ON admission.event_id = item.event_id
+          AND admission.workflow_id = item.workflow_id
+        WHERE item.group_key = ? AND admission.status = 'queued'
+        LIMIT 1`,
+    )
+      .bind(item.group_key)
+      .first<{ found: number }>();
+
+    if (existingWakeup) {
+      await env.DB.prepare(
+        `UPDATE savia_collection_admissions SET status='queued', updated_at=?
+          WHERE event_id=? AND workflow_id=? AND status='wakeup_pending'`,
+      )
+        .bind(receivedAt, event.id, subscription.workflowId)
+        .run();
+      admission = { status: "queued" };
+    } else {
+      try {
+        const delaySeconds = Math.min(
+          900,
+          Math.max(0, Math.ceil((item.due_at - Date.now()) / 1000)),
+        );
+        await sendSaviaCollectionBatchWakeup(
+          env.WORKFLOW_QUEUE,
+          item.group_key,
+          delaySeconds,
+        );
+        await env.DB.prepare(
+          `UPDATE savia_collection_admissions
+              SET status='queued', updated_at=?
+            WHERE status='wakeup_pending' AND workflow_id=?
+              AND event_id IN (
+                SELECT event_id FROM savia_collection_event_batch_items
+                 WHERE group_key=? AND workflow_id=?
+              )`,
+        )
+          .bind(receivedAt, subscription.workflowId, item.group_key, subscription.workflowId)
+          .run();
+        admission = { status: "queued" };
+      } catch (error) {
+        console.error("Savia collection batch wakeup could not be queued", error);
+        return { status: "wakeup-unavailable", groupKey: item.group_key };
+      }
+    }
+  }
+
   return {
     status: admission?.status ?? "backpressure",
     groupKey: item?.group_key,
   };
 }
 
-/** Flush at most one due group. Call from the scheduled worker once per tick. */
+/** Flush at most one due group, optionally targeting a queue wakeup's group. */
 export async function flushSaviaCollectionEventBatch(
   env: Bindings,
-  options: { now?: number; clock?: () => number } = {},
+  options: { now?: number; clock?: () => number; groupKey?: string } = {},
 ): Promise<{ skipped: string | false; groupKey?: string }> {
   const startedAt = Date.now();
   const now = options.now ?? startedAt;
@@ -244,7 +318,7 @@ export async function flushSaviaCollectionEventBatch(
          lease_until = ?, updated_at = ?
      WHERE group_key = (
        SELECT group_key FROM savia_collection_event_batch_groups
-       WHERE attempts < ? AND (
+       WHERE attempts < ? AND (? IS NULL OR group_key = ?) AND (
          (status = 'pending' AND due_at <= ? AND next_attempt_at <= ?)
          OR (status = 'processing' AND lease_until <= ?)
        )
@@ -258,6 +332,8 @@ export async function flushSaviaCollectionEventBatch(
       claimTime + BATCH_LEASE_MS,
       claimTime,
       SAVIA_COLLECTION_BATCH_MAX_ATTEMPTS,
+      options.groupKey ?? null,
+      options.groupKey ?? null,
       claimTime,
       claimTime,
       claimTime,

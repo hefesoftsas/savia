@@ -7,6 +7,7 @@ import {
 } from "./auth-fixtures";
 import type { Authenticator } from "../src/auth/types";
 import { generateRequestPage } from "@savia/studio-shared/request-page";
+import type { RealtimeHubClient } from "../src/realtime/hub-client";
 const migrations = Object.entries(
   import.meta.glob<string>("../../../packages/db/migrations/*.sql", {
     eager: true,
@@ -70,8 +71,15 @@ const provider = vi.fn(async (request: Request) => {
     });
   throw new Error("Unexpected path");
 });
-function appFor(auth: Authenticator = platformAdministratorAuthenticator()) {
-  return createTestApp({ auth, saviaRequestService: { fetch: provider } });
+function appFor(
+  auth: Authenticator = platformAdministratorAuthenticator(),
+  realtime?: RealtimeHubClient,
+) {
+  return createTestApp({
+    auth,
+    saviaRequestService: { fetch: provider },
+    realtime,
+  });
 }
 const input = () => ({
   id: crypto.randomUUID(),
@@ -112,6 +120,33 @@ beforeAll(async () => {
     .run();
 });
 describe("generated request pages", () => {
+  it("publishes a private completion hint after persisting a run", async () => {
+    const events: Array<{ room: string; event: Record<string, unknown> }> = [];
+    const realtime: RealtimeHubClient = {
+      publish: (room, event) => events.push({ room, event }),
+      issue: async () => ({
+        ticket: "ticket",
+        expiresAt: new Date().toISOString(),
+      }),
+      forward: async () => new Response(),
+    };
+    const body = input();
+    const response = await post(
+      appFor(platformAdministratorAuthenticator(), realtime),
+      body,
+    );
+    expect(response.status).toBe(200);
+    expect(events).toContainEqual({
+      room: "principal:test-platform-admin",
+      event: expect.objectContaining({
+        topic: "request-pages",
+        type: "updated",
+        collection: "generated",
+        id: body.id,
+      }),
+    });
+  });
+
   it("persists results and does not repeat a provider call on replay or history reads", async () => {
     const app = appFor(),
       body = input();

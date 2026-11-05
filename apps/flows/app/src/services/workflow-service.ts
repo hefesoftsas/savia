@@ -31,8 +31,16 @@ import {
   WorkflowNodeType,
 } from "@/components/workflow/workflow-types";
 
-import { getExecution } from "./execution-service";
+import {
+  connectWorkflowExecutionWS,
+  WorkflowWebSocket,
+} from "./workflow-session-service";
 import { makeOrgRequest } from "./utils";
+import { getExecution } from "./execution-service";
+import {
+  ExecutionAttemptGuard,
+  settleExecutionAttempt,
+} from "./execution-attempt";
 
 // Base endpoint for workflows
 const API_ENDPOINT_BASE = "/workflows";
@@ -360,7 +368,7 @@ async function serializeForWs(
 }
 
 /**
- * Hook to manage workflow execution, including parameter forms and status polling.
+ * Hook to manage workflow execution, including parameter forms and live status updates.
  */
 export function useWorkflowExecution(
   orgId: string,
@@ -379,24 +387,29 @@ export function useWorkflowExecution(
     workflowType?: string;
   } | null>(null);
 
-  const pollingRef = useRef<{
-    intervalId?: NodeJS.Timeout;
+  const executionRef = useRef<{
     cancelled: boolean;
     currentExecutionId?: string;
     currentWorkflowId?: string;
+    socket?: WorkflowWebSocket;
+    focusHandler?: () => void;
   }>({ cancelled: false });
+  const attemptGuardRef = useRef(new ExecutionAttemptGuard());
 
   const cleanup = useCallback(() => {
-    if (pollingRef.current.intervalId) {
-      clearInterval(pollingRef.current.intervalId);
+    attemptGuardRef.current.invalidate();
+    executionRef.current.socket?.disconnect();
+    executionRef.current.socket = undefined;
+    if (executionRef.current.focusHandler) {
+      window.removeEventListener("focus", executionRef.current.focusHandler);
+      executionRef.current.focusHandler = undefined;
     }
-    pollingRef.current.cancelled = true;
-    pollingRef.current.intervalId = undefined;
-    pollingRef.current.currentExecutionId = undefined;
-    pollingRef.current.currentWorkflowId = undefined;
+    executionRef.current.cancelled = true;
+    executionRef.current.currentExecutionId = undefined;
+    executionRef.current.currentWorkflowId = undefined;
   }, []);
 
-  const executeAndPollWorkflow = useCallback(
+  const executeWorkflowRequest = useCallback(
     async (
       id: string,
       request?: ExecuteWorkflowRequest
@@ -506,10 +519,10 @@ export function useWorkflowExecution(
 
   const cancelCurrentExecution = useCallback(async () => {
     // Save execution IDs before cleanup clears them
-    const executionId = pollingRef.current.currentExecutionId;
-    const workflowId = pollingRef.current.currentWorkflowId;
+    const executionId = executionRef.current.currentExecutionId;
+    const workflowId = executionRef.current.currentWorkflowId;
 
-    // Stop polling first
+    // Stop receiving updates before asking the server to cancel.
     cleanup();
 
     // If we have a current execution, try to cancel it on the server
@@ -527,24 +540,30 @@ export function useWorkflowExecution(
     }
   }, [cleanup, cancelWorkflowExecution]);
 
-  const performExecutionAndPoll = useCallback(
+  const performExecution = useCallback(
     async (
       id: string,
       onExecutionUpdate: (execution: WorkflowExecution) => void,
       request?: ExecuteWorkflowRequest
     ): Promise<() => void> => {
       cleanup();
-      pollingRef.current.cancelled = false;
+      const attempt = attemptGuardRef.current.begin();
+      const isCurrentAttempt = () =>
+        !executionRef.current.cancelled &&
+        attemptGuardRef.current.isCurrent(attempt);
+      executionRef.current.cancelled = false;
 
       if (wsExecuteFn) {
         try {
           const params = request?.parameters
             ? await serializeForWs(request.parameters)
             : request?.parameters;
+          if (!isCurrentAttempt()) return cancelCurrentExecution;
           wsExecuteFn({
             parameters: params,
           });
         } catch (error) {
+          if (!isCurrentAttempt()) return cancelCurrentExecution;
           console.error("WebSocket execution failed:", error);
           onExecutionUpdate({
             id: "",
@@ -560,12 +579,15 @@ export function useWorkflowExecution(
         return cancelCurrentExecution;
       }
 
-      executeAndPollWorkflow(id, request)
-        .then((initialExecution: WorkflowExecution) => {
-          if (pollingRef.current.cancelled) return;
+      void settleExecutionAttempt(
+        attemptGuardRef.current,
+        attempt,
+        executeWorkflowRequest(id, request),
+        (initialExecution: WorkflowExecution) => {
+          if (!isCurrentAttempt()) return;
 
-          pollingRef.current.currentExecutionId = initialExecution.id;
-          pollingRef.current.currentWorkflowId = id;
+          executionRef.current.currentExecutionId = initialExecution.id;
+          executionRef.current.currentWorkflowId = id;
 
           onExecutionUpdate(initialExecution);
 
@@ -579,39 +601,82 @@ export function useWorkflowExecution(
             return;
           }
 
-          pollingRef.current.intervalId = setInterval(async () => {
-            if (pollingRef.current.cancelled) return;
-
+          let socketUpdateVersion = 0;
+          let queryInFlight = false;
+          let refreshQueued = false;
+          const isTerminal = (execution: WorkflowExecution) =>
+            execution.status === "completed" ||
+            execution.status === "error" ||
+            execution.status === "cancelled" ||
+            execution.status === "exhausted";
+          const refreshExecution = async () => {
+            if (
+              !isCurrentAttempt() ||
+              executionRef.current.currentExecutionId !== initialExecution.id
+            ) {
+              return;
+            }
+            if (queryInFlight) {
+              refreshQueued = true;
+              return;
+            }
+            queryInFlight = true;
+            const updateVersion = socketUpdateVersion;
             try {
               const execution = await getExecution(initialExecution.id, orgId);
+              if (
+                !isCurrentAttempt() ||
+                executionRef.current.currentExecutionId !== initialExecution.id ||
+                socketUpdateVersion !== updateVersion
+              ) {
+                return;
+              }
+              onExecutionUpdate(execution);
+              if (isTerminal(execution)) cleanup();
+            } catch {
+              // A failed status read does not mean the execution failed. Keep
+              // the socket and focus listener active so the next live update,
+              // reconnect, or focus can recover the real status.
+            } finally {
+              queryInFlight = false;
+              if (refreshQueued && isCurrentAttempt()) {
+                refreshQueued = false;
+                void refreshExecution();
+              }
+            }
+          };
+          const focusHandler = () => {
+            if (document.visibilityState === "visible") void refreshExecution();
+          };
+          executionRef.current.focusHandler = focusHandler;
+          window.addEventListener("focus", focusHandler);
 
-              if (pollingRef.current.cancelled) return;
+          executionRef.current.socket = connectWorkflowExecutionWS(
+            orgId,
+            id,
+            initialExecution.id,
+            (execution) => {
+              if (
+                !isCurrentAttempt() ||
+                execution.id !== executionRef.current.currentExecutionId
+              ) {
+                return;
+              }
+              socketUpdateVersion++;
               onExecutionUpdate(execution);
 
-              if (
-                execution.status === "completed" ||
-                execution.status === "error" ||
-                execution.status === "cancelled" ||
-                execution.status === "exhausted"
-              ) {
-                cleanup();
-              }
-            } catch (error) {
-              console.error("Error polling execution status:", error);
-              cleanup();
-              onExecutionUpdate({
-                id: initialExecution.id,
-                workflowId: id,
-                status: "error",
-                nodeExecutions: [],
-                error:
-                  error instanceof Error ? error.message : "Polling failed",
-              });
-            }
-          }, 1000);
-        })
-        .catch((error) => {
-          if (pollingRef.current.cancelled) return;
+              if (isTerminal(execution)) cleanup();
+            },
+            {
+              onConnectionOpen: () => {
+                if (!isCurrentAttempt()) return;
+                void refreshExecution();
+              },
+            },
+          );
+        },
+        (error) => {
+          if (!isCurrentAttempt()) return;
           cleanup();
           onExecutionUpdate({
             id: "",
@@ -620,13 +685,14 @@ export function useWorkflowExecution(
             nodeExecutions: [],
             error: error instanceof Error ? error.message : "Failed to execute",
           });
-        });
+        },
+      );
 
       return cancelCurrentExecution;
     },
     [
       wsExecuteFn,
-      executeAndPollWorkflow,
+      executeWorkflowRequest,
       cancelCurrentExecution,
       orgId,
       cleanup,
@@ -673,9 +739,9 @@ export function useWorkflowExecution(
 
       // If no specific dialog conditions met for 'email' or 'http' (with params),
       // or if it's another workflow type, execute directly.
-      performExecutionAndPoll(id, onExecution);
+      performExecution(id, onExecution);
     },
-    [performExecutionAndPoll, cleanup]
+    [performExecution, cleanup]
   );
 
   const submitEmailFormData = useCallback(
@@ -691,11 +757,11 @@ export function useWorkflowExecution(
         body: emailData.body,
         attachments: emailData.attachments,
       };
-      performExecutionAndPoll(id, onExecution, { parameters });
+      performExecution(id, onExecution, { parameters });
       setIsEmailFormDialogVisible(false);
       setExecutionContext(null);
     },
-    [executionContext, performExecutionAndPoll]
+    [executionContext, performExecution]
   );
 
   const submitHttpRequestConfig = useCallback(
@@ -725,11 +791,11 @@ export function useWorkflowExecution(
         parameters.contentType = config.contentType;
       }
 
-      performExecutionAndPoll(id, onExecution, { parameters });
+      performExecution(id, onExecution, { parameters });
       setIsHttpRequestConfigDialogVisible(false);
       setExecutionContext(null);
     },
-    [executionContext, performExecutionAndPoll]
+    [executionContext, performExecution]
   );
 
   const closeExecutionForm = useCallback(() => {

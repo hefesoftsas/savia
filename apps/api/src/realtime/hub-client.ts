@@ -28,6 +28,8 @@ import type { RealtimeEventInput } from "./protocol";
  */
 export interface RealtimeHubClient {
   publish(room: string, event: RealtimeEventInput): void;
+  /** Resolves true only when the Durable Object accepted the event. */
+  publishConfirmed?(room: string, event: RealtimeEventInput): Promise<boolean>;
   issue(
     room: string,
     grant: { principalId: string; topics: string[] },
@@ -52,15 +54,25 @@ export function createRealtimeHubClient(
 ): RealtimeHubClient {
   return {
     publish(room, event) {
+      void this.publishConfirmed?.(room, event);
+    },
+
+    async publishConfirmed(room, event) {
       const target = stub(namespace, room);
-      if (!target) return;
-      void target
-        .fetch("https://realtime.internal/publish", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ event }),
-        })
-        .catch(() => undefined);
+      if (!target) return false;
+      try {
+        const response = await target.fetch(
+          "https://realtime.internal/publish",
+          {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ event }),
+          },
+        );
+        return response.ok;
+      } catch {
+        return false;
+      }
     },
 
     async issue(room, grant) {

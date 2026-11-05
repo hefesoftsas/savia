@@ -6,14 +6,197 @@ import {
   getActiveScheduledTriggers,
   resolveOrganizationBillingOptions,
 } from "./db";
-import { getWorkflowAgentByName } from "./durable-objects/agent-utils";
-import { createWorkerRuntime } from "./runtime/cloudflare-worker-runtime";
 import { flushSaviaCollectionEventBatch } from "./services/collection-event-batches";
 import { maintainFinishedCostReceipts } from "./services/cost-ledger-retention";
 import { policyStatus } from "./services/execution-policy";
 import { maintainLocalExecutionHistory } from "./services/execution-retention";
+import { WorkflowExecutor } from "./services/workflow-executor";
+import {
+  claimScheduledTriggerOccurrence,
+  completeScheduledTriggerOccurrence,
+  listExpiredScheduledTriggerOccurrences,
+  markScheduledTriggerOccurrenceDispatched,
+  pruneCompletedScheduledTriggerOccurrences,
+  renewScheduledTriggerOccurrenceLease,
+  releaseScheduledTriggerOccurrence,
+} from "./services/scheduled-trigger-claims";
 import { WorkflowStore } from "./stores/workflow-store";
 import { creditChecksEnabled } from "./utils/credits";
+
+const EXPIRED_OCCURRENCE_REPAIR_LIMIT = 100;
+const CLAIM_HEARTBEAT_MS = 60_000;
+
+type ScheduledTriggerEntry = Awaited<
+  ReturnType<typeof getActiveScheduledTriggers>
+>[number];
+
+function expressionMatchesOccurrence(
+  expression: string,
+  scheduledTime: number,
+): boolean {
+  const previous = CronParser.parse(expression, {
+    currentDate: new Date(scheduledTime + 1),
+    tz: "UTC",
+  })
+    .prev()
+    .toDate();
+  return previous.getTime() === scheduledTime;
+}
+
+async function fingerprintWorkflowData(data: unknown): Promise<string> {
+  const encoded = new TextEncoder().encode(JSON.stringify(data));
+  const digest = await crypto.subtle.digest("SHA-256", encoded);
+  return Array.from(new Uint8Array(digest), (byte) =>
+    byte.toString(16).padStart(2, "0"),
+  ).join("");
+}
+
+function keepClaimAlive(
+  env: Bindings,
+  workflowId: string,
+  scheduledTime: number,
+  leaseToken: string,
+): () => Promise<void> {
+  let renewal = Promise.resolve();
+  const timer = setInterval(() => {
+    renewal = renewal
+      .then(async () => {
+        const renewed = await renewScheduledTriggerOccurrenceLease(env, {
+          workflowId,
+          scheduledTime,
+          leaseToken,
+        });
+        if (!renewed) {
+          console.error(
+            `Lost scheduled trigger claim lease workflow=${workflowId} occurrence=${scheduledTime}`,
+          );
+        }
+      })
+      .catch((error) => {
+        console.error("Failed to renew scheduled trigger claim lease:", error);
+      });
+  }, CLAIM_HEARTBEAT_MS);
+
+  return async () => {
+    clearInterval(timer);
+    await renewal;
+  };
+}
+
+async function dispatchScheduledOccurrence(
+  env: Bindings,
+  workflowStore: WorkflowStore,
+  entry: ScheduledTriggerEntry,
+  scheduledTime: number,
+  timestamp: number,
+): Promise<void> {
+  const { scheduledTrigger, workflow, organizationBilling } = entry;
+  let claim:
+    Awaited<ReturnType<typeof claimScheduledTriggerOccurrence>> | undefined;
+  let dispatched = false;
+  let stopHeartbeat: (() => Promise<void>) | undefined;
+
+  try {
+    const workflowWithData = await workflowStore.getWithData(
+      workflow.id,
+      workflow.organizationId,
+    );
+    if (!workflowWithData?.data) {
+      console.error(`Failed to load workflow data for ${workflow.id}`);
+      return;
+    }
+    const workflowData = workflowWithData.data;
+    const workflowFingerprint = await fingerprintWorkflowData(workflowData);
+    claim = await claimScheduledTriggerOccurrence(env, {
+      workflowId: workflow.id,
+      scheduledTime,
+      workflowFingerprint,
+    });
+    if (claim.status !== "acquired") {
+      const message =
+        `Skipping scheduled workflow ${workflow.id} occurrence=${new Date(scheduledTime).toISOString()} ` +
+        `claim=${claim.status} execution=${claim.executionId}`;
+      if (claim.status === "uncertain") {
+        console.error(
+          `[Scheduled trigger requires manual review] ${message}; automatic redispatch is suppressed`,
+        );
+      } else {
+        console.log(message);
+      }
+      return;
+    }
+
+    const runtime = workflowData.runtime === "worker" ? "worker" : "workflow";
+    const markedDispatched = await markScheduledTriggerOccurrenceDispatched(
+      env,
+      {
+        workflowId: workflow.id,
+        scheduledTime,
+        leaseToken: claim.leaseToken,
+        workflowFingerprint,
+        runtime,
+      },
+    );
+    if (!markedDispatched) {
+      console.error(
+        `Scheduled trigger claim expired before dispatch workflow=${workflow.id} occurrence=${scheduledTime}`,
+      );
+      return;
+    }
+
+    stopHeartbeat = keepClaimAlive(
+      env,
+      workflow.id,
+      scheduledTime,
+      claim.leaseToken,
+    );
+    dispatched = true;
+    const execution = await WorkflowExecutor.execute({
+      userId: "scheduled_trigger",
+      organizationId: workflow.organizationId,
+      ...resolveOrganizationBillingOptions(organizationBilling),
+      workflow: {
+        id: workflow.id,
+        name: workflow.name,
+        trigger: workflowData.trigger,
+        runtime: workflowData.runtime,
+        nodes: workflowData.nodes,
+        edges: workflowData.edges,
+      },
+      scheduledTrigger: {
+        timestamp,
+        scheduledTime,
+        scheduleExpression: scheduledTrigger.scheduleExpression,
+      },
+      executionId: claim.executionId,
+      env,
+    });
+    console.log(
+      `[Execution] ${execution.executionId} workflow=${workflow.id} runtime=${runtime} trigger=scheduled`,
+    );
+    await completeScheduledTriggerOccurrence(env, {
+      workflowId: workflow.id,
+      scheduledTime,
+      leaseToken: claim.leaseToken,
+    });
+  } catch (error) {
+    if (claim?.status === "acquired" && !dispatched) {
+      await releaseScheduledTriggerOccurrence(env, {
+        workflowId: workflow.id,
+        scheduledTime,
+        leaseToken: claim.leaseToken,
+      }).catch((releaseError) => {
+        console.error(
+          "Failed to release scheduled trigger claim:",
+          releaseError,
+        );
+      });
+    }
+    console.error(`Error executing scheduled workflow ${workflow.id}:`, error);
+  } finally {
+    await stopHeartbeat?.();
+  }
+}
 
 export async function handleScheduledEvent(
   _event: ScheduledEvent,
@@ -41,6 +224,16 @@ export async function handleScheduledEvent(
   } catch (error) {
     console.error("Cost receipt retention failed", error);
   }
+  try {
+    const pruned = await pruneCompletedScheduledTriggerOccurrences(env, {
+      limit: 100,
+    });
+    if (pruned > 0) {
+      console.log(`[Scheduled trigger retention] deleted=${pruned}`);
+    }
+  } catch (error) {
+    console.error("Scheduled trigger retention failed", error);
+  }
   if (!(await policyStatus(env)).executionsEnabled) return;
   try {
     await flushSaviaCollectionEventBatch(env);
@@ -58,83 +251,60 @@ export async function handleScheduledEvent(
   console.log(`Found ${triggers.length} active scheduled triggers`);
 
   const now = Date.now();
+  const expiredOccurrences = await listExpiredScheduledTriggerOccurrences(env, {
+    now,
+    limit: EXPIRED_OCCURRENCE_REPAIR_LIMIT,
+  });
+  const expiredByWorkflow = new Map<string, number[]>();
+  for (const occurrence of expiredOccurrences) {
+    const times = expiredByWorkflow.get(occurrence.workflowId) ?? [];
+    times.push(occurrence.scheduledTime);
+    expiredByWorkflow.set(occurrence.workflowId, times);
+  }
 
   for (const { scheduledTrigger, workflow, organizationBilling } of triggers) {
+    if (!workflow.enabled) {
+      console.log(`Skipping scheduled workflow ${workflow.id}: not enabled`);
+      continue;
+    }
+
     try {
-      // Skip workflows that are not enabled
-      if (!workflow.enabled) {
-        console.log(`Skipping scheduled workflow ${workflow.id}: not enabled`);
-        continue;
-      }
-
-      // Parse schedule expression
-      const interval = CronParser.parse(scheduledTrigger.scheduleExpression, {
-        currentDate: new Date(now),
-        tz: "UTC",
-      });
-
-      const scheduledTime = interval.prev().toDate();
-
-      // Check if should run now (within last minute since we run every minute)
-      if (Math.abs(now - scheduledTime.getTime()) > 60000) {
-        continue; // Not time to execute
-      }
-
-      console.log(
-        `Executing scheduled workflow ${workflow.id} (${scheduledTrigger.scheduleExpression})`,
-      );
-
-      // Load workflow data from working version
-      const workflowWithData = await workflowStore.getWithData(
-        workflow.id,
-        workflow.organizationId,
-      );
-      if (!workflowWithData?.data) {
-        console.error(`Failed to load workflow data for ${workflow.id}`);
-        continue;
-      }
-      const workflowData = workflowWithData.data;
-
-      const billingOptions =
-        resolveOrganizationBillingOptions(organizationBilling);
-
-      const executionParams = {
-        userId: "scheduled_trigger",
-        organizationId: workflow.organizationId,
-        ...billingOptions,
-        workflow: {
-          id: workflow.id,
-          name: workflow.name,
-          trigger: workflowData.trigger,
-          runtime: workflowData.runtime,
-          nodes: workflowData.nodes,
-          edges: workflowData.edges,
+      const scheduledTime = CronParser.parse(
+        scheduledTrigger.scheduleExpression,
+        {
+          currentDate: new Date(now),
+          tz: "UTC",
         },
-        scheduledTrigger: {
-          timestamp: now,
-          scheduledTime: scheduledTime.getTime(),
-          scheduleExpression: scheduledTrigger.scheduleExpression,
-        },
-      };
+      )
+        .prev()
+        .toDate()
+        .getTime();
+      const occurrenceTimes = new Set(
+        expiredByWorkflow
+          .get(workflow.id)
+          ?.filter((time) =>
+            expressionMatchesOccurrence(
+              scheduledTrigger.scheduleExpression,
+              time,
+            ),
+          ) ?? [],
+      );
+      if (Math.abs(now - scheduledTime) <= 60_000) {
+        occurrenceTimes.add(scheduledTime);
+      }
 
-      // Use WorkerRuntime for "worker" runtime (synchronous execution)
-      // Use Cloudflare Workflows for "workflow" runtime (durable execution, default)
-      if (workflowData.runtime === "worker") {
-        const workerRuntime = createWorkerRuntime(env);
-        const execution = await workerRuntime.execute(executionParams);
-        console.log(
-          `[Execution] ${execution.id} workflow=${workflow.id} runtime=worker trigger=scheduled`,
-        );
-      } else {
-        const agent = await getWorkflowAgentByName(env, workflow.id);
-        const executionId = await agent.executeWorkflow(executionParams);
-        console.log(
-          `[Execution] ${executionId} workflow=${workflow.id} runtime=workflow trigger=scheduled`,
+      for (const occurrenceTime of [...occurrenceTimes].sort((a, b) => a - b)) {
+        await dispatchScheduledOccurrence(
+          env,
+          workflowStore,
+          { scheduledTrigger, workflow, organizationBilling },
+          occurrenceTime,
+          now,
         );
       }
     } catch (error) {
       console.error(
-        `Error executing scheduled workflow ${workflow.id}:`,
+        `Failed to parse schedule for workflow ${workflow.id}:`,
         error,
       );
     }

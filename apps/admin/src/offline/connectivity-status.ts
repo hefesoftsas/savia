@@ -1,6 +1,5 @@
 // One in-memory connectivity check shared by all useOnlineStatus consumers.
 // Browser offline hints are not authoritative in embedded browsers and VPNs.
-const RETRY_MS = 60_000;
 const TIMEOUT_MS = 8_000;
 const listeners = new Set<() => void>();
 let online = true;
@@ -8,7 +7,6 @@ let generation = 0;
 let explicitVerifications = 0;
 let request: AbortController | undefined;
 let completion: Promise<void> | undefined;
-let retry: ReturnType<typeof setTimeout> | undefined;
 let deadline: ReturnType<typeof setTimeout> | undefined;
 
 const browserOnline = () =>
@@ -27,9 +25,7 @@ function publish(value: boolean) {
 
 function cancel() {
   generation += 1;
-  clearTimeout(retry);
   clearTimeout(deadline);
-  retry = undefined;
   deadline = undefined;
   request?.abort();
   request = undefined;
@@ -43,8 +39,6 @@ function probe(explicit = false): Promise<void> {
     publish(true);
     return Promise.resolve();
   }
-  clearTimeout(retry);
-  retry = undefined;
   const controller = new AbortController();
   request = controller;
   const currentGeneration = ++generation;
@@ -82,11 +76,6 @@ async function performProbe(
       clearTimeout(deadline);
       deadline = undefined;
       request = undefined;
-      if (listeners.size && visible() && !browserOnline()) {
-        retry = setTimeout(() => {
-          void probe();
-        }, RETRY_MS);
-      }
     }
   }
 }
@@ -125,6 +114,7 @@ export function subscribeOnlineStatus(listener: () => void) {
     online = browserOnline();
     window.addEventListener("online", browserChanged);
     window.addEventListener("offline", browserChanged);
+    window.addEventListener("focus", visibilityChanged);
     document.addEventListener("visibilitychange", visibilityChanged);
     void probe();
   }
@@ -134,6 +124,7 @@ export function subscribeOnlineStatus(listener: () => void) {
       cancel();
       window.removeEventListener("online", browserChanged);
       window.removeEventListener("offline", browserChanged);
+      window.removeEventListener("focus", visibilityChanged);
       document.removeEventListener("visibilitychange", visibilityChanged);
     }
   };

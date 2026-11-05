@@ -80,7 +80,7 @@ describe("useMyDayAgenda", () => {
     );
     expect(result.current.events).toEqual([]);
   });
-  it("refreshes connected providers every five minutes while visible", async () => {
+  it("does not refresh connected providers on a timer and still refreshes on focus", async () => {
     vi.useFakeTimers();
     try {
       const client = integrations();
@@ -92,6 +92,11 @@ describe("useMyDayAgenda", () => {
       expect(initialCalls).toBe(2);
       await act(async () => {
         await vi.advanceTimersByTimeAsync(300000);
+      });
+      expect(client.listEvents).toHaveBeenCalledTimes(initialCalls);
+      await act(async () => {
+        window.dispatchEvent(new Event("focus"));
+        await Promise.resolve();
       });
       expect(client.listEvents).toHaveBeenCalledTimes(initialCalls + 2);
       unmount();

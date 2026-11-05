@@ -4,6 +4,10 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { createApp } from "./combined-app";
 import { createTestApp } from "./test-app";
 import { createRealtimeHubClient } from "../src/realtime/hub-client";
+import {
+  dispatchRealtimeOutbox,
+  pruneRealtimeOutbox,
+} from "../src/realtime/outbox";
 import { ensureBootstrapAdministrator } from "../src/auth/identity-repository";
 import {
   agencyAdministratorAuthenticator,
@@ -203,10 +207,232 @@ async function waitFor(
 describe("Realtime hub", () => {
   beforeAll(applyMigrations);
   beforeEach(async () => {
+    await env.DB.exec(
+      "DELETE FROM request_page_runs WHERE principal_id IN ('test-agency-member', 'another-principal')",
+    );
+    await env.DB.exec(
+      "DELETE FROM realtime_event_outbox WHERE principal_id IN ('test-agency-member', 'another-principal')",
+    );
+    await env.DB.exec(
+      "DELETE FROM realtime_event_retention WHERE principal_id IN ('test-agency-member', 'another-principal')",
+    );
     await env.DB.exec("DELETE FROM identity_tenant_membership");
     await env.DB.exec("DELETE FROM identity_global_role");
     await env.DB.exec("DELETE FROM identity_principal");
     await env.DB.exec("DELETE FROM tenants");
+  });
+
+  it("scopes assistant-thread and request-page realtime tickets to the authenticated principal", async () => {
+    const app = createTestApp({
+      auth: agencyMemberAuthenticator(),
+      realtime: createRealtimeHubClient(env.REALTIME_HUB),
+    });
+    const ticketed = await app.request("/v1/realtime/ticket", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ topics: ["assistant-threads", "request-pages"] }),
+    });
+    expect(ticketed.status).toBe(201);
+    expect(await ticketed.json()).toMatchObject({
+      data: {
+        room: "principal:test-agency-member",
+        topics: ["assistant-threads", "request-pages"],
+      },
+    });
+
+    const crossPrincipal = await app.request("/v1/realtime/ticket", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        topics: ["assistant-threads"],
+        principalId: "another-user",
+      }),
+    });
+    expect(crossPrincipal.status).toBe(403);
+
+    const mixedScope = await app.request("/v1/realtime/ticket", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        topics: ["assistant-threads", "records"],
+        tenantId: 101,
+      }),
+    });
+    expect(mixedScope.status).toBe(400);
+  });
+
+  it("replays durable request-page changes only for the authenticated principal", async () => {
+    const id = crypto.randomUUID();
+    await env.DB.prepare(
+      `INSERT INTO request_page_runs
+       (id, principal_id, tenant_id, page_name, action_id, action_label, mode,
+        status, form_values, result, error, created_at, updated_at)
+       VALUES (?, 'test-agency-member', '101', 'generated', 'flow-a', 'Run',
+        'live', 'running', '{}', NULL, NULL, '2026-10-30', '2026-10-30')`,
+    )
+      .bind(id)
+      .run();
+    await env.DB.prepare(
+      "UPDATE request_page_runs SET status='complete', result='{}' WHERE id=?",
+    )
+      .bind(id)
+      .run();
+    await env.DB.prepare(
+      `INSERT INTO request_page_runs
+       (id, principal_id, tenant_id, page_name, action_id, action_label, mode,
+        status, form_values, result, error, created_at, updated_at)
+       VALUES (?, 'another-principal', '101', 'generated', 'flow-b', 'Other',
+        'live', 'complete', '{}', '{}', NULL, '2026-10-30', '2026-10-30')`,
+    )
+      .bind(crypto.randomUUID())
+      .run();
+
+    const response = await createTestApp({
+      auth: agencyMemberAuthenticator(),
+      realtimeOutboxRecoveryEnabled: true,
+    }).request("/v1/realtime/events?after=0&limit=10");
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      data: {
+        durable: true,
+        events: [
+          {
+            topic: "request-pages",
+            type: "updated",
+            collection: "generated",
+            id,
+            actor: "test-agency-member",
+          },
+        ],
+        hasMore: false,
+      },
+    });
+  });
+
+  it("does not advertise durable recovery when operations have not enabled it", async () => {
+    const response = await createTestApp({
+      auth: agencyMemberAuthenticator(),
+    }).request("/v1/realtime/events?after=0");
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ data: { durable: false } });
+  });
+
+  it("keeps failed publications pending and marks them only after DO acceptance", async () => {
+    const id = crypto.randomUUID();
+    await env.DB.prepare(
+      `INSERT INTO realtime_event_outbox
+       (principal_id, topic, type, collection, resource_id, created_at)
+       VALUES ('test-agency-member', 'request-pages', 'updated', 'generated', ?, ?)`,
+    )
+      .bind(id, new Date().toISOString())
+      .run();
+    const unavailable = {
+      publish() {},
+      publishConfirmed: async () => false,
+      async issue() {
+        return { ticket: "ticket", expiresAt: new Date().toISOString() };
+      },
+      async forward() {
+        return new Response();
+      },
+    };
+    const failed = await dispatchRealtimeOutbox(env.DB, unavailable, {
+      principalId: "test-agency-member",
+      resourceId: id,
+    });
+    expect(failed).toEqual({ delivered: 0, failed: 1 });
+    const pending = await env.DB.prepare(
+      "SELECT published_at, attempts FROM realtime_event_outbox WHERE resource_id=?",
+    )
+      .bind(id)
+      .first<{ published_at: string | null; attempts: number }>();
+    expect(pending).toMatchObject({ published_at: null, attempts: 1 });
+    const backlog = await dispatchRealtimeOutbox(env.DB, unavailable, {
+      principalId: "test-agency-member",
+      resourceId: id,
+      inspectBacklog: true,
+    });
+    expect(backlog).toMatchObject({
+      delivered: 0,
+      failed: 0,
+      pending: true,
+    });
+    expect(backlog.oldestPendingAgeMs).toEqual(expect.any(Number));
+
+    await env.DB.prepare(
+      "UPDATE realtime_event_outbox SET next_attempt_at=0 WHERE resource_id=?",
+    )
+      .bind(id)
+      .run();
+    const available = { ...unavailable, publishConfirmed: async () => true };
+    const retried = await dispatchRealtimeOutbox(env.DB, available, {
+      principalId: "test-agency-member",
+      resourceId: id,
+    });
+    expect(retried).toEqual({ delivered: 1, failed: 0 });
+    const sent = await env.DB.prepare(
+      "SELECT published_at FROM realtime_event_outbox WHERE resource_id=?",
+    )
+      .bind(id)
+      .first<{ published_at: string | null }>();
+    expect(sent?.published_at).toBeTruthy();
+  });
+
+  it("expires only published events and tells clients to resync past the retention watermark", async () => {
+    const expiredId = crypto.randomUUID();
+    const secondExpiredId = crypto.randomUUID();
+    const pendingId = crypto.randomUUID();
+    const principalId = "test-agency-member";
+    const old = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000).toISOString();
+    await env.DB.prepare(
+      `INSERT INTO realtime_event_outbox
+       (principal_id, topic, type, collection, resource_id, created_at, published_at)
+       VALUES (?, 'request-pages', 'updated', 'generated', ?, ?, ?)`,
+    )
+      .bind(principalId, expiredId, old, old)
+      .run();
+    await env.DB.prepare(
+      `INSERT INTO realtime_event_outbox
+       (principal_id, topic, type, collection, resource_id, created_at, published_at)
+       VALUES (?, 'request-pages', 'updated', 'generated', ?, ?, ?)`,
+    )
+      .bind(principalId, secondExpiredId, old, old)
+      .run();
+    await env.DB.prepare(
+      `INSERT INTO realtime_event_outbox
+       (principal_id, topic, type, collection, resource_id, created_at)
+       VALUES (?, 'request-pages', 'updated', 'generated', ?, ?)`,
+    )
+      .bind(principalId, pendingId, new Date().toISOString())
+      .run();
+
+    expect(await pruneRealtimeOutbox(env.DB, Date.now(), 1)).toBe(1);
+    const stillExpired = await env.DB.prepare(
+      "SELECT published_at FROM realtime_event_outbox WHERE principal_id=? AND resource_id=?",
+    )
+      .bind(principalId, secondExpiredId)
+      .first<{ published_at: string | null }>();
+    expect(stillExpired?.published_at).toBeTruthy();
+    const pending = await env.DB.prepare(
+      "SELECT event_id FROM realtime_event_outbox WHERE principal_id=? AND resource_id=?",
+    )
+      .bind(principalId, pendingId)
+      .first<{ event_id: number }>();
+    expect(pending).toBeTruthy();
+    const response = await createTestApp({
+      auth: agencyMemberAuthenticator(),
+      realtimeOutboxRecoveryEnabled: true,
+    }).request("/v1/realtime/events?after=0");
+    expect(response.status).toBe(410);
+    expect(await response.json()).toMatchObject({
+      error: {
+        code: "REALTIME_CURSOR_EXPIRED",
+        durable: true,
+        resyncRequired: true,
+        resetCursor: pending?.event_id,
+      },
+    });
   });
 
   it("delivers published events only to subscribed sockets", async () => {

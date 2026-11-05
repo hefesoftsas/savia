@@ -28,6 +28,7 @@ import { getStudioRuntime } from "./runtime";
 import { jsonPointer } from "@savia/studio-shared/collection-operations";
 import DynamicForm from "./dynamic-form";
 import { LookupActions } from "./lookup-actions";
+import { useRealtimeTopics } from "@/realtime/use-realtime";
 
 function RefreshResultsButton({ onClick }: { onClick: () => void }) {
   const t = useMessages(automationMessages);
@@ -172,15 +173,19 @@ export default function RequestPage({ object }: { object: StudioObject }) {
   }
 
   const config = requestPageSchema.parse(object.config.studio?.requestPage);
+  const currentConfig = useRef(config);
+  currentConfig.current = config;
   const isWizard = !!object.config.studio?.wizard?.enabled;
   const [surface, setSurface] = useState<"form" | "results">("form");
   const tenantId = String(getStudioRuntime().tenantId ?? 0);
+  const scopeKey = `${tenantId}:${object.name}`;
   const [selected, setSelected] = useState(() =>
     defaultSelectedActions(config.actions),
   );
   const [showHistory, setShowHistory] = useState(false);
   const [mode, setMode] = useState<"live" | "mock">("live");
   const [runs, setRuns] = useState<PageRun[]>([]),
+    [runsScope, setRunsScope] = useState(scopeKey),
     [loading, setLoading] = useState(true),
     [error, setError] = useState("");
   const [values, setValues] = useState<Record<string, unknown>>({}),
@@ -188,20 +193,45 @@ export default function RequestPage({ object }: { object: StudioObject }) {
   const [busy, setBusy] = useState(false);
   const submitting = useRef(false);
   const alive = useRef(true);
+  const scopeGeneration = useRef(0);
+  const currentScope = useRef(scopeKey);
+  if (currentScope.current !== scopeKey) {
+    currentScope.current = scopeKey;
+    scopeGeneration.current++;
+  }
+  const refreshRunning = useRef(false);
+  const refreshAgain = useRef(false);
+  const refreshRef = useRef<(() => Promise<void>) | null>(null);
   const refresh = useCallback(async () => {
+    if (currentScope.current !== scopeKey) return;
+    if (refreshRunning.current) {
+      refreshAgain.current = true;
+      return;
+    }
+    refreshRunning.current = true;
+    const generation = scopeGeneration.current;
     try {
       const result = await requestPageApi<{ data: PageRun[] }>(
         "/runs?" + new URLSearchParams({ tenantId, pageName: object.name }),
       );
-      if (alive.current) {
+      if (alive.current && generation === scopeGeneration.current) {
         setRuns(result.data);
+        setRunsScope(scopeKey);
       }
     } catch (e) {
-      if (alive.current) setError((e as Error).message);
+      if (alive.current && generation === scopeGeneration.current)
+        setError((e as Error).message);
     } finally {
-      if (alive.current) setLoading(false);
+      if (alive.current && generation === scopeGeneration.current)
+        setLoading(false);
+      refreshRunning.current = false;
+      if (alive.current && refreshAgain.current) {
+        refreshAgain.current = false;
+        queueMicrotask(() => void refreshRef.current?.());
+      }
     }
   }, [tenantId, object.name]);
+  refreshRef.current = refresh;
   useEffect(() => {
     alive.current = true;
     void refresh();
@@ -209,28 +239,64 @@ export default function RequestPage({ object }: { object: StudioObject }) {
       alive.current = false;
     };
   }, [refresh]);
+  useEffect(() => {
+    setRuns([]);
+    setRunsScope(scopeKey);
+    setLoading(true);
+    setError("");
+    setBusy(false);
+    setValues({});
+    setFormVersion((version) => version + 1);
+    setSelected(defaultSelectedActions(currentConfig.current.actions));
+    submitting.current = false;
+  }, [scopeKey]);
+  const { status: realtimeStatus } = useRealtimeTopics({
+    topics: ["request-pages"],
+    onConnected: (reason) => {
+      if (reason === "initial" || reason === "recovered") void refresh();
+    },
+    onEvent: (event) => {
+      if (event.collection === object.name) void refresh();
+    },
+  });
+  const scopedRuns = runsScope === scopeKey ? runs : [];
   const displayedRuns = showHistory
-    ? runs
-    : runs.filter(
+    ? scopedRuns
+    : scopedRuns.filter(
         (run, index) =>
-          runs.findIndex((other) => other.actionId === run.actionId) === index,
+          scopedRuns.findIndex((other) => other.actionId === run.actionId) ===
+          index,
       );
-  const pending = runs.some(
-    (r) =>
-      r.status === "running" && Date.now() - Date.parse(r.createdAt) < 360000,
+  const pending = scopedRuns.some(
+    (run) =>
+      run.status === "running" &&
+      Date.now() - Date.parse(run.createdAt) < 360000,
   );
   useEffect(() => {
     if (!pending && !busy) return;
-    const timer = setInterval(() => void refresh(), 3000);
-    return () => clearInterval(timer);
-  }, [pending, busy, refresh]);
+    const refreshVisible = () => {
+      if (document.visibilityState !== "hidden") void refresh();
+    };
+    window.addEventListener("focus", refreshVisible);
+    if (realtimeStatus === "live")
+      document.addEventListener("visibilitychange", refreshVisible);
+    return () => {
+      window.removeEventListener("focus", refreshVisible);
+      document.removeEventListener("visibilitychange", refreshVisible);
+    };
+  }, [realtimeStatus, pending, busy, refresh]);
   const execute = async (
     action: RequestAction,
     data: Record<string, unknown>,
   ) => {
+    if (currentScope.current !== scopeKey)
+      throw new Error("The request page changed before execution started.");
+    const generation = scopeGeneration.current;
     const run = await executeRequestPageAction(object.name, action, data, mode);
-    if (alive.current)
+    if (alive.current && generation === scopeGeneration.current) {
       setRuns((previous) => [run, ...previous.filter((r) => r.id !== run.id)]);
+      setRunsScope(scopeKey);
+    }
     return run;
   };
   return (
@@ -302,7 +368,7 @@ export default function RequestPage({ object }: { object: StudioObject }) {
             onClick={() => setSurface("results")}
           >
             {t("Resultados")}
-            {runs.length ? ` (${runs.length})` : ""}
+            {scopedRuns.length ? ` (${scopedRuns.length})` : ""}
           </button>
         </nav>
       )}
@@ -371,6 +437,7 @@ export default function RequestPage({ object }: { object: StudioObject }) {
             ) : null;
           }}
           onSave={async (data) => {
+            if (currentScope.current !== scopeKey) return;
             if (submitting.current) return;
             const submitActions = config.actions.filter(
               (a) => selected.includes(a.id) && a.kind === "submit",
@@ -378,6 +445,7 @@ export default function RequestPage({ object }: { object: StudioObject }) {
             if (!submitActions.length)
               throw new Error(t("Selecciona al menos una operación."));
             submitting.current = true;
+            const generation = scopeGeneration.current;
             setBusy(true);
             try {
               await Promise.all(
@@ -385,15 +453,23 @@ export default function RequestPage({ object }: { object: StudioObject }) {
                   try {
                     await execute(a, data);
                   } catch (e) {
-                    if (alive.current) setError((e as Error).message);
+                    if (alive.current && generation === scopeGeneration.current)
+                      setError((e as Error).message);
                   }
                 }),
               );
               await refresh();
-              if (isWizard && alive.current) setSurface("results");
+              if (
+                isWizard &&
+                alive.current &&
+                generation === scopeGeneration.current
+              )
+                setSurface("results");
             } finally {
-              submitting.current = false;
-              if (alive.current) setBusy(false);
+              if (generation === scopeGeneration.current) {
+                submitting.current = false;
+                if (alive.current) setBusy(false);
+              }
             }
           }}
         />

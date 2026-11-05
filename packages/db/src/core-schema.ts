@@ -1275,3 +1275,45 @@ export const saviaFlowsCollectionReceipts = sqliteTable(
     ),
   ],
 );
+
+export const realtimeEventOutbox = sqliteTable(
+  "realtime_event_outbox",
+  {
+    eventId: integer("event_id").primaryKey({ autoIncrement: true }),
+    principalId: text("principal_id").notNull(),
+    topic: text("topic", {
+      enum: ["assistant-threads", "request-pages"],
+    }).notNull(),
+    type: text("type", { enum: ["created", "updated", "deleted"] }).notNull(),
+    collection: text("collection").notNull(),
+    resourceId: text("resource_id").notNull(),
+    createdAt: text("created_at").notNull(),
+    publishedAt: text("published_at"),
+    attempts: integer("attempts").notNull().default(0),
+    nextAttemptAt: integer("next_attempt_at").notNull().default(0),
+  },
+  (table) => [
+    index("realtime_event_outbox_principal_cursor").on(
+      table.principalId,
+      table.eventId,
+    ),
+    index("realtime_event_outbox_pending").on(
+      table.publishedAt,
+      table.nextAttemptAt,
+      table.eventId,
+    ),
+    check(
+      "realtime_event_outbox_topic_check",
+      sql`${table.topic} IN ('assistant-threads','request-pages')`,
+    ),
+    check(
+      "realtime_event_outbox_type_check",
+      sql`${table.type} IN ('created','updated','deleted')`,
+    ),
+  ],
+);
+
+export const realtimeEventRetention = sqliteTable("realtime_event_retention", {
+  principalId: text("principal_id").primaryKey().notNull(),
+  expiredThrough: integer("expired_through").notNull(),
+});

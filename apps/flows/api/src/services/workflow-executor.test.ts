@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   getWithData: vi.fn(),
   createWorkerRuntime: vi.fn(),
   stampOnboardingStage: vi.fn(),
+  agentExecuteWorkflow: vi.fn(),
 }));
 
 vi.mock("../runtime/cloudflare-execution-store", () => ({
@@ -19,7 +20,9 @@ vi.mock("../db", () => ({
   stampOnboardingStage: mocks.stampOnboardingStage,
 }));
 vi.mock("../durable-objects/agent-utils", () => ({
-  getWorkflowAgentByName: vi.fn(),
+  getWorkflowAgentByName: vi.fn(async () => ({
+    executeWorkflow: mocks.agentExecuteWorkflow,
+  })),
 }));
 
 import { WorkflowExecutor } from "./workflow-executor";
@@ -48,6 +51,7 @@ describe("WorkflowExecutor deterministic Worker retries", () => {
     mocks.getWithData.mockResolvedValue({ data: storedExecution });
     mocks.createWorkerRuntime.mockReturnValue({ execute: vi.fn() });
     mocks.stampOnboardingStage.mockResolvedValue(undefined);
+    mocks.agentExecuteWorkflow.mockResolvedValue(storedExecution.id);
   });
 
   it("returns a persisted terminal execution without executing nodes again", async () => {
@@ -91,5 +95,57 @@ describe("WorkflowExecutor deterministic Worker retries", () => {
     expect(result.executionId).toBe(execution.id);
     expect(execute).toHaveBeenCalledOnce();
     expect(mocks.getWithData).not.toHaveBeenCalled();
+  });
+
+  it("forwards a stable scheduled ID and occurrence context to Worker runtime", async () => {
+    mocks.getWithData.mockResolvedValue(null);
+    const execution = { ...storedExecution, status: "completed" as const };
+    const execute = vi.fn().mockResolvedValue(execution);
+    mocks.createWorkerRuntime.mockReturnValue({ execute });
+    const scheduledTrigger = {
+      timestamp: 1_730_000_001_000,
+      scheduledTime: 1_730_000_000_000,
+      scheduleExpression: "0 * * * *",
+    };
+
+    await WorkflowExecutor.execute({
+      workflow: { ...workflow, trigger: "scheduled" },
+      userId: "scheduled_trigger",
+      organizationId: "tenant:1",
+      computeCredits: 0,
+      executionId: "ea2b8cb2-f7e1-5196-b141-231b7bfd0a94",
+      scheduledTrigger,
+      env: {} as Bindings,
+    });
+
+    expect(execute).toHaveBeenCalledWith(
+      expect.objectContaining({ scheduledTrigger }),
+      "ea2b8cb2-f7e1-5196-b141-231b7bfd0a94",
+    );
+    expect(execute.mock.calls[0][0]).not.toHaveProperty("httpRequest");
+  });
+
+  it("forwards the same stable scheduled ID and context to durable Workflow runtime", async () => {
+    const scheduledTrigger = {
+      timestamp: 1_730_000_001_000,
+      scheduledTime: 1_730_000_000_000,
+      scheduleExpression: "0 * * * *",
+    };
+    const executionId = "ea2b8cb2-f7e1-5196-b141-231b7bfd0a94";
+
+    await WorkflowExecutor.execute({
+      workflow: { ...workflow, runtime: "workflow", trigger: "scheduled" },
+      userId: "scheduled_trigger",
+      organizationId: "tenant:1",
+      computeCredits: 0,
+      executionId,
+      scheduledTrigger,
+      env: {} as Bindings,
+    });
+
+    expect(mocks.agentExecuteWorkflow).toHaveBeenCalledWith(
+      expect.objectContaining({ scheduledTrigger }),
+      executionId,
+    );
   });
 });

@@ -91,7 +91,7 @@ it("shares one request among consumers and stops polling after unmount", async (
   expect(fetcher).toHaveBeenCalledTimes(1);
 });
 
-it("keeps real network failures offline and discovers recovery without browser events", async () => {
+it("does not retry network failures on a timer and recovers on focus", async () => {
   const fetcher = vi
     .fn()
     .mockRejectedValueOnce(new TypeError("Network unavailable"))
@@ -100,7 +100,10 @@ it("keeps real network failures offline and discovers recovery without browser e
   const hook = renderHook(useOnlineStatus);
   await flush();
   expect(hook.result.current).toBe(false);
-  await act(() => vi.advanceTimersByTimeAsync(60_000));
+  await act(() => vi.advanceTimersByTimeAsync(120_000));
+  expect(hook.result.current).toBe(false);
+  expect(fetcher).toHaveBeenCalledTimes(1);
+  await act(async () => window.dispatchEvent(new Event("focus")));
   expect(hook.result.current).toBe(true);
   expect(fetcher).toHaveBeenCalledTimes(2);
 });
@@ -137,7 +140,7 @@ it("pauses checks in hidden tabs and checks again when visible", async () => {
   expect(fetcher).toHaveBeenCalledTimes(1);
 });
 
-it("aborts hanging requests and retries after the timeout", async () => {
+it("aborts a hanging request without scheduling another probe", async () => {
   const fetcher = vi
     .fn()
     .mockImplementation(
@@ -154,7 +157,7 @@ it("aborts hanging requests and retries after the timeout", async () => {
   expect(fetcher.mock.calls[0][1].signal.aborted).toBe(true);
   expect(hook.result.current).toBe(false);
   await act(() => vi.advanceTimersByTimeAsync(60_000));
-  expect(fetcher).toHaveBeenCalledTimes(2);
+  expect(fetcher).toHaveBeenCalledTimes(1);
 });
 
 it("ignores a stale failure after a browser online event", async () => {

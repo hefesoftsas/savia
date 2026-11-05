@@ -1,5 +1,11 @@
 # Cloudflare spending circuit breaker
 
+As of November 5, 2026, the operator has disabled periodic cost checks for the
+event-only reactivation. The checked-in guard schedule is empty; historical
+five-minute verification below describes the previous operating mode. Manual
+controls remain available, but automatic cost monitoring is not active. See
+[the reactivation debt](event-only-reactivation.md) before restoring a schedule.
+
 Owner: Savia platform team. Reviewed: 2026-10-24.
 
 ## Live policy

@@ -19,19 +19,18 @@ export function useUnreadNotifications(
 ) {
   const sessionGeneration = useSessionGeneration();
   const queryKey = notificationReadKey(sessionGeneration, "unread-count");
-  const { status } = useRealtimeQuery({
+  useRealtimeQuery({
     topics: ["notifications"],
     queryKeys: [queryKey],
   });
   return useQuery({
     queryKey,
     queryFn: () => client.unreadCount(),
-    // El conteo compite con los datos críticos en la cascada inicial
-    // (1051ms en el HAR): no refetchear al enfocar ni al remontar.
+    // A short fresh window keeps this count out of the initial query burst.
+    // On focus, React Query refreshes it after this window expires.
     staleTime: 30_000,
     gcTime: 5 * 60_000,
-    refetchInterval: status === "live" ? false : 30_000,
-    refetchOnWindowFocus: false,
+    refetchOnWindowFocus: true,
     refetchOnMount: false,
   });
 }
@@ -42,7 +41,7 @@ export function useNotificationInbox(
 ) {
   const sessionGeneration = useSessionGeneration();
   const queryKey = notificationReadKey(sessionGeneration, "inbox", filter);
-  const { status } = useRealtimeQuery({
+  useRealtimeQuery({
     topics: ["notifications"],
     queryKeys: [queryKey],
   });
@@ -51,7 +50,6 @@ export function useNotificationInbox(
     queryFn: () => client.inbox(filter),
     staleTime: 30_000,
     gcTime: 5 * 60_000,
-    refetchInterval: status === "live" ? false : 30_000,
-    refetchOnWindowFocus: false,
+    refetchOnWindowFocus: true,
   });
 }

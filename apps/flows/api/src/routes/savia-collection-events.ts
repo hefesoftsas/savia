@@ -107,7 +107,9 @@ saviaCollectionEventRoutes.post("/", async (c) => {
           error:
             queued.status === "backpressure"
               ? "Savia collection event batch capacity is full; retry delivery later"
-              : "Savia event admission is already in progress",
+              : queued.status === "wakeup-unavailable"
+                ? "Savia collection batch queue is unavailable; retry delivery later"
+                : "Savia event admission is already in progress",
         },
         503,
       );

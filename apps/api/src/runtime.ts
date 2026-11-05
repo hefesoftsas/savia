@@ -14,6 +14,7 @@ import { maintainRecordHistory } from "@savia/studio-server/record-history-stora
 import { purgeStudioAudit } from "@savia/studio-server/audit-retention";
 import { createApp } from "./app";
 import { createRealtimeHubClient } from "./realtime/hub-client";
+import { dispatchRealtimeOutbox, pruneRealtimeOutbox } from "./realtime/outbox";
 import { runPluginMonitors } from "./studio/plugin-monitors";
 import { runScheduledNotifications } from "./notifications";
 import {
@@ -117,6 +118,7 @@ type AssistantSecrets = {
 export type RuntimeEnvironment = {
   COMPANION_ENABLED?: string;
   COMPANION_STT_MODEL?: string;
+  REALTIME_OUTBOX_RECOVERY_ENABLED?: string;
   SAVIA_WORKFLOW_ONLY_SCHEDULE?: string;
   PLUGIN_REGISTRY_TENANTS?: string;
   DB: D1Database;
@@ -381,6 +383,30 @@ async function runScheduledAuditRetention(db: D1Database): Promise<void> {
     console.info(JSON.stringify({ event: "studio_audit_cleanup", ...report }));
 }
 
+async function repairRealtimeOutbox(
+  db: D1Database,
+  realtime: import("./realtime/hub-client").RealtimeHubClient,
+): Promise<void> {
+  // Reserve room for other scheduled work under the Worker subrequest cap:
+  // each row can require one DO publish and one D1 acknowledgement update.
+  const report = await dispatchRealtimeOutbox(db, realtime, {
+    limit: 200,
+    inspectBacklog: true,
+  });
+  const expired =
+    new Date().getUTCMinutes() % 15 === 0
+      ? await pruneRealtimeOutbox(db, Date.now(), 5000)
+      : 0;
+  if (report.pending || report.delivered || report.failed || expired)
+    console.info(
+      JSON.stringify({
+        event: "realtime_outbox_repair",
+        ...report,
+        expired,
+      }),
+    );
+}
+
 export type RuntimeOverrides = {
   workflowFetch?: typeof fetch;
   monitorFetch?: typeof fetch;
@@ -566,6 +592,8 @@ const runtime = {
         service: environment.SAVIA_FLOWS,
         bridgeSecret: environment.SAVIA_FLOWS_BRIDGE_SECRET,
       },
+      environment.REALTIME_OUTBOX_RECOVERY_ENABLED === "true" &&
+        Boolean(environment.REALTIME_HUB),
     ).fetch(request, environment, context);
     return response;
   },
@@ -771,6 +799,7 @@ const runtime = {
     };
     if (environment.SAVIA_WORKFLOW_ONLY_SCHEDULE === "true") {
       const results = await Promise.allSettled([
+        repairRealtimeOutbox(environment.DB, realtime),
         runBookings(),
         runCompanion(),
         runWhatsapp(),
@@ -809,6 +838,7 @@ const runtime = {
       return;
     }
     const results = await Promise.allSettled([
+      repairRealtimeOutbox(environment.DB, realtime),
       runBookings(),
       runCompanion(),
       runWhatsapp(),

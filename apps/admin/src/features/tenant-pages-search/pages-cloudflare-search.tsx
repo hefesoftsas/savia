@@ -36,8 +36,6 @@ type Status = {
   needed: string[];
 };
 type Result = PageSearchResult & { score?: number };
-const MAX_BUSY_DEFERRALS = 20;
-
 function mergeResults(lexical: PageSummary[], semantic: Result[]) {
   const seen = new Set<string>();
   const merged: Result[] = [];
@@ -88,10 +86,8 @@ export function PagesCloudflareSearch({ client }: { client: PagesClient }) {
   const completedBatchRef = useRef("");
   const failedBatchRef = useRef("");
   const busyDeferredKeyRef = useRef("");
-  const busyDeferralsRef = useRef(0);
   const pageChangeTimerRef = useRef<number | undefined>(undefined);
   const delayedStatusTimerRef = useRef<number | undefined>(undefined);
-  const busyTimerRef = useRef<number | undefined>(undefined);
 
   const refreshStatus = useCallback(async () => {
     const request = ++refreshRef.current;
@@ -147,7 +143,6 @@ export function PagesCloudflareSearch({ client }: { client: PagesClient }) {
         if (!controller.signal.aborted && request === indexRef.current) {
           completedBatchRef.current = key;
           failedBatchRef.current = "";
-          busyDeferralsRef.current = 0;
           busyDeferredKeyRef.current = "";
           await refreshStatus();
           if (delayedStatusTimerRef.current)
@@ -166,21 +161,8 @@ export function PagesCloudflareSearch({ client }: { client: PagesClient }) {
             failure.status === 409 &&
             failure.code === "INDEX_IN_PROGRESS"
           ) {
-            busyDeferralsRef.current += 1;
-            if (busyDeferralsRef.current <= MAX_BUSY_DEFERRALS) {
-              busyDeferredKeyRef.current = key;
-              setIndexWaiting(true);
-              busyTimerRef.current = window.setTimeout(async () => {
-                busyTimerRef.current = undefined;
-                busyDeferredKeyRef.current = "";
-                setIndexWaiting(false);
-                await refreshStatus();
-              }, 5000);
-            } else {
-              busyDeferredKeyRef.current = "";
-              failedBatchRef.current = key;
-              setIndexError(true);
-            }
+            busyDeferredKeyRef.current = key;
+            setIndexWaiting(true);
           } else {
             failedBatchRef.current = key;
             setIndexError(true);
@@ -206,12 +188,7 @@ export function PagesCloudflareSearch({ client }: { client: PagesClient }) {
           window.clearTimeout(delayedStatusTimerRef.current);
           delayedStatusTimerRef.current = undefined;
         }
-        if (busyTimerRef.current) {
-          window.clearTimeout(busyTimerRef.current);
-          busyTimerRef.current = undefined;
-        }
         busyDeferredKeyRef.current = "";
-        busyDeferralsRef.current = 0;
         setIndexWaiting(false);
         completedBatchRef.current = "";
         indexRef.current += 1;
@@ -244,7 +221,6 @@ export function PagesCloudflareSearch({ client }: { client: PagesClient }) {
         window.clearTimeout(pageChangeTimerRef.current);
       if (delayedStatusTimerRef.current)
         window.clearTimeout(delayedStatusTimerRef.current);
-      if (busyTimerRef.current) window.clearTimeout(busyTimerRef.current);
     };
   }, [client, refreshStatus]);
 
@@ -259,22 +235,13 @@ export function PagesCloudflareSearch({ client }: { client: PagesClient }) {
     const needed = status.needed;
     const key = batchKey(needed);
     if (!needed.length) {
-      busyDeferralsRef.current = 0;
       busyDeferredKeyRef.current = "";
-      if (busyTimerRef.current) {
-        window.clearTimeout(busyTimerRef.current);
-        busyTimerRef.current = undefined;
-      }
       setIndexWaiting(false);
+      setIndexError(false);
       return;
     }
     if (busyDeferredKeyRef.current && busyDeferredKeyRef.current !== key) {
       busyDeferredKeyRef.current = "";
-      busyDeferralsRef.current = 0;
-      if (busyTimerRef.current) {
-        window.clearTimeout(busyTimerRef.current);
-        busyTimerRef.current = undefined;
-      }
       setIndexWaiting(false);
     }
     if (
@@ -382,11 +349,6 @@ export function PagesCloudflareSearch({ client }: { client: PagesClient }) {
     setIndexing(false);
     setIndexWaiting(false);
     busyDeferredKeyRef.current = "";
-    busyDeferralsRef.current = 0;
-    if (busyTimerRef.current) {
-      window.clearTimeout(busyTimerRef.current);
-      busyTimerRef.current = undefined;
-    }
   }
 
   function resumeIndexing() {
@@ -397,12 +359,7 @@ export function PagesCloudflareSearch({ client }: { client: PagesClient }) {
     if (!status?.enabled || !status.available || !status.needed.length) return;
     failedBatchRef.current = "";
     busyDeferredKeyRef.current = "";
-    busyDeferralsRef.current = 0;
     setIndexWaiting(false);
-    if (busyTimerRef.current) {
-      window.clearTimeout(busyTimerRef.current);
-      busyTimerRef.current = undefined;
-    }
     setIndexPaused(false);
     void indexBatch(status.needed);
   }
@@ -614,6 +571,21 @@ export function PagesCloudflareSearch({ client }: { client: PagesClient }) {
                     </span>
                   </Button>
                 ) : null}
+                {indexWaiting ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
+                    disabled={statusRefreshing}
+                    onClick={() => void refreshStatus()}
+                  >
+                    <RotateCcw aria-hidden="true" />
+                    <span className="sr-only sm:not-sr-only">
+                      {t("Refresh index status")}
+                    </span>
+                  </Button>
+                ) : null}
                 {indexError && status.needed.length ? (
                   <Button
                     type="button"
@@ -632,7 +604,7 @@ export function PagesCloudflareSearch({ client }: { client: PagesClient }) {
               {indexing || indexPaused || indexWaiting ? (
                 <p role="status" aria-live="polite">
                   {indexWaiting
-                    ? t("Waiting for page indexing")
+                    ? t("Another request is indexing these pages")
                     : indexPaused
                       ? t("Indexing paused", indexProgress)
                       : t("Indexing pages", indexProgress)}

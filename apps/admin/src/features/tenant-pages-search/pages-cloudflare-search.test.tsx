@@ -356,7 +356,7 @@ it("does not repeat a failed catchup batch until Retry is selected", async () =>
   await waitFor(() => expect(api.post).toHaveBeenCalledTimes(2));
 });
 
-it("defers INDEX_IN_PROGRESS and checks the manifest after five seconds without an immediate retry", async () => {
+it("does not poll after INDEX_IN_PROGRESS and refreshes status on request", async () => {
   vi.useFakeTimers();
   let statusCalls = 0;
   const api = apiFor();
@@ -380,14 +380,19 @@ it("defers INDEX_IN_PROGRESS and checks the manifest after five seconds without 
   });
   expect(api.post).toHaveBeenCalledTimes(1);
   expect(screen.getByText(/Another request is indexing/)).toBeVisible();
-  await act(async () => vi.advanceTimersByTimeAsync(4999));
+  await act(async () => vi.advanceTimersByTimeAsync(120_000));
   expect(statusCalls).toBe(1);
   expect(api.post).toHaveBeenCalledTimes(1);
-
-  await act(async () => vi.advanceTimersByTimeAsync(1));
+  await act(async () => {
+    fireEvent.click(
+      screen.getByRole("button", { name: "Refresh index status" }),
+    );
+    await Promise.resolve();
+    await Promise.resolve();
+  });
   expect(statusCalls).toBe(2);
-  expect(api.post).toHaveBeenCalledTimes(1);
   expect(screen.queryByText(/Another request is indexing/)).toBeNull();
+  expect(api.post).toHaveBeenCalledTimes(1);
 });
 
 it("aborts catchup on a page change and indexes the refreshed needed list", async () => {

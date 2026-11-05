@@ -320,8 +320,10 @@ function SessionDetail({
   useEffect(() => {
     if (!running) return;
     const abort = new AbortController();
-    let timer: ReturnType<typeof setTimeout>;
-    const poll = async () => {
+    let inFlight = false;
+    const refresh = async () => {
+      if (abort.signal.aborted || inFlight) return;
+      inFlight = true;
       try {
         const next = await client.get(initial.id, abort.signal);
         if (!abort.signal.aborted) {
@@ -336,15 +338,28 @@ function SessionDetail({
           }
           setError(true);
         }
+      } finally {
+        inFlight = false;
       }
-      if (!abort.signal.aborted) timer = setTimeout(() => void poll(), 5000);
     };
-    timer = setTimeout(() => void poll(), 3000);
+    const refreshVisible = () => {
+      if (document.visibilityState !== "hidden" && navigator.onLine)
+        void refresh();
+    };
+    // A row already active when opened gets one catch-up read. A status
+    // returned directly from the user's own process/cancel action is current
+    // and should not be immediately overwritten by a racing GET.
+    if (active(initial)) void refresh();
+    window.addEventListener("focus", refreshVisible);
+    window.addEventListener("online", refreshVisible);
+    document.addEventListener("visibilitychange", refreshVisible);
     return () => {
       abort.abort();
-      clearTimeout(timer);
+      window.removeEventListener("focus", refreshVisible);
+      window.removeEventListener("online", refreshVisible);
+      document.removeEventListener("visibilitychange", refreshVisible);
     };
-  }, [client, initial.id, onReadDenied, running]);
+  }, [client, initial, onReadDenied, running]);
   async function run(cancel: boolean) {
     if (inFlight.current) return;
     inFlight.current = true;

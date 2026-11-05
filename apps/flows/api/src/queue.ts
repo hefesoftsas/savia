@@ -12,6 +12,10 @@ import { createWorkerRuntime } from "./runtime/cloudflare-worker-runtime";
 import { queueExecutionId, queueRetryDelaySeconds } from "./queue-backoff";
 import { WorkflowStore } from "./stores/workflow-store";
 import { isCreditExhausted } from "./utils/credits";
+import {
+  flushSaviaCollectionEventBatch,
+  SAVIA_COLLECTION_BATCH_WAKEUP,
+} from "./services/collection-event-batches";
 
 const TERMINAL_EXECUTION_STATUSES = new Set([
   "completed",
@@ -164,6 +168,30 @@ export async function handleQueueMessages(
   try {
     for (const message of batch.messages) {
       try {
+        if (
+          message.body &&
+          typeof message.body === "object" &&
+          (message.body as { type?: unknown }).type ===
+            SAVIA_COLLECTION_BATCH_WAKEUP &&
+          typeof (message.body as { groupKey?: unknown }).groupKey ===
+            "string" &&
+          /^[a-f0-9]{64}:\d+$/.test(
+            (message.body as { groupKey: string }).groupKey,
+          )
+        ) {
+          const result = await flushSaviaCollectionEventBatch(env, {
+            groupKey: (message.body as { groupKey: string }).groupKey,
+          });
+          if (
+            result.skipped === "retry-scheduled" ||
+            result.skipped === "executions-paused"
+          ) {
+            retryMessage(message, `collection batch ${result.skipped}`);
+          } else {
+            message.ack();
+          }
+          continue;
+        }
         // Parse the message body
         const queueMessage = message.body as QueueMessage;
 

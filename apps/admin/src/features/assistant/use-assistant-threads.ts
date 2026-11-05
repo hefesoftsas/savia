@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ApiClientError } from "@/api/api-client";
 import { isReadAccessDenied } from "@/queries/read-state";
 import { useAppServices } from "./assistant-context";
+import { useRealtimeTopics } from "@/realtime/use-realtime";
 import {
   AssistantThreadsClient,
   type AssistantThreadSummary,
@@ -63,11 +64,17 @@ export function useAssistantThreads(
   const queue = useRef<Promise<unknown>>(Promise.resolve());
   const mounted = useRef(true);
   const refreshing = useRef(false);
-  const refreshAgain = useRef(false);
+  const refreshAgain = useRef<boolean | null>(null);
   const refreshRef = useRef<((force?: boolean) => Promise<void>) | null>(null);
   const generation = useRef(0);
   const contextRef = useRef(context);
   contextRef.current = context;
+  const contextScope = context ? `${context.kind}:${context.id}` : "default";
+  const contextScopeRef = useRef(contextScope);
+  if (contextScopeRef.current !== contextScope) {
+    contextScopeRef.current = contextScope;
+    generation.current++;
+  }
   const publish = useCallback((items: AssistantThreadSummary[]) => {
     records.current = items;
     if (mounted.current) setThreads(items);
@@ -194,7 +201,7 @@ export function useAssistantThreads(
   const refresh = useCallback(
     async (force = false) => {
       if (refreshing.current) {
-        if (force) refreshAgain.current = true;
+        refreshAgain.current = refreshAgain.current === true || force;
         return;
       }
       if (!force && (running.current || pending.current)) return;
@@ -344,15 +351,26 @@ export function useAssistantThreads(
       } finally {
         refreshing.current = false;
         if (mounted.current) setLoading(false);
-        if (refreshAgain.current) {
-          refreshAgain.current = false;
-          queueMicrotask(() => void refreshRef.current?.(true));
+        if (refreshAgain.current !== null) {
+          const forceAgain = refreshAgain.current;
+          refreshAgain.current = null;
+          queueMicrotask(() => void refreshRef.current?.(forceAgain));
         }
       }
     },
     [clearDeniedRead, client, publish, select, setActiveRecord, userId],
   );
   refreshRef.current = refresh;
+  useRealtimeTopics({
+    topics: ["assistant-threads"],
+    enabled,
+    onConnected: (reason) => {
+      if (reason === "initial" || reason === "recovered") void refresh();
+    },
+    onEvent: (event) => {
+      if (event.collection === "threads") void refresh();
+    },
+  });
   useEffect(() => {
     if (!enabled || !userId) return;
     void refresh();
@@ -360,13 +378,10 @@ export function useAssistantThreads(
       if (document.visibilityState !== "hidden") void refresh();
     };
     window.addEventListener("focus", refreshVisible);
-    const timer = window.setInterval(refreshVisible, 15000);
     return () => {
-      window.clearInterval(timer);
       window.removeEventListener("focus", refreshVisible);
     };
   }, [enabled, userId, context?.id, context?.kind, refresh]);
-
   useEffect(() => {
     if (!enabled || !context) return;
     const handleTenantChange = () => {

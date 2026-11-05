@@ -5,7 +5,11 @@
  * Handles parameter processing, execution creation, and persistence.
  */
 
-import type { BlobParameter, InputOverrides } from "@savia/flows-runtime";
+import type {
+  BlobParameter,
+  InputOverrides,
+  RuntimeParams,
+} from "@savia/flows-runtime";
 import type { SaviaCollectionEvent } from "@savia/studio-shared/savia-flows";
 import type {
   Node,
@@ -38,6 +42,8 @@ export interface WorkflowExecutorOptions {
   /** When true, all credit checks are bypassed (e.g., internal/test accounts). */
   unlimitedUsage?: boolean;
   parameters?: WorkflowExecutorParameters;
+  /** Scheduled occurrence metadata carried to both runtime implementations. */
+  scheduledTrigger?: RuntimeParams["scheduledTrigger"];
   /** Per-run node input values, keyed nodeId → inputName. */
   inputOverrides?: InputOverrides;
   /**
@@ -97,6 +103,7 @@ export class WorkflowExecutor {
       overageLimit,
       unlimitedUsage,
       parameters,
+      scheduledTrigger,
       inputOverrides,
       rehearsal,
       saviaCollectionEvent,
@@ -151,6 +158,7 @@ export class WorkflowExecutor {
       },
       userId,
       organizationId,
+      ...(scheduledTrigger && { scheduledTrigger }),
       computeCredits,
       ...(subscriptionStatus && { subscriptionStatus }),
       ...(overageLimit !== undefined && { overageLimit }),
@@ -206,6 +214,8 @@ export class WorkflowExecutor {
           timestamp: Date.now(),
         },
       };
+    } else if (workflow.trigger === "scheduled") {
+      finalExecutionParams = baseExecutionParams;
     } else {
       // For other workflow types, provide basic HTTP context without payload
       finalExecutionParams = {

@@ -179,6 +179,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
   vi.unstubAllGlobals();
   vi.clearAllMocks();
 });
@@ -345,8 +346,16 @@ it("keeps CAPTCHA and submit at the final step and posts normalized flat values"
   await solve();
   fireEvent.click(submitButton);
 
-  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-  const [, init] = fetchMock.mock.calls[0];
+  await waitFor(() =>
+    expect(
+      fetchMock.mock.calls.filter(
+        ([url]) => !String(url).includes("/status/"),
+      ),
+    ).toHaveLength(1),
+  );
+  const [, init] = fetchMock.mock.calls.find(
+    ([url]) => !String(url).includes("/status/"),
+  )!;
   expect(init.credentials).toBe("omit");
   const payload = JSON.parse(init.body);
   expect(payload.values.vehicle_plate).toBe("TESTCAR");
@@ -574,6 +583,11 @@ it("shows a live waiting state with timer and skeletons while quoting", async ()
   expect(
     await screen.findByText(/Cotizando con aseguradoras/),
   ).toBeInTheDocument();
+  vi.spyOn(navigator, "onLine", "get").mockReturnValue(true);
+  await act(async () => {
+    window.dispatchEvent(new Event("focus"));
+    await Promise.resolve();
+  });
   expect(screen.getByText(/no cierres ni recargues/)).toBeInTheDocument();
   expect(document.querySelectorAll(".public-quote-skeleton-card")).toHaveLength(
     3,
@@ -792,9 +806,10 @@ it("paints finished insurers through the shared comparator while others poll", a
   expect(
     await screen.findByText(/Cotizando con aseguradoras/),
   ).toBeInTheDocument();
-  // Malformed entries never render; the shared comparator shows the
-  // finished card, pending skeletons and failed rows. The first poll waits
-  // a full interval by design.
+  // The single progress read paints finished cards, pending skeletons and
+  // failed rows without starting a background status loop.
+  vi.spyOn(navigator, "onLine", "get").mockReturnValue(true);
+  fireEvent.focus(window);
   expect(
     await screen.findByRole("heading", { name: "SBS" }, { timeout: 5000 }),
   ).toBeInTheDocument();
@@ -809,6 +824,19 @@ it("paints finished insurers through the shared comparator while others poll", a
   expect(
     fetchMock.mock.calls.some(([url]) => String(url).includes("/status/")),
   ).toBe(true);
+  const statusCalls = () =>
+    fetchMock.mock.calls.filter(([url]) => String(url).includes("/status/"));
+  expect(statusCalls()).toHaveLength(1);
+  vi.useFakeTimers();
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(15_000);
+  });
+  expect(statusCalls()).toHaveLength(1);
+  await act(async () => {
+    window.dispatchEvent(new Event("focus"));
+    await Promise.resolve();
+  });
+  expect(statusCalls()).toHaveLength(2);
 });
 
 it("fills the birth date from the age presets", async () => {

@@ -118,7 +118,6 @@ export const usePaginatedExecutions = (
       pageSize: EXECUTIONS_PAGE_SIZE,
       revalidateFirstPage: true,
       revalidateOnMount: true,
-      refreshInterval: 5000, // Regular refresh to see execution status updates
     }
   );
 

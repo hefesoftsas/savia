@@ -1,8 +1,7 @@
 name: Back up Savia production
 
 on:
-  schedule:
-    - cron: "23 8 * * *"
+  # TD-EVENT-01: automatic backups disabled for the on-demand rollout.
   workflow_dispatch:
 
 permissions:

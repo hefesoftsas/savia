@@ -109,7 +109,7 @@ export function flowsWorkerConfig(
         },
       ],
     },
-    triggers: { crons: ["* * * * *"] },
+    triggers: { crons: [] },
     ratelimits: [
       {
         name: "RATE_LIMIT_DEFAULT",

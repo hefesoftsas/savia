@@ -1,12 +1,15 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, render, screen, fireEvent } from "@testing-library/react";
+import { act, cleanup, render, screen, fireEvent } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { CollectionFollow } from "./collection-follow";
 import { AdminNoticeForm } from "./admin-notice-form";
 import { AdminNoticeStatus } from "./admin-notice-status";
 import type { NotificationClient } from "./client";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+});
 
 function baseClient(overrides: Partial<NotificationClient> = {}): NotificationClient {
   return {
@@ -88,4 +91,24 @@ it("shows accepted delivery status for administrators", async () => {
   );
   expect(await screen.findByText("processing")).toBeVisible();
   expect(await screen.findByText("4")).toBeVisible();
+});
+
+it("does not poll administrative notice status", async () => {
+  vi.useFakeTimers();
+  const adminStatus = vi.fn().mockResolvedValue({
+    status: "processing",
+    delivered: 0,
+    failed: 0,
+    pendingRetries: 1,
+  });
+  const client = baseClient({ adminStatus });
+  renderWith(client, <AdminNoticeStatus eventId="evt-pending" client={client} />);
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(0);
+  });
+  expect(adminStatus).toHaveBeenCalledTimes(1);
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(300_000);
+  });
+  expect(adminStatus).toHaveBeenCalledTimes(1);
 });
