@@ -67,6 +67,12 @@ live completion without periodic fallback. Pending jobs may need manual refresh.
 
 ## Isolated Auth diagnosis
 
+`Check preview Auth bridge` is a manual, protected-Preview, main-only credential
+check. It verifies that every serving Auth revision differs from its fixed invalid
+revision, then sends the existing bridge credential through a temporary session.
+An upstream 409 confirms authentication while stopping before database
+initialization. It publishes no application version and retains no credentials.
+
 The authenticated initialization session reports allowlisted failure categories
 and upstream HTTP status without forwarding response bodies or credentials.
 Distinguish bridge rejection, revision mismatch, transport failure and initialization
