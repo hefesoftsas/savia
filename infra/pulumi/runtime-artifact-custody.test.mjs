@@ -1,5 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+import { fileURLToPath } from "node:url";
 import {
   mkdtemp,
   mkdir,
@@ -61,6 +64,75 @@ async function artifact(directory) {
     destination: join(directory, "..", "release"),
   });
 }
+
+test("CLI stdout is JSON for retention, reuse and configuration-change fallback", async () => {
+  const work = await mkdtemp(join(tmpdir(), "savia-custody-cli-test-"));
+  try {
+    const source = join(work, "source");
+    await mkdir(source);
+    const prepared = await artifact(source);
+    const common = [
+      "--archive",
+      join(work, "release.enc"),
+      "--provenance",
+      join(work, "provenance.enc"),
+      "--run-id",
+      "42081871859",
+      "--sha",
+      sha,
+      "--environment",
+      "preview",
+      "--account-id",
+      "c".repeat(32),
+    ];
+    const env = {
+      ...process.env,
+      ...configEnv,
+      SAVIA_BACKUP_KEY: key,
+      GITHUB_ENV: join(work, "github-env"),
+    };
+    const runCli = async (args, overrides = {}) => {
+      const { stdout } = await promisify(execFile)(
+        process.execPath,
+        [
+          fileURLToPath(
+            new URL("./runtime-artifact-custody.mjs", import.meta.url),
+          ),
+          ...args,
+          ...common,
+        ],
+        { env: { ...env, ...overrides } },
+      );
+      return JSON.parse(stdout);
+    };
+    const retained = await runCli([
+      "retain",
+      "--artifact",
+      prepared.artifactDirectory,
+    ]);
+    assert.equal(retained.sourceSha, sha);
+    const restored = await runCli([
+      "restore",
+      "--destination",
+      join(work, "restored"),
+    ]);
+    assert.equal(restored.restored, true);
+    assert.match(
+      await readFile(env.GITHUB_ENV, "utf8"),
+      /SAVIA_PLUGIN_EDITOR_DEPLOYMENT_URL=https:/,
+    );
+    const changed = await runCli(
+      ["restore", "--destination", join(work, "changed")],
+      { OPENROUTER_MODEL: "different/model" },
+    );
+    assert.deepEqual(changed, {
+      restored: false,
+      reason: "current-preview-config-changed",
+    });
+  } finally {
+    await rm(work, { recursive: true, force: true });
+  }
+});
 
 test("round-trips a verified release with same-run, SHA, environment and digest custody", async () => {
   const work = await mkdtemp(join(tmpdir(), "savia-custody-test-"));

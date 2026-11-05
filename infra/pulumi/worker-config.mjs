@@ -595,7 +595,7 @@ export async function renderCloudflareConfigFromEnv(env = process.env) {
     outputRoot: env.SAVIA_DEPLOY_CONFIG_ROOT ?? process.cwd(),
     publicOrigin: env.SAVIA_PUBLIC_ORIGIN,
   });
-  process.stdout.write("Rendered Cloudflare deployment configuration.\n");
+  process.stderr.write("Rendered Cloudflare deployment configuration.\n");
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
