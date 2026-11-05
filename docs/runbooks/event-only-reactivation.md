@@ -79,5 +79,8 @@ encrypted result is retained, for one day. No Cloudflare credentials are supplie
 no remote database is changed, and application secrets are not rotated. Decrypt,
 inspect the manifest, and extract Auth SQL only in private local storage. Replay
 the SQL with fake application credentials.
+Manifest validation compares planned bucket names and values without depending
+on JSON property order; reordered Pulumi output remains valid, while missing,
+additional or mismatched buckets are rejected.
 Keep Preview deployment temporarily disabled while diagnosing, then re-enable it
 only when the release blocker has been corrected and checked.

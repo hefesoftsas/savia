@@ -11,7 +11,7 @@ import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { readFile, readdir, lstat } from "node:fs/promises";
 import { join, relative, sep, dirname, resolve, isAbsolute } from "node:path";
-import { promisify } from "node:util";
+import { isDeepStrictEqual, promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 import { buildR2ObjectPutCommand } from "./backup.mjs";
 import { r2InventoryHash } from "./recovery-consistency.mjs";
@@ -396,8 +396,7 @@ export function validateManifest(manifest, confirm, runtimeAccountId) {
         planned.worker !== expectedNames.worker ||
         planned.queue !== expectedNames.queue ||
         planned.workflow !== expectedNames.workflow ||
-        JSON.stringify(planned.buckets) !==
-          JSON.stringify(expectedNames.buckets)
+        !isDeepStrictEqual(planned.buckets, expectedNames.buckets)
       ) {
         throw new Error(
           "Backup manifest Flows resource names do not match its resolved environment",
