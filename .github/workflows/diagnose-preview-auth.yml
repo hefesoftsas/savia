@@ -18,7 +18,7 @@ permissions:
 
 jobs:
   extract:
-    name: Prepare encrypted Auth database for offline diagnosis
+    name: Prepare encrypted recovery archive for offline diagnosis
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -28,8 +28,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Verify encrypted extraction safeguards
-        run: node --test scripts/extract-auth-recovery.test.mjs
+      - name: Verify backup encryption safeguards
+        run: node --test scripts/encrypt-flows-backup.test.mjs
       - name: Verify trusted deployment provenance
         env:
           GH_TOKEN: ${{ github.token }}
@@ -59,13 +59,18 @@ jobs:
           run-id: ${{ inputs.source_run_id }}
           github-token: ${{ github.token }}
           path: ${{ runner.temp }}/auth-recovery-input
-      - name: Extract and re-encrypt Auth database
+      - name: Authenticate and decrypt the existing recovery archive
         env:
           SAVIA_BACKUP_KEY: ${{ secrets.SAVIA_BACKUP_KEY }}
-          SAVIA_FLOWS_BACKUP_KEY: ${{ secrets.SAVIA_FLOWS_BACKUP_KEY }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: node scripts/extract-auth-recovery.mjs --environment preview --input "$RUNNER_TEMP/auth-recovery-input/flows-release-backup.enc" --output "$RUNNER_TEMP/auth-diagnosis.enc"
-      - name: Retain only encrypted Auth diagnosis
+        run: |
+          umask 077
+          mkdir "$RUNNER_TEMP/auth-recovery-private"
+          node scripts/encrypt-flows-backup.mjs --action decrypt --input "$RUNNER_TEMP/auth-recovery-input/flows-release-backup.enc" --output "$RUNNER_TEMP/auth-recovery-private/recovery.tar.gz"
+      - name: Re-encrypt the archive for existing diagnostic custody
+        env:
+          SAVIA_BACKUP_KEY: ${{ secrets.SAVIA_FLOWS_BACKUP_KEY }}
+        run: node scripts/encrypt-flows-backup.mjs --action encrypt --input "$RUNNER_TEMP/auth-recovery-private/recovery.tar.gz" --output "$RUNNER_TEMP/auth-diagnosis.enc"
+      - name: Retain only encrypted diagnosis
         uses: actions/upload-artifact@v4
         with:
           name: preview-auth-offline-diagnosis
@@ -74,4 +79,4 @@ jobs:
           if-no-files-found: error
       - name: Remove temporary artifacts
         if: always()
-        run: rm -rf "$RUNNER_TEMP/auth-recovery-input" "$RUNNER_TEMP/auth-diagnosis.enc" "$RUNNER_TEMP/source-run.json"
+        run: rm -rf "$RUNNER_TEMP/auth-recovery-input" "$RUNNER_TEMP/auth-recovery-private" "$RUNNER_TEMP/auth-diagnosis.enc" "$RUNNER_TEMP/source-run.json"

@@ -71,12 +71,13 @@ When initialization fails, do not repeat the full release merely to collect
 evidence. The manual `Diagnose preview Auth offline` workflow accepts the failed
 preview deployment run ID and its exact source SHA. It runs only on `main` in the
 protected `preview` environment, validates the source workflow and repository,
-and extracts only the Auth database from the existing recovery archive.
+and prepares the existing recovery archive for private offline inspection.
 
-The source is decrypted with `SAVIA_BACKUP_KEY`; the Auth SQL is re-encrypted with
+The source is decrypted with `SAVIA_BACKUP_KEY`; the archive is re-encrypted with
 `SAVIA_FLOWS_BACKUP_KEY` for the operator's existing diagnostic custody. Only the
 encrypted result is retained, for one day. No Cloudflare credentials are supplied,
-no remote database is changed, and application secrets are not rotated. Decrypt
-and replay the SQL only in private local storage with fake application credentials.
+no remote database is changed, and application secrets are not rotated. Decrypt,
+inspect the manifest, and extract Auth SQL only in private local storage. Replay
+the SQL with fake application credentials.
 Keep Preview deployment temporarily disabled while diagnosing, then re-enable it
 only when the release blocker has been corrected and checked.
