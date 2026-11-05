@@ -73,13 +73,16 @@ test("deployment initializes only its bound revision, validates readiness and re
   const configPath = join(directory, "auth.json");
   await writeFile(configPath, JSON.stringify(config));
   try {
-    for (const valid of [true, false]) {
+    for (const outcome of ["ready", "mismatch", "forged"]) {
+      const valid = outcome === "ready";
       let probeConfig, probePath;
       const requests = [];
+      const stages = [];
       const result = initializeAuthDeployment(
         { environment: "preview", configPath },
         {
           env,
+          report: (stage) => stages.push(stage),
           start: (binary, args, options) => {
             assert.match(binary, /wrangler$/);
             assert.ok(args.includes("--remote"));
@@ -105,15 +108,33 @@ test("deployment initializes only its bound revision, validates readiness and re
               options.headers["x-savia-bridge-key"],
               /^[a-f\d]{64}$/,
             );
-            return Response.json({
-              status: "ready",
-              revision: valid ? revision : "c".repeat(40),
-            });
+            return outcome === "forged"
+              ? Response.json(
+                  {
+                    error: "AUTH_BRIDGE_REJECTED;SECRET_CANARY",
+                    upstreamStatus: "403 SECRET_CANARY",
+                  },
+                  { status: 502 },
+                )
+              : Response.json({
+                  status: "ready",
+                  revision: valid ? revision : "c".repeat(40),
+                });
           },
         },
       );
       if (valid) assert.deepEqual(await result, { status: "ready", revision });
-      else await assert.rejects(result, /readiness mismatch/);
+      else if (outcome === "mismatch") {
+        await assert.rejects(result, /readiness mismatch/);
+        assert.match(stages.join("\n"), /READINESS_MISMATCH/);
+      } else {
+        await assert.rejects(result, /Auth preparation failed/);
+        assert.match(stages.join("\n"), /INITIALIZATION_FAILED/);
+        assert.doesNotMatch(
+          stages.join("\n"),
+          /SECRET_CANARY|AUTH_BRIDGE_REJECTED/,
+        );
+      }
       assert.equal(requests.length, 2);
       await assert.rejects(access(probePath), /ENOENT/);
     }
