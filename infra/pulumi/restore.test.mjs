@@ -142,6 +142,25 @@ describe("pulumi restore", () => {
       integrity: {},
     };
     assert.equal(validateManifest(manifest, "preview").stack, "preview");
+    const sorted = structuredClone(manifest);
+    sorted.pulumiOutputs.plannedFlowsResourceNames.buckets = Object.fromEntries(
+      Object.entries(names.flows.buckets).sort(([a], [b]) =>
+        a.localeCompare(b),
+      ),
+    );
+    assert.equal(validateManifest(sorted, "preview").stack, "preview");
+    for (const buckets of [
+      { ...names.flows.buckets, resources: "wrong-bucket" },
+      { ...names.flows.buckets, unexpected: "extra-bucket" },
+      { resources: names.flows.buckets.resources },
+    ]) {
+      const invalid = structuredClone(manifest);
+      invalid.pulumiOutputs.plannedFlowsResourceNames.buckets = buckets;
+      assert.throws(
+        () => validateManifest(invalid, "preview"),
+        /Flows resource names do not match/,
+      );
+    }
     assert.throws(
       () => validateManifest({ ...manifest, stack: "production" }, "preview"),
       /resolved environment|not preview/i,
