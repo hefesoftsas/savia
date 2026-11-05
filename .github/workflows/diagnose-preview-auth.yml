@@ -1,0 +1,77 @@
+name: Diagnose preview Auth offline
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_run_id:
+        description: Preview deployment run containing the encrypted recovery archive
+        required: true
+        type: string
+      source_sha:
+        description: Exact source revision of that preview deployment
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  extract:
+    name: Prepare encrypted Auth database for offline diagnosis
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    environment: preview
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify encrypted extraction safeguards
+        run: node --test scripts/extract-auth-recovery.test.mjs
+      - name: Verify trusted deployment provenance
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN: ${{ inputs.source_run_id }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_RUN" =~ ^[0-9]+$ ]]
+          [[ "$SOURCE_SHA" =~ ^[a-f0-9]{40}$ ]]
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN" > "$RUNNER_TEMP/source-run.json"
+          node --input-type=module <<'NODE'
+          import { readFileSync } from 'node:fs';
+          const run = JSON.parse(readFileSync(`${process.env.RUNNER_TEMP}/source-run.json`, 'utf8'));
+          if (run.repository?.full_name !== process.env.GITHUB_REPOSITORY ||
+              run.head_repository?.full_name !== process.env.GITHUB_REPOSITORY ||
+              run.head_branch !== 'main' || run.head_sha !== process.env.SOURCE_SHA ||
+              run.path !== '.github/workflows/deploy-preview.yml' ||
+              run.event !== 'workflow_run' || run.status !== 'completed') {
+            throw new Error('Recovery source is not a completed trusted preview deployment');
+          }
+          NODE
+      - name: Download encrypted recovery archive
+        uses: actions/download-artifact@v4
+        with:
+          name: preview-runtime-recovery
+          run-id: ${{ inputs.source_run_id }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/auth-recovery-input
+      - name: Extract and re-encrypt Auth database
+        env:
+          SAVIA_BACKUP_KEY: ${{ secrets.SAVIA_BACKUP_KEY }}
+          SAVIA_FLOWS_BACKUP_KEY: ${{ secrets.SAVIA_FLOWS_BACKUP_KEY }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: node scripts/extract-auth-recovery.mjs --environment preview --input "$RUNNER_TEMP/auth-recovery-input/flows-release-backup.enc" --output "$RUNNER_TEMP/auth-diagnosis.enc"
+      - name: Retain only encrypted Auth diagnosis
+        uses: actions/upload-artifact@v4
+        with:
+          name: preview-auth-offline-diagnosis
+          path: ${{ runner.temp }}/auth-diagnosis.enc
+          retention-days: 1
+          if-no-files-found: error
+      - name: Remove temporary artifacts
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/auth-recovery-input" "$RUNNER_TEMP/auth-diagnosis.enc" "$RUNNER_TEMP/source-run.json"
