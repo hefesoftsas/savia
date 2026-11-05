@@ -105,6 +105,18 @@ test("preview retries reuse one encrypted same-run release artifact and make a f
     /artifact-ids: \$\{\{ steps\.find_retry_release\.outputs\.artifact_id \}\}/,
   );
   assert.match(source.slice(download, restore), /merge-multiple: true/);
+  const downloadedPath = source
+    .slice(download, restore)
+    .match(/path: (.+)/)?.[1];
+  const uploadedPath = source
+    .slice(upload, plan)
+    .match(/path: (.+)\/\*\.enc/)?.[1];
+  assert.ok(downloadedPath && uploadedPath);
+  assert.notEqual(
+    downloadedPath,
+    uploadedPath,
+    "A config-change rebuild must not overwrite exclusive-create retry inputs",
+  );
   assert.match(
     source.slice(restore, prepare),
     /runtime-artifact-custody\.mjs restore/,

@@ -195,7 +195,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           artifact-ids: ${{ steps.find_retry_release.outputs.artifact_id }}
-          path: ${{ runner.temp }}/preview-runtime-custody
+          path: ${{ runner.temp }}/preview-runtime-custody/retry-input
           merge-multiple: true
 
       - name: Restore encrypted Preview release artifact
@@ -214,8 +214,8 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
           set -euo pipefail
-          archive="$RUNNER_TEMP/preview-runtime-custody/release.tar.gz.enc"
-          provenance="$RUNNER_TEMP/preview-runtime-custody/provenance.json.enc"
+          archive="$RUNNER_TEMP/preview-runtime-custody/retry-input/release.tar.gz.enc"
+          provenance="$RUNNER_TEMP/preview-runtime-custody/retry-input/provenance.json.enc"
           if [ "${{ steps.find_retry_release.outputs.found }}" != true ]; then
             echo "restored=false" >> "$GITHUB_OUTPUT"
             exit 0
@@ -224,7 +224,7 @@ jobs:
             echo "::error::Same-run Preview release artifact is incomplete."
             exit 1
           fi
-          if [ -n "$(find "$RUNNER_TEMP/preview-runtime-custody" -mindepth 1 -maxdepth 1 ! -type f -print -quit)" ] || [ "$(find "$RUNNER_TEMP/preview-runtime-custody" -mindepth 1 -maxdepth 1 -type f | wc -l | tr -d ' ')" != 2 ]; then
+          if [ -n "$(find "$RUNNER_TEMP/preview-runtime-custody/retry-input" -mindepth 1 -maxdepth 1 ! -type f -print -quit)" ] || [ "$(find "$RUNNER_TEMP/preview-runtime-custody/retry-input" -mindepth 1 -maxdepth 1 -type f | wc -l | tr -d ' ')" != 2 ]; then
             echo "::error::Same-run Preview release artifact has unexpected or ambiguous files."
             exit 1
           fi
@@ -277,11 +277,11 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           set -euo pipefail
-          mkdir -m 700 -p "$RUNNER_TEMP/preview-runtime-custody"
+          mkdir -m 700 -p "$RUNNER_TEMP/preview-runtime-custody/retained"
           node infra/pulumi/runtime-artifact-custody.mjs retain \
             --artifact "$RUNNER_TEMP/savia-release" \
-            --archive "$RUNNER_TEMP/preview-runtime-custody/release.tar.gz.enc" \
-            --provenance "$RUNNER_TEMP/preview-runtime-custody/provenance.json.enc" \
+            --archive "$RUNNER_TEMP/preview-runtime-custody/retained/release.tar.gz.enc" \
+            --provenance "$RUNNER_TEMP/preview-runtime-custody/retained/provenance.json.enc" \
             --run-id "$GITHUB_RUN_ID" \
             --sha "$APPROVED_SHA" \
             --environment preview \
@@ -292,7 +292,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: preview-runtime-release-${{ github.run_id }}
-          path: ${{ runner.temp }}/preview-runtime-custody/*.enc
+          path: ${{ runner.temp }}/preview-runtime-custody/retained/*.enc
           retention-days: 7
           if-no-files-found: error
           overwrite: true
