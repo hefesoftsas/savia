@@ -68,7 +68,8 @@ export async function prepareEnvironmentRelease(
       ...(outputs.flowsEnabled ? ["flows/api"] : []),
       ...(environment === "preview" ? ["plugin-editor-runtime"] : []),
     ];
-    if (environment === "preview" && !codeOnly) {
+    const frontendOnly = codeOnly?.targets.includes("gateway") ?? false;
+    if (environment === "preview" && (!codeOnly || frontendOnly)) {
       client ??= createRuntimeCloudClient(
         { accountId: env.CLOUDFLARE_ACCOUNT_ID, workers: [] },
         { env },
@@ -84,7 +85,7 @@ export async function prepareEnvironmentRelease(
         { cwd: root, env: operationEnv },
       );
     }
-    if (!codeOnly)
+    if (!codeOnly || frontendOnly)
       await run("pnpm", ["--filter", "@savia/admin", "run", "build:assets"], {
         cwd: root,
         env: operationEnv,
@@ -94,6 +95,8 @@ export async function prepareEnvironmentRelease(
     );
     if (codeOnly) {
       const appForTarget = {
+        gateway: "admin",
+        pluginEditor: "plugin-editor-runtime",
         auth: "auth",
         api: "api",
         request: "savia-request",

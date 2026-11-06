@@ -10,9 +10,18 @@ const CI_KINDS = new Set([
   "api",
   "backup-gate",
   "ci-config",
+  "frontend",
 ]);
 const RELEASE_KINDS = new Set(["platform", "plugin", "none"]);
 const RUNTIME_PROFILE_KINDS = new Set(["auth", "api", "backup-gate"]);
+const FRONTEND_ADMIN_JOBS = [
+  "admin",
+  "admin-2",
+  "admin-3",
+  "admin-4",
+  "admin-5",
+  "admin-6",
+];
 
 export function evaluateContractGate(needs) {
   const failures = [];
@@ -54,6 +63,19 @@ export function evaluateContractGate(needs) {
     const result = needs?.["runtime-profile"]?.result;
     if (result !== "success") {
       failures.push(`runtime profile result was ${result ?? "missing"}`);
+    }
+  }
+
+  if (ciKind === "frontend") {
+    const result = needs?.["runtime-profile"]?.result;
+    if (result !== "success") {
+      failures.push(`runtime profile result was ${result ?? "missing"}`);
+    }
+    for (const job of FRONTEND_ADMIN_JOBS) {
+      const jobResult = needs?.[job]?.result;
+      if (jobResult !== "success") {
+        failures.push(`${job} result was ${jobResult ?? "missing"}`);
+      }
     }
   }
 

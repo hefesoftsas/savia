@@ -4,7 +4,10 @@ const codeOnlyWorkerNames = Object.freeze({
   api: "savia-agencies-preview",
   request: "savia-request-preview",
   connectors: "savia-connectors-preview",
+  gateway: "savia-preview",
+  pluginEditor: "savia-plugin-editor-preview",
 });
+const frontendCodeOnlyTargets = Object.freeze(["gateway", "pluginEditor"]);
 export function expectedPreviewCodeOnlyWorkers(releaseSource) {
   if (!releaseSource || !Object.hasOwn(releaseSource, "codeOnly")) return null;
   const scope = releaseSource.codeOnly,
@@ -27,6 +30,9 @@ export function expectedPreviewCodeOnlyWorkers(releaseSource) {
         typeof target !== "string" ||
         !Object.hasOwn(codeOnlyWorkerNames, target),
     ) ||
+    (targets.some((target) => frontendCodeOnlyTargets.includes(target)) &&
+      (targets.length !== frontendCodeOnlyTargets.length ||
+        frontendCodeOnlyTargets.some((target) => !targets.includes(target)))) ||
     new Set(targets).size !== targets.length
   )
     throw new Error("Invalid verified Preview code scope");

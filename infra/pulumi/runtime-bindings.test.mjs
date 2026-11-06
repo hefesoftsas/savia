@@ -20,6 +20,36 @@ test("gateway cannot enter the source-only lane even with well-formed metadata",
     /scope/,
   );
 });
+
+test("frontend Preview code scope resolves gateway and plugin editor to exact Workers as a pair", () => {
+  const revision = "b".repeat(40);
+  const releaseSource = {
+    version: 1,
+    sourceRevision: revision,
+    codeOnly: {
+      base: "a".repeat(40),
+      head: revision,
+      targets: ["gateway", "pluginEditor"],
+    },
+  };
+  assert.deepEqual(expectedPreviewCodeOnlyWorkers(releaseSource), [
+    "savia-plugin-editor-preview",
+    "savia-preview",
+  ]);
+  for (const targets of [
+    ["gateway"],
+    ["pluginEditor"],
+    ["gateway", "pluginEditor", "api"],
+  ])
+    assert.throws(
+      () =>
+        expectedPreviewCodeOnlyWorkers({
+          ...releaseSource,
+          codeOnly: { ...releaseSource.codeOnly, targets },
+        }),
+      /scope/,
+    );
+});
 const inputs = {
   accountId: "a".repeat(32),
   environment: "preview",

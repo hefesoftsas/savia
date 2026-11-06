@@ -37,6 +37,27 @@ const PREVIEW_INFRA_HELPERS = new Set([
   "scripts/preview-change-plan.test.mjs",
 ]);
 
+const FRONTEND_TEST_PATH = /^apps\/admin\/src\/.+\.(?:test|spec)\.tsx?$/;
+const FRONTEND_TEST_DIRECTORY = /(?:^|\/)(?:test|tests|__tests__|spec|specs)\//;
+
+/** True only for admin UI source that can use the focused frontend CI lane. */
+export function isFrontendSourcePath(path) {
+  if (
+    typeof path !== "string" ||
+    !path.startsWith("apps/admin/src/") ||
+    FRONTEND_TEST_DIRECTORY.test(path) ||
+    /\.(?:test|spec)\.[^/]+$/.test(path)
+  ) {
+    return false;
+  }
+  if (/^apps\/admin\/src\/i18n\/.+\.ts$/.test(path)) return true;
+  return /^apps\/admin\/src\/.+\.(?:tsx|css)$/.test(path);
+}
+
+function isFrontendCiPath(path) {
+  return isFrontendSourcePath(path) || FRONTEND_TEST_PATH.test(path);
+}
+
 function git(args, repo) {
   return execFileSync("git", args, {
     cwd: repo,
@@ -367,6 +388,9 @@ export function classifyCiChanges({ base, head, repo = process.cwd() } = {}) {
     runtimePaths.every((path) => CI_CONFIG_PATHS.has(path))
   ) {
     return isolatedRuntimeProfile("ci-config");
+  }
+  if (runtimePaths.length > 0 && runtimePaths.every(isFrontendCiPath)) {
+    return isolatedRuntimeProfile("frontend");
   }
 
   const infraPaths = paths.filter((path) => path.startsWith("infra/pulumi/"));

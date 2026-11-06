@@ -146,6 +146,81 @@ test("verified Preview code scope is selected before builds and freezes only its
   assert.deepEqual(events, ["render", "freeze"]);
 });
 
+test("frontend Preview scope builds both frontends and freezes only their configs", async () => {
+  const accountId = "a".repeat(32),
+    names = resolveInfraNames({
+      environment: "preview",
+      documentsBucket: "savia-documents-preview",
+      publicOrigin: "https://savia-preview.hefesoft.com",
+    }),
+    events = [];
+  const outputs = {
+    cloudflareAccountId: accountId,
+    authD1Id: "auth-id",
+    domainD1Id: "domain-id",
+    documentsBucketName: names.bucket,
+    resolvedEnvironment: "preview",
+    resolvedPublicOrigin: names.publicOrigin,
+    workerNames: names.workers,
+    databaseNames: names.databases,
+    deletionProtected: false,
+    flowsEnabled: false,
+    flowsResources: null,
+    flowsExecutionEnabled: false,
+    plannedFlowsResourceNames: names.flows,
+    tenantSubdomains: [],
+    vectorizeIndex: names.vectorizeIndex,
+  };
+  await prepareEnvironmentRelease(
+    { environment: "preview", destination: "/tmp/not-created-code-only" },
+    {
+      env: {
+        CLOUDFLARE_ACCOUNT_ID: accountId,
+        SAVIA_PREVIEW_RELEASE_BASE: "a".repeat(40),
+      },
+      readOutputs: async () => outputs,
+      client: {
+        api: async () => ({ subdomain: "test-account" }),
+      },
+      render: async () => events.push("render"),
+      run: async (binary, args) => {
+        if (binary === "git") {
+          if (args[0] === "rev-parse") return { stdout: "b".repeat(40) };
+          if (args[0] === "merge-base") return { stdout: "" };
+          if (args[0] === "diff")
+            return { stdout: "apps/admin/src/i18n/locales/savia.ts" };
+          if (args[0] === "show") return { stdout: "export const x = 1" };
+        }
+        events.push(`build:${args.at(-1)}`);
+        return { stdout: "" };
+      },
+      freeze: async (options) => {
+        assert.deepEqual(options.codeOnly, {
+          base: "a".repeat(40),
+          head: "b".repeat(40),
+          targets: ["pluginEditor", "gateway"],
+        });
+        assert.deepEqual(
+          options.configs.map((path) => path.split("/").slice(-2).join("/")),
+          [
+            "admin/wrangler.preview.jsonc",
+            "plugin-editor-runtime/wrangler.preview.jsonc",
+          ],
+        );
+        assert.ok(options.domainMigrations.endsWith("packages/db/migrations"));
+        events.push("freeze");
+        return { artifactDigest: "c".repeat(64) };
+      },
+    },
+  );
+  assert.deepEqual(events, [
+    "render",
+    "build:build:plugin-editor",
+    "build:build:assets",
+    "freeze",
+  ]);
+});
+
 test("a Preview full-release fallback still builds assets and freezes the full Worker set", async () => {
   const accountId = "a".repeat(32),
     names = resolveInfraNames({

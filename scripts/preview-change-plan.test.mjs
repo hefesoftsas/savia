@@ -11,7 +11,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
-import { classifyChanges, classifyCiChanges } from "./preview-change-plan.mjs";
+import {
+  classifyChanges,
+  classifyCiChanges,
+  isFrontendSourcePath,
+} from "./preview-change-plan.mjs";
 
 const manifest = (version = "1.0.0", extra = {}) => ({
   format: "savia.extension",
@@ -363,7 +367,7 @@ test("CI classification isolates only infrastructure and documentation changes",
     ["infra/pulumi/project.ts", "export const value = 2;\n", "infrastructure"],
     ["infra/pulumi/project.test.mjs", "// changed test\n", "infrastructure"],
     ["docs/guide.md", "Updated guide\n", "none"],
-    ["apps/admin/src/page.tsx", "export const page = true;\n", "full"],
+    ["apps/admin/src/page.tsx", "export const page = true;\n", "frontend"],
     ["package.json", "{}\n", "full"],
     ["pnpm-lock.yaml", "lockfileVersion: '9.0'\n", "full"],
     ["packages/shared/src/index.ts", "export {};\n", "full"],
@@ -702,6 +706,128 @@ test("CI isolates the Auth deployment PR paths with docs and keeps mixed paths f
   }
 });
 
+test("CI selects frontend only for eligible admin UI source and its tests", (t) => {
+  const f = fixture(t);
+  for (const path of [
+    "apps/admin/src/views/page.tsx",
+    "apps/admin/src/styles/page.css",
+    "apps/admin/src/i18n/en.ts",
+    "apps/admin/src/views/page.test.ts",
+    "apps/admin/src/views/page.test.tsx",
+    "apps/admin/src/views/page.spec.ts",
+    "apps/admin/src/views/page.spec.tsx",
+    "docs/guides/admin.md",
+  ]) {
+    f.put(path, "// baseline\n");
+  }
+  const base = f.commit("base");
+
+  let scenarioBase = base;
+  for (const path of [
+    "apps/admin/src/views/page.tsx",
+    "apps/admin/src/styles/page.css",
+    "apps/admin/src/i18n/en.ts",
+    "apps/admin/src/views/page.test.ts",
+    "apps/admin/src/views/page.test.tsx",
+    "apps/admin/src/views/page.spec.ts",
+    "apps/admin/src/views/page.spec.tsx",
+  ]) {
+    f.put(path, "// updated\n");
+    const head = f.commit(`update ${path}`);
+    const plan = classifyCiChanges({ base: scenarioBase, head, repo: f.repo });
+    assert.equal(plan.kind, "frontend", `${path} should select frontend CI`);
+    assert.equal(plan.flows, false);
+    scenarioBase = head;
+  }
+
+  f.put("apps/admin/src/views/page.tsx", "// updated with a test\n");
+  f.put("apps/admin/src/views/page.spec.tsx", "// changed test\n");
+  const mixedHead = f.commit("UI and test update");
+  assert.equal(
+    classifyCiChanges({ base: scenarioBase, head: mixedHead, repo: f.repo })
+      .kind,
+    "frontend",
+  );
+  scenarioBase = mixedHead;
+
+  f.put("docs/guides/admin.md", "Updated admin guide\n");
+  const docsHead = f.commit("frontend docs update");
+  assert.equal(
+    classifyCiChanges({ base: scenarioBase, head: docsHead, repo: f.repo })
+      .kind,
+    "none",
+  );
+});
+
+test("frontend source eligibility excludes tests and unrestricted TypeScript", () => {
+  for (const path of [
+    "apps/admin/src/page.tsx",
+    "apps/admin/src/styles/page.css",
+    "apps/admin/src/i18n/en.ts",
+  ]) {
+    assert.equal(
+      isFrontendSourcePath(path),
+      true,
+      `${path} should be eligible`,
+    );
+  }
+  for (const path of [
+    "apps/admin/src/page.test.tsx",
+    "apps/admin/src/page.spec.tsx",
+    "apps/admin/src/i18n/en.test.ts",
+    "apps/admin/src/__tests__/page.test.ts",
+    "apps/admin/src/i18n/__tests__/messages.ts",
+    "apps/admin/src/services/api.ts",
+    "apps/admin/vite.config.ts",
+  ]) {
+    assert.equal(isFrontendSourcePath(path), false, `${path} is not UI source`);
+  }
+});
+
+test("admin config, arbitrary TypeScript, and mixed frontend scopes retain full CI", (t) => {
+  const f = fixture(t);
+  f.put("apps/admin/src/page.tsx", "export const page = true;\n");
+  f.put("apps/admin/src/i18n/en.ts", "export default {};\n");
+  const base = f.commit("base");
+
+  for (const path of [
+    "apps/admin/src/services/api.ts",
+    "apps/admin/src/i18n/helpers.ts",
+    "apps/admin/vite.config.ts",
+    "apps/admin/package.json",
+    "pnpm-lock.yaml",
+    "apps/api/src/index.ts",
+  ]) {
+    f.put(path, "// changed\n");
+    const head = f.commit(`change ${path}`);
+    const plan = classifyCiChanges({ base, head, repo: f.repo });
+    assert.equal(plan.kind, "full", `${path} must select full CI`);
+    assert.equal(plan.flows, true, `${path} must retain Flows checks`);
+  }
+
+  f.put("apps/admin/src/page.tsx", "export const page = false;\n");
+  f.put("apps/api/src/index.ts", "export const api = true;\n");
+  const mixed = f.commit("mixed frontend and runtime");
+  assert.equal(
+    classifyCiChanges({ base, head: mixed, repo: f.repo }).kind,
+    "full",
+  );
+});
+
+test("release-facing classification keeps eligible admin UI changes platform", (t) => {
+  const f = fixture(t);
+  f.put("apps/admin/src/page.tsx", "export const page = true;\n");
+  const base = f.commit("base");
+  f.put("apps/admin/src/page.tsx", "export const page = false;\n");
+  const head = f.commit("admin UI update");
+
+  assert.equal(classifyChanges({ base, head, repo: f.repo }).kind, "platform");
+  assert.equal(
+    classifyCiChanges({ base, head, repo: f.repo }).kind,
+    "frontend",
+  );
+});
+
 test("CI routes infrastructure contracts through the required suite and gate", () => {
   const workflow = readFileSync(
     new URL("../.github/workflows/ci.yml", import.meta.url),
@@ -735,7 +861,7 @@ test("CI routes infrastructure contracts through the required suite and gate", (
   assert.match(workflow, /ci_flows == 'true'/);
   assert.match(
     workflow,
-    /ci_kind=\(infrastructure\|plugin\|none\|auth\|api\|backup-gate\|ci-config\)/,
+    /ci_kind=\(infrastructure\|plugin\|none\|auth\|api\|backup-gate\|ci-config\|frontend\)/,
   );
   assert.match(workflow, /^  runtime-profile:/m);
   assert.match(workflow, /pnpm --filter @savia\/connector-gateway typecheck/);

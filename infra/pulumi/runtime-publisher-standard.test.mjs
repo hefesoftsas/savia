@@ -5,7 +5,7 @@ import {
   createStandardPublisher,
 } from "./runtime-publisher-standard.mjs";
 import { codeOnlyReleaseCommands } from "./runtime-publisher-code-only.mjs";
-import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { prepareRuntimeArtifact } from "./runtime-publisher.mjs";
@@ -20,6 +20,13 @@ async function codeOnlyFixture({
   await mkdir(join(source, "migrations"), { recursive: true });
   await writeFile(join(source, "migrations", "0000.sql"), "SELECT 1;");
   await writeFile(join(source, "worker.mjs"), "export default {};");
+  await mkdir(join(source, "assets", "admin"), { recursive: true });
+  await mkdir(join(source, "assets", "plugin-editor"), { recursive: true });
+  await writeFile(join(source, "assets", "admin", "index.html"), "admin");
+  await writeFile(
+    join(source, "assets", "plugin-editor", "index.html"),
+    "plugin editor",
+  );
   const revision = "b".repeat(40);
   await writeFile(
     join(source, "release-source.json"),
@@ -37,6 +44,7 @@ async function codeOnlyFixture({
     "savia-request-preview",
     "savia-connectors-preview",
     "savia-hook-executor-preview",
+    "savia-plugin-editor-preview",
   ];
   const artifact = await prepareRuntimeArtifact({
     environment: "preview",
@@ -50,8 +58,15 @@ async function codeOnlyFixture({
             auth: "savia-auth-preview",
             request: "savia-request-preview",
             connectors: "savia-connectors-preview",
+            gateway: "savia-preview",
+            pluginEditor: "savia-plugin-editor-preview",
           }[target];
-          return [`${roleName}.json`, { name: roleName, main: "worker.mjs" }];
+          const config = { name: roleName, main: "worker.mjs" };
+          if (target === "gateway")
+            config.assets = { directory: "assets/admin" };
+          if (target === "pluginEditor")
+            config.assets = { directory: "assets/plugin-editor" };
+          return [`${roleName}.json`, config];
         }),
       ),
     },
@@ -288,6 +303,14 @@ test("code-only publication deploys only scoped preview Workers without stateful
         join(fixture.inputs.artifactDirectory, "savia-agencies-preview.json"),
       ],
     );
+    assert.ok(
+      deployments.every(
+        (call) =>
+          call.args.length === 3 &&
+          call.args[0] === "deploy" &&
+          call.args[1] === "--config",
+      ),
+    );
     const authDeploy = calls.findIndex(
       (call) =>
         call.binary === "wrangler" &&
@@ -317,6 +340,15 @@ test("code-only publication deploys only scoped preview Workers without stateful
             arg.endsWith("scripts/verify-preview-health.mjs"),
           ),
       ),
+    );
+    assert.deepEqual(
+      calls
+        .filter((call) => call.binary === "node")
+        .map((call) => call.args[0].split("/").slice(-2).join("/")),
+      [
+        "scripts/initialize-auth-deployment.mjs",
+        "scripts/verify-preview-health.mjs",
+      ],
     );
     assert.equal(
       calls.some(
@@ -386,6 +418,95 @@ test("code-only preflight rejects artifact targets outside the exact verified sc
   }
 });
 
+test("frontend code-only publication requires both Workers and deploys their frozen assets in order", async () => {
+  const fixture = await codeOnlyFixture({
+    targets: ["gateway", "pluginEditor"],
+  });
+  try {
+    const calls = [];
+    const deploymentUrl =
+      "https://savia-plugin-editor-preview.account.workers.dev";
+    fixture.env.SAVIA_PLUGIN_EDITOR_DEPLOYMENT_URL = deploymentUrl;
+    const publisher = await createStandardPublisher(fixture.inputs, {
+      env: fixture.env,
+      root: fixture.root,
+      client: { readSnapshot: async () => ({ maintenanceWorkerNames: [] }) },
+      recoveryDirectory: join(fixture.root, "recovery"),
+      run: async (binary, args, options) =>
+        calls.push({ binary, args, env: options.env }),
+      runWrangler: async (args, options) =>
+        calls.push({ binary: "wrangler", args, cwd: options.cwd }),
+    });
+    await publisher.publish();
+
+    const deployments = calls.filter(
+      (call) => call.binary === "wrangler" && call.args[0] === "deploy",
+    );
+    assert.deepEqual(
+      deployments.map((call) => call.args[call.args.indexOf("--config") + 1]),
+      [
+        join(
+          fixture.inputs.artifactDirectory,
+          "savia-plugin-editor-preview.json",
+        ),
+        join(fixture.inputs.artifactDirectory, "savia-preview.json"),
+      ],
+    );
+    assert.equal(
+      await readFile(
+        join(fixture.inputs.artifactDirectory, "assets", "admin", "index.html"),
+        "utf8",
+      ),
+      "admin",
+    );
+    assert.equal(
+      await readFile(
+        join(
+          fixture.inputs.artifactDirectory,
+          "assets",
+          "plugin-editor",
+          "index.html",
+        ),
+        "utf8",
+      ),
+      "plugin editor",
+    );
+    assert.equal(
+      calls.some(
+        (call) =>
+          call.binary === "node" &&
+          /backup|apply-d1-migrations|flows-maintenance|initialize-auth/.test(
+            call.args.join(" "),
+          ),
+      ),
+      false,
+    );
+    assert.equal(
+      calls.some(
+        (call) => call.binary === "wrangler" && call.args.includes("secret"),
+      ),
+      false,
+    );
+    assert.deepEqual(
+      calls
+        .filter((call) => call.binary === "node")
+        .map((call) => call.args[0].split("/").slice(-2).join("/")),
+      [
+        "scripts/configure-plugin-editor-preview.mjs",
+        "scripts/verify-preview-health.mjs",
+      ],
+    );
+    assert.equal(
+      calls.find((call) =>
+        call.args[0]?.endsWith("configure-plugin-editor-preview.mjs"),
+      ).env.PLUGIN_EDITOR_DEPLOYMENT_URL,
+      deploymentUrl,
+    );
+  } finally {
+    await rm(fixture.root, { recursive: true, force: true });
+  }
+});
+
 test("code-only scopes fail closed on unknown, malformed, production, and paused scopes", () => {
   const revision = "b".repeat(40);
   const configs = { api: "/artifact/api.json" };
@@ -408,6 +529,12 @@ test("code-only scopes fail closed on unknown, malformed, production, and paused
 
   assert.throws(() => plan(scoped(["unknown"])), /scope/);
   assert.throws(() => plan(scoped(["api", "api"])), /scope/);
+  assert.throws(() => plan(scoped(["pluginEditor"])), /scope/);
+  assert.throws(() => plan(scoped(["gateway"])), /scope/);
+  assert.throws(
+    () => plan(scoped(["api", "gateway", "pluginEditor"])),
+    /scope/,
+  );
   assert.throws(
     () =>
       plan({

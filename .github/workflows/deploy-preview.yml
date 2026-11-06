@@ -135,6 +135,22 @@ jobs:
           NANGO_MICROSOFT_TEAMS_INTEGRATION_ID: ${{ vars.NANGO_MICROSOFT_TEAMS_INTEGRATION_ID }}
           OPENROUTER_MODEL: ${{ vars.OPENROUTER_MODEL }}
 
+      - name: Inspect rendered frontend Preview configurations
+        if: ${{ success() && !cancelled() }}
+        run: |
+          node --input-type=module <<'NODE'
+          import { readFileSync } from 'node:fs';
+          for (const [app, expected] of [['admin', 'savia-preview'], ['plugin-editor-runtime', 'savia-plugin-editor-preview']]) {
+            const path = `apps/${app}/wrangler.preview.jsonc`;
+            const config = JSON.parse(readFileSync(path, 'utf8'));
+            if (config.name !== expected) throw new Error(`Unexpected Preview frontend target in ${path}`);
+            for (const section of [config, ...Object.values(config.env ?? {})]) {
+              if (section.ai || section.ai_search || section.triggers?.crons?.length) throw new Error(`Forbidden inference binding or schedule in ${path}`);
+            }
+            console.log(JSON.stringify({ path, name: config.name, main: config.main, assets: config.assets?.directory, nativeAI: false, schedules: 0 }));
+          }
+          NODE
+
       - name: Validate planned Flows settings and stable keys before mutation
         if: ${{ success() && !cancelled() }}
         run: node infra/pulumi/flows-preflight.mjs

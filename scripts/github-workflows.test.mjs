@@ -34,6 +34,28 @@ function workflow(name) {
   );
 }
 
+test("frontend CI runs all Admin shards and typechecking before the required gate", async () => {
+  const ci = await workflow("ci.yml");
+  const admin = ci.slice(ci.indexOf("  admin:"), ci.indexOf("  api:"));
+  assert.equal([...admin.matchAll(/ci_kind == 'frontend'/g)].length, 6);
+  const profile = ci.slice(
+    ci.indexOf("  runtime-profile:"),
+    ci.indexOf("  workspace:"),
+  );
+  assert.match(profile, /frontend\)\n\s+pnpm --filter @savia\/admin typecheck/);
+  const gate = ci.slice(ci.indexOf("  contracts:"), ci.indexOf("  typecheck:"));
+  for (const name of [
+    "admin",
+    "admin-2",
+    "admin-3",
+    "admin-4",
+    "admin-5",
+    "admin-6",
+  ]) {
+    assert.ok(gate.includes(`      - ${name}\n`));
+  }
+});
+
 test("CI validates main pushes and pull requests without deployment credentials", async () => {
   const ci = await workflow("ci.yml");
 
@@ -54,7 +76,7 @@ test("CI validates main pushes and pull requests without deployment credentials"
   assert.match(ci, /^  runtime-profile:/m);
   assert.match(
     ci,
-    /ci_kind=\(infrastructure\|plugin\|none\|auth\|api\|backup-gate\|ci-config\)/,
+    /ci_kind=\(infrastructure\|plugin\|none\|auth\|api\|backup-gate\|ci-config\|frontend\)/,
   );
   assert.match(ci, /pnpm run test:unit:admin/);
   assert.match(ci, /pnpm run test:unit:api/);

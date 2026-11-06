@@ -28,7 +28,6 @@ test("unknown, configuration, schema and entrypoint changes require full publica
     "packages/db/migrations/01.sql",
     "apps/admin/vite.config.ts",
     "apps/admin/src/plugin-vscode-runtime.ts",
-    "apps/admin/src/components/Button.tsx",
   ])
     assert.equal(classifyPreviewCodeChanges([file(path)]), null, path);
   for (const source of [
@@ -50,6 +49,40 @@ test("unknown, configuration, schema and entrypoint changes require full publica
     null,
   );
   assert.equal(classifyPreviewCodeChanges([file("docs/guide.md")]), null);
+});
+
+test("frontend source freezes both frontend targets and rejects mixed or unproven scopes", () => {
+  for (const path of [
+    "apps/admin/src/components/Button.tsx",
+    "apps/admin/src/app.css",
+    "apps/admin/src/i18n/locales/savia.ts",
+  ]) {
+    assert.deepEqual(classifyPreviewCodeChanges([file(path)]), [
+      "pluginEditor",
+      "gateway",
+    ]);
+    assert.equal(classifyPreviewCodeChanges([file(path, null)]), null);
+    assert.equal(
+      classifyPreviewCodeChanges([
+        file(path),
+        file("apps/auth/src/session.ts"),
+      ]),
+      null,
+    );
+  }
+  for (const path of [
+    "apps/admin/src/edge-gateway.ts",
+    "apps/admin/src/office-gateway.ts",
+    "apps/admin/package.json",
+    "apps/admin/wrangler.preview.jsonc",
+    "apps/admin/build/manual-chunks.ts",
+    "apps/admin/vite.config.ts",
+  ]) {
+    assert.equal(
+      classifyPreviewCodeChanges([file("apps/admin/src/app.tsx"), file(path)]),
+      null,
+    );
+  }
 });
 test("scope requires a verified ancestor and exact source reads; errors fail closed", async () => {
   const base = "a".repeat(40),

@@ -264,7 +264,9 @@ export async function retainPreviewRuntimeArtifact({
   const { metadata, artifact } = await artifactIdentity(directory, identity);
   metadata.sourceConfigDigest = (
     await currentSourceConfigDigest(metadata.workerNames, env, undefined, {
-      includePluginEditor: !artifact.releaseSource?.codeOnly,
+      includePluginEditor:
+        !artifact.releaseSource?.codeOnly ||
+        artifact.releaseSource.codeOnly.targets?.includes("pluginEditor"),
     })
   ).digest;
   await inventory(directory);
@@ -359,7 +361,13 @@ export async function restorePreviewRuntimeArtifact({
       actual.workerNames,
       env,
       undefined,
-      { includePluginEditor: !actualArtifact.releaseSource?.codeOnly },
+      {
+        includePluginEditor:
+          !actualArtifact.releaseSource?.codeOnly ||
+          actualArtifact.releaseSource.codeOnly.targets?.includes(
+            "pluginEditor",
+          ),
+      },
     );
     if (currentConfig.digest !== metadata.sourceConfigDigest)
       return { restored: false, reason: "current-preview-config-changed" };

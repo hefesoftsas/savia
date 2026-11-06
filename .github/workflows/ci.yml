@@ -65,7 +65,7 @@ jobs:
             if node "$trusted_script" --ci --base "$BASE_SHA" --head "$HEAD_SHA" --output "$ci_output" \
               && [[ "$(grep -c '^ci_kind=' "$ci_output")" == 1 ]] \
               && [[ "$(grep -c '^ci_flows=' "$ci_output")" == 1 ]] \
-              && { { grep -Fxq 'ci_kind=full' "$ci_output" && grep -Fxq 'ci_flows=true' "$ci_output"; } || { grep -Exq 'ci_kind=(infrastructure|plugin|none|auth|api|backup-gate|ci-config)' "$ci_output" && grep -Fxq 'ci_flows=false' "$ci_output"; }; }; then
+              && { { grep -Fxq 'ci_kind=full' "$ci_output" && grep -Fxq 'ci_flows=true' "$ci_output"; } || { grep -Exq 'ci_kind=(infrastructure|plugin|none|auth|api|backup-gate|ci-config|frontend)' "$ci_output" && grep -Fxq 'ci_flows=false' "$ci_output"; }; }; then
               cat "$ci_output" >> "$GITHUB_OUTPUT"
             else
               {
@@ -142,7 +142,7 @@ jobs:
     # The six shards use historical costs; all discovered tests still run once.
     name: Admin unit tests (shard 1/6)
     needs: changes
-    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full') }}
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full' || needs.changes.outputs.ci_kind == 'frontend') }}
     timeout-minutes: 15
     runs-on: ubuntu-24.04
     env:
@@ -170,7 +170,7 @@ jobs:
 
   admin-2:
     needs: changes
-    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full') }}
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full' || needs.changes.outputs.ci_kind == 'frontend') }}
     name: Admin unit tests (shard 2/6)
     timeout-minutes: 15
     runs-on: ubuntu-24.04
@@ -199,7 +199,7 @@ jobs:
 
   admin-3:
     needs: changes
-    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full') }}
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full' || needs.changes.outputs.ci_kind == 'frontend') }}
     name: Admin unit tests (shard 3/6)
     timeout-minutes: 15
     runs-on: ubuntu-24.04
@@ -228,7 +228,7 @@ jobs:
 
   admin-4:
     needs: changes
-    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full') }}
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full' || needs.changes.outputs.ci_kind == 'frontend') }}
     name: Admin unit tests (shard 4/6)
     timeout-minutes: 15
     runs-on: ubuntu-24.04
@@ -257,7 +257,7 @@ jobs:
 
   admin-5:
     needs: changes
-    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full') }}
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full' || needs.changes.outputs.ci_kind == 'frontend') }}
     name: Admin unit tests (shard 5/6)
     timeout-minutes: 15
     runs-on: ubuntu-24.04
@@ -286,7 +286,7 @@ jobs:
 
   admin-6:
     needs: changes
-    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full') }}
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full' || needs.changes.outputs.ci_kind == 'frontend') }}
     name: Admin unit tests (shard 6/6)
     timeout-minutes: 15
     runs-on: ubuntu-24.04
@@ -405,7 +405,7 @@ jobs:
     needs: changes
     if: >-
       ${{ !cancelled() && needs.changes.result == 'success' &&
-      contains(fromJSON('["auth","api","backup-gate"]'), needs.changes.outputs.ci_kind) }}
+      contains(fromJSON('["auth","api","backup-gate","frontend"]'), needs.changes.outputs.ci_kind) }}
     timeout-minutes: 15
     runs-on: ubuntu-24.04
     env:
@@ -434,6 +434,9 @@ jobs:
         run: |
           set -euo pipefail
           case "$CI_KIND" in
+            frontend)
+              pnpm --filter @savia/admin typecheck
+              ;;
             auth)
               pnpm --filter @savia/auth test
               node --test scripts/auth-deployment/worker.test.mjs scripts/initialize-auth-deployment.test.mjs scripts/check-auth-bridge.test.mjs
@@ -628,6 +631,12 @@ jobs:
       - plugin-validation
       - runtime-profile
       - contract-suite
+      - admin
+      - admin-2
+      - admin-3
+      - admin-4
+      - admin-5
+      - admin-6
     if: always()
     timeout-minutes: 3
     runs-on: ubuntu-24.04

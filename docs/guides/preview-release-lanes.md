@@ -144,8 +144,9 @@ For coherent backup and failed-release recovery details, see
 ## Preview code updates
 
 Existing application source changes can publish only the affected API, Auth,
-Request or Connector Gateway Worker. Admin source uses the full lane because it
-can also feed the isolated plugin-editor bundle. Scope is resolved before build
+Request or Connector Gateway Worker. Existing Admin TSX/CSS and TypeScript
+localization sources can use the frontend-only lane described below. Other Admin
+source and configuration changes retain the full lane. Scope is resolved before build
 preparation: a verified source-only release bundles only the selected Workers
 and skips unrelated Admin and plugin-editor builds. The frozen artifact digest
 also covers the exact base, head and selected targets in `release-source.json`.
@@ -157,6 +158,26 @@ successful evidence-backed deployed ancestor, so a failed release cannot hide
 pending changes. Missing history, new/deleted files, schema statements, entrypoints,
 configuration, dependencies, migrations and unknown paths select the full release.
 Production always uses the complete publication sequence.
+
+The frontend-only lane builds Admin assets and the isolated plugin-editor bundle
+because they share UI source. It freezes only the `pluginEditor` and `gateway`
+targets, publishes the editor before Admin, and verifies public health and editor
+isolation. It does not publish Auth, API, Flows or other backend Workers. The pair
+must be complete and cannot be combined with backend targets in one code scope.
+Retries validate both frozen configuration dependencies and the plugin editor
+origin. No backups, migrations, secret publication or Auth initialization run.
+
+Frontend CI runs all six weighted Admin shards, Admin type checking, contracts
+and source-safety checks. The required gate requires all six shards and type
+checking to succeed. Dependency changes, arbitrary TypeScript utilities, edge
+gateway source, build configuration and mixed backend edits retain full CI and
+full publication. Missing previous file contents or deleted/new source also
+retains full publication even when focused frontend tests are appropriate.
+
+Measure a label-only push separately from installing this workflow: the trusted
+base classifier needs the workflow changes on `main` before it can select the
+frontend profile. Measure until the label is observed in the live browser, not
+only until GitHub reports publication success.
 
 This preview-only path requires an active runtime. It skips write pauses, Flows
 snapshot/drain, data backups, migrations and secret publication. Auth publication

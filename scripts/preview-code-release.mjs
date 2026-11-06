@@ -1,6 +1,7 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { releaseRuntimeChanged } from "./preview-release-plan.mjs";
+import { isFrontendSourcePath } from "./preview-change-plan.mjs";
 const execute = promisify(execFile);
 const roles = ["auth", "api", "request", "connectors"];
 const roots = {
@@ -15,6 +16,7 @@ const schema =
   /\b(?:CREATE\s+(?:(?:UNIQUE|TEMP|TEMPORARY|VIRTUAL)\s+)?(?:TABLE|INDEX|TRIGGER|VIEW)|ALTER\s+TABLE|DROP\s+(?:TABLE|INDEX|TRIGGER|VIEW)|getMigrations|betterAuth|createBetterAuth|oauthProvider)\b/i;
 export function classifyPreviewCodeChanges(files) {
   const targets = new Set();
+  let frontend = false;
   for (const { path, before, after } of files) {
     if (!releaseRuntimeChanged([path])) continue;
     if (
@@ -27,6 +29,10 @@ export function classifyPreviewCodeChanges(files) {
     // This package also owns the coordinator Durable Object implementation.
     // Updating only its four consumers would leave a mixed coordinator protocol.
     if (path === "packages/backup-gate/index.mjs") return null;
+    if (isFrontendSourcePath(path)) {
+      frontend = true;
+      continue;
+    }
     const role = roles.find((role) => path.startsWith(roots[role]));
     if (
       !role ||
@@ -36,6 +42,7 @@ export function classifyPreviewCodeChanges(files) {
       return null;
     targets.add(role);
   }
+  if (frontend) return targets.size ? null : ["pluginEditor", "gateway"];
   return targets.size ? roles.filter((role) => targets.has(role)) : null;
 }
 export async function derivePreviewCodeScope({

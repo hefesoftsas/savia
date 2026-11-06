@@ -100,6 +100,40 @@ async function authCodeOnlyArtifact(directory) {
   });
 }
 
+async function frontendCodeOnlyArtifact(directory) {
+  const names = ["savia-preview", "savia-plugin-editor-preview"];
+  await writeFile(
+    join(directory, "release-source.json"),
+    JSON.stringify({
+      version: 1,
+      sourceRevision: sha,
+      codeOnly: {
+        base: "c".repeat(40),
+        head: sha,
+        targets: ["gateway", "pluginEditor"],
+      },
+    }),
+  );
+  const configs = {};
+  for (const [index, workerName] of names.entries()) {
+    const workers = join(directory, "workers", workerName);
+    await mkdir(workers, { recursive: true });
+    await writeFile(
+      join(workers, "index.js"),
+      `export default { fetch() { return new Response('frontend ${index}') } };`,
+    );
+    configs[`workers/${workerName}/wrangler.json`] = {
+      name: workerName,
+      main: "index.js",
+    };
+  }
+  return prepareRuntimeArtifact({
+    environment: "preview",
+    release: { directory, configs },
+    destination: join(directory, "..", "frontend-release"),
+  });
+}
+
 test("CLI stdout is JSON for retention, reuse and configuration-change fallback", async () => {
   const work = await mkdtemp(join(tmpdir(), "savia-custody-cli-test-"));
   try {
@@ -321,6 +355,53 @@ test("code-only Auth custody round-trips without plugin-editor URL or Cloudflare
       "auth",
     );
     await assert.rejects(readFile(githubEnv), { code: "ENOENT" });
+  } finally {
+    await rm(work, { recursive: true, force: true });
+  }
+});
+
+test("frontend code-only custody fingerprints the plugin-editor URL", async () => {
+  const work = await mkdtemp(
+    join(tmpdir(), "savia-custody-frontend-code-only-"),
+  );
+  try {
+    const source = join(work, "source");
+    await mkdir(source);
+    const prepared = await frontendCodeOnlyArtifact(source);
+    const archivePath = join(work, "frontend-release.enc");
+    const provenancePath = join(work, "frontend-provenance.enc");
+    const identity = {
+      runId: "42159474734",
+      sourceSha: sha,
+      environment: "preview",
+      accountId: "c".repeat(32),
+    };
+    const env = { ...configEnv, CLOUDFLARE_ACCOUNT_ID: "c".repeat(32) };
+    await retainPreviewRuntimeArtifact({
+      artifactDirectory: prepared.artifactDirectory,
+      archivePath,
+      provenancePath,
+      key,
+      env,
+      ...identity,
+    });
+    const restored = join(work, "restored-frontend");
+    const result = await restorePreviewRuntimeArtifact({
+      archivePath,
+      provenancePath,
+      destination: restored,
+      key,
+      env: {
+        ...env,
+        SAVIA_PLUGIN_EDITOR_DEPLOYMENT_URL:
+          "https://savia-plugin-editor-preview.other-account.workers.dev",
+      },
+      ...identity,
+    });
+    assert.deepEqual(result, {
+      restored: false,
+      reason: "current-preview-config-changed",
+    });
   } finally {
     await rm(work, { recursive: true, force: true });
   }

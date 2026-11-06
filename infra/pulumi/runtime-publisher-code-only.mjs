@@ -6,7 +6,10 @@ export const CODE_ONLY_TARGETS = Object.freeze([
   "api",
   "request",
   "connectors",
+  "pluginEditor",
+  "gateway",
 ]);
+const FRONTEND_TARGETS = Object.freeze(["pluginEditor", "gateway"]);
 
 const sha1 = (value) =>
   typeof value === "string" && /^[a-f\d]{40}$/.test(value);
@@ -48,6 +51,9 @@ export function codeOnlyReleaseCommands({
       (target) =>
         typeof target !== "string" || !CODE_ONLY_TARGETS.includes(target),
     ) ||
+    (scope.targets.some((target) => FRONTEND_TARGETS.includes(target)) &&
+      (scope.targets.length !== FRONTEND_TARGETS.length ||
+        FRONTEND_TARGETS.some((target) => !scope.targets.includes(target)))) ||
     new Set(scope.targets).size !== scope.targets.length
   )
     throw new Error("Invalid code-only release scope");
@@ -61,7 +67,10 @@ export function codeOnlyReleaseCommands({
     args: ["deploy", "--config", configs[worker]],
   });
   const deploy = [];
-  for (const worker of CODE_ONLY_TARGETS)
+  for (const worker of [
+    ...CODE_ONLY_TARGETS.filter((target) => !FRONTEND_TARGETS.includes(target)),
+    ...FRONTEND_TARGETS,
+  ])
     if (scope.targets.includes(worker)) {
       deploy.push(wrangler(worker));
       if (worker === "auth")
@@ -71,15 +80,25 @@ export function codeOnlyReleaseCommands({
           args: ["--environment", environment, "--config", configs.auth],
         });
     }
+  const verify = [];
+  if (FRONTEND_TARGETS.every((target) => scope.targets.includes(target)))
+    verify.push({
+      kind: "node",
+      script: "scripts/configure-plugin-editor-preview.mjs",
+      args: [],
+    });
+  verify.push({
+    kind: "node",
+    script: "scripts/verify-preview-health.mjs",
+    args: [],
+  });
   return {
     quiesce: [],
     backup: [],
     migrate: [],
     secrets: [],
     deploy,
-    verify: [
-      { kind: "node", script: "scripts/verify-preview-health.mjs", args: [] },
-    ],
+    verify,
     resume: [],
   };
 }
@@ -90,12 +109,19 @@ export function createCodeOnlyPublisher(
   { env, root, run, runWrangler },
 ) {
   async function execute(step) {
-    if (step.kind === "node")
+    if (step.kind === "node") {
+      const stepEnv = {
+        ...env,
+        CLOUDFLARE_DATABASE_ID: env.SAVIA_DOMAIN_D1_ID,
+      };
+      if (step.script === "scripts/configure-plugin-editor-preview.mjs")
+        stepEnv.PLUGIN_EDITOR_DEPLOYMENT_URL =
+          env.SAVIA_PLUGIN_EDITOR_DEPLOYMENT_URL;
       await run("node", [join(root, step.script), ...step.args], {
         cwd: root,
-        env: { ...env, CLOUDFLARE_DATABASE_ID: env.SAVIA_DOMAIN_D1_ID },
+        env: stepEnv,
       });
-    else if (step.kind === "wrangler")
+    } else if (step.kind === "wrangler")
       await runWrangler(step.args, {
         env,
         cwd: inputs.artifactDirectory,
