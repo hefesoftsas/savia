@@ -655,3 +655,28 @@ test("CI routes infrastructure contracts through the existing required gate", ()
     /runs: pnpm run test:unit:workspace|typecheck:plugins && pnpm run typecheck:companion/,
   );
 });
+
+test("CI validates custody and Preview planning helpers with infrastructure contracts", (t) => {
+  const f = fixture(t);
+  const paths = [
+    "infra/pulumi/runtime-artifact-custody.mjs",
+    "scripts/preview-code-release.mjs",
+    "scripts/preview-release-plan.mjs",
+    "scripts/preview-change-plan.mjs",
+    "scripts/preview-code-release.test.mjs",
+  ];
+  for (const path of paths) f.put(path, "// before\n");
+  const base = f.commit("base");
+  for (const path of paths) f.put(path, "// after\n");
+  const head = f.commit("custody helpers");
+  assert.equal(
+    classifyCiChanges({ base, head, repo: f.repo }).kind,
+    "infrastructure",
+  );
+  f.put("packages/shared/src/index.ts", "export const x = 1;\n");
+  const mixed = f.commit("shared runtime");
+  assert.equal(
+    classifyCiChanges({ base, head: mixed, repo: f.repo }).kind,
+    "full",
+  );
+});

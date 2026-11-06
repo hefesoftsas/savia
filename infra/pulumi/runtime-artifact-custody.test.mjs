@@ -65,6 +65,41 @@ async function artifact(directory) {
   });
 }
 
+async function authCodeOnlyArtifact(directory) {
+  const workerName = "savia-auth-preview";
+  const workers = join(directory, "workers", workerName);
+  await mkdir(workers, { recursive: true });
+  await writeFile(
+    join(directory, "release-source.json"),
+    JSON.stringify({
+      version: 1,
+      sourceRevision: sha,
+      codeOnly: {
+        base: "c".repeat(40),
+        head: sha,
+        targets: ["auth"],
+      },
+    }),
+  );
+  await writeFile(
+    join(workers, "index.js"),
+    "export default { fetch() { return new Response('auth') } };",
+  );
+  return prepareRuntimeArtifact({
+    environment: "preview",
+    release: {
+      directory,
+      configs: {
+        [`workers/${workerName}/wrangler.json`]: {
+          name: workerName,
+          main: "index.js",
+        },
+      },
+    },
+    destination: join(directory, "..", "auth-release"),
+  });
+}
+
 test("CLI stdout is JSON for retention, reuse and configuration-change fallback", async () => {
   const work = await mkdtemp(join(tmpdir(), "savia-custody-cli-test-"));
   try {
@@ -126,6 +161,17 @@ test("CLI stdout is JSON for retention, reuse and configuration-change fallback"
       { OPENROUTER_MODEL: "different/model" },
     );
     assert.deepEqual(changed, {
+      restored: false,
+      reason: "current-preview-config-changed",
+    });
+    const changedPluginEditorUrl = await runCli(
+      ["restore", "--destination", join(work, "changed-plugin-editor-url")],
+      {
+        SAVIA_PLUGIN_EDITOR_DEPLOYMENT_URL:
+          "https://savia-plugin-editor-preview.other-account.workers.dev",
+      },
+    );
+    assert.deepEqual(changedPluginEditorUrl, {
       restored: false,
       reason: "current-preview-config-changed",
     });
@@ -224,6 +270,57 @@ test("rebuilds instead of reusing a release when freshly rendered config has cha
     await assert.rejects(readFile(join(destination, "release-manifest.json")), {
       code: "ENOENT",
     });
+  } finally {
+    await rm(work, { recursive: true, force: true });
+  }
+});
+
+test("code-only Auth custody round-trips without plugin-editor URL or Cloudflare token", async () => {
+  const work = await mkdtemp(join(tmpdir(), "savia-custody-auth-code-only-"));
+  try {
+    const source = join(work, "source");
+    await mkdir(source);
+    const prepared = await authCodeOnlyArtifact(source);
+    const archivePath = join(work, "auth-release.enc");
+    const provenancePath = join(work, "auth-provenance.enc");
+    const identity = {
+      runId: "42159474732",
+      sourceSha: sha,
+      environment: "preview",
+      accountId: "c".repeat(32),
+    };
+    const env = { ...configEnv };
+    env.CLOUDFLARE_ACCOUNT_ID = "c".repeat(32);
+    delete env.SAVIA_PLUGIN_EDITOR_DEPLOYMENT_URL;
+    delete env.CLOUDFLARE_API_TOKEN;
+    const githubEnv = join(work, "github-env");
+    env.GITHUB_ENV = githubEnv;
+
+    await retainPreviewRuntimeArtifact({
+      artifactDirectory: prepared.artifactDirectory,
+      archivePath,
+      provenancePath,
+      key,
+      env,
+      ...identity,
+    });
+    const restored = join(work, "restored-auth");
+    const result = await restorePreviewRuntimeArtifact({
+      archivePath,
+      provenancePath,
+      destination: restored,
+      key,
+      env,
+      ...identity,
+    });
+
+    assert.equal(result.restored, true);
+    assert.equal(
+      JSON.parse(await readFile(join(restored, "release-source.json"), "utf8"))
+        .codeOnly.targets[0],
+      "auth",
+    );
+    await assert.rejects(readFile(githubEnv), { code: "ENOENT" });
   } finally {
     await rm(work, { recursive: true, force: true });
   }

@@ -13,6 +13,9 @@ const COMPONENTS = {
 const RUNTIME_IGNORED_PATHS = new Set([
   ".github/workflows/deploy-preview.yml",
   "scripts/preview-release-plan.mjs",
+  "scripts/preview-code-release.mjs",
+  "scripts/preview-change-plan.mjs",
+  "infra/pulumi/runtime-artifact-custody.mjs",
   "scripts/preview-component-evidence.mjs",
   "scripts/deploy-store-plugins.mjs",
   "scripts/plugin-deployment/worker.ts",

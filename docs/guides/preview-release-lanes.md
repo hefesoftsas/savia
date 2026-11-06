@@ -231,3 +231,12 @@ left untouched and is never installed automatically; a newer required version
 blocks publication. Same-version packages still undergo the server's exact-content
 check, and a conflicting HTTP 409 remains a failure. Production does not enable
 this policy. No scheduled jobs, pings or background polling are introduced.
+
+Verified code-only artifacts retain only the configuration dependencies of their
+selected Workers. In particular, retaining or restoring an Auth-only artifact
+does not query or export the plugin-editor URL. Full releases still fingerprint
+that URL and reject reuse when it changes. Known Preview planning/custody tooling
+changes can accompany a compatible code update without forcing a data backup;
+unknown infrastructure, Worker configuration and schema changes still select
+the full path. Changes limited to infrastructure plus the named Preview planning
+helpers run the infrastructure contract profile, including offline recovery tests.

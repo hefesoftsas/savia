@@ -84,3 +84,48 @@ test("scope requires a verified ancestor and exact source reads; errors fail clo
   );
   assert.equal(await derivePreviewCodeScope({ head, run }), null);
 });
+
+test("pending compatible code stays scoped across unrelated deployment tooling changes", () => {
+  assert.deepEqual(
+    classifyPreviewCodeChanges([
+      file("apps/auth/src/lib/utils.ts"),
+      file("infra/pulumi/runtime-artifact-custody.mjs"),
+      file("scripts/preview-code-release.mjs"),
+      file("scripts/preview-release-plan.mjs"),
+      file(".github/workflows/deploy-preview.yml"),
+    ]),
+    ["auth"],
+  );
+  assert.equal(
+    classifyPreviewCodeChanges([
+      file("apps/auth/src/lib/utils.ts"),
+      file("infra/pulumi/worker-config.mjs"),
+    ]),
+    null,
+  );
+  assert.equal(
+    classifyPreviewCodeChanges([
+      file("infra/pulumi/runtime-artifact-custody.mjs"),
+    ]),
+    null,
+  );
+});
+
+test("derivation skips non-runtime paths before reading files absent from the baseline", async () => {
+  const base = "a".repeat(40),
+    head = "b".repeat(40);
+  const scope = await derivePreviewCodeScope({
+    base,
+    head,
+    run: async (_, args) => {
+      if (args[0] === "diff")
+        return {
+          stdout: "apps/auth/src/lib/utils.ts\ndocs/new-release-guide.md\n",
+        };
+      if (args[0] === "show" && args[1].includes("docs/"))
+        throw Error("new guide missing from baseline");
+      return { stdout: "export const x = 1" };
+    },
+  });
+  assert.deepEqual(scope, { base, head, targets: ["auth"] });
+});

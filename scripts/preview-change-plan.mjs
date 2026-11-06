@@ -14,6 +14,16 @@ const AUTH_CI_HELPER_PATHS = new Set([
   ".github/workflows/check-preview-auth.yml",
 ]);
 
+// These helpers execute only in release tooling and are covered by contracts.
+const PREVIEW_INFRA_HELPERS = new Set([
+  "scripts/preview-code-release.mjs",
+  "scripts/preview-code-release.test.mjs",
+  "scripts/preview-release-plan.mjs",
+  "scripts/preview-release-plan.test.mjs",
+  "scripts/preview-change-plan.mjs",
+  "scripts/preview-change-plan.test.mjs",
+]);
+
 function git(args, repo) {
   return execFileSync("git", args, {
     cwd: repo,
@@ -344,7 +354,10 @@ export function classifyCiChanges({ base, head, repo = process.cwd() } = {}) {
   const allowedInfrastructureChange =
     infraPaths.length > 0 &&
     paths.every(
-      (path) => path.startsWith("infra/pulumi/") || documentationPath(path),
+      (path) =>
+        path.startsWith("infra/pulumi/") ||
+        documentationPath(path) ||
+        PREVIEW_INFRA_HELPERS.has(path),
     );
   if (allowedInfrastructureChange) {
     return {

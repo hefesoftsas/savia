@@ -134,6 +134,7 @@ async function currentSourceConfigDigest(
     );
     return (await client.api("/workers/subdomain")).subdomain;
   },
+  { includePluginEditor = true } = {},
 ) {
   const temporary = await mkdtemp(
     join(tmpdir(), "savia-preview-config-check-"),
@@ -165,27 +166,33 @@ async function currentSourceConfigDigest(
       throw new Error(
         "Current Preview configuration does not match release Workers",
       );
-    let pluginEditorDeploymentUrl = env.SAVIA_PLUGIN_EDITOR_DEPLOYMENT_URL;
-    if (!pluginEditorDeploymentUrl) {
-      const subdomain = await readSubdomain();
-      if (!/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(subdomain ?? ""))
-        throw new Error("Current Preview Workers subdomain is unavailable");
-      pluginEditorDeploymentUrl = `https://savia-plugin-editor-preview.${subdomain}.workers.dev`;
-    }
-    if (
-      !/^https:\/\/savia-plugin-editor-preview\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.workers\.dev$/.test(
-        pluginEditorDeploymentUrl,
+    let pluginEditorDeploymentUrl;
+    if (includePluginEditor) {
+      pluginEditorDeploymentUrl = env.SAVIA_PLUGIN_EDITOR_DEPLOYMENT_URL;
+      if (!pluginEditorDeploymentUrl) {
+        const subdomain = await readSubdomain();
+        if (!/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(subdomain ?? ""))
+          throw new Error("Current Preview Workers subdomain is unavailable");
+        pluginEditorDeploymentUrl = `https://savia-plugin-editor-preview.${subdomain}.workers.dev`;
+      }
+      if (
+        !/^https:\/\/savia-plugin-editor-preview\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.workers\.dev$/.test(
+          pluginEditorDeploymentUrl,
+        )
       )
-    )
-      throw new Error("Invalid Preview plugin editor deployment URL");
+        throw new Error("Invalid Preview plugin editor deployment URL");
+    }
+    const configFingerprint = {
+      configs: [...configs.entries()]
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([name, config]) => [`workers/${name}/wrangler.json`, config]),
+    };
+    if (includePluginEditor) {
+      configFingerprint.pluginEditorDeploymentUrl = pluginEditorDeploymentUrl;
+      configFingerprint.pluginEditorRuntimeUrl = `${pluginEditorDeploymentUrl}/plugin-editor`;
+    }
     return {
-      digest: hash({
-        configs: [...configs.entries()]
-          .sort(([left], [right]) => left.localeCompare(right))
-          .map(([name, config]) => [`workers/${name}/wrangler.json`, config]),
-        pluginEditorDeploymentUrl,
-        pluginEditorRuntimeUrl: `${pluginEditorDeploymentUrl}/plugin-editor`,
-      }),
+      digest: hash(configFingerprint),
       pluginEditorDeploymentUrl,
     };
   } finally {
@@ -254,9 +261,11 @@ export async function retainPreviewRuntimeArtifact({
   const identity = { runId, sourceSha, environment, accountId };
   safeIdentity(identity);
   const directory = resolve(artifactDirectory);
-  const { metadata } = await artifactIdentity(directory, identity);
+  const { metadata, artifact } = await artifactIdentity(directory, identity);
   metadata.sourceConfigDigest = (
-    await currentSourceConfigDigest(metadata.workerNames, env)
+    await currentSourceConfigDigest(metadata.workerNames, env, undefined, {
+      includePluginEditor: !artifact.releaseSource?.codeOnly,
+    })
   ).digest;
   await inventory(directory);
   const temporary = await mkdtemp(join(tmpdir(), "savia-preview-custody-"));
@@ -335,7 +344,8 @@ export async function restorePreviewRuntimeArtifact({
       { maxBuffer: 1024 * 1024 },
     );
     await inventory(payloadPath);
-    const { metadata: actual } = await artifactIdentity(payloadPath, identity);
+    const { metadata: actual, artifact: actualArtifact } =
+      await artifactIdentity(payloadPath, identity);
     if (
       actual.artifactDigest !== metadata.artifactDigest ||
       actual.configDigest !== metadata.configDigest ||
@@ -348,6 +358,8 @@ export async function restorePreviewRuntimeArtifact({
     const currentConfig = await currentSourceConfigDigest(
       actual.workerNames,
       env,
+      undefined,
+      { includePluginEditor: !actualArtifact.releaseSource?.codeOnly },
     );
     if (currentConfig.digest !== metadata.sourceConfigDigest)
       return { restored: false, reason: "current-preview-config-changed" };
@@ -359,7 +371,7 @@ export async function restorePreviewRuntimeArtifact({
     }
     await chmod(payloadPath, 0o700);
     await rename(payloadPath, output);
-    if (env.GITHUB_ENV)
+    if (env.GITHUB_ENV && currentConfig.pluginEditorDeploymentUrl)
       await appendFile(
         env.GITHUB_ENV,
         `SAVIA_PLUGIN_EDITOR_DEPLOYMENT_URL=${currentConfig.pluginEditorDeploymentUrl}\n`,

@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { releaseRuntimeChanged } from "./preview-release-plan.mjs";
 const execute = promisify(execFile);
 const roles = ["auth", "api", "request", "connectors"];
 const roots = {
@@ -15,7 +16,7 @@ const schema =
 export function classifyPreviewCodeChanges(files) {
   const targets = new Set();
   for (const { path, before, after } of files) {
-    if (/^(?:docs\/|.*\.(?:test|spec)\.[cm]?[jt]sx?$)/.test(path)) continue;
+    if (!releaseRuntimeChanged([path])) continue;
     if (
       before === null ||
       after === null ||
@@ -58,6 +59,7 @@ export async function derivePreviewCodeScope({
     const files = [];
     for (const path of stdout.trim().split("\n").filter(Boolean)) {
       if (path.includes(":") || path.startsWith("/")) return null;
+      if (!releaseRuntimeChanged([path])) continue;
       const before = (await run("git", ["show", `${base}:${path}`], { cwd }))
         .stdout;
       const after = (await run("git", ["show", `${head}:${path}`], { cwd }))
