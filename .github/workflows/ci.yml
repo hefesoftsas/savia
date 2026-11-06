@@ -64,7 +64,7 @@ jobs:
             if node "$trusted_script" --ci --base "$BASE_SHA" --head "$HEAD_SHA" --output "$ci_output" \
               && [[ "$(grep -c '^ci_kind=' "$ci_output")" == 1 ]] \
               && [[ "$(grep -c '^ci_flows=' "$ci_output")" == 1 ]] \
-              && { { grep -Fxq 'ci_kind=full' "$ci_output" && grep -Fxq 'ci_flows=true' "$ci_output"; } || { grep -Exq 'ci_kind=(infrastructure|plugin|none|auth|api|backup-gate)' "$ci_output" && grep -Fxq 'ci_flows=false' "$ci_output"; }; }; then
+              && { { grep -Fxq 'ci_kind=full' "$ci_output" && grep -Fxq 'ci_flows=true' "$ci_output"; } || { grep -Exq 'ci_kind=(infrastructure|plugin|none|auth|api|backup-gate|ci-config)' "$ci_output" && grep -Fxq 'ci_flows=false' "$ci_output"; }; }; then
               cat "$ci_output" >> "$GITHUB_OUTPUT"
             else
               {
@@ -164,7 +164,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Run Admin unit tests
-        run: VITEST_SHARD_ARGS='--shard 1/6' pnpm run test:unit:admin
+        run: VITEST_SHARD_ARGS='--shard 1/6 --config ../../scripts/admin-vitest.config.mts' pnpm run test:unit:admin
 
   admin-2:
     needs: changes
@@ -193,7 +193,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Run Admin unit tests
-        run: VITEST_SHARD_ARGS='--shard 2/6' pnpm run test:unit:admin
+        run: VITEST_SHARD_ARGS='--shard 2/6 --config ../../scripts/admin-vitest.config.mts' pnpm run test:unit:admin
 
   admin-3:
     needs: changes
@@ -222,7 +222,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Run Admin unit tests
-        run: VITEST_SHARD_ARGS='--shard 3/6' pnpm run test:unit:admin
+        run: VITEST_SHARD_ARGS='--shard 3/6 --config ../../scripts/admin-vitest.config.mts' pnpm run test:unit:admin
 
   admin-4:
     needs: changes
@@ -251,7 +251,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Run Admin unit tests
-        run: VITEST_SHARD_ARGS='--shard 4/6' pnpm run test:unit:admin
+        run: VITEST_SHARD_ARGS='--shard 4/6 --config ../../scripts/admin-vitest.config.mts' pnpm run test:unit:admin
 
   admin-5:
     needs: changes
@@ -280,7 +280,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Run Admin unit tests
-        run: VITEST_SHARD_ARGS='--shard 5/6' pnpm run test:unit:admin
+        run: VITEST_SHARD_ARGS='--shard 5/6 --config ../../scripts/admin-vitest.config.mts' pnpm run test:unit:admin
 
   admin-6:
     needs: changes
@@ -309,7 +309,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Run Admin unit tests
-        run: VITEST_SHARD_ARGS='--shard 6/6' pnpm run test:unit:admin
+        run: VITEST_SHARD_ARGS='--shard 6/6 --config ../../scripts/admin-vitest.config.mts' pnpm run test:unit:admin
 
   api:
     needs: changes
@@ -606,6 +606,9 @@ jobs:
       - name: Run contract tests
         run: pnpm run test:contracts
 
+      - name: Verify Admin test distribution
+        run: node --test scripts/admin-test-sequencer.test.mjs scripts/contract-check-gate.test.mjs
+
       - name: Verify security analysis selection
         run: node --test scripts/codeql-plan.test.mjs
 
@@ -735,7 +738,29 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - name: Verify imported source and local policy
-        run: pnpm run flows:verify && pnpm run flows:test:core
+        run: pnpm run flows:verify && pnpm --filter @savia/flows test && pnpm --filter @savia/flows-native test
+
+  flows-packages:
+    name: Flows package tests
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.ci_flows == 'true') }}
+    timeout-minutes: 25
+    runs-on: ubuntu-24.04
+    env:
+      PNPM_CONFIG_STRICT_DEP_BUILDS: "false"
+      NODE_OPTIONS: "--max-old-space-size=1536"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.24.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Test independent Flows packages
+        run: pnpm --filter @savia/flows-app test && pnpm --filter @savia/flows-runtime test && pnpm --filter @savia/flows-geo test && pnpm --filter @savia/flows-utils test
 
   flows-readiness:
     name: Flows types and recovery
@@ -771,14 +796,15 @@ jobs:
       - changes
       - flows-api
       - flows-core
+      - flows-packages
       - flows-readiness
     if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.ci_flows == 'true') }}
     runs-on: ubuntu-24.04
     steps:
       - name: Require all Flows validation lanes
         run: |
-          if [[ "${{ needs.flows-api.result }}" != "success" || "${{ needs.flows-core.result }}" != "success" || "${{ needs.flows-readiness.result }}" != "success" ]]; then
-            echo "Flows validation failed: API=${{ needs.flows-api.result }}, core=${{ needs.flows-core.result }}, readiness=${{ needs.flows-readiness.result }}"
+          if [[ "${{ needs.flows-api.result }}" != "success" || "${{ needs.flows-core.result }}" != "success" || "${{ needs.flows-packages.result }}" != "success" || "${{ needs.flows-readiness.result }}" != "success" ]]; then
+            echo "Flows validation failed: API=${{ needs.flows-api.result }}, core=${{ needs.flows-core.result }}, packages=${{ needs.flows-packages.result }}, readiness=${{ needs.flows-readiness.result }}"
             exit 1
           fi
 

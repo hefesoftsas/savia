@@ -9,6 +9,7 @@ const CI_KINDS = new Set([
   "auth",
   "api",
   "backup-gate",
+  "ci-config",
 ]);
 const RELEASE_KINDS = new Set(["platform", "plugin", "none"]);
 const RUNTIME_PROFILE_KINDS = new Set(["auth", "api", "backup-gate"]);

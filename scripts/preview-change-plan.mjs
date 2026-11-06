@@ -13,6 +13,19 @@ const AUTH_CI_HELPER_PATHS = new Set([
   "scripts/check-auth-bridge.test.mjs",
   ".github/workflows/check-preview-auth.yml",
 ]);
+const CI_CONFIG_PATHS = new Set([
+  ".github/workflows/ci.yml",
+  ".github/workflows/codeql.yml",
+  ".github/workflows/coverage.yml",
+  ".github/workflows/deploy-preview.yml",
+  "scripts/codeql-plan.mjs",
+  "scripts/codeql-plan.test.mjs",
+  "scripts/github-workflows.test.mjs",
+  "scripts/preview-release-plan.mjs",
+  "scripts/preview-release-plan.test.mjs",
+  "scripts/preview-component-evidence.mjs",
+  "scripts/preview-component-evidence.test.mjs",
+]);
 
 // These helpers execute only in release tooling and are covered by contracts.
 const PREVIEW_INFRA_HELPERS = new Set([
@@ -348,6 +361,12 @@ export function classifyCiChanges({ base, head, repo = process.cwd() } = {}) {
     )
   ) {
     return isolatedRuntimeProfile("api");
+  }
+  if (
+    runtimePaths.length > 0 &&
+    runtimePaths.every((path) => CI_CONFIG_PATHS.has(path))
+  ) {
+    return isolatedRuntimeProfile("ci-config");
   }
 
   const infraPaths = paths.filter((path) => path.startsWith("infra/pulumi/"));

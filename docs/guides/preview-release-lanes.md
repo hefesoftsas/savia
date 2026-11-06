@@ -333,3 +333,35 @@ separate from the Preview deployment gate.
 **Coverage** is manual only. Required CI tests remain automatic. Changes limited
 to these security/coverage workflows and their selector do not publish Preview
 runtime or assets. Neither workflow adds Cloudflare schedules, pings or polling.
+
+## Focused automation validation
+
+The `ci-config` profile runs the contract suite and public-source safety checks
+for the exact orchestration allowlist in `scripts/preview-change-plan.mjs`.
+It includes the CI, Preview, CodeQL and Coverage workflows and named release and
+security selectors. It does not include arbitrary workflow or script directories.
+Classifier and required-gate edits, dependency files, test-distribution helpers,
+unknown files and mixtures with application changes retain full CI.
+
+Classification still executes the base revision's trusted script. Introducing
+a profile therefore runs the previous profile on that first push; subsequent
+eligible pushes use the new profile. A missing or unsupported result falls back
+to full CI. The required Contract tests gate rejects failed, cancelled, skipped
+or missing contract results, including for `ci-config`.
+
+Full CI splits Flows core into two independent jobs: policy verification plus
+integration/native tests, and app/runtime/geo/utils tests. Generated integration
+builds stay in their original job. The aggregate Flows gate requires both jobs,
+API tests and readiness checks to succeed. All seven package suites remain.
+
+Admin keeps six jobs and one test worker per job. A custom Vitest sequencer
+distributes the complete discovered test list by advisory historical file costs
+in `scripts/admin-test-durations.json`. The initial estimates use the successful
+2026-11-06 CI run plus a fixed per-file setup allowance. Missing measurements get
+a default cost, and obsolete measurements do not add or remove tests. Assignment
+is deterministic and every discovered test belongs to exactly one shard. These
+estimates affect scheduling only; refresh them when timing imbalance returns.
+
+The Admin sequencer is enabled only by CI command arguments; normal local test
+commands and application builds are unchanged. Changes to CI helpers do not
+publish Preview application components.

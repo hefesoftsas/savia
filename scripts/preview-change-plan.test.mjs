@@ -368,7 +368,7 @@ test("CI classification isolates only infrastructure and documentation changes",
     ["pnpm-lock.yaml", "lockfileVersion: '9.0'\n", "full"],
     ["packages/shared/src/index.ts", "export {};\n", "full"],
     ["unknown/file.txt", "unknown\n", "full"],
-    [".github/workflows/ci.yml", "name: changed\n", "full"],
+    [".github/workflows/ci.yml", "name: changed\n", "ci-config"],
     ["scripts/preview-change-plan.mjs", "// changed classifier\n", "full"],
   ];
 
@@ -408,6 +408,92 @@ test("CI classification isolates only infrastructure and documentation changes",
   });
   assert.equal(unavailable.kind, "full");
   assert.equal(unavailable.flows, true);
+});
+
+test("CI selects ci-config only for the explicit orchestration path allowlist", (t) => {
+  const f = fixture(t);
+  const allowedPaths = [
+    ".github/workflows/ci.yml",
+    ".github/workflows/codeql.yml",
+    ".github/workflows/coverage.yml",
+    ".github/workflows/deploy-preview.yml",
+    "scripts/codeql-plan.mjs",
+    "scripts/codeql-plan.test.mjs",
+    "scripts/github-workflows.test.mjs",
+    "scripts/preview-release-plan.mjs",
+    "scripts/preview-release-plan.test.mjs",
+    "scripts/preview-component-evidence.mjs",
+    "scripts/preview-component-evidence.test.mjs",
+  ];
+  for (const path of allowedPaths) f.put(path, "// baseline\n");
+  f.put("docs/guides/ci.md", "CI guide\n");
+  const base = f.commit("base");
+
+  for (const path of allowedPaths) f.put(path, "// updated\n");
+  f.put("docs/guides/ci.md", "Updated CI guide\n");
+  const head = f.commit("orchestration update");
+  const plan = classifyCiChanges({ base, head, repo: f.repo });
+  assert.equal(plan.kind, "ci-config");
+  assert.equal(plan.flows, false);
+
+  for (const path of [
+    ".github/workflows/other.yml",
+    "scripts/other-ci-helper.mjs",
+    "package.json",
+    "pnpm-lock.yaml",
+    "apps/api/src/index.ts",
+  ]) {
+    const scenario = fixture(t);
+    scenario.put(".github/workflows/ci.yml", "name: CI\n");
+    const scenarioBase = scenario.commit("base");
+    scenario.put(".github/workflows/ci.yml", "name: Updated CI\n");
+    scenario.put(path, "// changed\n");
+    const mixedHead = scenario.commit(`change ${path}`);
+    const mixed = classifyCiChanges({
+      base: scenarioBase,
+      head: mixedHead,
+      repo: scenario.repo,
+    });
+    assert.equal(mixed.kind, "full", `${path} must select full CI`);
+    assert.equal(mixed.flows, true, `${path} must retain Flows checks`);
+  }
+});
+
+test("CI config classification leaves trusted-source handling in the workflow intact", () => {
+  const ci = readFileSync(
+    new URL("../.github/workflows/ci.yml", import.meta.url),
+    "utf8",
+  );
+  assert.match(ci, /name: Classify changes with trusted base code/);
+  assert.match(
+    ci,
+    /git show "\$BASE_SHA:scripts\/preview-change-plan\.mjs" > "\$trusted_script"/,
+  );
+});
+
+test("CI config renames classify both paths without rename detection", (t) => {
+  const f = fixture(t);
+  f.put(".github/workflows/coverage.yml", "name: coverage\n");
+  const base = f.commit("base");
+  f.put(".github/workflows/coverage.yml", "name: moved\n");
+  f.put(".github/workflows/unknown-coverage.yml", "name: moved\n");
+  const head = f.commit("rename allowed workflow to unknown path");
+
+  const plan = classifyCiChanges({ base, head, repo: f.repo });
+  assert.equal(plan.kind, "full");
+  assert.equal(plan.flows, true);
+});
+
+test("release classification remains unchanged for orchestration paths", (t) => {
+  const f = fixture(t);
+  f.put(".github/workflows/ci.yml", "name: CI\n");
+  const base = f.commit("base");
+  f.put(".github/workflows/ci.yml", "name: Updated CI\n");
+  const head = f.commit("workflow update");
+
+  const plan = classifyChanges({ base, head, repo: f.repo });
+  assert.equal(plan.kind, "platform");
+  assert.equal(plan.flows, true);
 });
 
 test("the CI command-line mode emits separate outputs and leaves default classification intact", (t) => {
@@ -649,7 +735,7 @@ test("CI routes infrastructure contracts through the required suite and gate", (
   assert.match(workflow, /ci_flows == 'true'/);
   assert.match(
     workflow,
-    /ci_kind=\(infrastructure\|plugin\|none\|auth\|api\|backup-gate\)/,
+    /ci_kind=\(infrastructure\|plugin\|none\|auth\|api\|backup-gate\|ci-config\)/,
   );
   assert.match(workflow, /^  runtime-profile:/m);
   assert.match(workflow, /pnpm --filter @savia\/connector-gateway typecheck/);
