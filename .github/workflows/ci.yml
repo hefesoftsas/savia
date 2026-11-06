@@ -574,26 +574,15 @@ jobs:
       - name: Run workspace unit tests
         run: VITEST_SHARD_ARGS='--shard 2/2' pnpm run test:unit:workspace:studio
 
-  contracts:
-    name: Contract tests
-    needs:
-      - changes
-      - plugin-validation
-      - runtime-profile
-    if: always()
+  contract-suite:
+    name: Contract suite
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.result == 'success' }}
     timeout-minutes: 10
     runs-on: ubuntu-24.04
     env:
       PNPM_CONFIG_STRICT_DEP_BUILDS: "false"
     steps:
-      - name: Require a successful change classification
-        if: >-
-          always() && (needs.changes.result != 'success' ||
-          (needs.changes.outputs.kind == 'plugin' && needs.plugin-validation.result != 'success') ||
-          (contains(fromJSON('["auth","api","backup-gate"]'), needs.changes.outputs.ci_kind) &&
-          needs.runtime-profile.result != 'success'))
-        run: exit 1
-
       - name: Check out source
         uses: actions/checkout@v4
 
@@ -617,9 +606,31 @@ jobs:
       - name: Run contract tests
         run: pnpm run test:contracts
 
+      - name: Verify durable Preview publication evidence
+        run: node --test scripts/preview-component-evidence.test.mjs
+
       - name: Run offline Flows recovery contracts for infrastructure changes
         if: needs.changes.outputs.ci_kind == 'infrastructure'
         run: node --test --test-concurrency=1 scripts/flows-*.test.mjs scripts/flows-maintenance/*.test.mjs scripts/encrypt-flows-backup.test.mjs scripts/verify-flows-preview.test.mjs
+
+  contracts:
+    name: Contract tests
+    needs:
+      - changes
+      - plugin-validation
+      - runtime-profile
+      - contract-suite
+    if: always()
+    timeout-minutes: 3
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Require successful applicable CI lanes
+        env:
+          CI_NEEDS: ${{ toJSON(needs) }}
+        run: printf '%s' "$CI_NEEDS" | node scripts/contract-check-gate.mjs
 
   typecheck:
     needs: changes

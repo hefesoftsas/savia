@@ -24,8 +24,8 @@ changes use the infrastructure CI scope described below.
 Publication compares the tested commit with the last successful Preview release
 ancestor, rather than only its parent commit. Therefore an earlier failed
 platform deployment cannot be skipped by a later plugin-only commit. Missing
-history selects the full lane. A successful workflow without an unexpired
-`preview-release` artifact for its exact main commit does not advance the baseline.
+durable and legacy evidence selects the full lane. A workflow conclusion alone
+does not advance the baseline: publication needs a verified component receipt.
 
 The publisher packages only changed plugins and updates their existing enabled
 installations. It does not install optional plugins in new workspaces, reactivate
@@ -240,3 +240,36 @@ changes can accompany a compatible code update without forcing a data backup;
 unknown infrastructure, Worker configuration and schema changes still select
 the full path. Changes limited to infrastructure plus the named Preview planning
 helpers run the infrastructure contract profile, including offline recovery tests.
+
+## Evidence independent of Actions retention
+
+Preview also stores successful component receipts in GitHub Deployments, using
+the existing `preview` environment and dedicated `savia:preview:component:*`
+tasks. Each receipt includes the exact main SHA, repository, component and
+workflow-run identity. A successful status is written only after publication;
+the complete-release receipt requires all applicable jobs to succeed. It can
+represent unchanged component equivalence without claiming a new Worker version.
+
+These records survive deleting workflow runs and artifacts. Planning reads them
+before legacy Actions evidence, checks identity and git ancestry, and retains
+independent runtime, Office and store baselines. Automatic environment
+inactivation does not erase an earlier successful publication; a failed or
+incomplete receipt cannot establish a baseline. An unavailable receipt API stops
+planning rather than forcing a full deployment and backup. Explicitly deleting
+the deployment records still removes this evidence; keep them when cleaning CI.
+
+Receipts contain only release metadata. They add no storage service, secret,
+scheduled workflow, ping or polling task. Only publication jobs have deployment
+write permission. The initial completed release was recovered from preserved
+local job evidence cross-checked against the surviving successful environment
+deployment; normal runs write receipts automatically. Existing encrypted retry
+artifacts retain their previous expiration and are not replaced by receipts.
+
+## Concurrent contract validation
+
+The **Contract suite** job starts after successful change classification, in
+parallel with plugin validation and focused Auth/API/runtime checks. The existing
+required **Contract tests** check remains the final gate. It requires the suite
+and classification to succeed, plus each applicable plugin or runtime lane;
+failed, cancelled and unexpectedly skipped prerequisites cannot pass the gate.
+This changes scheduling, not the required validation coverage.

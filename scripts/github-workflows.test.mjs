@@ -2,6 +2,30 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import { evaluateContractGate } from "./contract-check-gate.mjs";
+
+test("required contract gate CLI rejects invalid input and a cancelled suite", () => {
+  for (const input of [
+    "{",
+    JSON.stringify({
+      changes: {
+        result: "success",
+        outputs: { kind: "platform", ci_kind: "full" },
+      },
+      "contract-suite": { result: "cancelled" },
+    }),
+  ]) {
+    const result = spawnSync(
+      process.execPath,
+      ["scripts/contract-check-gate.mjs"],
+      {
+        input,
+        encoding: "utf8",
+      },
+    );
+    assert.equal(result.status, 1);
+  }
+});
 
 function workflow(name) {
   return readFile(
@@ -40,20 +64,26 @@ test("CI validates main pushes and pull requests without deployment credentials"
   assert.doesNotMatch(ci, /CLOUDFLARE_API_TOKEN|self-hosted|secrets\./);
 });
 
-test("plugin validation is part of the required Contract tests gate", async () => {
+test("contract suite runs independently and the required gate includes all required lanes", async () => {
   const ci = await workflow("ci.yml");
+  const contractSuite = ci.slice(
+    ci.indexOf("  contract-suite:"),
+    ci.indexOf("  contracts:"),
+  );
   const contracts = ci.slice(
     ci.indexOf("  contracts:"),
     ci.indexOf("  typecheck:"),
   );
 
+  assert.match(contractSuite, /needs: changes/);
+  assert.match(contractSuite, /pnpm run test:contracts/);
+  assert.match(contractSuite, /name: Contract suite/);
+  assert.match(contractSuite, /ci_kind == 'infrastructure'/);
+  assert.match(contracts, /name: Contract tests/);
   assert.match(contracts, /needs:\n\s+- changes\n\s+- plugin-validation/);
-  assert.match(contracts, /if: >-\n\s+always\(\)/);
-  assert.match(
-    contracts,
-    /needs\.changes\.result != 'success'[\s\S]*needs\.plugin-validation\.result != 'success'/,
-  );
-  assert.match(contracts, /run: exit 1/);
+  assert.match(contracts, /- runtime-profile\n\s+- contract-suite/);
+  assert.match(contracts, /if: always\(\)/);
+  assert.match(contracts, /node scripts\/contract-check-gate\.mjs/);
 });
 
 test("focused runtime profile failures block the required Contract tests gate", async () => {
@@ -65,8 +95,112 @@ test("focused runtime profile failures block the required Contract tests gate", 
 
   assert.match(contracts, /needs:[\s\S]*- runtime-profile/);
   assert.match(contracts, /name: Contract tests[\s\S]*?\n\s+if: always\(\)/);
-  assert.match(contracts, /contains\(fromJSON\('[^']*backup-gate/);
-  assert.match(contracts, /needs\.runtime-profile\.result != 'success'/);
+  assert.match(contracts, /- contract-suite/);
+  const gate = await readFile(
+    new URL("./contract-check-gate.mjs", import.meta.url),
+    "utf8",
+  );
+  assert.match(gate, /RUNTIME_PROFILE_KINDS\.has\(ciKind\)/);
+  assert.match(gate, /result !== "success"/);
+});
+
+test("contract gate accepts successful mandatory and applicable lanes", () => {
+  const baseline = {
+    changes: {
+      result: "success",
+      outputs: { kind: "platform", ci_kind: "full" },
+    },
+    "plugin-validation": { result: "skipped" },
+    "runtime-profile": { result: "skipped" },
+    "contract-suite": { result: "success" },
+  };
+  assert.deepEqual(evaluateContractGate(baseline), []);
+  assert.deepEqual(
+    evaluateContractGate({
+      ...baseline,
+      changes: {
+        result: "success",
+        outputs: { kind: "plugin", ci_kind: "auth" },
+      },
+      "plugin-validation": { result: "success" },
+      "runtime-profile": { result: "success" },
+    }),
+    [],
+  );
+});
+
+test("contract gate requires classification and contract suite success", () => {
+  const baseline = {
+    changes: {
+      result: "success",
+      outputs: { kind: "platform", ci_kind: "full" },
+    },
+    "plugin-validation": { result: "skipped" },
+    "runtime-profile": { result: "skipped" },
+    "contract-suite": { result: "success" },
+  };
+  assert.notDeepEqual(
+    evaluateContractGate({
+      ...baseline,
+      changes: { result: "failure", outputs: {} },
+    }),
+    [],
+  );
+  for (const result of ["failure", "cancelled", "skipped", undefined]) {
+    assert.notDeepEqual(
+      evaluateContractGate({
+        ...baseline,
+        "contract-suite": result ? { result } : undefined,
+      }),
+      [],
+    );
+  }
+});
+
+test("contract gate rejects unknown release classification kinds", () => {
+  const result = evaluateContractGate({
+    changes: {
+      result: "success",
+      outputs: { kind: "mystery", ci_kind: "full" },
+    },
+    "plugin-validation": { result: "skipped" },
+    "runtime-profile": { result: "skipped" },
+    "contract-suite": { result: "success" },
+  });
+
+  assert.ok(
+    result.some((failure) =>
+      failure.includes("release kind was invalid: mystery"),
+    ),
+  );
+});
+
+test("contract gate rejects skipped or cancelled expected plugin and runtime lanes", () => {
+  const baseline = {
+    changes: {
+      result: "success",
+      outputs: { kind: "plugin", ci_kind: "auth" },
+    },
+    "plugin-validation": { result: "success" },
+    "runtime-profile": { result: "success" },
+    "contract-suite": { result: "success" },
+  };
+  for (const result of ["failure", "cancelled", "skipped", undefined]) {
+    assert.notDeepEqual(
+      evaluateContractGate({
+        ...baseline,
+        "plugin-validation": result ? { result } : undefined,
+      }),
+      [],
+    );
+    assert.notDeepEqual(
+      evaluateContractGate({
+        ...baseline,
+        "runtime-profile": result ? { result } : undefined,
+      }),
+      [],
+    );
+  }
 });
 
 test("long-running CI jobs honor cancellation while Contracts retains its final guard", async () => {
@@ -80,7 +214,7 @@ test("long-running CI jobs honor cancellation while Contracts retains its final 
   assert.match(contracts, /^    if: always\(\)$/m);
   assert.match(
     contracts,
-    /Require a successful change classification[\s\S]*?if: >-[\s\S]*?always\(\)/,
+    /Require successful applicable CI lanes[\s\S]*?CI_NEEDS: \$\{\{ toJSON\(needs\) \}\}/,
   );
   assert.match(ci, /!cancelled\(\)/);
 });

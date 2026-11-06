@@ -77,6 +77,26 @@ test("missing deployment history or unavailable history uses full release", asyn
   }
 });
 
+test("durable receipts retain the deployed baseline after Actions history is deleted", async () => {
+  let comparedBase;
+  const plan = await buildPreviewReleasePlan({
+    head,
+    currentRunId: 3,
+    runs: [],
+    durableRuns: [run({ durable: true })],
+    isAncestor: () => true,
+    classify: ({ base }) => {
+      comparedBase = base;
+      return { kind: "none", plugins: [], flows: false };
+    },
+  });
+  assert.equal(comparedBase, prior);
+  assert.equal(plan.base, prior);
+  assert.equal(plan.officeRuntimeBase, prior);
+  assert.equal(plan.storePluginsBase, prior);
+  assert.equal(plan.kind, "none");
+});
+
 test("release asset flags identify Office and store plugin changes independently", () => {
   assert.deepEqual(releaseAssetFlags(["apps/auth/src/index.ts"]), {
     officeRuntimeChanged: false,
@@ -370,6 +390,26 @@ test("component baselines accept successful component proof on an overall failed
   );
 });
 
+test("a newer successful ancestor wins regardless of durable or legacy evidence order", () => {
+  const newer = "c".repeat(40);
+  const olderReceipt = run({ durable: true });
+  const newerLegacy = run({ id: 2, head_sha: newer });
+  for (const records of [
+    [olderReceipt, newerLegacy],
+    [newerLegacy, olderReceipt],
+  ]) {
+    assert.equal(
+      selectComponentBaseline(records, "runtime", {
+        head,
+        currentRunId: 3,
+        isAncestor: (base, target) =>
+          target === head || (base === prior && target === newer),
+      }),
+      newer,
+    );
+  }
+});
+
 test("release planning keeps independent component baselines and pending assets", async () => {
   const repo = mkdtempSync(join(tmpdir(), "savia-component-plan-"));
   const git = (...args) =>
@@ -443,6 +483,8 @@ test("workflow, tests, documentation, and known asset-only files do not require 
   assert.equal(
     releaseRuntimeChanged([
       ".github/workflows/deploy-preview.yml",
+      ".github/workflows/ci.yml",
+      "scripts/contract-check-gate.mjs",
       "scripts/preview-release-plan.mjs",
       "scripts/preview-component-evidence.mjs",
       "scripts/deploy-store-plugins.mjs",

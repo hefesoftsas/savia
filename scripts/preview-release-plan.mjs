@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { appendFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { classifyChanges } from "./preview-change-plan.mjs";
+import { loadComponentEvidence } from "./preview-component-evidence.mjs";
 
 const shaPattern = /^[a-f0-9]{40}$/;
 const COMPONENTS = {
@@ -12,6 +13,8 @@ const COMPONENTS = {
 
 const RUNTIME_IGNORED_PATHS = new Set([
   ".github/workflows/deploy-preview.yml",
+  ".github/workflows/ci.yml",
+  "scripts/contract-check-gate.mjs",
   "scripts/preview-release-plan.mjs",
   "scripts/preview-code-release.mjs",
   "scripts/preview-change-plan.mjs",
@@ -114,6 +117,7 @@ export function selectComponentBaseline(
 ) {
   if (!COMPONENTS[component])
     throw new Error(`Unknown Preview component: ${component}`);
+  let selected = null;
   for (const run of runs ?? []) {
     if (
       String(run.id) === String(currentRunId) ||
@@ -126,18 +130,24 @@ export function selectComponentBaseline(
     )
       continue;
     try {
-      if (isAncestor(run.head_sha, head)) return run.head_sha;
+      if (
+        isAncestor(run.head_sha, head) &&
+        (!selected ||
+          (selected !== run.head_sha && isAncestor(selected, run.head_sha)))
+      )
+        selected = run.head_sha;
     } catch {
       /* Missing history is not proof of deployment. */
     }
   }
-  return null;
+  return selected;
 }
 
 export async function buildPreviewReleasePlan({
   head,
   currentRunId,
   runs,
+  durableRuns = [],
   isAncestor,
   classify = classifyChanges,
   classifyAssets = releaseAssetFlags,
@@ -145,17 +155,18 @@ export async function buildPreviewReleasePlan({
 }) {
   if (!shaPattern.test(head ?? ""))
     throw new Error("An exact approved commit is required.");
-  const base = selectComponentBaseline(runs, "runtime", {
+  const evidence = [...durableRuns, ...(runs ?? [])];
+  const base = selectComponentBaseline(evidence, "runtime", {
     head,
     currentRunId,
     isAncestor,
   });
-  const officeRuntimeBase = selectComponentBaseline(runs, "office", {
+  const officeRuntimeBase = selectComponentBaseline(evidence, "office", {
     head,
     currentRunId,
     isAncestor,
   });
-  const storePluginsBase = selectComponentBaseline(runs, "store", {
+  const storePluginsBase = selectComponentBaseline(evidence, "store", {
     head,
     currentRunId,
     isAncestor,
@@ -282,7 +293,35 @@ async function main() {
     throw new Error("A valid repository is required.");
   if (!process.env.GITHUB_TOKEN)
     throw new Error("GitHub read access is required.");
-  let runs = null;
+  const isAncestor = (base, target) => {
+    try {
+      execFileSync("git", ["merge-base", "--is-ancestor", base, target], {
+        stdio: "ignore",
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  // Durable evidence is independent of Actions retention. An API outage must
+  // stop planning rather than accidentally select an expensive full release.
+  const durableRuns = await loadComponentEvidence({
+    repository,
+    token: process.env.GITHUB_TOKEN,
+    head,
+    isAncestor,
+  });
+  const durableBases = Object.fromEntries(
+    Object.keys(COMPONENTS).map((component) => [
+      component,
+      selectComponentBaseline(durableRuns, component, {
+        head,
+        currentRunId: process.env.GITHUB_RUN_ID,
+        isAncestor,
+      }),
+    ]),
+  );
+  let runs = [];
   try {
     const response = await fetch(
       `https://api.github.com/repos/${repository}/actions/workflows/deploy-preview.yml/runs?status=completed&per_page=100`,
@@ -295,14 +334,21 @@ async function main() {
         redirect: "error",
       },
     );
-    if (response.ok) {
+    if (!response.ok)
+      throw new Error("Cannot inspect legacy Preview releases.");
+    {
       runs = (await response.json()).workflow_runs;
       const verified = new Set();
       for (const run of runs ?? []) {
         if (
           run.event !== "workflow_run" ||
           run.head_branch !== "main" ||
-          !shaPattern.test(run.head_sha ?? "")
+          !shaPattern.test(run.head_sha ?? "") ||
+          Object.values(durableBases).every(
+            (base) =>
+              base &&
+              (base === run.head_sha || !isAncestor(base, run.head_sha)),
+          )
         )
           continue;
         try {
@@ -333,18 +379,16 @@ async function main() {
       }
     }
   } catch {
-    /* A full release is the safe fallback. */
+    throw new Error(
+      "Preview release history is unavailable; publication was not planned.",
+    );
   }
   const plan = await buildPreviewReleasePlan({
     head,
     currentRunId: process.env.GITHUB_RUN_ID,
     runs,
-    isAncestor: (base, target) => {
-      execFileSync("git", ["merge-base", "--is-ancestor", base, target], {
-        stdio: "ignore",
-      });
-      return true;
-    },
+    durableRuns,
+    isAncestor,
   });
   writeFileSync(
     process.env.PREVIEW_PLAN_PATH ?? "preview-release-plan.json",

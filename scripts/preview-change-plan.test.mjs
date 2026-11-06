@@ -616,10 +616,14 @@ test("CI isolates the Auth deployment PR paths with docs and keeps mixed paths f
   }
 });
 
-test("CI routes infrastructure contracts through the existing required gate", () => {
+test("CI routes infrastructure contracts through the required suite and gate", () => {
   const workflow = readFileSync(
     new URL("../.github/workflows/ci.yml", import.meta.url),
     "utf8",
+  );
+  const contractSuite = workflow.slice(
+    workflow.indexOf("  contract-suite:"),
+    workflow.indexOf("  contracts:"),
   );
   const contracts = workflow.slice(
     workflow.indexOf("  contracts:"),
@@ -628,17 +632,20 @@ test("CI routes infrastructure contracts through the existing required gate", ()
 
   assert.match(workflow, /node "\$trusted_script" --ci --base/);
   assert.match(workflow, /echo 'ci_kind=full'/);
-  assert.match(contracts, /needs:\n\s+- changes\n\s+- plugin-validation/);
-  assert.match(contracts, /run: pnpm run test:contracts/);
+  assert.match(contractSuite, /needs: changes/);
+  assert.match(contractSuite, /run: pnpm run test:contracts/);
   assert.match(
-    contracts,
+    contractSuite,
     /Run offline Flows recovery contracts for infrastructure changes/,
   );
   assert.match(
-    contracts,
+    contractSuite,
     /if: needs\.changes\.outputs\.ci_kind == 'infrastructure'/,
   );
-  assert.match(contracts, /scripts\/flows-maintenance\/\*\.test\.mjs/);
+  assert.match(contractSuite, /scripts\/flows-maintenance\/\*\.test\.mjs/);
+  assert.match(contracts, /needs:[\s\S]*- contract-suite/);
+  assert.match(contracts, /name: Contract tests/);
+  assert.match(contracts, /node scripts\/contract-check-gate\.mjs/);
   assert.match(workflow, /ci_flows == 'true'/);
   assert.match(
     workflow,

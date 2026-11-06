@@ -9,6 +9,7 @@ on:
 permissions:
   contents: read
   actions: read
+  deployments: read
 
 concurrency:
   group: savia-preview
@@ -58,6 +59,10 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
 
   deploy:
+    permissions:
+      contents: read
+      actions: read
+      deployments: write
     needs: plan
     if: >-
       ${{ always() && needs.plan.result == 'success' && needs.plan.outputs.kind == 'platform' && needs.plan.outputs.runtime_changed == 'true' &&
@@ -447,6 +452,13 @@ jobs:
           writeFileSync(process.env.RUNNER_TEMP + '/preview-runtime.json', JSON.stringify({ sha, repository: process.env.GITHUB_REPOSITORY, environment: 'preview' }));
           NODE
 
+      - name: Persist runtime publication independently of Actions
+        if: ${{ success() && !cancelled() }}
+        run: node scripts/preview-component-evidence.mjs record runtime
+        env:
+          APPROVED_SHA: ${{ github.event.workflow_run.head_sha }}
+          GITHUB_TOKEN: ${{ github.token }}
+
       - name: Publish runtime component evidence
         if: ${{ success() && !cancelled() }}
         uses: actions/upload-artifact@v4
@@ -457,6 +469,10 @@ jobs:
           overwrite: true
 
   office:
+    permissions:
+      contents: read
+      actions: read
+      deployments: write
     name: Publish Preview Office
     needs: [plan, deploy]
     if: >-
@@ -544,6 +560,13 @@ jobs:
           writeFileSync(process.env.RUNNER_TEMP + '/preview-office.json', JSON.stringify({ sha, repository: process.env.GITHUB_REPOSITORY, environment: 'preview' }));
           NODE
 
+      - name: Persist office publication independently of Actions
+        if: ${{ success() && !cancelled() }}
+        run: node scripts/preview-component-evidence.mjs record office
+        env:
+          APPROVED_SHA: ${{ github.event.workflow_run.head_sha }}
+          GITHUB_TOKEN: ${{ github.token }}
+
       - name: Publish office component evidence
         if: ${{ success() && !cancelled() }}
         uses: actions/upload-artifact@v4
@@ -554,6 +577,10 @@ jobs:
           overwrite: true
 
   store:
+    permissions:
+      contents: read
+      actions: read
+      deployments: write
     name: Publish Preview store plugins
     needs: [plan, deploy, plugins]
     if: >-
@@ -634,6 +661,13 @@ jobs:
           if (sha !== process.env.DEPLOYED_SHA) throw new Error('Deployed commit does not match tested commit');
           writeFileSync(process.env.RUNNER_TEMP + '/preview-store.json', JSON.stringify({ sha, repository: process.env.GITHUB_REPOSITORY, environment: 'preview' }));
           NODE
+
+      - name: Persist store publication independently of Actions
+        if: ${{ success() && !cancelled() }}
+        run: node scripts/preview-component-evidence.mjs record store
+        env:
+          APPROVED_SHA: ${{ github.event.workflow_run.head_sha }}
+          GITHUB_TOKEN: ${{ github.token }}
 
       - name: Publish store component evidence
         if: ${{ success() && !cancelled() }}
@@ -745,6 +779,10 @@ jobs:
           overwrite: true
 
   promotion:
+    permissions:
+      contents: read
+      actions: read
+      deployments: write
     name: Record complete Preview release
     needs: [plan, deploy, office, store, plugins]
     if: >-
@@ -756,6 +794,17 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 2
     steps:
+      - name: Check out tested source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Persist complete publication independently of Actions
+        run: node scripts/preview-component-evidence.mjs record release
+        env:
+          APPROVED_SHA: ${{ github.event.workflow_run.head_sha }}
+          GITHUB_TOKEN: ${{ github.token }}
+
       - name: Record complete publication
         env:
           APPROVED_SHA: ${{ github.event.workflow_run.head_sha }}
