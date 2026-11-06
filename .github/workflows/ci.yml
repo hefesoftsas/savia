@@ -38,6 +38,7 @@ jobs:
           node-version: 22
 
       - name: Classify changes with trusted base code
+        # New profiles take effect only after their classifier reaches the base branch.
         id: plan
         shell: bash
         env:
@@ -138,6 +139,7 @@ jobs:
           NODE
 
   admin:
+    # The six shards use historical costs; all discovered tests still run once.
     name: Admin unit tests (shard 1/6)
     needs: changes
     if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.ci_kind == 'full') }}
@@ -741,6 +743,7 @@ jobs:
         run: pnpm run flows:verify && pnpm --filter @savia/flows test && pnpm --filter @savia/flows-native test
 
   flows-packages:
+    # These source-level suites do not consume the integration job's generated builds.
     name: Flows package tests
     needs: changes
     if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.ci_flows == 'true') }}

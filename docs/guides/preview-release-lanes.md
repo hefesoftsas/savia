@@ -365,3 +365,11 @@ estimates affect scheduling only; refresh them when timing imbalance returns.
 The Admin sequencer is enabled only by CI command arguments; normal local test
 commands and application builds are unchanged. Changes to CI helpers do not
 publish Preview application components.
+
+The first full CI measurement on 2026-11-06 completed in 4m21s versus 5m07s for
+the preceding full run. Flows core's longest test step fell from 3m57s to 3m01s;
+the longest Admin test step fell from 3m23s to 2m56s. The complete push-to-Preview
+check took 4m49s, with every application publication job skipped. These are
+individual observations, not an application deployment benchmark or a guarantee.
+Flows adds one parallel runner; focused automation changes avoid the full set of
+application runners. Runner-time cost and elapsed time should be tracked separately.
