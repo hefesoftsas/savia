@@ -507,3 +507,117 @@ test("focused API changes retain all three parallel API test shards", async () =
   const profile = ci.split("            api)")[1].split(";;")[0];
   assert.doesNotMatch(profile, /@savia\/api test/);
 });
+
+test("Preview components can retry independently without repeating runtime publication", async () => {
+  const preview = await workflow("deploy-preview.yml");
+  const job = (name) =>
+    preview.split(`\n  ${name}:`)[1]?.split(/\n  [a-z-]+:/)[0] ?? "";
+  const runtime = job("deploy"),
+    office = job("office"),
+    store = job("store"),
+    promotion = job("promotion");
+  assert.match(runtime, /needs\.plan\.outputs\.runtime_changed == 'true'/);
+  assert.match(runtime, /name: preview-runtime/);
+  assert.doesNotMatch(runtime, /prepare-office-runtime|deploy-store-plugins/);
+  for (const component of [office, store]) {
+    assert.match(component, /needs: \[plan, deploy(?:, plugins)?\]/);
+    assert.match(component, /needs\.deploy\.result == 'skipped'/);
+    assert.match(
+      component,
+      /git ls-remote --exit-code origin refs\/heads\/main/,
+    );
+    assert.doesNotMatch(
+      component,
+      /environment\.mjs apply|backup\.mjs|apply-d1-migrations/,
+    );
+  }
+  assert.match(office, /name: preview-office/);
+  assert.match(store, /name: preview-store/);
+  assert.match(store, /SAVIA_PLUGIN_PRESERVE_NEWER_OPTIONAL: "true"/);
+  assert.match(promotion, /needs: \[plan, deploy, office, store, plugins\]/);
+  for (const name of ["deploy", "office", "store", "plugins"]) {
+    assert.ok(promotion.includes(`needs.${name}.result == 'success'`));
+    assert.ok(promotion.includes(`needs.${name}.result == 'skipped'`));
+  }
+  assert.match(promotion, /name: preview-release/);
+});
+
+test("Preview promotion rejects required components skipped after a dependency failure", async () => {
+  const preview = await workflow("deploy-preview.yml");
+  const expression = preview
+    .split("\n  promotion:")[1]
+    .split("${{")[1]
+    .split("}}")[0];
+  const evaluate = new Function(
+    "needs",
+    "always",
+    "cancelled",
+    `return (${expression});`,
+  );
+  const needs = {
+    plan: {
+      result: "success",
+      outputs: {
+        kind: "platform",
+        runtime_changed: "true",
+        office_runtime_changed: "true",
+        store_plugins_changed: "true",
+      },
+    },
+    deploy: { result: "success" },
+    office: { result: "success" },
+    store: { result: "success" },
+    plugins: { result: "skipped" },
+  };
+  assert.equal(
+    evaluate(
+      needs,
+      () => true,
+      () => false,
+    ),
+    true,
+  );
+  for (const component of ["deploy", "office", "store"]) {
+    assert.equal(
+      evaluate(
+        { ...needs, [component]: { result: "skipped" } },
+        () => true,
+        () => false,
+      ),
+      false,
+      `${component} needs a successful result when required`,
+    );
+  }
+  const unchanged = structuredClone(needs);
+  unchanged.plan.outputs.runtime_changed = "false";
+  unchanged.plan.outputs.office_runtime_changed = "false";
+  unchanged.plan.outputs.store_plugins_changed = "false";
+  for (const component of ["deploy", "office", "store"])
+    unchanged[component].result = "skipped";
+  assert.equal(
+    evaluate(
+      unchanged,
+      () => true,
+      () => false,
+    ),
+    true,
+  );
+  unchanged.plan.outputs.kind = "plugin";
+  assert.equal(
+    evaluate(
+      unchanged,
+      () => true,
+      () => false,
+    ),
+    false,
+  );
+  unchanged.plugins.result = "success";
+  assert.equal(
+    evaluate(
+      unchanged,
+      () => true,
+      () => false,
+    ),
+    true,
+  );
+});

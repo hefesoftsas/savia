@@ -198,3 +198,36 @@ Full releases stage secrets with `wrangler versions secret bulk` before publishi
 code, allowing retries after rollback leaves a newer inactive Worker version.
 The Auth helper records bounded subprocess diagnostics in the private encrypted
 failure artifact; CI displays only preparation stages and HTTP status numbers.
+
+## Independent Preview component retries
+
+Preview records runtime, Office and complete store-catalog publication separately.
+Each receipt is bound to an exact trusted main workflow run and a successful
+component job. A later asset failure cannot invalidate successful runtime work.
+The aggregate `preview-release` receipt is emitted only when every required job
+succeeds; partial releases never qualify as full promotion evidence.
+
+Use GitHub Actions **Re-run failed jobs** to retry a failed component. Successful
+runtime and Office jobs are retained, so retrying store publication does not run
+Pulumi, pause the application, export databases or copy R2 objects again. Store
+publication waits for selective plugin publication to avoid concurrent catalog
+writes. Pending asset changes are compared with their own last successful
+component baseline, even when runtime has advanced since the failure.
+
+The planner can adopt a previous combined release's successful runtime operation
+only with exact-run immutable artifact evidence, successful resource isolation
+and supersession guards, and a successful managed apply. Successful Office upload
+can be adopted independently. A failed or incomplete apply is never a baseline.
+Unknown history still fails closed to the full release lane.
+
+For verified compatible code changes, the existing Preview-only code lane skips
+maintenance, backups, migrations and secret updates. Schema/configuration or
+unknown changes retain the full recovery path. Known orchestration-only and
+asset-only changes do not republish unchanged Workers.
+
+The Preview store job opts into preserving newer optional catalog versions. It
+preflights all workspace catalogs before uploading: a newer optional version is
+left untouched and is never installed automatically; a newer required version
+blocks publication. Same-version packages still undergo the server's exact-content
+check, and a conflicting HTTP 409 remains a failure. Production does not enable
+this policy. No scheduled jobs, pings or background polling are introduced.

@@ -29,6 +29,7 @@ jobs:
       kind: ${{ steps.plan.outputs.kind }}
       plugins: ${{ steps.plan.outputs.plugins }}
       base: ${{ steps.plan.outputs.base }}
+      runtime_changed: ${{ steps.plan.outputs.runtime_changed }}
       office_runtime_changed: ${{ steps.plan.outputs.office_runtime_changed }}
       store_plugins_changed: ${{ steps.plan.outputs.store_plugins_changed }}
     steps:
@@ -59,7 +60,7 @@ jobs:
   deploy:
     needs: plan
     if: >-
-      ${{ always() && needs.plan.result == 'success' && needs.plan.outputs.kind == 'platform' &&
+      ${{ always() && needs.plan.result == 'success' && needs.plan.outputs.kind == 'platform' && needs.plan.outputs.runtime_changed == 'true' &&
         github.event_name == 'workflow_run' &&
         github.event.workflow_run.conclusion == 'success' &&
         github.event.workflow_run.event == 'push' &&
@@ -433,6 +434,86 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
+      - name: Record verified runtime publication
+        if: ${{ success() && !cancelled() }}
+        env:
+          DEPLOYED_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          node --input-type=module <<'NODE'
+          import { writeFileSync } from 'node:fs';
+          import { execFileSync } from 'node:child_process';
+          const sha = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+          if (sha !== process.env.DEPLOYED_SHA) throw new Error('Deployed commit does not match tested commit');
+          writeFileSync(process.env.RUNNER_TEMP + '/preview-runtime.json', JSON.stringify({ sha, repository: process.env.GITHUB_REPOSITORY, environment: 'preview' }));
+          NODE
+
+      - name: Publish runtime component evidence
+        if: ${{ success() && !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: preview-runtime
+          path: ${{ runner.temp }}/preview-runtime.json
+          retention-days: 90
+          overwrite: true
+
+  office:
+    name: Publish Preview Office
+    needs: [plan, deploy]
+    if: >-
+      ${{ always() && !cancelled() && needs.plan.result == 'success' &&
+        (needs.deploy.result == 'success' || needs.deploy.result == 'skipped') &&
+        needs.plan.outputs.office_runtime_changed == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment:
+      name: preview
+      url: https://savia-preview.hefesoft.com
+    env:
+      PNPM_CONFIG_STRICT_DEP_BUILDS: "false"
+    steps:
+      - name: Check out tested source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.24.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Load existing infrastructure outputs without applying changes
+        uses: ./.github/actions/pulumi-infrastructure
+        with:
+          stack: preview
+        env:
+          PULUMI_BACKEND_URL: ${{ secrets.PULUMI_BACKEND_URL }}
+          PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_STATE_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_STATE_SECRET_ACCESS_KEY }}
+
+      - name: Verify isolated preview resources before component mutation
+        run: node scripts/verify-preview-resources.mjs
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+      - name: Reject superseded component publication
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$(git ls-remote --exit-code origin refs/heads/main | cut -f1)"
+
       - name: Prepare Office runtime assets
         if: ${{ success() && !cancelled() && needs.plan.outputs.office_runtime_changed == 'true' }}
         run: node scripts/prepare-office-runtime.mjs
@@ -450,16 +531,7 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
 
-      - name: Deploy release plugin ZIPs to all workspaces
-        if: ${{ success() && !cancelled() && needs.plan.outputs.store_plugins_changed == 'true' }}
-        run: node scripts/deploy-store-plugins.mjs
-        env:
-          SAVIA_DEPLOY_ENVIRONMENT: preview
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_DATABASE_ID: ${{ env.SAVIA_DOMAIN_D1_ID }}
-
-      - name: Record the deployed and verified commit
+      - name: Record verified office publication
         if: ${{ success() && !cancelled() }}
         env:
           DEPLOYED_SHA: ${{ github.event.workflow_run.head_sha }}
@@ -469,16 +541,108 @@ jobs:
           import { execFileSync } from 'node:child_process';
           const sha = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
           if (sha !== process.env.DEPLOYED_SHA) throw new Error('Deployed commit does not match tested commit');
-          writeFileSync(process.env.RUNNER_TEMP + '/preview-release.json', JSON.stringify({ sha, repository: process.env.GITHUB_REPOSITORY, environment: 'preview' }));
+          writeFileSync(process.env.RUNNER_TEMP + '/preview-office.json', JSON.stringify({ sha, repository: process.env.GITHUB_REPOSITORY, environment: 'preview' }));
           NODE
 
-      - name: Publish promotion evidence
+      - name: Publish office component evidence
         if: ${{ success() && !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
-          name: preview-release
-          path: ${{ runner.temp }}/preview-release.json
-          retention-days: 30
+          name: preview-office
+          path: ${{ runner.temp }}/preview-office.json
+          retention-days: 90
+          overwrite: true
+
+  store:
+    name: Publish Preview store plugins
+    needs: [plan, deploy, plugins]
+    if: >-
+      ${{ always() && !cancelled() && needs.plan.result == 'success' &&
+        (needs.deploy.result == 'success' || needs.deploy.result == 'skipped') &&
+        (needs.plugins.result == 'success' || needs.plugins.result == 'skipped') &&
+        needs.plan.outputs.store_plugins_changed == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment:
+      name: preview
+      url: https://savia-preview.hefesoft.com
+    env:
+      PNPM_CONFIG_STRICT_DEP_BUILDS: "false"
+    steps:
+      - name: Check out tested source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.24.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Load existing infrastructure outputs without applying changes
+        uses: ./.github/actions/pulumi-infrastructure
+        with:
+          stack: preview
+        env:
+          PULUMI_BACKEND_URL: ${{ secrets.PULUMI_BACKEND_URL }}
+          PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_STATE_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_STATE_SECRET_ACCESS_KEY }}
+
+      - name: Verify isolated preview resources before component mutation
+        run: node scripts/verify-preview-resources.mjs
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+      - name: Reject superseded component publication
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$(git ls-remote --exit-code origin refs/heads/main | cut -f1)"
+
+      - name: Deploy release plugin ZIPs to all workspaces
+        if: ${{ success() && !cancelled() && needs.plan.outputs.store_plugins_changed == 'true' }}
+        run: node scripts/deploy-store-plugins.mjs
+        env:
+          SAVIA_DEPLOY_ENVIRONMENT: preview
+          SAVIA_PLUGIN_PRESERVE_NEWER_OPTIONAL: "true"
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_DATABASE_ID: ${{ env.SAVIA_DOMAIN_D1_ID }}
+
+      - name: Record verified store publication
+        if: ${{ success() && !cancelled() }}
+        env:
+          DEPLOYED_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          node --input-type=module <<'NODE'
+          import { writeFileSync } from 'node:fs';
+          import { execFileSync } from 'node:child_process';
+          const sha = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+          if (sha !== process.env.DEPLOYED_SHA) throw new Error('Deployed commit does not match tested commit');
+          writeFileSync(process.env.RUNNER_TEMP + '/preview-store.json', JSON.stringify({ sha, repository: process.env.GITHUB_REPOSITORY, environment: 'preview' }));
+          NODE
+
+      - name: Publish store component evidence
+        if: ${{ success() && !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: preview-store
+          path: ${{ runner.temp }}/preview-store.json
+          retention-days: 90
+          overwrite: true
 
   plugins:
     name: Publish changed Preview plugins
@@ -569,12 +733,43 @@ jobs:
         run: |
           node --input-type=module <<'NODE'
           import { writeFileSync } from 'node:fs';
-          writeFileSync(process.env.RUNNER_TEMP + '/preview-release.json', JSON.stringify({ sha: process.env.APPROVED_SHA, repository: process.env.GITHUB_REPOSITORY, environment: 'preview', kind: 'plugin' }));
+          writeFileSync(process.env.RUNNER_TEMP + '/preview-selective-plugins.json', JSON.stringify({ sha: process.env.APPROVED_SHA, repository: process.env.GITHUB_REPOSITORY, environment: 'preview', kind: 'plugin' }));
           NODE
 
       - name: Publish plugin promotion evidence
         uses: actions/upload-artifact@v4
         with:
+          name: preview-selective-plugins
+          path: ${{ runner.temp }}/preview-selective-plugins.json
+          retention-days: 90
+          overwrite: true
+
+  promotion:
+    name: Record complete Preview release
+    needs: [plan, deploy, office, store, plugins]
+    if: >-
+      ${{ always() && !cancelled() && needs.plan.result == 'success' &&
+        (needs.deploy.result == 'success' || (needs.deploy.result == 'skipped' && (needs.plan.outputs.runtime_changed == 'false' || needs.plan.outputs.kind != 'platform'))) &&
+        (needs.office.result == 'success' || (needs.office.result == 'skipped' && needs.plan.outputs.office_runtime_changed == 'false')) &&
+        (needs.store.result == 'success' || (needs.store.result == 'skipped' && needs.plan.outputs.store_plugins_changed == 'false')) &&
+        (needs.plugins.result == 'success' || (needs.plugins.result == 'skipped' && needs.plan.outputs.kind != 'plugin')) }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: Record complete publication
+        env:
+          APPROVED_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          node --input-type=module <<'NODE'
+          import { writeFileSync } from 'node:fs';
+          if (!/^[a-f0-9]{40}$/.test(process.env.APPROVED_SHA ?? '')) throw new Error('Invalid source revision');
+          writeFileSync(process.env.RUNNER_TEMP + '/preview-release.json', JSON.stringify({ sha: process.env.APPROVED_SHA, repository: process.env.GITHUB_REPOSITORY, environment: 'preview' }));
+          NODE
+
+      - name: Publish promotion evidence
+        uses: actions/upload-artifact@v4
+        with:
           name: preview-release
           path: ${{ runner.temp }}/preview-release.json
-          retention-days: 30
+          retention-days: 90
+          overwrite: true

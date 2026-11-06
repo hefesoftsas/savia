@@ -18,6 +18,30 @@ import { packageStorePlugin } from "./pack-store-plugin.mjs";
 const root = resolve(import.meta.dirname, "..");
 
 const PORT_NAME_PATTERN = /^[a-z0-9-]+$/;
+const STRICT_SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
+
+function comparePluginVersions(left, right) {
+  const a = left.match(STRICT_SEMVER);
+  const b = right.match(STRICT_SEMVER);
+  if (!a || !b) throw new Error("Plugin catalog contains an invalid version.");
+  for (let index = 1; index <= 3; index += 1) {
+    const leftPart = BigInt(a[index]);
+    const rightPart = BigInt(b[index]);
+    if (leftPart < rightPart) return -1;
+    if (leftPart > rightPart) return 1;
+  }
+  return 0;
+}
+
+export function assertPluginPreservationPolicy(env) {
+  if (
+    env.SAVIA_PLUGIN_PRESERVE_NEWER_OPTIONAL === "true" &&
+    env.SAVIA_DEPLOY_ENVIRONMENT !== "preview"
+  )
+    throw new Error(
+      "SAVIA_PLUGIN_PRESERVE_NEWER_OPTIONAL is only allowed in Preview.",
+    );
+}
 
 function normalizePortList(value, field) {
   if (!Array.isArray(value))
@@ -137,7 +161,8 @@ export function deploymentConfig(env, session) {
 
 export async function deployArtifacts(artifacts, baseUrl, session, io = {}) {
   const request = io.fetch ?? fetch,
-    log = io.log ?? console.log;
+    log = io.log ?? console.log,
+    preserveNewerOptional = io.preserveNewerOptional === true;
   async function call(path, init = {}) {
     const response = await request(`${baseUrl}${path}`, {
       ...init,
@@ -155,11 +180,56 @@ export async function deployArtifacts(artifacts, baseUrl, session, io = {}) {
   const { tenants } = await call("/tenants");
   if (!Array.isArray(tenants))
     throw new Error("Deployment worker returned an invalid tenant list.");
+  const preservedByTenant = new Map();
+  if (preserveNewerOptional) {
+    // Inspect every workspace before the first upload. A required-plugin
+    // conflict in a later workspace must not leave earlier workspaces changed.
+    for (const tenant of tenants) {
+      const catalog = await call(
+        `/catalog?tenant=${encodeURIComponent(tenant)}`,
+      );
+      if (!Array.isArray(catalog?.data))
+        throw new Error(
+          `Plugin deployment worker returned an invalid catalog for ${tenant}.`,
+        );
+      const latestById = new Map();
+      for (const row of catalog.data) {
+        const id = row?.manifest?.id,
+          version = row?.version ?? row?.manifest?.version;
+        if (typeof id !== "string" || typeof version !== "string")
+          throw new Error(
+            `Plugin deployment worker returned an invalid catalog for ${tenant}.`,
+          );
+        const latest = latestById.get(id);
+        if (!latest || comparePluginVersions(version, latest) > 0)
+          latestById.set(id, version);
+      }
+      const preserved = new Set();
+      for (const artifact of artifacts) {
+        const current = latestById.get(artifact.manifest.id);
+        if (
+          !current ||
+          comparePluginVersions(current, artifact.manifest.version) <= 0
+        )
+          continue;
+        if (!artifact.optional)
+          throw new Error(
+            `Newer required plugin ${artifact.manifest.id}@${current} is already available in ${tenant}; refusing to deploy ${artifact.manifest.version}.`,
+          );
+        preserved.add(artifact.manifest.id);
+        log(
+          `Preserving newer optional plugin ${artifact.manifest.id}@${current} in ${tenant}; release ${artifact.manifest.version} was not uploaded.`,
+        );
+      }
+      preservedByTenant.set(tenant, preserved);
+    }
+  }
   for (const tenant of tenants) {
     // Upload every dependency before installing in topological order.
     // Optional plugins are uploaded so they show up as installable in
     // the workspace catalog, but they are never auto-installed.
     for (const artifact of artifacts) {
+      if (preservedByTenant.get(tenant)?.has(artifact.manifest.id)) continue;
       const form = new FormData();
       form.set(
         "file",
@@ -210,6 +280,7 @@ export async function deployArtifacts(artifacts, baseUrl, session, io = {}) {
 }
 
 export async function deployStorePlugins(env = process.env) {
+  assertPluginPreservationPolicy(env);
   const artifacts = releaseArtifacts(env.SAVIA_PLUGIN_DIRECTORY);
   if (!artifacts.length) {
     console.log("No deployment plugin ZIPs found.");
@@ -271,7 +342,11 @@ export async function deployStorePlugins(env = process.env) {
     }
     if (!ready || exited)
       throw new Error("Authenticated plugin deployment session did not start.");
-    return await deployArtifacts(artifacts, baseUrl, session);
+    return await deployArtifacts(artifacts, baseUrl, session, {
+      preserveNewerOptional:
+        env.SAVIA_DEPLOY_ENVIRONMENT === "preview" &&
+        env.SAVIA_PLUGIN_PRESERVE_NEWER_OPTIONAL === "true",
+    });
   } finally {
     if (child.pid) {
       try {

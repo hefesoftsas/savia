@@ -6,6 +6,7 @@ import { join } from "node:path";
 import {
   deploymentConfig,
   deployArtifacts,
+  deployStorePlugins,
   releaseArtifacts,
 } from "./deploy-store-plugins.mjs";
 
@@ -232,4 +233,180 @@ test("upload conflicts identify the immutable plugin version and tenant", async 
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
+});
+
+test("Preview preserves newer optional catalog versions without uploading or installing", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "savia-deploy-newer-optional-"));
+  const path = join(directory, "optional.zip");
+  writeFileSync(path, "plugin bytes");
+  const calls = [];
+  try {
+    const result = await deployArtifacts(
+      [
+        {
+          path,
+          manifest: { id: "insurance.opportunities", version: "1.2.0" },
+          optional: true,
+        },
+      ],
+      "http://127.0.0.1",
+      "session",
+      {
+        preserveNewerOptional: true,
+        log() {},
+        fetch: async (url, init) => {
+          calls.push({ url, init });
+          if (url.endsWith("/tenants"))
+            return Response.json({ tenants: ["tenant:1"] });
+          if (url.includes("/catalog?"))
+            return Response.json({
+              data: [
+                {
+                  manifest: { id: "insurance.opportunities", version: "1.3.0" },
+                  version: "1.3.0",
+                },
+                {
+                  manifest: { id: "insurance.opportunities", version: "1.9.0" },
+                  version: "1.9.0",
+                },
+                {
+                  manifest: {
+                    id: "insurance.opportunities",
+                    version: "1.10.0",
+                  },
+                  version: "1.10.0",
+                },
+              ],
+            });
+          return Response.json({ data: {} });
+        },
+      },
+    );
+    assert.deepEqual(result, {
+      plugins: 1,
+      tenants: 1,
+      installed: 0,
+      optional: 1,
+    });
+    assert.equal(
+      calls.filter(({ url }) => url.includes("/catalog?")).length,
+      1,
+    );
+    assert.equal(calls.filter(({ url }) => url.includes("/upload?")).length, 0);
+    assert.equal(
+      calls.filter(({ url }) => url.includes("/install?")).length,
+      0,
+    );
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("Preview rejects a newer required catalog version before any writes", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "savia-deploy-newer-required-"));
+  const path = join(directory, "required.zip");
+  writeFileSync(path, "plugin bytes");
+  const calls = [];
+  try {
+    await assert.rejects(
+      deployArtifacts(
+        [
+          {
+            path,
+            manifest: { id: "custom.required", version: "1.2.0" },
+          },
+        ],
+        "http://127.0.0.1",
+        "session",
+        {
+          preserveNewerOptional: true,
+          log() {},
+          fetch: async (url) => {
+            calls.push(url);
+            if (url.endsWith("/tenants"))
+              return Response.json({ tenants: ["tenant:1", "tenant:2"] });
+            if (url.includes("/catalog?tenant=tenant%3A1"))
+              return Response.json({ data: [] });
+            if (url.includes("/catalog?tenant=tenant%3A2"))
+              return Response.json({
+                data: [
+                  {
+                    manifest: { id: "custom.required", version: "1.3.0" },
+                    version: "1.3.0",
+                  },
+                ],
+              });
+            return Response.json({ data: {} });
+          },
+        },
+      ),
+      /Newer required plugin custom\.required@1\.3\.0.*tenant:2/,
+    );
+    assert.equal(calls.filter((url) => url.includes("/upload?")).length, 0);
+    assert.equal(calls.filter((url) => url.includes("/install?")).length, 0);
+    assert.equal(calls.filter((url) => url.includes("/catalog?")).length, 2);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("same-version content conflicts still fail with Preview preservation enabled", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "savia-deploy-same-version-"));
+  const path = join(directory, "optional.zip");
+  writeFileSync(path, "different plugin bytes");
+  const calls = [];
+  try {
+    await assert.rejects(
+      deployArtifacts(
+        [
+          {
+            path,
+            manifest: { id: "insurance.opportunities", version: "1.3.0" },
+            optional: true,
+          },
+        ],
+        "http://127.0.0.1",
+        "session",
+        {
+          preserveNewerOptional: true,
+          log() {},
+          fetch: async (url) => {
+            calls.push(url);
+            if (url.endsWith("/tenants"))
+              return Response.json({ tenants: ["tenant:1"] });
+            if (url.includes("/catalog?"))
+              return Response.json({
+                data: [
+                  {
+                    manifest: {
+                      id: "insurance.opportunities",
+                      version: "1.3.0",
+                    },
+                    version: "1.3.0",
+                  },
+                ],
+              });
+            return Response.json(
+              { error: "same version has different content" },
+              { status: 409 },
+            );
+          },
+        },
+      ),
+      /insurance\.opportunities@1\.3\.0.*tenant:1.*HTTP 409/,
+    );
+    assert.equal(calls.filter((url) => url.includes("/upload?")).length, 1);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("Preview opt-in is rejected outside Preview", async () => {
+  await assert.rejects(
+    deployStorePlugins({
+      SAVIA_DEPLOY_ENVIRONMENT: "production",
+      SAVIA_PLUGIN_PRESERVE_NEWER_OPTIONAL: "true",
+    }),
+    /only allowed in Preview/,
+  );
 });

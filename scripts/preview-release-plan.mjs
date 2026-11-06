@@ -4,6 +4,32 @@ import { fileURLToPath } from "node:url";
 import { classifyChanges } from "./preview-change-plan.mjs";
 
 const shaPattern = /^[a-f0-9]{40}$/;
+const COMPONENTS = {
+  runtime: { artifact: "preview-runtime", job: "Deploy preview" },
+  office: { artifact: "preview-office", job: "Publish Preview Office" },
+  store: { artifact: "preview-store", job: "Publish Preview store plugins" },
+};
+
+const RUNTIME_IGNORED_PATHS = new Set([
+  ".github/workflows/deploy-preview.yml",
+  "scripts/preview-release-plan.mjs",
+  "scripts/preview-component-evidence.mjs",
+  "scripts/deploy-store-plugins.mjs",
+  "scripts/plugin-deployment/worker.ts",
+  "apps/admin/office-runtime.json",
+  "scripts/prepare-office-runtime.mjs",
+  "scripts/package-office-runtime.mjs",
+  "scripts/upload-office-runtime.mjs",
+]);
+
+function documentationOrTestPath(path) {
+  return (
+    path.startsWith("docs/") ||
+    path.startsWith("documentation/") ||
+    /(?:^|\/)(?:test|tests|__tests__)\//.test(path) ||
+    /\.(?:test|spec)\.[^/]+$/.test(path)
+  );
+}
 
 export function releaseAssetFlags(paths) {
   if (!Array.isArray(paths) || paths.some((path) => typeof path !== "string")) {
@@ -24,6 +50,18 @@ export function releaseAssetFlags(paths) {
         ),
     ),
   };
+}
+
+export function releaseRuntimeChanged(paths) {
+  if (!Array.isArray(paths) || paths.some((path) => typeof path !== "string"))
+    return true;
+  return paths.some(
+    (path) =>
+      !documentationOrTestPath(path) &&
+      !RUNTIME_IGNORED_PATHS.has(path) &&
+      !path.startsWith("deployment/plugins/") &&
+      !path.startsWith("store-ports/"),
+  );
 }
 
 function changedPaths({ base, head, repo = process.cwd() }) {
@@ -66,6 +104,33 @@ export function selectPreviewBaseline(
   return null;
 }
 
+export function selectComponentBaseline(
+  runs,
+  component,
+  { head, currentRunId, isAncestor },
+) {
+  if (!COMPONENTS[component])
+    throw new Error(`Unknown Preview component: ${component}`);
+  for (const run of runs ?? []) {
+    if (
+      String(run.id) === String(currentRunId) ||
+      run.event !== "workflow_run" ||
+      run.head_branch !== "main" ||
+      run.status !== "completed" ||
+      !Array.isArray(run.verifiedComponents) ||
+      !run.verifiedComponents.includes(component) ||
+      !shaPattern.test(run.head_sha ?? "")
+    )
+      continue;
+    try {
+      if (isAncestor(run.head_sha, head)) return run.head_sha;
+    } catch {
+      /* Missing history is not proof of deployment. */
+    }
+  }
+  return null;
+}
+
 export async function buildPreviewReleasePlan({
   head,
   currentRunId,
@@ -77,7 +142,21 @@ export async function buildPreviewReleasePlan({
 }) {
   if (!shaPattern.test(head ?? ""))
     throw new Error("An exact approved commit is required.");
-  const base = selectPreviewBaseline(runs, { head, currentRunId, isAncestor });
+  const base = selectComponentBaseline(runs, "runtime", {
+    head,
+    currentRunId,
+    isAncestor,
+  });
+  const officeRuntimeBase = selectComponentBaseline(runs, "office", {
+    head,
+    currentRunId,
+    isAncestor,
+  });
+  const storePluginsBase = selectComponentBaseline(runs, "store", {
+    head,
+    currentRunId,
+    isAncestor,
+  });
   if (!base)
     return {
       kind: "platform",
@@ -86,14 +165,32 @@ export async function buildPreviewReleasePlan({
       plugin_only: false,
       reasons: ["No verified deployed ancestor; full release required."],
       base: null,
+      officeRuntimeBase,
+      storePluginsBase,
       head,
+      runtimeChanged: true,
       officeRuntimeChanged: true,
       storePluginsChanged: true,
     };
   const plan = await classify({ base, head });
+  const runtimePaths = changedPaths({ base, head, repo });
+  const officePaths = officeRuntimeBase
+    ? changedPaths({ base: officeRuntimeBase, head, repo })
+    : null;
+  const storePaths = storePluginsBase
+    ? changedPaths({ base: storePluginsBase, head, repo })
+    : null;
   return {
     ...plan,
-    ...classifyAssets(changedPaths({ base, head, repo })),
+    runtimeChanged: releaseRuntimeChanged(runtimePaths),
+    officeRuntimeBase,
+    storePluginsBase,
+    officeRuntimeChanged: officeRuntimeBase
+      ? classifyAssets(officePaths).officeRuntimeChanged
+      : true,
+    storePluginsChanged: storePluginsBase
+      ? classifyAssets(storePaths).storePluginsChanged
+      : true,
     base,
     head,
   };
@@ -110,6 +207,71 @@ export function hasPromotionEvidence(artifacts, run) {
   );
 }
 
+export function hasComponentEvidence(artifacts, run, jobs, component) {
+  const definition = COMPONENTS[component];
+  if (!definition) throw new Error(`Unknown Preview component: ${component}`);
+  const exactArtifact = (name) =>
+    (artifacts ?? []).some(
+      (artifact) =>
+        artifact.name === name &&
+        artifact.expired === false &&
+        artifact.workflow_run?.head_sha === run.head_sha &&
+        String(artifact.workflow_run?.id) === String(run.id) &&
+        artifact.workflow_run?.head_branch === "main",
+    );
+  const successfulJob = (name) =>
+    (jobs ?? []).some(
+      (job) =>
+        job.name === name &&
+        job.status === "completed" &&
+        job.conclusion === "success",
+    );
+
+  if (exactArtifact(definition.artifact) && successfulJob(definition.job))
+    return true;
+
+  if (
+    exactArtifact("preview-release") &&
+    successfulJob("Record complete Preview release")
+  )
+    return true;
+
+  // Legacy full releases used one receipt from the core job after all
+  // component steps had completed. Selective plugin receipts do not prove the
+  // full release catalog was reconciled.
+  if (exactArtifact("preview-release")) {
+    if (successfulJob("Deploy preview")) return true;
+  }
+
+  if (
+    (component === "runtime" || component === "office") &&
+    exactArtifact(`preview-runtime-release-${run.id}`)
+  ) {
+    const coreJob = (jobs ?? []).find((job) => job.name === "Deploy preview");
+    const requiredSteps = [
+      "Reject superseded deployments",
+      "Validate planned Flows settings and stable keys before mutation",
+      "Verify isolated preview resources before any mutation",
+      "Review the saved managed runtime plan",
+      "Apply the exact managed runtime plan",
+    ];
+    if (component === "office")
+      requiredSteps.push(
+        "Prepare Office runtime assets",
+        "Package Office runtime assets",
+        "Upload Office runtime assets to preview R2",
+      );
+    const steps = new Map(
+      (coreJob?.steps ?? []).map((step) => [step.name, step]),
+    );
+    return (
+      coreJob?.status === "completed" &&
+      requiredSteps.every((name) => steps.get(name)?.conclusion === "success")
+    );
+  }
+  return false;
+}
+
 async function main() {
   const repository = process.env.GITHUB_REPOSITORY;
   const head = process.env.APPROVED_SHA;
@@ -120,7 +282,7 @@ async function main() {
   let runs = null;
   try {
     const response = await fetch(
-      `https://api.github.com/repos/${repository}/actions/workflows/deploy-preview.yml/runs?status=success&per_page=100`,
+      `https://api.github.com/repos/${repository}/actions/workflows/deploy-preview.yml/runs?status=completed&per_page=100`,
       {
         headers: {
           Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
@@ -132,11 +294,11 @@ async function main() {
     );
     if (response.ok) {
       runs = (await response.json()).workflow_runs;
+      const verified = new Set();
       for (const run of runs ?? []) {
         if (
           run.event !== "workflow_run" ||
           run.head_branch !== "main" ||
-          run.head_sha === head ||
           !shaPattern.test(run.head_sha ?? "")
         )
           continue;
@@ -146,24 +308,22 @@ async function main() {
             ["merge-base", "--is-ancestor", run.head_sha, head],
             { stdio: "ignore" },
           );
-          const proof = await fetch(
-            `https://api.github.com/repos/${repository}/actions/runs/${run.id}/artifacts?per_page=100`,
-            {
-              headers: {
-                Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
-                Accept: "application/vnd.github+json",
-              },
-              signal: AbortSignal.timeout(30_000),
-              redirect: "error",
-            },
+          const [artifacts, jobs] = await Promise.all([
+            githubCollection(
+              `https://api.github.com/repos/${repository}/actions/runs/${run.id}/artifacts`,
+              "artifacts",
+            ),
+            githubCollection(
+              `https://api.github.com/repos/${repository}/actions/runs/${run.id}/jobs`,
+              "jobs",
+            ),
+          ]);
+          run.verifiedComponents = Object.keys(COMPONENTS).filter((component) =>
+            hasComponentEvidence(artifacts, run, jobs, component),
           );
-          if (
-            proof.ok &&
-            hasPromotionEvidence((await proof.json()).artifacts, run)
-          ) {
-            run.promotionVerified = true;
-            break;
-          }
+          for (const component of run.verifiedComponents)
+            verified.add(component);
+          if (verified.size === Object.keys(COMPONENTS).length) break;
         } catch {
           /* An unverified run cannot establish the release baseline. */
         }
@@ -190,11 +350,32 @@ async function main() {
   if (process.env.GITHUB_OUTPUT)
     appendFileSync(
       process.env.GITHUB_OUTPUT,
-      `kind=${plan.kind}\nplugins=${JSON.stringify(plan.plugins)}\nbase=${plan.base ?? ""}\noffice_runtime_changed=${plan.officeRuntimeChanged}\nstore_plugins_changed=${plan.storePluginsChanged}\n`,
+      `kind=${plan.kind}\nplugins=${JSON.stringify(plan.plugins)}\nbase=${plan.base ?? ""}\nruntime_changed=${plan.runtimeChanged}\noffice_runtime_base=${plan.officeRuntimeBase ?? ""}\nstore_plugins_base=${plan.storePluginsBase ?? ""}\noffice_runtime_changed=${plan.officeRuntimeChanged}\nstore_plugins_changed=${plan.storePluginsChanged}\n`,
     );
   console.log(
-    `Preview release: ${plan.kind}; ${plan.plugins.length} eligible plugin(s).`,
+    `Preview release: ${plan.kind}; runtime ${plan.runtimeChanged ? "changed" : "current"}; ${plan.plugins.length} eligible plugin(s).`,
   );
+}
+
+async function githubCollection(url, key) {
+  const values = [];
+  for (let page = 1; page <= 10; page += 1) {
+    const response = await fetch(`${url}?per_page=100&page=${page}`, {
+      headers: {
+        Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
+        Accept: "application/vnd.github+json",
+      },
+      signal: AbortSignal.timeout(30_000),
+      redirect: "error",
+    });
+    if (!response.ok) throw new Error(`Cannot inspect Preview ${key}`);
+    const body = await response.json();
+    const pageValues = body[key];
+    if (!Array.isArray(pageValues)) throw new Error(`Invalid Preview ${key}`);
+    values.push(...pageValues);
+    if (pageValues.length < 100) return values;
+  }
+  throw new Error(`Preview ${key} pagination exceeded its safety limit`);
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url))

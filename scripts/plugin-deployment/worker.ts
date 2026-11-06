@@ -29,6 +29,13 @@ export default {
     if (!tenant || !tenants.includes(tenant))
       return new Response("Unknown deployment workspace", { status: 404 });
     const studio = createStudioApp(tenant, { seedObjects: [] });
+    if (request.method === "GET" && url.pathname === "/catalog") {
+      return studio.request(
+        "https://deployment.internal/api/plugin-store",
+        {},
+        env,
+      );
+    }
     if (request.method === "POST" && url.pathname === "/upload") {
       return studio.request(
         "https://deployment.internal/api/plugin-store/upload",
