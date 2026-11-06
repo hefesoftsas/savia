@@ -394,3 +394,28 @@ check took 4m49s, with every application publication job skipped. These are
 individual observations, not an application deployment benchmark or a guarantee.
 Flows adds one parallel runner; focused automation changes avoid the full set of
 application runners. Runner-time cost and elapsed time should be tracked separately.
+
+## Event-driven PWA activation
+
+The private bootstrap mounts the deployment observer before registering the
+service worker, including while the private application is loading. When a
+replacement controller takes over, a visible, online, safe view reloads once
+from its installed shell. The first worker claim does not reload the document.
+Updates are discovered by normal registration and the existing visibility and
+reconnection events (at most one explicit check per minute); no periodic check,
+heartbeat, deployment socket or cron is added. A continuously visible idle tab
+is not guaranteed to discover a deployment immediately.
+
+Open forms, textareas, editable content, embedded apps, dialogs, busy regions,
+edited controls still mounted in the document, and existing unload guards defer
+automatic reload. Closing the editor or leaving the edited view allows the
+pending update to apply. Saving alone does not prove an arbitrary custom editor
+is safe; the explicit update action remains available. A DOM observer watches
+only while an update is pending and makes no network requests. Storage,
+credentials, synchronization queues and public-route behavior are unchanged.
+
+Rollout verification requires two releases: load the new update handler first,
+then publish a frontend label change while that document remains open. Returning
+to the tab should discover the replacement and show its label without a manual
+reload or cache-busting navigation. An already open document running the old
+handler needs its existing update action once to adopt this behavior.

@@ -99,12 +99,22 @@ it("rejects malformed public paths without falling through to private login", ()
   expect(calls.admin).not.toHaveBeenCalled();
 });
 
-it("registers update recovery before importing the private application", async () => {
+it("registers the worker only after the private update listener is mounted", async () => {
+  const worker = Object.assign(new EventTarget(), { controller: {} });
+  Object.defineProperty(navigator, "serviceWorker", {
+    configurable: true,
+    value: worker,
+  });
+  const listen = vi.spyOn(worker, "addEventListener");
+  calls.worker.mockImplementationOnce(() => {
+    expect(listen).toHaveBeenCalledWith(
+      "controllerchange",
+      expect.any(Function),
+    );
+  });
   render(<ApplicationRoot pathname="/" />);
   expect(await screen.findByText("Private app")).toBeInTheDocument();
-  expect(calls.worker.mock.invocationCallOrder[0]).toBeLessThan(
-    calls.admin.mock.invocationCallOrder[0],
-  );
+  expect(calls.worker).toHaveBeenCalledOnce();
 });
 
 it("lets anonymous visitors switch ES/EN/PT and updates document language without private services", async () => {

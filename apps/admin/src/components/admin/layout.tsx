@@ -3,7 +3,6 @@ import { LogoutTransition } from "./logout-transition";
 import { TenantScopeBoundary } from "@/features/tenants/tenant-scope-boundary";
 import { useCurrentTenant } from "@/features/tenants/use-current-tenant";
 import { BrandingRealtimeSync } from "@/realtime/branding-realtime";
-import { DeploymentUpdateNotice } from "@/pwa/deployment-recovery-ui";
 import { PwaInstallBanner } from "@/pwa";
 import { CookieConsentBanner } from "@/consent/cookie-consent-banner";
 import type { ErrorInfo } from "react";
@@ -290,7 +289,6 @@ export const Layout = (props: CoreLayoutProps) => {
                 </Suspense>
               </div>
             </header>
-            <DeploymentUpdateNotice />
             <ErrorBoundary
               onError={handleError}
               fallbackRender={({ error, resetErrorBoundary }) => (
