@@ -458,9 +458,9 @@ test("registry deployment accepts only the current main commit", async () => {
   );
 });
 
-test("coverage measures main and manual runs without duplicating required PR tests", async () => {
+test("coverage remains manually available without automatic repeated tests", async () => {
   const coverage = await workflow("coverage.yml");
-  assert.match(coverage, /push:\n\s+branches: \[main\]/);
+  assert.doesNotMatch(coverage, /^  (?:push|schedule|workflow_run):/m);
   assert.match(coverage, /workflow_dispatch:/);
   assert.doesNotMatch(coverage, /pull_request(?:_target)?:/);
   assert.match(coverage, /pnpm test:coverage/);
@@ -468,6 +468,30 @@ test("coverage measures main and manual runs without duplicating required PR tes
   const ci = await workflow("ci.yml");
   assert.match(ci, /pull_request:/);
   assert.doesNotMatch(ci, /paths-ignore:|continue-on-error: true/);
+});
+
+test("CodeQL scans affected PR languages or manual selections without push or schedule triggers", async () => {
+  const source = await workflow("codeql.yml");
+  assert.match(source, /^  pull_request:\n    branches: \[main\]/m);
+  assert.match(source, /^  workflow_dispatch:/m);
+  assert.doesNotMatch(
+    source,
+    /^  (?:push|schedule|workflow_run|pull_request_target):/m,
+  );
+  assert.match(source, /cancel-in-progress: true/);
+  assert.match(
+    source,
+    /github\.event\.pull_request\.base\.sha \|\| github\.sha/,
+  );
+  assert.match(source, /run: node scripts\/codeql-plan\.mjs/);
+  assert.match(source, /needs: changes/);
+  assert.match(source, /if: needs\.changes\.outputs\.should_scan == 'true'/);
+  assert.match(source, /fromJSON\(needs\.changes\.outputs\.languages\)/);
+  assert.match(source, /security-events: write/);
+  assert.match(source, /github\/codeql-action\/init@v4/);
+  assert.match(source, /github\/codeql-action\/analyze@v4/);
+  assert.match(source, /category: \/language:/);
+  assert.doesNotMatch(source, /secrets\.|CLOUDFLARE|continue-on-error: true/);
 });
 
 test("Preview lanes are exclusive and plugin health stays within rollback protection", async () => {

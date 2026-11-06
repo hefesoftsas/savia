@@ -308,3 +308,28 @@ ownership checks, saved-plan digest and checkpoint fingerprint checks remain in
 force. Deployment-only inventory/configuration helpers can accompany a compatible
 Auth code update without forcing backups; Worker configuration and schema changes
 continue to select the full release path.
+
+## Security analysis and optional coverage
+
+**CodeQL security** runs on pull requests targeting `main` and manual dispatch.
+It replaces GitHub's default setup: there is no automatic scan on a main push
+and no weekly scan. The selector uses all changed PR paths, including the old
+path of a renamed file, to select Actions, JavaScript/TypeScript, Python and Rust.
+Each selected language still analyzes the complete repository. Documentation
+and image changes alone skip analysis; unknown files and changes to the scanner
+controls select all languages. A newer run cancels the superseded run for that PR.
+
+Selection runs trusted base-branch code and checks the PR revisions before and
+after reading the paginated file list. API errors, changed revisions and file
+lists beyond the supported limit fail selection instead of silently skipping a
+scan. No deployment secrets are used.
+
+Use **CodeQL security → Run workflow → language: all** for a complete baseline,
+including after direct pushes to `main` that bypass PR analysis. A single
+language can be selected for a focused manual check. This removes duplicate
+scans; it does not promise a shorter analysis of a given language. CodeQL is
+separate from the Preview deployment gate.
+
+**Coverage** is manual only. Required CI tests remain automatic. Changes limited
+to these security/coverage workflows and their selector do not publish Preview
+runtime or assets. Neither workflow adds Cloudflare schedules, pings or polling.

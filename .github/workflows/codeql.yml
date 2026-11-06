@@ -1,0 +1,75 @@
+name: CodeQL security
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      language:
+        description: Language to analyze; all preserves the complete security scan
+        type: choice
+        default: all
+        options: [all, actions, javascript-typescript, python, rust]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: savia-codeql-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    name: Select security analysis
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      languages: ${{ steps.plan.outputs.languages }}
+      should_scan: ${{ steps.plan.outputs.should_scan }}
+    steps:
+      - name: Check out trusted selection code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Select affected languages
+        id: plan
+        run: node scripts/codeql-plan.mjs
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    needs: changes
+    if: needs.changes.outputs.should_scan == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    permissions:
+      actions: read
+      contents: read
+      packages: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        language: ${{ fromJSON(needs.changes.outputs.languages) }}
+    steps:
+      - name: Check out source for analysis
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: none
+
+      - name: Analyze and upload security results
+        uses: github/codeql-action/analyze@v4
+        with:
+          category: /language:${{ matrix.language }}

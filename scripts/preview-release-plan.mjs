@@ -14,6 +14,9 @@ const COMPONENTS = {
 const RUNTIME_IGNORED_PATHS = new Set([
   ".github/workflows/deploy-preview.yml",
   ".github/workflows/ci.yml",
+  ".github/workflows/codeql.yml",
+  ".github/workflows/coverage.yml",
+  "scripts/codeql-plan.mjs",
   "scripts/contract-check-gate.mjs",
   "scripts/preview-release-plan.mjs",
   "scripts/preview-code-release.mjs",

@@ -606,6 +606,9 @@ jobs:
       - name: Run contract tests
         run: pnpm run test:contracts
 
+      - name: Verify security analysis selection
+        run: node --test scripts/codeql-plan.test.mjs
+
       - name: Verify durable Preview publication evidence
         run: node --test scripts/preview-component-evidence.test.mjs
 
