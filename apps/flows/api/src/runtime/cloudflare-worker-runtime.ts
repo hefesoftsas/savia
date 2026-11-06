@@ -1,0 +1,28 @@
+/**
+ * Worker Runtime
+ *
+ * Factory for creating a WorkerRuntime wired with Cloudflare production
+ * dependencies. Used for synchronous (non-durable) workflow execution
+ * where results are returned inline to the caller.
+ */
+
+import { WorkerRuntime } from "@savia/flows-runtime";
+
+import type { Bindings } from "../context";
+import {
+  type BuildDependenciesOptions,
+  buildDependencies,
+} from "./cloudflare-runtime-dependencies";
+
+export { WorkerRuntime } from "@savia/flows-runtime";
+
+export function createWorkerRuntime(
+  env: Bindings,
+  options?: BuildDependenciesOptions
+): WorkerRuntime<Bindings> {
+  const noopMonitoring = { async sendUpdate() {} };
+  return new WorkerRuntime(
+    env,
+    buildDependencies(env, noopMonitoring, options)
+  );
+}

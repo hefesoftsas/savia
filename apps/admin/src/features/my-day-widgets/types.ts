@@ -1,0 +1,52 @@
+import type {
+  MyDayWidget,
+  MyDayWidgetsLayout,
+} from "@savia/studio-shared/my-day-widgets";
+
+export type { MyDayWidget, MyDayWidgetsLayout };
+
+export type WidgetTenant = {
+  id: string;
+  tenantId: number;
+  label: string;
+  kind: "platform" | "tenant";
+  apiBasePath: string;
+};
+
+export type WidgetCollection = {
+  apiBasePath: string;
+  name: string;
+  label: string;
+  count?: number;
+};
+
+export type WidgetCollectionField = {
+  name: string;
+  label: string;
+  type: string;
+};
+
+export type WidgetCollectionSchema = {
+  apiBasePath: string;
+  name: string;
+  label: string;
+  fields: WidgetCollectionField[];
+};
+
+export type WidgetRecord = {
+  id: string;
+  created_at?: string;
+  updated_at?: string;
+  [key: string]: unknown;
+};
+
+export type WidgetRecordsPage = {
+  data: WidgetRecord[];
+  total: number;
+};
+
+export type WidgetSummaryGroup = {
+  value: string;
+  count: number;
+  amount: number;
+};

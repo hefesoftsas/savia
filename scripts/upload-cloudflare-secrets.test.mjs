@@ -1,0 +1,328 @@
+import assert from "node:assert/strict";
+import { createHmac } from "node:crypto";
+import test from "node:test";
+import { buildSecretUploads } from "./upload-cloudflare-secrets.mjs";
+const values = {
+  SAVIA_BACKUP_CONTROL_SECRET: "c".repeat(64),
+  ...Object.fromEntries(
+    [
+      "BETTER_AUTH_SECRET",
+      "SAVIA_MCP_SHARED_SECRET",
+      "SAVIA_REQUEST_ENCRYPTION_KEY",
+      "EXTENSION_CONNECTIONS_ENCRYPTION_KEY",
+      "ASSISTANT_SETTINGS_ENCRYPTION_KEY",
+      "CRM_INTEGRATION_KEY",
+      "NANGO_API_KEY",
+    ].map((key) => [key, "test-only-value"]),
+  ),
+  BETTER_AUTH_BOOTSTRAP_PASSWORD: "test-only-bootstrap-password",
+};
+test("preview secrets always use explicit preview configuration and names", () => {
+  const plans = buildSecretUploads("preview", values);
+  assert.equal(plans.length, 5);
+  for (const plan of plans) {
+    assert.ok(plan.worker.endsWith("-preview"));
+    assert.equal(plan.config, "wrangler.preview.jsonc");
+  }
+  assert.equal(
+    plans.find((x) => x.app === "savia-request").secrets.ENCRYPTION_KEY,
+    values.SAVIA_REQUEST_ENCRYPTION_KEY,
+  );
+  const apiSecrets = plans.find((x) => x.app === "api").secrets;
+  const expectedBridge = createHmac("sha256", values.SAVIA_MCP_SHARED_SECRET)
+    .update("savia:auth-tenant-user-administration:v1")
+    .digest("hex");
+  assert.equal(
+    plans.find((x) => x.app === "auth").secrets.SAVIA_INTERNAL_BRIDGE_KEY,
+    expectedBridge,
+  );
+  assert.equal(apiSecrets.SAVIA_INTERNAL_BRIDGE_KEY, expectedBridge);
+  assert.equal(apiSecrets.STUDIO_INTEGRATION_KEY, "test-only-value");
+  assert.ok(!("CRM_INTEGRATION_KEY" in apiSecrets));
+  assert.throws(() => buildSecretUploads("other", values), /environment/);
+  assert.throws(() => buildSecretUploads("preview", {}), /required/);
+});
+
+test("Jira reporter connection is uploaded only to the matching API worker", () => {
+  for (const environment of ["preview", "production"]) {
+    const plans = buildSecretUploads(environment, {
+      ...values,
+      NANGO_JIRA_INTEGRATION_ID: "jira",
+      NANGO_JIRA_REPORTING_CONNECTION_ID: `jira-owner-${environment}`,
+    });
+    const api = plans.find((plan) => plan.app === "api");
+    assert.equal(
+      api.secrets.NANGO_JIRA_REPORTING_CONNECTION_ID,
+      `jira-owner-${environment}`,
+    );
+    for (const plan of plans.filter((item) => item.app !== "api"))
+      assert.equal("NANGO_JIRA_REPORTING_CONNECTION_ID" in plan.secrets, false);
+  }
+});
+
+test("enabled Jira deployments require an operational reporting connection", () => {
+  assert.throws(
+    () =>
+      buildSecretUploads("preview", {
+        ...values,
+        NANGO_JIRA_INTEGRATION_ID: "jira",
+      }),
+    /NANGO_JIRA_REPORTING_CONNECTION_ID is required when Jira is enabled/,
+  );
+});
+
+test("studio integration key prefers the canonical name over the legacy alias", () => {
+  const canonical = buildSecretUploads("preview", {
+    ...Object.fromEntries(
+      [
+        "BETTER_AUTH_SECRET",
+        "SAVIA_MCP_SHARED_SECRET",
+        "SAVIA_REQUEST_ENCRYPTION_KEY",
+        "EXTENSION_CONNECTIONS_ENCRYPTION_KEY",
+        "ASSISTANT_SETTINGS_ENCRYPTION_KEY",
+        "NANGO_API_KEY",
+      ].map((key) => [key, "test-only-value"]),
+    ),
+    STUDIO_INTEGRATION_KEY: "canonical-value",
+    CRM_INTEGRATION_KEY: "legacy-value",
+  }).find((x) => x.app === "api").secrets;
+  assert.equal(canonical.STUDIO_INTEGRATION_KEY, "canonical-value");
+});
+
+test("OAuth credentials are optional complete pairs for the auth Worker", () => {
+  const authSecrets = buildSecretUploads("preview", values).find(
+    (plan) => plan.app === "auth",
+  ).secrets;
+  assert.equal("SAVIA_GOOGLE_CLIENT_ID" in authSecrets, false);
+  assert.equal("SAVIA_GOOGLE_CLIENT_SECRET" in authSecrets, false);
+  assert.equal("SAVIA_MICROSOFT_CLIENT_ID" in authSecrets, false);
+  assert.equal("SAVIA_MICROSOFT_CLIENT_SECRET" in authSecrets, false);
+
+  const oauth = {
+    SAVIA_GOOGLE_CLIENT_ID: "google-client-id",
+    SAVIA_GOOGLE_CLIENT_SECRET: "google-client-secret",
+    SAVIA_MICROSOFT_CLIENT_ID: "microsoft-client-id",
+    SAVIA_MICROSOFT_CLIENT_SECRET: "microsoft-client-secret",
+  };
+  const enabledAuthSecrets = buildSecretUploads("production", {
+    ...values,
+    ...oauth,
+  }).find((plan) => plan.app === "auth").secrets;
+  for (const [key, value] of Object.entries(oauth))
+    assert.equal(enabledAuthSecrets[key], value);
+
+  for (const key of Object.keys(oauth)) {
+    assert.throws(
+      () => buildSecretUploads("preview", { ...values, [key]: oauth[key] }),
+      /SAVIA_(GOOGLE|MICROSOFT)_CLIENT_(ID|SECRET).*configured together/,
+    );
+  }
+});
+
+test("bootstrap password is optional when uploading retained environments and scoped to auth", () => {
+  const password = "random-production-bootstrap-password";
+  const plans = buildSecretUploads("production", {
+    ...values,
+    BETTER_AUTH_BOOTSTRAP_PASSWORD: password,
+  });
+  const auth = plans.find((plan) => plan.app === "auth").secrets;
+  assert.equal(auth.BETTER_AUTH_BOOTSTRAP_PASSWORD, password);
+  for (const plan of plans.filter((item) => item.app !== "auth"))
+    assert.equal("BETTER_AUTH_BOOTSTRAP_PASSWORD" in plan.secrets, false);
+  const withoutPassword = { ...values };
+  delete withoutPassword.BETTER_AUTH_BOOTSTRAP_PASSWORD;
+  const retained = buildSecretUploads("production", withoutPassword).find(
+    (plan) => plan.app === "auth",
+  ).secrets;
+  assert.equal("BETTER_AUTH_BOOTSTRAP_PASSWORD" in retained, false);
+});
+
+test("preview bootstrap password remains optional but is scoped to auth when supplied", () => {
+  const withoutPassword = { ...values };
+  delete withoutPassword.BETTER_AUTH_BOOTSTRAP_PASSWORD;
+  const without = buildSecretUploads("preview", withoutPassword).find(
+    (plan) => plan.app === "auth",
+  ).secrets;
+  assert.equal("BETTER_AUTH_BOOTSTRAP_PASSWORD" in without, false);
+  const password = "preview-bootstrap-password";
+  const withPassword = buildSecretUploads("preview", {
+    ...values,
+    BETTER_AUTH_BOOTSTRAP_PASSWORD: password,
+  }).find((plan) => plan.app === "auth").secrets;
+  assert.equal(withPassword.BETTER_AUTH_BOOTSTRAP_PASSWORD, password);
+});
+
+test("database bridge requires a complete HTTPS configuration", () => {
+  for (const environment of ["preview", "production"]) {
+    const bridge = {
+      SQL_BRIDGE_URL: "https://bridge.example.com",
+      SQL_BRIDGE_SECRET: "test-bridge-secret",
+    };
+    const api = buildSecretUploads(environment, { ...values, ...bridge }).find(
+      (plan) => plan.app === "api",
+    );
+    assert.equal(api.secrets.SQL_BRIDGE_URL, bridge.SQL_BRIDGE_URL);
+    assert.equal(api.secrets.SQL_BRIDGE_SECRET, bridge.SQL_BRIDGE_SECRET);
+    assert.throws(
+      () =>
+        buildSecretUploads(environment, {
+          ...values,
+          SQL_BRIDGE_URL: bridge.SQL_BRIDGE_URL,
+        }),
+      /SQL_BRIDGE/,
+    );
+    assert.throws(
+      () =>
+        buildSecretUploads(environment, {
+          ...values,
+          SQL_BRIDGE_SECRET: bridge.SQL_BRIDGE_SECRET,
+        }),
+      /SQL_BRIDGE/,
+    );
+    assert.throws(
+      () =>
+        buildSecretUploads(environment, {
+          ...values,
+          ...bridge,
+          SQL_BRIDGE_URL: "http://bridge.example.com",
+        }),
+      /HTTPS/,
+    );
+  }
+});
+
+test("ChatGPT website clients require the registered authentication method", () => {
+  const publicClient = buildSecretUploads("preview", {
+    ...values,
+    SAVIA_CHATGPT_CLIENT_ID: "oaiapp_test",
+  }).find((plan) => plan.app === "auth").secrets;
+  assert.equal(publicClient.SAVIA_CHATGPT_CLIENT_ID, "oaiapp_test");
+  assert.equal(publicClient.SAVIA_CHATGPT_TOKEN_AUTH_METHOD, "none");
+  assert.throws(
+    () =>
+      buildSecretUploads("preview", {
+        ...values,
+        SAVIA_CHATGPT_CLIENT_ID: "oaiapp_test",
+        SAVIA_CHATGPT_CLIENT_SECRET: "test-secret",
+      }),
+    /ChatGPT/,
+  );
+  assert.throws(
+    () =>
+      buildSecretUploads("preview", {
+        ...values,
+        SAVIA_CHATGPT_CLIENT_ID: "dynamic_agent_client_test",
+      }),
+    /ChatGPT/,
+  );
+  const confidential = buildSecretUploads("preview", {
+    ...values,
+    SAVIA_CHATGPT_CLIENT_ID: "oaiapp_test",
+    SAVIA_CHATGPT_CLIENT_SECRET: "test-secret",
+    SAVIA_CHATGPT_TOKEN_AUTH_METHOD: "client_secret_basic",
+  }).find((plan) => plan.app === "auth").secrets;
+  assert.equal(confidential.SAVIA_CHATGPT_CLIENT_SECRET, "test-secret");
+  assert.equal(
+    confidential.SAVIA_CHATGPT_TOKEN_AUTH_METHOD,
+    "client_secret_basic",
+  );
+});
+
+test("optional Nango fallback stays with the matching API worker", () => {
+  for (const environment of ["preview", "production"]) {
+    const plans = buildSecretUploads(environment, {
+      ...values,
+      NANGO_FALLBACK_API_KEY: `fallback-${environment}`,
+    });
+    const api = plans.find((plan) => plan.app === "api");
+    assert.equal(api.secrets.NANGO_FALLBACK_API_KEY, `fallback-${environment}`);
+    for (const plan of plans.filter((item) => item.app !== "api"))
+      assert.equal("NANGO_FALLBACK_API_KEY" in plan.secrets, false);
+    const unconfigured = buildSecretUploads(environment, values).find(
+      (plan) => plan.app === "api",
+    );
+    assert.equal(unconfigured.secrets.NANGO_FALLBACK_API_KEY, null);
+    const cleared = buildSecretUploads(environment, {
+      ...values,
+      NANGO_FALLBACK_API_KEY: "   ",
+    }).find((plan) => plan.app === "api");
+    assert.equal(cleared.secrets.NANGO_FALLBACK_API_KEY, null);
+  }
+});
+
+test("WhatsApp webhook secrets are an optional API-only pair", () => {
+  for (const environment of ["preview", "production"]) {
+    const absentPlans = buildSecretUploads(environment, values);
+    const absentApi = absentPlans.find((plan) => plan.app === "api").secrets;
+    assert.equal("WHATSAPP_META_APP_SECRET" in absentApi, false);
+    assert.equal("WHATSAPP_WEBHOOK_VERIFY_TOKEN" in absentApi, false);
+
+    const emptyPlans = buildSecretUploads(environment, {
+      ...values,
+      WHATSAPP_META_APP_SECRET: "  ",
+      WHATSAPP_WEBHOOK_VERIFY_TOKEN: "",
+    });
+    const emptyApi = emptyPlans.find((plan) => plan.app === "api").secrets;
+    assert.equal("WHATSAPP_META_APP_SECRET" in emptyApi, false);
+    assert.equal("WHATSAPP_WEBHOOK_VERIFY_TOKEN" in emptyApi, false);
+
+    const pair = {
+      WHATSAPP_META_APP_SECRET: "test-meta-app-secret",
+      WHATSAPP_WEBHOOK_VERIFY_TOKEN: "test-webhook-verify-token",
+    };
+    const plans = buildSecretUploads(environment, { ...values, ...pair });
+    const api = plans.find((plan) => plan.app === "api").secrets;
+    assert.equal(api.WHATSAPP_META_APP_SECRET, pair.WHATSAPP_META_APP_SECRET);
+    assert.equal(
+      api.WHATSAPP_WEBHOOK_VERIFY_TOKEN,
+      pair.WHATSAPP_WEBHOOK_VERIFY_TOKEN,
+    );
+    for (const plan of plans.filter((item) => item.app !== "api")) {
+      assert.equal("WHATSAPP_META_APP_SECRET" in plan.secrets, false);
+      assert.equal("WHATSAPP_WEBHOOK_VERIFY_TOKEN" in plan.secrets, false);
+    }
+
+    assert.throws(
+      () =>
+        buildSecretUploads(environment, {
+          ...values,
+          WHATSAPP_META_APP_SECRET: pair.WHATSAPP_META_APP_SECRET,
+        }),
+      /WHATSAPP_META_APP_SECRET and WHATSAPP_WEBHOOK_VERIFY_TOKEN must be configured together/,
+    );
+    assert.throws(
+      () =>
+        buildSecretUploads(environment, {
+          ...values,
+          WHATSAPP_WEBHOOK_VERIFY_TOKEN: pair.WHATSAPP_WEBHOOK_VERIFY_TOKEN,
+        }),
+      /WHATSAPP_META_APP_SECRET and WHATSAPP_WEBHOOK_VERIFY_TOKEN must be configured together/,
+    );
+  }
+});
+
+test("backup controller credential is uploaded only to the API when explicitly supplied", () => {
+  const secret = "c".repeat(64);
+  const plans = buildSecretUploads("production", {
+    ...values,
+    SAVIA_BACKUP_CONTROL_SECRET: secret,
+  });
+  assert.equal(
+    plans.find((plan) => plan.app === "api").secrets
+      .SAVIA_BACKUP_CONTROL_SECRET,
+    secret,
+  );
+  for (const plan of plans.filter((plan) => plan.app !== "api"))
+    assert.equal(plan.secrets.SAVIA_BACKUP_CONTROL_SECRET, undefined);
+});
+
+test("production refuses a missing backup control credential before uploading any secret", () => {
+  assert.throws(
+    () =>
+      buildSecretUploads("production", {
+        ...values,
+        SAVIA_BACKUP_CONTROL_SECRET: undefined,
+      }),
+    /SAVIA_BACKUP_CONTROL_SECRET/,
+  );
+});

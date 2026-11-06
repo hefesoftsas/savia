@@ -1,0 +1,105 @@
+import { isObjectReference } from "@/services/object-service";
+import { cn } from "@/utils/utils";
+
+import { FieldPlaceholder } from "./field-placeholder";
+import {
+  FileUploadZone,
+  useObjectPreviewUrl,
+  useFileUpload,
+} from "./file-field-primitives";
+import { fileValidators } from "./file-upload-handler";
+import type { FieldProps, ObjectReference } from "./types";
+
+const UPLOAD_CONFIG = {
+  validateFile: fileValidators.video,
+  errorMessage: "Failed to upload video",
+} as const;
+
+export interface VideoFieldProps extends FieldProps {
+  createObjectUrl?: (objectReference: ObjectReference) => string;
+}
+
+export function VideoField({
+  className,
+  connected,
+  createObjectUrl,
+  disabled,
+  onChange,
+  parameter,
+  value,
+}: VideoFieldProps) {
+  const { isUploading, uploadError, handleUpload } = useFileUpload(
+    UPLOAD_CONFIG,
+    onChange,
+  );
+  const { url: objectUrl, error: previewError } = useObjectPreviewUrl(
+    value,
+    createObjectUrl,
+  );
+  const hasValue = objectUrl !== null;
+  const mimeType =
+    value && isObjectReference(value)
+      ? (value as ObjectReference)?.mimeType || "video/*"
+      : "video/*";
+
+  if (isObjectReference(value) && !objectUrl) {
+    return (
+      <FieldPlaceholder
+        className={className}
+        label={previewError ? "Video preview unavailable" : "Loading video…"}
+      />
+    );
+  }
+
+  if (disabled && !hasValue) {
+    return (
+      <FieldPlaceholder
+        className={className}
+        connected={connected}
+        label="No video"
+      />
+    );
+  }
+
+  if (hasValue) {
+    return (
+      <div
+        className={cn(
+          "relative rounded-md p-2 bg-background border border-neutral-300 dark:border-neutral-700",
+          className,
+        )}
+      >
+        <video controls className="w-full text-xs rounded" preload="metadata">
+          <source src={objectUrl} type={mimeType} />
+        </video>
+        <a
+          href={objectUrl}
+          download={
+            isObjectReference(value) ? value.filename || "video" : "video"
+          }
+          className="mt-1 inline-block text-xs text-primary underline"
+        >
+          Download
+        </a>
+        {uploadError && (
+          <p className="text-xs text-red-600 dark:text-red-400 mt-1">
+            {uploadError}
+          </p>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <FileUploadZone
+      className={className}
+      accept="video/*"
+      disabled={disabled}
+      isUploading={isUploading}
+      uploadError={uploadError}
+      onFileUpload={handleUpload}
+      parameterId={parameter.id}
+      fieldType="video"
+    />
+  );
+}

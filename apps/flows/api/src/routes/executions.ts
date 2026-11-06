@@ -1,0 +1,137 @@
+import {
+  ExecutionStatus,
+  type ExecutionStatusType,
+  GetExecutionResponse,
+  ListExecutionsRequest,
+  ListExecutionsResponse,
+  WorkflowExecution,
+  WorkflowExecutionStatus,
+} from "@savia/flows-types";
+import { eq } from "drizzle-orm";
+import { Hono } from "hono";
+
+import { apiKeyOrJwtMiddleware, jwtMiddleware } from "../auth";
+import { ApiContext } from "../context";
+import { createDatabase } from "../db";
+import { feedback } from "../db/schema";
+import { CloudflareExecutionStore } from "../runtime/cloudflare-execution-store";
+import { isExecutionId, parseUuid } from "../utils/validation";
+
+const executionRoutes = new Hono<ApiContext>();
+
+executionRoutes.get("/:id", apiKeyOrJwtMiddleware, async (c) => {
+  const organizationId = c.get("organizationId")!;
+  const id = c.req.param("id")!;
+
+  if (!isExecutionId(id)) {
+    return c.json({ error: "Invalid execution ID format" }, 400);
+  }
+
+  const executionStore = new CloudflareExecutionStore(c.env);
+  const db = createDatabase(c.env.DB);
+
+  try {
+    const execution = await executionStore.getWithData(id, organizationId);
+
+    if (!execution) {
+      return c.json({ error: "Execution not found" }, 404);
+    }
+
+    const workflowExecution: WorkflowExecution = {
+      id: execution.id,
+      workflowId: execution.workflowId,
+      workflowName: execution.workflowName,
+      status: execution.status as WorkflowExecutionStatus,
+      nodeExecutions: execution.data.nodeExecutions || [],
+      error: execution.error || undefined,
+      startedAt: execution.startedAt ?? execution.data.startedAt,
+      endedAt: execution.endedAt ?? execution.data.endedAt,
+    };
+
+    // Get execution feedback (multi-criteria)
+    const feedbackRows = await db.query.feedback.findMany({
+      where: eq(feedback.executionId, id),
+      with: {
+        criterion: { columns: { question: true } },
+      },
+    });
+
+    const response: GetExecutionResponse = {
+      execution: workflowExecution,
+      feedback:
+        feedbackRows.length > 0
+          ? feedbackRows.map((f) => ({
+              id: f.id,
+              executionId: f.executionId,
+              criterionId: f.criterionId,
+              criterionQuestion: (f.criterion as { question: string } | null)
+                ?.question,
+              sentiment: f.sentiment,
+              comment: f.comment ?? undefined,
+              createdAt: f.createdAt,
+              updatedAt: f.updatedAt,
+            }))
+          : undefined,
+    };
+    return c.json(response);
+  } catch (error) {
+    console.error("Error retrieving execution:", error);
+    return c.json({ error: "Failed to retrieve execution" }, 500);
+  }
+});
+
+executionRoutes.get("/", jwtMiddleware, async (c) => {
+  const executionStore = new CloudflareExecutionStore(c.env);
+  const { workflowId, status, startDate, endDate, limit, offset } =
+    c.req.query();
+
+  const organizationId = c.get("organizationId")!;
+
+  const validatedWorkflowId = parseUuid(workflowId);
+
+  const validStatuses = Object.values(ExecutionStatus) as string[];
+  const validatedStatus: ExecutionStatusType | undefined =
+    status && validStatuses.includes(status)
+      ? (status as ExecutionStatusType)
+      : undefined;
+
+  const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+  const validatedStartDate =
+    startDate && dateRegex.test(startDate) ? startDate : undefined;
+  const validatedEndDate =
+    endDate && dateRegex.test(endDate) ? endDate : undefined;
+
+  // Parse and validate pagination params
+  const parsedLimit = Math.min(Math.max(1, parseInt(limit, 10) || 20), 100);
+  const parsedOffset = Math.min(Math.max(0, parseInt(offset, 10) || 0), 10000);
+
+  // List executions with optional filtering
+  const queryParams: ListExecutionsRequest = {
+    workflowId: validatedWorkflowId,
+    status: validatedStatus,
+    startDate: validatedStartDate,
+    endDate: validatedEndDate,
+    limit: parsedLimit,
+    offset: parsedOffset,
+  };
+
+  const executions = await executionStore.list(organizationId, queryParams);
+
+  const results = executions.map((execution) => {
+    return {
+      id: execution.id,
+      workflowId: execution.workflowId,
+      workflowName: execution.workflowName,
+      status: execution.status as WorkflowExecutionStatus,
+      error: execution.error || undefined,
+      startedAt: execution.startedAt || undefined,
+      endedAt: execution.endedAt || undefined,
+      usage: execution.usage ?? 0,
+    };
+  });
+
+  const response: ListExecutionsResponse = { executions: results };
+  return c.json(response);
+});
+
+export default executionRoutes;

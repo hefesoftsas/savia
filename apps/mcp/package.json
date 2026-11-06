@@ -1,0 +1,23 @@
+{
+  "name": "@savia/mcp",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "inspect": "fastmcp inspect --file src/index.ts --json",
+    "start": "tsx src/index.ts",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@prefecthq/fastmcp-ts": "^1.7.0",
+    "@savia/release-catalog": "workspace:*",
+    "zod": "^4.5.4"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.0",
+    "wrangler": "^4.127.1"
+  }
+}

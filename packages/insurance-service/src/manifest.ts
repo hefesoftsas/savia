@@ -1,0 +1,14 @@
+import type { ExtensionManifest } from "@savia/studio-shared/extension-package";
+export const manifest = {
+  format: "savia.extension",
+  formatVersion: 1,
+  id: "insurance.service",
+  version: "1.0.0",
+  label: "Solicitudes de servicio",
+  description:
+    "Organiza consultas, reclamos y solicitudes de tus clientes hasta su respuesta.",
+  labels: {"en": "Service requests", "pt": "Solicitações de atendimento"},
+  descriptions: {"en": "Organize customer questions, complaints and requests through to a response.", "pt": "Organize dúvidas, reclamações e solicitações dos clientes até a resposta."},
+  requires: [],
+  apiVersion: 1,
+} satisfies ExtensionManifest;

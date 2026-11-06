@@ -1,0 +1,122 @@
+{
+  "format": "savia.store",
+  "formatVersion": 1,
+  "collections": [
+    {
+      "object": {
+        "name": "insurance_calendar",
+        "label": "Calendario",
+        "description": "Eventos, exportación y sincronización de agenda.",
+        "config": {
+          "version": 2,
+          "fields": {
+            "title": {
+              "type": "Textbox",
+              "label": "Nombre",
+              "labels": {},
+              "required": true,
+              "config": {
+                "maxLength": 200
+              }
+            },
+            "payload": {
+              "type": "Textarea",
+              "label": "Contenido",
+              "labels": {},
+              "config": {
+                "maxLength": 10000
+              }
+            },
+            "stage": {
+              "type": "Textbox",
+              "label": "Estado",
+              "labels": {},
+              "config": {
+                "maxLength": 200
+              }
+            }
+          },
+          "fieldOrder": [
+            "title",
+            "payload",
+            "stage"
+          ]
+        }
+      },
+      "requiredFields": {
+        "title": {
+          "types": [
+            "Textbox"
+          ],
+          "required": true
+        },
+        "payload": {
+          "types": [
+            "Textarea"
+          ]
+        },
+        "stage": {
+          "types": [
+            "Textbox"
+          ]
+        }
+      }
+    }
+  ],
+  "screens": [
+    {
+      "object": "insurance_calendar",
+      "view": "records"
+    }
+  ],
+  "connectors": [
+    {
+      "id": "insurance.calendar.gateway",
+      "label": "Conexión de integración",
+      "secretFields": [
+        "token"
+      ],
+      "configSchema": {
+        "type": "object",
+        "required": [
+          "endpoint",
+          "token"
+        ],
+        "properties": {
+          "endpoint": {
+            "type": "string"
+          },
+          "token": {
+            "type": "string"
+          }
+        }
+      },
+      "allowedHosts": [],
+      "allowConfiguredHost": true
+    }
+  ],
+  "actions": [
+    {
+      "id": "sync",
+      "kind": "http",
+      "connector": "insurance.calendar.gateway",
+      "request": {
+        "method": "POST",
+        "url": "{{connection.endpoint}}",
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer {{connection.token}}",
+          "Idempotency-Key": "{{tenant}}:{{extension}}:{{action}}:{{input.operationKey}}"
+        },
+        "body": {
+          "version": 1,
+          "extensionId": "{{extension}}",
+          "actionId": "{{action}}",
+          "tenantId": "{{tenant}}",
+          "principalId": "{{principal}}",
+          "payload": "{{input.payload}}"
+        }
+      }
+    }
+  ]
+}

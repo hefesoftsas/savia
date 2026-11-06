@@ -1,0 +1,715 @@
+import { useRealtimeQuery } from "@/realtime/use-realtime-query";
+import { useSearchParams } from "react-router-dom";
+import { useCallback, useMemo, useState, type ElementType } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useSessionGeneration } from "@/auth/session-scope";
+import { readKey } from "@/queries/query-keys";
+import { isReadAccessDenied } from "@/queries/read-state";
+import { ReadRefreshStatus } from "@/components/admin/read-refresh-status";
+import Nango from "@nangohq/frontend";
+import GoogleCalendar from "@thesvg/react/google-calendar";
+import GoogleDrive from "@thesvg/react/google-drive";
+import Gmail from "@thesvg/react/gmail";
+import MicrosoftOnedrive from "@thesvg/react/microsoft-onedrive";
+import MicrosoftOutlook from "@thesvg/react/microsoft-outlook";
+import Jira from "@thesvg/react/jira";
+import Linear from "@thesvg/react/linear";
+import Github from "@thesvg/react/github";
+import { CircleAlert } from "lucide-react";
+import Zoom from "@thesvg/react/zoom";
+import Slack from "@thesvg/react/slack";
+import MicrosoftTeams from "@thesvg/react/microsoft-teams";
+import type { AppServices } from "@/app-services";
+import type {
+  PersonalIntegrationConnection,
+  PersonalIntegrationProvider,
+  PersonalIntegrationProviderId,
+} from "@/api/personal-integrations-client";
+import { CrmConnectionsPage } from "@/features/crm/crm-connections-page";
+import { WhatsappConnectionsPage } from "@/features/whatsapp/whatsapp-connections-page";
+import { Button } from "@/components/ui/button";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { CompanionDownloads } from "./companion-downloads";
+import { AiAssistantsConnect } from "./ai-assistants-connect";
+import { VirtualEmployeesManagement } from "./virtual-employees-management";
+import { useMessages } from "@/i18n/core";
+import { personalIntegrationsMessages } from "@/i18n/locales/integrations";
+import {
+  IntegrationGroup,
+  IntegrationGroupEmpty,
+  IntegrationGroupsSkeleton,
+  IntegrationProviderIcon,
+  IntegrationProviderRow,
+  IntegrationsPageHeader,
+  IntegrationsPageShell,
+  type IntegrationStatusTone,
+} from "./integration-ui";
+
+type NangoConnectEvent = unknown;
+
+export type PersonalNangoConnectFactory = () => {
+  openConnectUI(options: {
+    sessionToken: string;
+    baseURL: string;
+    apiURL: string;
+    onEvent(event: NangoConnectEvent): void | Promise<void>;
+  }): unknown;
+};
+
+const browserNangoFactory: PersonalNangoConnectFactory = () => new Nango();
+
+const unavailableProviders: PersonalIntegrationProvider[] = [
+  {
+    id: "zoom",
+    displayName: "Zoom",
+    availability: "unavailable",
+    capabilities: [],
+  },
+  {
+    id: "google_drive",
+    displayName: "Google Drive",
+    availability: "unavailable",
+    capabilities: [],
+  },
+  {
+    id: "gmail",
+    displayName: "Gmail",
+    availability: "unavailable",
+    capabilities: [],
+  },
+  {
+    id: "google_calendar",
+    displayName: "Google Calendar",
+    availability: "unavailable",
+    capabilities: [],
+  },
+  {
+    id: "outlook",
+    displayName: "Outlook",
+    availability: "unavailable",
+    capabilities: [],
+  },
+  {
+    id: "onedrive_personal",
+    displayName: "OneDrive Personal",
+    availability: "unavailable",
+    capabilities: [],
+  },
+  {
+    id: "onedrive_business",
+    displayName: "OneDrive for Business",
+    availability: "unavailable",
+    capabilities: [],
+  },
+  {
+    id: "jira",
+    displayName: "Jira Cloud",
+    availability: "unavailable",
+    capabilities: [],
+  },
+  {
+    id: "linear",
+    displayName: "Linear",
+    availability: "unavailable",
+    capabilities: [],
+  },
+  {
+    id: "github",
+    displayName: "GitHub",
+    availability: "unavailable",
+    capabilities: [],
+  },
+  {
+    id: "slack",
+    displayName: "Slack",
+    availability: "unavailable",
+    capabilities: [],
+  },
+  {
+    id: "microsoft_teams",
+    displayName: "Microsoft Teams",
+    availability: "unavailable",
+    capabilities: [],
+  },
+];
+
+function eventType(event: unknown): string | undefined {
+  return event &&
+    typeof event === "object" &&
+    typeof (event as { type?: unknown }).type === "string"
+    ? (event as { type: string }).type
+    : undefined;
+}
+
+function connectionIdFromEvent(event: unknown): string | undefined {
+  if (!event || typeof event !== "object") return undefined;
+  const candidate = event as {
+    connectionId?: unknown;
+    payload?: { connectionId?: unknown };
+  };
+  return typeof candidate.connectionId === "string"
+    ? candidate.connectionId
+    : typeof candidate.payload?.connectionId === "string"
+      ? (candidate.payload.connectionId as string)
+      : undefined;
+}
+
+function providerIcon(provider: PersonalIntegrationProviderId) {
+  return {
+    zoom: Zoom,
+    google_drive: GoogleDrive,
+    gmail: Gmail,
+    google_calendar: GoogleCalendar,
+    outlook: MicrosoftOutlook,
+    onedrive_personal: MicrosoftOnedrive,
+    onedrive_business: MicrosoftOnedrive,
+    jira: Jira,
+    linear: Linear,
+    github: Github,
+    slack: Slack,
+    microsoft_teams: MicrosoftTeams,
+  }[provider];
+}
+
+function providerHint(
+  t: (
+    key: keyof typeof personalIntegrationsMessages & string,
+    params?: Record<string, string | number>,
+  ) => string,
+  provider: PersonalIntegrationProvider,
+  connection: PersonalIntegrationConnection | undefined,
+): string {
+  if (provider.availability === "unavailable") {
+    if (provider.id === "jira")
+      return t(
+        "Un administrador debe habilitar Jira en Nango. Después podrás conectar tu cuenta aquí.",
+      );
+    if (provider.id === "linear")
+      return t(
+        "Un administrador debe habilitar Linear en Nango. Después podrás conectar tu cuenta aquí.",
+      );
+    if (provider.id === "github")
+      return t(
+        "Un administrador debe habilitar GitHub en Nango. Después podrás conectar tu cuenta aquí.",
+      );
+    if (provider.id === "slack" || provider.id === "microsoft_teams")
+      return t(
+        "Un administrador debe habilitar %{provider} en Nango. Después podrás conectar tu cuenta aquí.",
+        { provider: provider.displayName },
+      );
+    return "";
+  }
+  const collaborationDescription =
+    provider.id === "slack"
+      ? t("Comparte resúmenes de registros en canales de Slack.")
+      : provider.id === "microsoft_teams"
+        ? t("Comparte resúmenes de registros en canales de Microsoft Teams.")
+        : undefined;
+  const issueDescription =
+    provider.id === "jira"
+      ? t("Conecta Jira Cloud para previsualizar incidencias en Páginas.")
+      : provider.id === "linear"
+        ? t("Conecta Linear para previsualizar incidencias en Páginas.")
+        : provider.id === "github"
+          ? t(
+              "Conecta GitHub para previsualizar incidencias y pull requests en Páginas.",
+            )
+          : undefined;
+  if (connection?.status === "connected")
+    return connection.externalAccountLabel
+      ? `${t("Conectado como %{label}.", {
+          label: connection.externalAccountLabel,
+        })}${collaborationDescription ? ` ${collaborationDescription}` : ""}`
+      : (collaborationDescription ??
+          issueDescription ??
+          t("Conexión autorizada y lista para usarse."));
+  if (connection?.status === "reconnect_required")
+    return t("La sesión expiró. Vuelve a conectar para continuar usándola.");
+  if (connection?.status === "failed")
+    return t("La última sincronización falló. Intenta reconectar la cuenta.");
+  if (connection?.status === "pending")
+    return t("Finalizando la autorización en segundo plano…");
+  return (
+    collaborationDescription ??
+    issueDescription ??
+    t("Requiere tu autorización antes de que Savia pueda interactuar con ella.")
+  );
+}
+
+function connectionStatusLabel(
+  t: (key: keyof typeof personalIntegrationsMessages & string) => string,
+  connection: PersonalIntegrationConnection,
+): string {
+  switch (connection.status) {
+    case "connected":
+      return t("Conectada");
+    case "reconnect_required":
+      return t("Reconectar");
+    case "failed":
+      return t("Falló");
+    case "pending":
+      return t("Pendiente");
+    case "disconnected":
+    default:
+      return t("Desconectada");
+  }
+}
+
+function providerStatusLabel(
+  t: (key: keyof typeof personalIntegrationsMessages & string) => string,
+  provider: PersonalIntegrationProvider,
+  connection: PersonalIntegrationConnection | undefined,
+): string | undefined {
+  if (provider.availability === "unavailable")
+    return provider.id === "jira" ||
+      provider.id === "linear" ||
+      provider.id === "github" ||
+      provider.id === "slack" ||
+      provider.id === "microsoft_teams"
+      ? t("Requiere configuración")
+      : undefined;
+  return connection ? connectionStatusLabel(t, connection) : undefined;
+}
+
+function connectionStatusTone(
+  connection: PersonalIntegrationConnection,
+): IntegrationStatusTone {
+  switch (connection.status) {
+    case "connected":
+      return "success";
+    case "reconnect_required":
+    case "failed":
+      return "warning";
+    case "pending":
+    case "disconnected":
+    default:
+      return "neutral";
+  }
+}
+
+function actionLabel(
+  t: (key: keyof typeof personalIntegrationsMessages & string) => string,
+  provider: PersonalIntegrationProvider,
+  connection: PersonalIntegrationConnection | undefined,
+): string {
+  if (provider.availability !== "enabled") return t("No disponible");
+  if (connection?.status === "connected") return t("Desconectar");
+  if (
+    connection?.status === "reconnect_required" ||
+    connection?.status === "failed"
+  )
+    return t("Reconectar");
+  if (connection?.status === "pending") return t("Reintentar");
+  return t("Conectar");
+}
+
+function feedbackFrom(
+  t: (key: keyof typeof personalIntegrationsMessages & string) => string,
+  error: unknown,
+): string {
+  if (error && typeof error === "object" && "message" in error) {
+    return String((error as { message?: unknown }).message);
+  }
+  return t("Ocurrió un error inesperado al gestionar la integración.");
+}
+
+function providerLoadFeedback(
+  t: (key: keyof typeof personalIntegrationsMessages & string) => string,
+  error: unknown,
+): string {
+  return error &&
+    typeof error === "object" &&
+    (error as { status?: unknown }).status === 404
+    ? t(
+        "La API que está en ejecución aún no incluye las integraciones personales. Reinicia Savia desde la versión actual.",
+      )
+    : t("No pudimos cargar el estado de las integraciones.");
+}
+
+export function PersonalIntegrationsPage({
+  services,
+  nangoFactory = browserNangoFactory,
+}: {
+  services: Pick<
+    AppServices,
+    | "personalIntegrations"
+    | "authProvider"
+    | "crm"
+    | "dataProvider"
+    | "virtualEmployees"
+  > &
+    Partial<Pick<AppServices, "whatsapp">> & {
+      assistantConfiguration?: AppServices["assistantConfiguration"];
+    };
+  nangoFactory?: PersonalNangoConnectFactory;
+}) {
+  const t = useMessages(personalIntegrationsMessages);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab =
+    searchParams.get("tab") === "virtual-employees"
+      ? "virtual-employees"
+      : searchParams.get("tab") === "crm"
+        ? "crm"
+        : searchParams.get("tab") === "whatsapp"
+          ? "whatsapp"
+          : searchParams.get("tab") === "apps"
+            ? "apps"
+            : searchParams.get("tab") === "ai-assistants"
+              ? "ai-assistants"
+              : "connections";
+  const selectTab = (tab: string) => {
+    const next = new URLSearchParams(searchParams);
+    next.set("tab", tab);
+    setSearchParams(next);
+  };
+  const [actionProvider, setActionProvider] =
+    useState<PersonalIntegrationProviderId>();
+  const [feedback, setFeedback] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+  const sessionGeneration = useSessionGeneration();
+  const queryKey = useMemo(
+    () =>
+      readKey(
+        { sessionGeneration, kind: "principal", id: "current" },
+        "personal-integrations",
+      ),
+    [sessionGeneration],
+  );
+  const read = useQuery({
+    queryKey,
+    queryFn: async ({ signal }) => {
+      const [nextProviders, nextConnections] = await Promise.all([
+        services.personalIntegrations.listProviders(),
+        services.personalIntegrations.listConnections(true),
+      ]);
+      if (signal.aborted)
+        throw new DOMException("Read cancelled", "AbortError");
+      return { providers: nextProviders, connections: nextConnections };
+    },
+  });
+  const loading = read.isPending;
+  const accessDenied = isReadAccessDenied(read.error);
+  const providerLoadFailed =
+    read.isError && (read.data === undefined || accessDenied);
+  const providers =
+    read.data?.providers ??
+    (providerLoadFailed && !accessDenied ? unavailableProviders : []);
+  const connections = accessDenied ? [] : (read.data?.connections ?? []);
+  const loadError = read.error
+    ? providerLoadFeedback(t, read.error)
+    : undefined;
+  const refresh = useCallback(
+    () => queryClient.invalidateQueries({ queryKey, exact: true }),
+    [queryClient, queryKey],
+  );
+
+  useRealtimeQuery({
+    topics: ["personal-integrations"],
+    queryKeys: [queryKey],
+  });
+
+  const connectionsByProvider = useMemo(
+    () =>
+      new Map(
+        connections.map((connection) => [connection.provider, connection]),
+      ),
+    [connections],
+  );
+
+  async function complete(
+    provider: PersonalIntegrationProviderId,
+    connectionId: string,
+  ) {
+    try {
+      await services.personalIntegrations.complete(provider, connectionId);
+      setFeedback(t("La cuenta quedó conectada de forma segura."));
+      await refresh();
+    } catch (error) {
+      setFeedback(feedbackFrom(t, error));
+    } finally {
+      setActionProvider(undefined);
+    }
+  }
+
+  async function begin(
+    provider: PersonalIntegrationProvider,
+    connection: PersonalIntegrationConnection | undefined,
+  ) {
+    if (provider.availability !== "enabled") return;
+    setActionProvider(provider.id);
+    setFeedback(null);
+    if (connection?.status === "connected") {
+      try {
+        await services.personalIntegrations.disconnect(provider.id);
+        setFeedback(t("La cuenta quedó desconectada."));
+        await refresh();
+      } catch (error) {
+        setFeedback(feedbackFrom(t, error));
+      } finally {
+        setActionProvider(undefined);
+      }
+      return;
+    }
+    try {
+      const session = await services.personalIntegrations.createConnectSession(
+        provider.id,
+        connection?.status === "reconnect_required" ||
+          connection?.status === "failed",
+      );
+      let terminalEventReceived = false;
+      nangoFactory().openConnectUI({
+        sessionToken: session.token,
+        baseURL: session.connectUrl,
+        apiURL: session.apiUrl,
+        onEvent: (event) => {
+          const type = eventType(event);
+          if (type === "connect") {
+            terminalEventReceived = true;
+            const connectionId = connectionIdFromEvent(event);
+            if (!connectionId) {
+              setFeedback(t("Nango no informó una conexión válida."));
+              setActionProvider(undefined);
+              return;
+            }
+            void complete(provider.id, connectionId);
+          }
+          if (type === "close" && !terminalEventReceived) {
+            setFeedback(t("La ventana de conexión se cerró sin cambios."));
+            setActionProvider(undefined);
+          }
+          if (type === "error") {
+            terminalEventReceived = true;
+            setFeedback(
+              t("No fue posible completar la autorización de la cuenta."),
+            );
+            setActionProvider(undefined);
+          }
+        },
+      });
+    } catch (error) {
+      setFeedback(feedbackFrom(t, error));
+      setActionProvider(undefined);
+    }
+  }
+
+  const groups = [
+    {
+      id: "video-integrations",
+      title: "Zoom",
+      providers: providers.filter((provider) => provider.id === "zoom"),
+    },
+    {
+      id: "google-integrations",
+      title: "Google",
+      providers: providers.filter(
+        (provider) =>
+          provider.id.startsWith("google") || provider.id === "gmail",
+      ),
+    },
+    {
+      id: "microsoft-integrations",
+      title: "Microsoft",
+      providers: providers.filter(
+        (provider) =>
+          provider.id === "outlook" || provider.id.startsWith("onedrive"),
+      ),
+    },
+    {
+      id: "issue-tracker-integrations",
+      title: t("Gestión de incidencias"),
+      providers: providers.filter(
+        (provider) =>
+          provider.id === "jira" ||
+          provider.id === "linear" ||
+          provider.id === "github",
+      ),
+    },
+    {
+      id: "collaboration-integrations",
+      title: t("Colaboración"),
+      providers: providers.filter(
+        (provider) =>
+          provider.id === "slack" || provider.id === "microsoft_teams",
+      ),
+    },
+  ];
+
+  return (
+    <IntegrationsPageShell>
+      <IntegrationsPageHeader
+        title={t("Integraciones")}
+        description={t(
+          "Conecta tus cuentas, servicios y configura los empleados virtuales de IA para Savia.",
+        )}
+      />
+
+      <Tabs
+        value={activeTab}
+        onValueChange={selectTab}
+        className="w-full space-y-6"
+      >
+        <TabsList className="mb-2 w-full flex-wrap justify-start gap-1 group-data-[orientation=horizontal]/tabs:h-auto [&_[data-slot=tabs-trigger]]:h-auto [&_[data-slot=tabs-trigger]]:min-h-11 sm:[&_[data-slot=tabs-trigger]]:min-h-9">
+          <TabsTrigger value="connections">
+            {t("Cuentas y Conexiones")}
+          </TabsTrigger>
+          <TabsTrigger className="min-h-11 sm:min-h-0" value="crm">
+            {t("CRM")}
+          </TabsTrigger>
+          <TabsTrigger className="min-h-11 sm:min-h-0" value="whatsapp">
+            WhatsApp
+          </TabsTrigger>
+          <TabsTrigger
+            className="min-h-11 sm:min-h-0"
+            value="virtual-employees"
+          >
+            {t("Empleados Virtuales (IA)")}
+          </TabsTrigger>
+          <TabsTrigger className="min-h-11 sm:min-h-0" value="ai-assistants">
+            {t("ChatGPT y Claude")}
+          </TabsTrigger>
+          <TabsTrigger value="apps">{t("Aplicaciones")}</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="connections" className="space-y-6">
+          {feedback || providerLoadFailed ? (
+            <div
+              className="integrations-feedback flex flex-wrap items-center gap-3 rounded-xl border bg-card px-4 py-3 text-sm"
+              role="alert"
+              aria-label={accessDenied ? loadError : (feedback ?? loadError)}
+            >
+              <CircleAlert className="mt-0.5 size-4 shrink-0 text-primary" />
+              <p className="flex-1 leading-6">
+                {accessDenied ? loadError : (feedback ?? loadError)}
+              </p>
+              {providerLoadFailed && !accessDenied ? (
+                <Button
+                  size="sm"
+                  className="max-sm:h-11"
+                  variant="outline"
+                  disabled={read.isFetching}
+                  onClick={() => void read.refetch()}
+                >
+                  {t("Reintentar")}
+                </Button>
+              ) : null}
+            </div>
+          ) : null}
+
+          {read.data && !feedback && !accessDenied ? (
+            <ReadRefreshStatus
+              refreshing={read.isFetching}
+              error={read.isError ? loadError : undefined}
+              onRetry={() => void read.refetch()}
+            />
+          ) : null}
+
+          {loading ? (
+            <IntegrationGroupsSkeleton groups={3} />
+          ) : accessDenied ? null : (
+            <div className="integrations-groups">
+              {groups.map((group) => (
+                <IntegrationGroup
+                  key={group.id}
+                  title={group.title}
+                  headingId={group.id}
+                >
+                  {group.providers.map((provider) => {
+                    const Icon = providerIcon(provider.id) as ElementType;
+                    const connection = connectionsByProvider.get(provider.id);
+                    const busy = actionProvider === provider.id;
+                    const enabled = provider.availability === "enabled";
+                    const connected = connection?.status === "connected";
+                    const showStatus =
+                      provider.availability === "unavailable" &&
+                      (provider.id === "jira" ||
+                        provider.id === "linear" ||
+                        provider.id === "github" ||
+                        provider.id === "slack" ||
+                        provider.id === "microsoft_teams")
+                        ? true
+                        : !!connection &&
+                          (connected ||
+                            connection.status === "reconnect_required" ||
+                            connection.status === "failed" ||
+                            connection.status === "pending");
+                    return (
+                      <IntegrationProviderRow
+                        key={provider.id}
+                        name={provider.displayName}
+                        hint={providerHint(t, provider, connection)}
+                        statusLabel={providerStatusLabel(
+                          t,
+                          provider,
+                          connection,
+                        )}
+                        statusTone={
+                          provider.availability === "unavailable"
+                            ? "warning"
+                            : connection
+                              ? connectionStatusTone(connection)
+                              : "neutral"
+                        }
+                        showStatus={showStatus}
+                        actionLabel={actionLabel(t, provider, connection)}
+                        actionVariant={connected ? "outline" : "default"}
+                        busy={busy}
+                        disabled={!enabled}
+                        muted={!enabled}
+                        onAction={() => void begin(provider, connection)}
+                        icon={
+                          <IntegrationProviderIcon
+                            Icon={Icon}
+                            displayName={provider.displayName}
+                          />
+                        }
+                      />
+                    );
+                  })}
+                  {group.providers.length === 0 ? (
+                    <IntegrationGroupEmpty
+                      message={t("No hay integraciones disponibles.")}
+                    />
+                  ) : null}
+                </IntegrationGroup>
+              ))}
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="apps" className="space-y-6">
+          <CompanionDownloads />
+        </TabsContent>
+
+        <TabsContent value="crm" className="space-y-6">
+          <CrmConnectionsPage embedded services={{ crm: services.crm }} />
+        </TabsContent>
+
+        <TabsContent value="whatsapp" className="space-y-6">
+          {services.whatsapp ? (
+            <WhatsappConnectionsPage
+              embedded
+              services={{ whatsapp: services.whatsapp }}
+            />
+          ) : (
+            <IntegrationGroup title="WhatsApp">
+              <IntegrationGroupEmpty
+                message={t("WhatsApp no está disponible en este entorno.")}
+              />
+            </IntegrationGroup>
+          )}
+        </TabsContent>
+
+        <TabsContent value="virtual-employees" className="space-y-6">
+          <VirtualEmployeesManagement
+            client={services.virtualEmployees}
+            assistantConfigClient={services.assistantConfiguration}
+          />
+        </TabsContent>
+
+        <TabsContent value="ai-assistants" className="space-y-6">
+          <AiAssistantsConnect />
+        </TabsContent>
+      </Tabs>
+    </IntegrationsPageShell>
+  );
+}

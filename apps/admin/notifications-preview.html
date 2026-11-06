@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Notifications preview (loopback fixture)</title>
+  </head>
+  <body>
+    <main id="notifications-preview">
+      <h1>Notifications preview</h1>
+      <p>
+        Loopback-only fixture for recorded browser verification. Serve alongside
+        an isolated local API seeded with
+        <code>seedNotificationsPreview</code>; never point it at production
+        data.
+      </p>
+      <ol>
+        <li>An ordinary user receives another user's collection edit.</li>
+        <li>An administrator sends an acknowledgement message.</li>
+        <li>
+          A workflow task resolves in both the workflow and notification views.
+        </li>
+        <li>An account switch clears the inbox.</li>
+        <li>A denied resource cannot be opened from a notice.</li>
+        <li>Offline delivery recovers on reconnect.</li>
+      </ol>
+    </main>
+  </body>
+</html>

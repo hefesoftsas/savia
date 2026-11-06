@@ -1,0 +1,377 @@
+name: Deploy Savia production
+
+on:
+  workflow_dispatch:
+    inputs:
+      initialize_environment:
+        description: Create fresh production persistence before the first managed release (fails if production exists)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: savia-production
+  cancel-in-progress: false
+
+jobs:
+  preview-check:
+    if: ${{ vars.PRODUCTION_OPERATIONS_ENABLED == 'true' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Require successful preview deployment for this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          run_id=""
+          for candidate in $(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/deploy-preview.yml/runs?head_sha=$GITHUB_SHA&status=success&per_page=100" \
+            --jq '.workflow_runs[] | select(.event == "workflow_run") | .id'); do
+            if gh api "repos/$GITHUB_REPOSITORY/actions/runs/$candidate/jobs" \
+              --jq 'any(.jobs[]; .name == "Deploy preview" and .conclusion == "success")' | grep -qx true; then
+              run_id="$candidate"
+              break
+            fi
+          done
+          test -n "$run_id"
+          gh run download "$run_id" --repo "$GITHUB_REPOSITORY" --name preview-release --dir "$RUNNER_TEMP/preview-release"
+          node --input-type=module <<'NODE'
+          import { readFileSync } from 'node:fs';
+          const proof = JSON.parse(readFileSync(process.env.RUNNER_TEMP + '/preview-release/preview-release.json', 'utf8'));
+          if (proof.sha !== process.env.GITHUB_SHA || proof.repository !== process.env.GITHUB_REPOSITORY || proof.environment !== 'preview') {
+            throw new Error('No verified preview deployment for the production commit');
+          }
+          NODE
+
+  verify:
+    needs: preview-check
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out exact promoted source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify successful trusted main CI for this exact source
+        run: node infra/pulumi/production-ci-proof.mjs
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+  deploy:
+    needs: verify
+    if: ${{ vars.PRODUCTION_OPERATIONS_ENABLED == 'true' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && needs.verify.result == 'success' && always() }}
+    name: Deploy production
+    runs-on: ubuntu-24.04
+    environment: production-app
+    env:
+      PNPM_CONFIG_STRICT_DEP_BUILDS: "false"
+      SAVIA_BACKUP_ENVIRONMENT: production
+    steps:
+      - name: Check out source
+        if: ${{ success() && !cancelled() }}
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Reject superseded deployments
+        if: ${{ success() && !cancelled() }}
+        shell: bash
+        run: |
+          approved_sha="$(git rev-parse HEAD)"
+          current_sha="$(git ls-remote --exit-code origin refs/heads/main | cut -f1)"
+          if [ "$approved_sha" != "$current_sha" ]; then
+            echo "::error::This commit has been superseded on main; refusing an outdated deployment."
+            exit 1
+          fi
+
+      - name: Set up pnpm
+        if: ${{ success() && !cancelled() }}
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.24.0
+
+      - name: Set up Node.js
+        if: ${{ success() && !cancelled() }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        if: ${{ success() && !cancelled() }}
+        run: pnpm install --frozen-lockfile
+
+      - name: Install infrastructure toolchain for first installation
+        if: ${{ success() && !cancelled() && inputs.initialize_environment }}
+        uses: ./.github/actions/install-pulumi
+
+      - name: Initialize empty production persistence from its exact saved plan
+        if: ${{ success() && !cancelled() && inputs.initialize_environment }}
+        run: node infra/pulumi/production-bootstrap.mjs --plan "$RUNNER_TEMP/production-provision.json"
+        env:
+          PRODUCTION_OPERATIONS_ENABLED: ${{ vars.PRODUCTION_OPERATIONS_ENABLED }}
+          PULUMI_BACKEND_URL: ${{ secrets.PULUMI_BACKEND_URL }}
+          PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_STATE_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_STATE_SECRET_ACCESS_KEY }}
+          BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
+          BETTER_AUTH_BOOTSTRAP_PASSWORD: ${{ secrets.BETTER_AUTH_BOOTSTRAP_PASSWORD }}
+          SAVIA_MCP_SHARED_SECRET: ${{ secrets.SAVIA_MCP_SHARED_SECRET }}
+          SAVIA_REQUEST_ENCRYPTION_KEY: ${{ secrets.SAVIA_REQUEST_ENCRYPTION_KEY }}
+          EXTENSION_CONNECTIONS_ENCRYPTION_KEY: ${{ secrets.EXTENSION_CONNECTIONS_ENCRYPTION_KEY }}
+          ASSISTANT_SETTINGS_ENCRYPTION_KEY: ${{ secrets.ASSISTANT_SETTINGS_ENCRYPTION_KEY }}
+          CRM_INTEGRATION_KEY: ${{ secrets.CRM_INTEGRATION_KEY }}
+          NANGO_API_KEY: ${{ secrets.NANGO_API_KEY }}
+          SAVIA_BACKUP_CONTROL_SECRET: ${{ secrets.SAVIA_BACKUP_CONTROL_SECRET }}
+          SAVIA_BACKUP_KEY: ${{ secrets.SAVIA_BACKUP_KEY }}
+          R2_BACKUP_ACCESS_KEY_ID: ${{ secrets.R2_BACKUP_ACCESS_KEY_ID }}
+          R2_BACKUP_SECRET_ACCESS_KEY: ${{ secrets.R2_BACKUP_SECRET_ACCESS_KEY }}
+
+      - name: Preserve encrypted first-install configuration for reconciliation
+        if: ${{ always() && inputs.initialize_environment }}
+        env:
+          SAVIA_BACKUP_KEY: ${{ secrets.SAVIA_BACKUP_KEY }}
+          PULUMI_BACKEND_URL: ${{ secrets.PULUMI_BACKEND_URL }}
+          PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_STATE_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_STATE_SECRET_ACCESS_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          if [ -f "$RUNNER_TEMP/production-provision.json" ]; then
+            custody="$RUNNER_TEMP/production-bootstrap-custody"
+            mkdir -p "$custody"
+            cp infra/pulumi/Pulumi.production.yaml "$custody/"
+            cp "$RUNNER_TEMP/production-provision.json" "$custody/"
+            cp "$RUNNER_TEMP/production-provision.json.pulumi.json" "$custody/"
+            timeout 30s pulumi stack export --stack production --cwd infra/pulumi --non-interactive > "$custody/checkpoint.private.json" 2> "$custody/export.private.log" || true
+            tar -czf "$RUNNER_TEMP/production-bootstrap-custody.tar.gz" -C "$RUNNER_TEMP" production-bootstrap-custody
+            node scripts/encrypt-flows-backup.mjs --action encrypt --input "$RUNNER_TEMP/production-bootstrap-custody.tar.gz" --output "$RUNNER_TEMP/production-bootstrap-custody.enc"
+            rm -rf "$custody" "$RUNNER_TEMP/production-bootstrap-custody.tar.gz"
+          fi
+
+      - name: Retain only encrypted bootstrap configuration
+        if: ${{ always() && inputs.initialize_environment }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-bootstrap-custody
+          path: ${{ runner.temp }}/production-bootstrap-custody.enc
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Load infrastructure stack outputs
+        if: ${{ success() && !cancelled() }}
+        id: infrastructure
+        uses: ./.github/actions/pulumi-infrastructure
+        with:
+          stack: production
+        env:
+          PULUMI_BACKEND_URL: ${{ secrets.PULUMI_BACKEND_URL }}
+          PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_STATE_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_STATE_SECRET_ACCESS_KEY }}
+          NANGO_JIRA_INTEGRATION_ID: ${{ vars.NANGO_JIRA_INTEGRATION_ID }}
+          NANGO_GITHUB_INTEGRATION_ID: ${{ vars.NANGO_GITHUB_INTEGRATION_ID }}
+          NANGO_ZOOM_INTEGRATION_ID: ${{ vars.NANGO_ZOOM_INTEGRATION_ID }}
+          NANGO_SLACK_INTEGRATION_ID: ${{ vars.NANGO_SLACK_INTEGRATION_ID }}
+          NANGO_MICROSOFT_TEAMS_INTEGRATION_ID: ${{ vars.NANGO_MICROSOFT_TEAMS_INTEGRATION_ID }}
+          OPENROUTER_MODEL: ${{ vars.OPENROUTER_MODEL }}
+
+      - name: Run the production readiness preflight before any mutation
+        if: ${{ success() && !cancelled() }}
+        run: node infra/pulumi/production-preflight.mjs
+        env:
+          PULUMI_BACKEND_URL: ${{ secrets.PULUMI_BACKEND_URL }}
+          PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_STATE_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_STATE_SECRET_ACCESS_KEY }}
+          SAVIA_BACKUP_CONTROL_SECRET: ${{ secrets.SAVIA_BACKUP_CONTROL_SECRET }}
+          SAVIA_BACKUP_KEY: ${{ secrets.SAVIA_BACKUP_KEY }}
+          SAVIA_FLOWS_BACKUP_KEY: ${{ secrets.SAVIA_FLOWS_BACKUP_KEY }}
+          SAVIA_FLOWS_BRIDGE_SECRET: ${{ secrets.SAVIA_FLOWS_BRIDGE_SECRET }}
+          SAVIA_FLOWS_JWT_SECRET: ${{ secrets.SAVIA_FLOWS_JWT_SECRET }}
+          SAVIA_FLOWS_SECRET_MASTER_KEY: ${{ secrets.SAVIA_FLOWS_SECRET_MASTER_KEY }}
+          SAVIA_FLOWS_FORM_SIGNING_KEY: ${{ secrets.SAVIA_FLOWS_FORM_SIGNING_KEY }}
+
+      - name: Validate planned production Flows settings and secrets
+        if: ${{ success() && !cancelled() }}
+        run: node infra/pulumi/flows-preflight.mjs --stack production
+        env:
+          SAVIA_FLOWS_PROVISIONED: ${{ env.SAVIA_FLOWS_PROVISIONED }}
+          SAVIA_FLOWS_BRIDGE_SECRET: ${{ secrets.SAVIA_FLOWS_BRIDGE_SECRET }}
+          SAVIA_FLOWS_JWT_SECRET: ${{ secrets.SAVIA_FLOWS_JWT_SECRET }}
+          SAVIA_FLOWS_SECRET_MASTER_KEY: ${{ secrets.SAVIA_FLOWS_SECRET_MASTER_KEY }}
+          SAVIA_FLOWS_FORM_SIGNING_KEY: ${{ secrets.SAVIA_FLOWS_FORM_SIGNING_KEY }}
+          SAVIA_FLOWS_BACKUP_KEY: ${{ secrets.SAVIA_FLOWS_BACKUP_KEY }}
+          PULUMI_BACKEND_URL: ${{ secrets.PULUMI_BACKEND_URL }}
+          PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_STATE_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_STATE_SECRET_ACCESS_KEY }}
+
+      - name: Prepare one immutable runtime release
+        if: ${{ success() && !cancelled() }}
+        run: node infra/pulumi/prepare-release.mjs --environment production --out "$RUNNER_TEMP/savia-release"
+        env:
+          PULUMI_BACKEND_URL: ${{ secrets.PULUMI_BACKEND_URL }}
+          PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_STATE_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_STATE_SECRET_ACCESS_KEY }}
+          NANGO_JIRA_INTEGRATION_ID: ${{ vars.NANGO_JIRA_INTEGRATION_ID }}
+          NANGO_GITHUB_INTEGRATION_ID: ${{ vars.NANGO_GITHUB_INTEGRATION_ID }}
+          NANGO_ZOOM_INTEGRATION_ID: ${{ vars.NANGO_ZOOM_INTEGRATION_ID }}
+          NANGO_SLACK_INTEGRATION_ID: ${{ vars.NANGO_SLACK_INTEGRATION_ID }}
+          NANGO_MICROSOFT_TEAMS_INTEGRATION_ID: ${{ vars.NANGO_MICROSOFT_TEAMS_INTEGRATION_ID }}
+          OPENROUTER_MODEL: ${{ vars.OPENROUTER_MODEL }}
+          PRODUCTION_OPERATIONS_ENABLED: ${{ vars.PRODUCTION_OPERATIONS_ENABLED }}
+          NODE_OPTIONS: "--max-old-space-size=1536"
+
+      - name: Review the saved managed runtime plan
+        if: ${{ success() && !cancelled() }}
+        id: runtime_plan
+        run: node infra/pulumi/environment.mjs plan --environment production --artifact "$RUNNER_TEMP/savia-release" --plan "$RUNNER_TEMP/savia-release-plan.json"
+        env:
+          PULUMI_BACKEND_URL: ${{ secrets.PULUMI_BACKEND_URL }}
+          PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_STATE_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_STATE_SECRET_ACCESS_KEY }}
+          NANGO_JIRA_INTEGRATION_ID: ${{ vars.NANGO_JIRA_INTEGRATION_ID }}
+          NANGO_GITHUB_INTEGRATION_ID: ${{ vars.NANGO_GITHUB_INTEGRATION_ID }}
+          NANGO_ZOOM_INTEGRATION_ID: ${{ vars.NANGO_ZOOM_INTEGRATION_ID }}
+          NANGO_SLACK_INTEGRATION_ID: ${{ vars.NANGO_SLACK_INTEGRATION_ID }}
+          NANGO_MICROSOFT_TEAMS_INTEGRATION_ID: ${{ vars.NANGO_MICROSOFT_TEAMS_INTEGRATION_ID }}
+          OPENROUTER_MODEL: ${{ vars.OPENROUTER_MODEL }}
+          SAVIA_DEPLOY_ENVIRONMENT: production
+          SAVIA_BACKUP_CONTROL_SECRET: ${{ secrets.SAVIA_BACKUP_CONTROL_SECRET }}
+          BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
+          BETTER_AUTH_BOOTSTRAP_PASSWORD: ${{ secrets.BETTER_AUTH_BOOTSTRAP_PASSWORD }}
+          SAVIA_MCP_SHARED_SECRET: ${{ secrets.SAVIA_MCP_SHARED_SECRET }}
+          SAVIA_REQUEST_ENCRYPTION_KEY: ${{ secrets.SAVIA_REQUEST_ENCRYPTION_KEY }}
+          EXTENSION_CONNECTIONS_ENCRYPTION_KEY: ${{ secrets.EXTENSION_CONNECTIONS_ENCRYPTION_KEY }}
+          ASSISTANT_SETTINGS_ENCRYPTION_KEY: ${{ secrets.ASSISTANT_SETTINGS_ENCRYPTION_KEY }}
+          CRM_INTEGRATION_KEY: ${{ secrets.CRM_INTEGRATION_KEY }}
+          PLUGIN_REGISTRY_TENANTS: ${{ secrets.PLUGIN_REGISTRY_TENANTS }}
+          NANGO_API_KEY: ${{ secrets.NANGO_API_KEY }}
+          NANGO_FALLBACK_API_KEY: ${{ secrets.NANGO_FALLBACK_API_KEY }}
+          NANGO_JIRA_REPORTING_CONNECTION_ID: ${{ secrets.NANGO_JIRA_REPORTING_CONNECTION_ID }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          WHATSAPP_META_APP_SECRET: ${{ secrets.WHATSAPP_META_APP_SECRET }}
+          WHATSAPP_WEBHOOK_VERIFY_TOKEN: ${{ secrets.WHATSAPP_WEBHOOK_VERIFY_TOKEN }}
+          SAVIA_FLOWS_BRIDGE_SECRET: ${{ env.SAVIA_FLOWS_PLANNED == 'true' && secrets.SAVIA_FLOWS_BRIDGE_SECRET || '' }}
+          SAVIA_FLOWS_JWT_SECRET: ${{ env.SAVIA_FLOWS_PLANNED == 'true' && secrets.SAVIA_FLOWS_JWT_SECRET || '' }}
+          SAVIA_FLOWS_SECRET_MASTER_KEY: ${{ env.SAVIA_FLOWS_PLANNED == 'true' && secrets.SAVIA_FLOWS_SECRET_MASTER_KEY || '' }}
+          SAVIA_FLOWS_FORM_SIGNING_KEY: ${{ env.SAVIA_FLOWS_PLANNED == 'true' && secrets.SAVIA_FLOWS_FORM_SIGNING_KEY || '' }}
+          SQL_BRIDGE_URL: ${{ secrets.SQL_BRIDGE_URL }}
+          SQL_BRIDGE_SECRET: ${{ secrets.SQL_BRIDGE_SECRET }}
+          SAVIA_CHATGPT_CLIENT_ID: ${{ secrets.SAVIA_CHATGPT_CLIENT_ID }}
+          SAVIA_CHATGPT_CLIENT_SECRET: ${{ secrets.SAVIA_CHATGPT_CLIENT_SECRET }}
+          SAVIA_CHATGPT_TOKEN_AUTH_METHOD: ${{ vars.SAVIA_CHATGPT_TOKEN_AUTH_METHOD }}
+          SAVIA_GOOGLE_CLIENT_ID: ${{ secrets.SAVIA_GOOGLE_CLIENT_ID }}
+          SAVIA_GOOGLE_CLIENT_SECRET: ${{ secrets.SAVIA_GOOGLE_CLIENT_SECRET }}
+          SAVIA_MICROSOFT_CLIENT_ID: ${{ secrets.SAVIA_MICROSOFT_CLIENT_ID }}
+          SAVIA_MICROSOFT_CLIENT_SECRET: ${{ secrets.SAVIA_MICROSOFT_CLIENT_SECRET }}
+          SAVIA_BACKUP_KEY: ${{ secrets.SAVIA_BACKUP_KEY }}
+          SAVIA_FLOWS_BACKUP_KEY: ${{ secrets.SAVIA_FLOWS_BACKUP_KEY }}
+          SAVIA_BACKUP_R2_FORCE_API: "true"
+          R2_BACKUP_ACCESS_KEY_ID: ${{ secrets.R2_BACKUP_ACCESS_KEY_ID }}
+          R2_BACKUP_SECRET_ACCESS_KEY: ${{ secrets.R2_BACKUP_SECRET_ACCESS_KEY }}
+          SAVIA_RUNTIME_OPERATION_DIRECTORY: ${{ runner.temp }}/savia-runtime
+          PRODUCTION_OPERATIONS_ENABLED: ${{ vars.PRODUCTION_OPERATIONS_ENABLED }}
+
+      - name: Apply the exact managed runtime plan
+        id: managed_runtime
+        if: ${{ always() && !failure() && steps.runtime_plan.outcome == 'success' }}
+        run: node infra/pulumi/environment.mjs apply --environment production --artifact "$RUNNER_TEMP/savia-release" --plan "$RUNNER_TEMP/savia-release-plan.json" --apply
+        env:
+          PULUMI_BACKEND_URL: ${{ secrets.PULUMI_BACKEND_URL }}
+          PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_STATE_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_STATE_SECRET_ACCESS_KEY }}
+          NANGO_JIRA_INTEGRATION_ID: ${{ vars.NANGO_JIRA_INTEGRATION_ID }}
+          NANGO_GITHUB_INTEGRATION_ID: ${{ vars.NANGO_GITHUB_INTEGRATION_ID }}
+          NANGO_ZOOM_INTEGRATION_ID: ${{ vars.NANGO_ZOOM_INTEGRATION_ID }}
+          NANGO_SLACK_INTEGRATION_ID: ${{ vars.NANGO_SLACK_INTEGRATION_ID }}
+          NANGO_MICROSOFT_TEAMS_INTEGRATION_ID: ${{ vars.NANGO_MICROSOFT_TEAMS_INTEGRATION_ID }}
+          OPENROUTER_MODEL: ${{ vars.OPENROUTER_MODEL }}
+          SAVIA_DEPLOY_ENVIRONMENT: production
+          SAVIA_BACKUP_CONTROL_SECRET: ${{ secrets.SAVIA_BACKUP_CONTROL_SECRET }}
+          BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
+          BETTER_AUTH_BOOTSTRAP_PASSWORD: ${{ secrets.BETTER_AUTH_BOOTSTRAP_PASSWORD }}
+          SAVIA_MCP_SHARED_SECRET: ${{ secrets.SAVIA_MCP_SHARED_SECRET }}
+          SAVIA_REQUEST_ENCRYPTION_KEY: ${{ secrets.SAVIA_REQUEST_ENCRYPTION_KEY }}
+          EXTENSION_CONNECTIONS_ENCRYPTION_KEY: ${{ secrets.EXTENSION_CONNECTIONS_ENCRYPTION_KEY }}
+          ASSISTANT_SETTINGS_ENCRYPTION_KEY: ${{ secrets.ASSISTANT_SETTINGS_ENCRYPTION_KEY }}
+          CRM_INTEGRATION_KEY: ${{ secrets.CRM_INTEGRATION_KEY }}
+          PLUGIN_REGISTRY_TENANTS: ${{ secrets.PLUGIN_REGISTRY_TENANTS }}
+          NANGO_API_KEY: ${{ secrets.NANGO_API_KEY }}
+          NANGO_FALLBACK_API_KEY: ${{ secrets.NANGO_FALLBACK_API_KEY }}
+          NANGO_JIRA_REPORTING_CONNECTION_ID: ${{ secrets.NANGO_JIRA_REPORTING_CONNECTION_ID }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          WHATSAPP_META_APP_SECRET: ${{ secrets.WHATSAPP_META_APP_SECRET }}
+          WHATSAPP_WEBHOOK_VERIFY_TOKEN: ${{ secrets.WHATSAPP_WEBHOOK_VERIFY_TOKEN }}
+          SAVIA_FLOWS_BRIDGE_SECRET: ${{ env.SAVIA_FLOWS_PLANNED == 'true' && secrets.SAVIA_FLOWS_BRIDGE_SECRET || '' }}
+          SAVIA_FLOWS_JWT_SECRET: ${{ env.SAVIA_FLOWS_PLANNED == 'true' && secrets.SAVIA_FLOWS_JWT_SECRET || '' }}
+          SAVIA_FLOWS_SECRET_MASTER_KEY: ${{ env.SAVIA_FLOWS_PLANNED == 'true' && secrets.SAVIA_FLOWS_SECRET_MASTER_KEY || '' }}
+          SAVIA_FLOWS_FORM_SIGNING_KEY: ${{ env.SAVIA_FLOWS_PLANNED == 'true' && secrets.SAVIA_FLOWS_FORM_SIGNING_KEY || '' }}
+          SQL_BRIDGE_URL: ${{ secrets.SQL_BRIDGE_URL }}
+          SQL_BRIDGE_SECRET: ${{ secrets.SQL_BRIDGE_SECRET }}
+          SAVIA_CHATGPT_CLIENT_ID: ${{ secrets.SAVIA_CHATGPT_CLIENT_ID }}
+          SAVIA_CHATGPT_CLIENT_SECRET: ${{ secrets.SAVIA_CHATGPT_CLIENT_SECRET }}
+          SAVIA_CHATGPT_TOKEN_AUTH_METHOD: ${{ vars.SAVIA_CHATGPT_TOKEN_AUTH_METHOD }}
+          SAVIA_GOOGLE_CLIENT_ID: ${{ secrets.SAVIA_GOOGLE_CLIENT_ID }}
+          SAVIA_GOOGLE_CLIENT_SECRET: ${{ secrets.SAVIA_GOOGLE_CLIENT_SECRET }}
+          SAVIA_MICROSOFT_CLIENT_ID: ${{ secrets.SAVIA_MICROSOFT_CLIENT_ID }}
+          SAVIA_MICROSOFT_CLIENT_SECRET: ${{ secrets.SAVIA_MICROSOFT_CLIENT_SECRET }}
+          SAVIA_BACKUP_KEY: ${{ secrets.SAVIA_BACKUP_KEY }}
+          SAVIA_FLOWS_BACKUP_KEY: ${{ secrets.SAVIA_FLOWS_BACKUP_KEY }}
+          SAVIA_BACKUP_R2_FORCE_API: "true"
+          R2_BACKUP_ACCESS_KEY_ID: ${{ secrets.R2_BACKUP_ACCESS_KEY_ID }}
+          R2_BACKUP_SECRET_ACCESS_KEY: ${{ secrets.R2_BACKUP_SECRET_ACCESS_KEY }}
+          SAVIA_RUNTIME_OPERATION_DIRECTORY: ${{ runner.temp }}/savia-runtime
+          PRODUCTION_OPERATIONS_ENABLED: ${{ vars.PRODUCTION_OPERATIONS_ENABLED }}
+
+      - name: Encrypt private command diagnostics
+        if: ${{ always() }}
+        env:
+          SAVIA_BACKUP_KEY: ${{ secrets.SAVIA_BACKUP_KEY }}
+        run: |
+          if [ -d "$RUNNER_TEMP/savia-runtime/command-errors" ]; then
+            umask 077
+            trap 'rm -f "$RUNNER_TEMP/production-command-diagnostics.tar.gz"' EXIT
+            tar -czf "$RUNNER_TEMP/production-command-diagnostics.tar.gz" -C "$RUNNER_TEMP/savia-runtime" command-errors
+            node scripts/encrypt-flows-backup.mjs --action encrypt --input "$RUNNER_TEMP/production-command-diagnostics.tar.gz" --output "$RUNNER_TEMP/production-command-diagnostics.enc"
+            rm -f "$RUNNER_TEMP/production-command-diagnostics.tar.gz"
+          fi
+
+      - name: Retain encrypted command diagnostics
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-command-diagnostics
+          path: ${{ runner.temp }}/production-command-diagnostics.enc
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Deploy release plugin ZIPs to all workspaces
+        if: ${{ success() && !cancelled() }}
+        run: node scripts/deploy-store-plugins.mjs
+        env:
+          SAVIA_DEPLOY_ENVIRONMENT: production
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_DATABASE_ID: ${{ env.SAVIA_DOMAIN_D1_ID }}

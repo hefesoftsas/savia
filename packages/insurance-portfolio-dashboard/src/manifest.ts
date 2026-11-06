@@ -1,0 +1,15 @@
+import type { ExtensionManifest } from "@savia/studio-shared/extension-package";
+
+export const insurancePortfolioExtensionManifest: ExtensionManifest = {
+  format: "savia.extension",
+  formatVersion: 1,
+  id: "insurance.portfolio-dashboard",
+  version: "1.0.0",
+  label: "Cartera de pólizas",
+  description:
+    "Resumen de pólizas vigentes, próximas a vencer y prima total para este espacio.",
+  labels: {"en": "Policy portfolio", "pt": "Carteira de apólices"},
+  descriptions: {"en": "Summary of active policies, upcoming expirations and total premium for this workspace.", "pt": "Resumo de apólices vigentes, próximos vencimentos e prêmio total deste espaço."},
+  requires: [],
+  apiVersion: 1,
+};

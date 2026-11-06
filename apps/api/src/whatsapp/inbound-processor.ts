@@ -1,0 +1,366 @@
+import {
+  nativeReplySchema,
+  nativeReplyText,
+  buildNativeMessage,
+  defaultNativeConfiguration,
+  type NativeReply,
+} from "./native";
+import type {
+  WhatsappAssistantBinding,
+  WhatsappInboundDependencies,
+  WhatsappRecoveryContext,
+} from "./inbound-contracts";
+import {
+  GENERATION_ATTEMPTS,
+  WhatsappInboundRepository,
+} from "./inbound-repository";
+
+import { humanSupportRecoveryReply } from "./human-support";
+
+import type { WhatsappQueueScope } from "./queue";
+
+const MAX_REPLY_LENGTH = 4096;
+const DEFAULT_BATCH_SIZE = 10;
+const DRAIN_BATCH_SIZE = 2;
+const DRAIN_MAX_BATCHES = 100;
+const DRAIN_WALL_BUDGET_MS = 5 * 60 * 1000;
+
+function sameBinding(
+  left: WhatsappAssistantBinding,
+  right: WhatsappAssistantBinding,
+): boolean {
+  return (
+    left.tenantId === right.tenantId &&
+    left.connectionId === right.connectionId &&
+    left.employeeId === right.employeeId &&
+    left.ownerPrincipalId === right.ownerPrincipalId &&
+    JSON.stringify(left.native) === JSON.stringify(right.native)
+  );
+}
+
+export async function processWhatsappInbox(
+  repository: WhatsappInboundRepository,
+  dependencies: WhatsappInboundDependencies,
+  limit = DEFAULT_BATCH_SIZE,
+  scope?: WhatsappQueueScope,
+): Promise<{ processed: number; failed: number }> {
+  const now = new Date().toISOString();
+  const candidates = await repository.candidates(limit, now, scope);
+  let processed = 0;
+  let failed = 0;
+
+  for (const messageId of candidates) {
+    const token = crypto.randomUUID();
+    const item = await repository.claim(
+      messageId,
+      token,
+      new Date().toISOString(),
+    );
+    if (!item) continue;
+    const processingStartedAt = Date.now();
+    const timing = (stage: string, startedAt: number, outcome = "completed") =>
+      console.info(
+        JSON.stringify({
+          event: "whatsapp_inbound_timing",
+          message_id: item.messageId,
+          attempt: item.attempts,
+          stage,
+          outcome,
+          duration_ms: Math.max(0, Date.now() - startedAt),
+        }),
+      );
+    console.info(
+      JSON.stringify({
+        event: "whatsapp_inbound_claimed",
+        message_id: item.messageId,
+        attempt: item.attempts,
+        queue_wait_ms: Math.max(
+          0,
+          processingStartedAt - Date.parse(item.receivedAt),
+        ),
+      }),
+    );
+
+    let binding = await repository.resolve(item.phoneNumberId, item.wabaId);
+    if (
+      !binding ||
+      binding.tenantId !== item.tenantId ||
+      binding.connectionId !== item.connectionId ||
+      !binding.allowedContacts.includes(item.normalizedContact)
+    ) {
+      await repository.fail(
+        item.messageId,
+        token,
+        "assistant_binding_unavailable",
+      );
+      failed++;
+      continue;
+    }
+    if (
+      !item.assignedEmployeeId ||
+      !item.assignedOwnerPrincipalId ||
+      binding.employeeId !== item.assignedEmployeeId ||
+      binding.ownerPrincipalId !== item.assignedOwnerPrincipalId
+    ) {
+      await repository.fail(item.messageId, token, "assistant_binding_changed");
+      failed++;
+      continue;
+    }
+    if (!(await repository.isWithinReplyWindow(item))) {
+      await repository.fail(item.messageId, token, "inbound_message_expired");
+      failed++;
+      continue;
+    }
+
+    if (dependencies.indicator) {
+      const indicatorStartedAt = Date.now();
+      try {
+        await dependencies.indicator(binding, item.messageId);
+      } catch {
+        /* Metadata indicators must not block the conversation. */
+      } finally {
+        timing("indicator", indicatorStartedAt);
+      }
+    }
+    const history = await repository.getHistory(item);
+    timing("preparation", processingStartedAt);
+    const generationStartedAt = Date.now();
+    let reply: string;
+    let outgoing: string | NativeReply;
+    try {
+      const generated = await dependencies.generate(
+        binding,
+        history,
+        item.text,
+        item,
+      );
+      if (typeof generated === "string") {
+        outgoing = generated.trim();
+        reply = outgoing;
+      } else {
+        outgoing = nativeReplySchema.parse(generated);
+        if (outgoing.kind === "template")
+          throw new Error("Automatic templates require an administrator send");
+        buildNativeMessage(
+          outgoing,
+          binding.native ?? defaultNativeConfiguration,
+          item.contactPhone,
+        );
+        reply = nativeReplyText(outgoing, binding.native).slice(
+          0,
+          MAX_REPLY_LENGTH,
+        );
+      }
+      if (!reply || reply.length > MAX_REPLY_LENGTH)
+        throw new Error("Generated reply is empty or too long");
+      timing("generation", generationStartedAt);
+    } catch (error) {
+      timing("generation", generationStartedAt, "failed");
+      const reason =
+        error instanceof Error && error.name === "TimeoutError"
+          ? "timeout"
+          : error instanceof Error && error.name === "AbortError"
+            ? "aborted"
+            : "generation_failed";
+      const retry =
+        reason === "generation_failed" && item.attempts < GENERATION_ATTEMPTS;
+      console.info(
+        JSON.stringify({
+          event: "whatsapp_inbound_generation_error",
+          message_id: item.messageId,
+          attempt: item.attempts,
+          error_code: reason,
+          retry_decision: retry ? "retry_generation" : "send_recovery",
+        }),
+      );
+      if (retry) {
+        await repository.retryGeneration(item.messageId, token, item.attempts);
+        failed++;
+        continue;
+      }
+      // Persist and authorize the recovery reply through the same send path.
+      const recoveryContext: WhatsappRecoveryContext = { reason };
+      outgoing =
+        (await dependencies
+          .recoveryReply?.(binding, item, recoveryContext)
+          .catch(() => humanSupportRecoveryReply())) ??
+        humanSupportRecoveryReply();
+      reply = outgoing;
+    }
+
+    if (!(await repository.isWithinReplyWindow(item))) {
+      await repository.fail(item.messageId, token, "inbound_message_expired");
+      failed++;
+      continue;
+    }
+
+    const current = await repository.resolve(item.phoneNumberId, item.wabaId);
+    if (
+      !current ||
+      !sameBinding(binding, current) ||
+      !current.allowedContacts.includes(item.normalizedContact)
+    ) {
+      await repository.fail(item.messageId, token, "assistant_binding_changed");
+      failed++;
+      continue;
+    }
+    binding = current;
+
+    let completionStatements: D1PreparedStatement[] = [];
+    if (dependencies.completionStatements) {
+      const completionStartedAt = Date.now();
+      try {
+        // Prepare all database work before an external send. Preparation
+        // failures can retry safely because no message has been dispatched.
+        completionStatements = await dependencies.completionStatements(
+          binding,
+          item,
+        );
+        timing("completion_preparation", completionStartedAt);
+      } catch {
+        timing("completion_preparation", completionStartedAt, "failed");
+        await repository.retryGeneration(item.messageId, token, item.attempts);
+        failed++;
+        continue;
+      }
+    }
+
+    const startedAt = new Date().toISOString();
+    if (
+      !(await repository.beginResponse(
+        item.messageId,
+        token,
+        reply,
+        startedAt,
+        typeof outgoing === "string" ? undefined : outgoing,
+      ))
+    )
+      continue;
+
+    // A responding row is never reclaimed for generation or sending. This final
+    // check prevents a setting or membership revocation just before dispatch.
+    const beforeSend = await repository.resolve(
+      item.phoneNumberId,
+      item.wabaId,
+    );
+    if (!(await repository.isWithinReplyWindow(item))) {
+      await repository.fail(item.messageId, token, "inbound_message_expired");
+      failed++;
+      continue;
+    }
+    if (
+      !beforeSend ||
+      !sameBinding(binding, beforeSend) ||
+      !beforeSend.allowedContacts.includes(item.normalizedContact)
+    ) {
+      await repository.fail(item.messageId, token, "assistant_binding_changed");
+      failed++;
+      continue;
+    }
+
+    if (
+      dependencies.authorizeReply &&
+      !(await dependencies.authorizeReply(beforeSend, item))
+    ) {
+      await repository.fail(item.messageId, token, "channel_access_revoked");
+      failed++;
+      continue;
+    }
+    const transportStartedAt = Date.now();
+    let sendCompleted = false;
+    let persistenceStartedAt = 0;
+    try {
+      const outboundId = await dependencies.send(
+        beforeSend,
+        outgoing,
+        item.contactPhone,
+        item,
+      );
+      if (!outboundId.trim())
+        throw new Error("The provider returned no message id");
+      timing("transport", transportStartedAt);
+      sendCompleted = true;
+      persistenceStartedAt = Date.now();
+      const saved = await repository.complete(
+        item.messageId,
+        token,
+        outboundId,
+        completionStatements,
+      );
+      timing(
+        "persistence",
+        persistenceStartedAt,
+        saved ? "completed" : "stale",
+      );
+      if (saved) {
+        processed++;
+        await dependencies
+          .afterReply?.(beforeSend, item, outgoing)
+          .catch(() => console.error("WHATSAPP_CHANNEL_HISTORY_FAILED"));
+        timing("total", processingStartedAt);
+      } else failed++;
+    } catch {
+      if (sendCompleted) timing("persistence", persistenceStartedAt, "failed");
+      else timing("transport", transportStartedAt, "uncertain");
+      // The request may have reached Meta even if its response was lost. Keep
+      // the saved reply and stop here; an automatic retry could send twice.
+      await repository.fail(item.messageId, token, "outbound_send_uncertain");
+      failed++;
+    }
+  }
+
+  return { processed, failed };
+}
+
+export type WhatsappInboxDrainOptions = {
+  batchSize?: number;
+  maxBatches?: number;
+  wallBudgetMs?: number;
+  now?: () => number;
+};
+
+export async function drainWhatsappInbox(
+  repository: WhatsappInboundRepository,
+  dependencies: WhatsappInboundDependencies,
+  options: WhatsappInboxDrainOptions = {},
+): Promise<{ processed: number; failed: number }> {
+  const now = options.now ?? Date.now;
+  const batchSize = Math.max(
+    1,
+    Math.min(
+      DRAIN_BATCH_SIZE,
+      Math.floor(options.batchSize ?? DRAIN_BATCH_SIZE),
+    ),
+  );
+  const maxBatches = Math.max(
+    1,
+    Math.min(
+      DRAIN_MAX_BATCHES,
+      Math.floor(options.maxBatches ?? DRAIN_MAX_BATCHES),
+    ),
+  );
+  const wallBudgetMs = Math.max(
+    1,
+    Math.min(
+      DRAIN_WALL_BUDGET_MS,
+      Math.floor(options.wallBudgetMs ?? DRAIN_WALL_BUDGET_MS),
+    ),
+  );
+  const startedAt = now();
+  let processed = 0;
+  let failed = 0;
+
+  for (let batch = 0; batch < maxBatches; batch++) {
+    if (now() - startedAt >= wallBudgetMs) break;
+    const result = await processWhatsappInbox(
+      repository,
+      dependencies,
+      batchSize,
+    );
+    processed += result.processed;
+    failed += result.failed;
+    if (result.processed + result.failed === 0) break;
+  }
+
+  return { processed, failed };
+}

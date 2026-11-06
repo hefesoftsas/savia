@@ -1,0 +1,984 @@
+import { runInDurableObject } from "cloudflare:test";
+import { env } from "cloudflare:workers";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { createApp } from "./combined-app";
+import { createTestApp } from "./test-app";
+import { createRealtimeHubClient } from "../src/realtime/hub-client";
+import {
+  dispatchRealtimeOutbox,
+  pruneRealtimeOutbox,
+} from "../src/realtime/outbox";
+import { ensureBootstrapAdministrator } from "../src/auth/identity-repository";
+import {
+  agencyAdministratorAuthenticator,
+  agencyMemberAuthenticator,
+  platformAdministratorAuthenticator,
+} from "./auth-fixtures";
+
+const migrationSqls = Object.entries(
+  import.meta.glob<string>("../../../packages/db/migrations/*.sql", {
+    eager: true,
+    import: "default",
+    query: "?raw",
+  }),
+)
+  .sort(([left], [right]) => left.localeCompare(right))
+  .map(([, sql]) => sql);
+
+function migrationStatements(sql: string): string[] {
+  return sql
+    .split("--> statement-breakpoint")
+    .map((statement) =>
+      statement
+        .replace(/^--.*$/gm, "")
+        .replace(/\s+/g, " ")
+        .trim(),
+    )
+    .filter(Boolean);
+}
+
+async function applyMigrations() {
+  for (const migration of migrationSqls) {
+    for (const statement of migrationStatements(migration)) {
+      await env.DB.exec(statement);
+    }
+  }
+}
+
+async function seedTenant(id = 101): Promise<void> {
+  await env.DB.prepare(
+    "INSERT INTO tenants (id, id_slug, name, is_active, created_at, updated_at, kind) VALUES (?, ?, ?, 1, '2026-01-01', '2026-01-01', 'commercial')",
+  )
+    .bind(id, `realtime-tenant-${id}`, `Realtime Tenant ${id}`)
+    .run();
+}
+
+async function seedMembershipActor(
+  principalId: string,
+  tenantId: number,
+  role: string,
+): Promise<void> {
+  await env.DB.prepare(
+    "INSERT INTO identity_principal(id,issuer,subject,email,display_name,is_active,created_at,updated_at) VALUES(?,?,?,?,?,1,'2026-01-01','2026-01-01')",
+  )
+    .bind(
+      principalId,
+      "savia:better-auth",
+      principalId,
+      `${principalId}@savia.test`,
+      principalId,
+    )
+    .run();
+  await env.DB.prepare(
+    "INSERT INTO identity_tenant_membership(id,principal_id,tenant_id,role,is_active,created_at,updated_at) VALUES(?,?,?, ?,1,'2026-01-01','2026-01-01')",
+  )
+    .bind(`${principalId}-membership`, principalId, tenantId, role)
+    .run();
+}
+
+function identityUserAdministrator() {
+  const accounts = new Map<
+    string,
+    {
+      subject: string;
+      email: string;
+      displayName: string;
+      role: "admin" | "user";
+      isBanned: boolean;
+      twoFactorEnabled: boolean;
+    }
+  >();
+  return {
+    issuer: "savia:better-auth",
+    async listUsers() {
+      return [...accounts.values()];
+    },
+    async getUser(subject: string) {
+      return {
+        subject,
+        email: "realtime.user@acme.test",
+        displayName: "Realtime User",
+        role: "user" as const,
+        isBanned: false,
+        twoFactorEnabled: false,
+      };
+    },
+    async createUser(input: {
+      email: string;
+      firstName: string;
+      lastName: string;
+      platformAdmin: boolean;
+    }) {
+      const account = {
+        subject: "better-auth-realtime-user",
+        email: input.email,
+        displayName: `${input.firstName} ${input.lastName}`,
+        role: input.platformAdmin ? ("admin" as const) : ("user" as const),
+        isBanned: false,
+        twoFactorEnabled: false,
+      };
+      accounts.set(account.subject, account);
+      return account;
+    },
+    async updateUser(subject: string) {
+      return {
+        subject,
+        email: "realtime.user@acme.test",
+        displayName: "Realtime User",
+        role: "user" as const,
+        isBanned: false,
+        twoFactorEnabled: false,
+      };
+    },
+    async setAccountActive(subject: string) {
+      return {
+        subject,
+        email: "realtime.user@acme.test",
+        displayName: "Realtime User",
+        role: "user" as const,
+        isBanned: false,
+        twoFactorEnabled: false,
+      };
+    },
+    async revokeSessions() {},
+    async sendPasswordReset() {},
+    async deleteUser(subject: string) {
+      accounts.delete(subject);
+    },
+  };
+}
+
+function roomStub(room: string) {
+  return env.REALTIME_HUB.get(env.REALTIME_HUB.idFromName(room));
+}
+
+async function issueTicket(
+  stub: DurableObjectStub,
+  grant: { principalId: string; topics: string[] },
+): Promise<string> {
+  const response = await stub.fetch("https://realtime.internal/issue", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(grant),
+  });
+  expect(response.status).toBe(200);
+  const body = (await response.json()) as {
+    data: { ticket: string; expiresAt: string };
+  };
+  return body.data.ticket;
+}
+
+async function connectSocket(stub: DurableObjectStub, ticket: string) {
+  const upgrade = await stub.fetch(
+    `https://realtime.internal/session?ticket=${encodeURIComponent(ticket)}`,
+    { headers: { Upgrade: "websocket" } },
+  );
+  expect(upgrade.status).toBe(101);
+  const socket = upgrade.webSocket;
+  expect(socket).toBeDefined();
+  const received: Array<Record<string, unknown>> = [];
+  // workerd test sockets require accept(); real browsers do not.
+  (socket as unknown as { accept?: () => void }).accept?.();
+  socket!.addEventListener("message", (event) => {
+    received.push(
+      event.data === "pong" ? { type: "pong" } : JSON.parse(String(event.data)),
+    );
+  });
+  return { socket: socket!, received };
+}
+
+async function waitFor(
+  received: Array<Record<string, unknown>>,
+  predicate: (message: Record<string, unknown>) => boolean,
+): Promise<Record<string, unknown>> {
+  const deadline = Date.now() + 2000;
+  for (;;) {
+    const found = received.find(predicate);
+    if (found) return found;
+    if (Date.now() > deadline) {
+      throw new Error(
+        `Timed out waiting for realtime message, got: ${JSON.stringify(received)}`,
+      );
+    }
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+}
+
+describe("Realtime hub", () => {
+  beforeAll(applyMigrations);
+  beforeEach(async () => {
+    await env.DB.exec(
+      "DELETE FROM request_page_runs WHERE principal_id IN ('test-agency-member', 'another-principal')",
+    );
+    await env.DB.exec(
+      "DELETE FROM realtime_event_outbox WHERE principal_id IN ('test-agency-member', 'another-principal')",
+    );
+    await env.DB.exec(
+      "DELETE FROM realtime_event_retention WHERE principal_id IN ('test-agency-member', 'another-principal')",
+    );
+    await env.DB.exec("DELETE FROM identity_tenant_membership");
+    await env.DB.exec("DELETE FROM identity_global_role");
+    await env.DB.exec("DELETE FROM identity_principal");
+    await env.DB.exec("DELETE FROM tenants");
+  });
+
+  it("scopes assistant-thread and request-page realtime tickets to the authenticated principal", async () => {
+    const app = createTestApp({
+      auth: agencyMemberAuthenticator(),
+      realtime: createRealtimeHubClient(env.REALTIME_HUB),
+    });
+    const ticketed = await app.request("/v1/realtime/ticket", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ topics: ["assistant-threads", "request-pages"] }),
+    });
+    expect(ticketed.status).toBe(201);
+    expect(await ticketed.json()).toMatchObject({
+      data: {
+        room: "principal:test-agency-member",
+        topics: ["assistant-threads", "request-pages"],
+      },
+    });
+
+    const crossPrincipal = await app.request("/v1/realtime/ticket", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        topics: ["assistant-threads"],
+        principalId: "another-user",
+      }),
+    });
+    expect(crossPrincipal.status).toBe(403);
+
+    const mixedScope = await app.request("/v1/realtime/ticket", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        topics: ["assistant-threads", "records"],
+        tenantId: 101,
+      }),
+    });
+    expect(mixedScope.status).toBe(400);
+  });
+
+  it("replays durable request-page changes only for the authenticated principal", async () => {
+    const id = crypto.randomUUID();
+    await env.DB.prepare(
+      `INSERT INTO request_page_runs
+       (id, principal_id, tenant_id, page_name, action_id, action_label, mode,
+        status, form_values, result, error, created_at, updated_at)
+       VALUES (?, 'test-agency-member', '101', 'generated', 'flow-a', 'Run',
+        'live', 'running', '{}', NULL, NULL, '2026-10-30', '2026-10-30')`,
+    )
+      .bind(id)
+      .run();
+    await env.DB.prepare(
+      "UPDATE request_page_runs SET status='complete', result='{}' WHERE id=?",
+    )
+      .bind(id)
+      .run();
+    await env.DB.prepare(
+      `INSERT INTO request_page_runs
+       (id, principal_id, tenant_id, page_name, action_id, action_label, mode,
+        status, form_values, result, error, created_at, updated_at)
+       VALUES (?, 'another-principal', '101', 'generated', 'flow-b', 'Other',
+        'live', 'complete', '{}', '{}', NULL, '2026-10-30', '2026-10-30')`,
+    )
+      .bind(crypto.randomUUID())
+      .run();
+
+    const response = await createTestApp({
+      auth: agencyMemberAuthenticator(),
+      realtimeOutboxRecoveryEnabled: true,
+    }).request("/v1/realtime/events?after=0&limit=10");
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      data: {
+        durable: true,
+        events: [
+          {
+            topic: "request-pages",
+            type: "updated",
+            collection: "generated",
+            id,
+            actor: "test-agency-member",
+          },
+        ],
+        hasMore: false,
+      },
+    });
+  });
+
+  it("does not advertise durable recovery when operations have not enabled it", async () => {
+    const response = await createTestApp({
+      auth: agencyMemberAuthenticator(),
+    }).request("/v1/realtime/events?after=0");
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ data: { durable: false } });
+  });
+
+  it("keeps failed publications pending and marks them only after DO acceptance", async () => {
+    const id = crypto.randomUUID();
+    await env.DB.prepare(
+      `INSERT INTO realtime_event_outbox
+       (principal_id, topic, type, collection, resource_id, created_at)
+       VALUES ('test-agency-member', 'request-pages', 'updated', 'generated', ?, ?)`,
+    )
+      .bind(id, new Date().toISOString())
+      .run();
+    const unavailable = {
+      publish() {},
+      publishConfirmed: async () => false,
+      async issue() {
+        return { ticket: "ticket", expiresAt: new Date().toISOString() };
+      },
+      async forward() {
+        return new Response();
+      },
+    };
+    const failed = await dispatchRealtimeOutbox(env.DB, unavailable, {
+      principalId: "test-agency-member",
+      resourceId: id,
+    });
+    expect(failed).toEqual({ delivered: 0, failed: 1 });
+    const pending = await env.DB.prepare(
+      "SELECT published_at, attempts FROM realtime_event_outbox WHERE resource_id=?",
+    )
+      .bind(id)
+      .first<{ published_at: string | null; attempts: number }>();
+    expect(pending).toMatchObject({ published_at: null, attempts: 1 });
+    const backlog = await dispatchRealtimeOutbox(env.DB, unavailable, {
+      principalId: "test-agency-member",
+      resourceId: id,
+      inspectBacklog: true,
+    });
+    expect(backlog).toMatchObject({
+      delivered: 0,
+      failed: 0,
+      pending: true,
+    });
+    expect(backlog.oldestPendingAgeMs).toEqual(expect.any(Number));
+
+    await env.DB.prepare(
+      "UPDATE realtime_event_outbox SET next_attempt_at=0 WHERE resource_id=?",
+    )
+      .bind(id)
+      .run();
+    const available = { ...unavailable, publishConfirmed: async () => true };
+    const retried = await dispatchRealtimeOutbox(env.DB, available, {
+      principalId: "test-agency-member",
+      resourceId: id,
+    });
+    expect(retried).toEqual({ delivered: 1, failed: 0 });
+    const sent = await env.DB.prepare(
+      "SELECT published_at FROM realtime_event_outbox WHERE resource_id=?",
+    )
+      .bind(id)
+      .first<{ published_at: string | null }>();
+    expect(sent?.published_at).toBeTruthy();
+  });
+
+  it("expires only published events and tells clients to resync past the retention watermark", async () => {
+    const expiredId = crypto.randomUUID();
+    const secondExpiredId = crypto.randomUUID();
+    const pendingId = crypto.randomUUID();
+    const principalId = "test-agency-member";
+    const old = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000).toISOString();
+    await env.DB.prepare(
+      `INSERT INTO realtime_event_outbox
+       (principal_id, topic, type, collection, resource_id, created_at, published_at)
+       VALUES (?, 'request-pages', 'updated', 'generated', ?, ?, ?)`,
+    )
+      .bind(principalId, expiredId, old, old)
+      .run();
+    await env.DB.prepare(
+      `INSERT INTO realtime_event_outbox
+       (principal_id, topic, type, collection, resource_id, created_at, published_at)
+       VALUES (?, 'request-pages', 'updated', 'generated', ?, ?, ?)`,
+    )
+      .bind(principalId, secondExpiredId, old, old)
+      .run();
+    await env.DB.prepare(
+      `INSERT INTO realtime_event_outbox
+       (principal_id, topic, type, collection, resource_id, created_at)
+       VALUES (?, 'request-pages', 'updated', 'generated', ?, ?)`,
+    )
+      .bind(principalId, pendingId, new Date().toISOString())
+      .run();
+
+    expect(await pruneRealtimeOutbox(env.DB, Date.now(), 1)).toBe(1);
+    const stillExpired = await env.DB.prepare(
+      "SELECT published_at FROM realtime_event_outbox WHERE principal_id=? AND resource_id=?",
+    )
+      .bind(principalId, secondExpiredId)
+      .first<{ published_at: string | null }>();
+    expect(stillExpired?.published_at).toBeTruthy();
+    const pending = await env.DB.prepare(
+      "SELECT event_id FROM realtime_event_outbox WHERE principal_id=? AND resource_id=?",
+    )
+      .bind(principalId, pendingId)
+      .first<{ event_id: number }>();
+    expect(pending).toBeTruthy();
+    const response = await createTestApp({
+      auth: agencyMemberAuthenticator(),
+      realtimeOutboxRecoveryEnabled: true,
+    }).request("/v1/realtime/events?after=0");
+    expect(response.status).toBe(410);
+    expect(await response.json()).toMatchObject({
+      error: {
+        code: "REALTIME_CURSOR_EXPIRED",
+        durable: true,
+        resyncRequired: true,
+        resetCursor: pending?.event_id,
+      },
+    });
+  });
+
+  it("delivers published events only to subscribed sockets", async () => {
+    const stub = roomStub("platform");
+    const users = await connectSocket(
+      stub,
+      await issueTicket(stub, { principalId: "p-1", topics: ["users"] }),
+    );
+    const tenants = await connectSocket(
+      stub,
+      await issueTicket(stub, { principalId: "p-2", topics: ["tenants"] }),
+    );
+
+    await stub.fetch("https://realtime.internal/publish", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        event: { topic: "users", type: "created", id: "principal-9" },
+      }),
+    });
+
+    const created = await waitFor(
+      users.received,
+      (message) => message.type === "created",
+    );
+    expect(created).toMatchObject({ v: 1, topic: "users", id: "principal-9" });
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(tenants.received.some((message) => message.type === "created")).toBe(
+      false,
+    );
+  });
+
+  it("isolates rooms from each other", async () => {
+    const platform = await connectSocket(
+      roomStub("platform"),
+      await issueTicket(roomStub("platform"), {
+        principalId: "p-1",
+        topics: ["users"],
+      }),
+    );
+    const tenant = await connectSocket(
+      roomStub("tenant:101"),
+      await issueTicket(roomStub("tenant:101"), {
+        principalId: "p-2",
+        topics: ["records"],
+      }),
+    );
+
+    await roomStub("tenant:101").fetch("https://realtime.internal/publish", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        event: { topic: "records", type: "updated", collection: "quotes" },
+      }),
+    });
+
+    await waitFor(tenant.received, (message) => message.type === "updated");
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(
+      platform.received.some((message) => message.type === "updated"),
+    ).toBe(false);
+  });
+
+  it("rejects invalid tickets and enforces single use", async () => {
+    const stub = roomStub("platform");
+    const bad = await stub.fetch(
+      "https://realtime.internal/session?ticket=missing",
+      { headers: { Upgrade: "websocket" } },
+    );
+    expect(bad.status).toBe(401);
+
+    const ticket = await issueTicket(stub, {
+      principalId: "p-1",
+      topics: ["users"],
+    });
+    const first = await stub.fetch(
+      `https://realtime.internal/session?ticket=${ticket}`,
+      { headers: { Upgrade: "websocket" } },
+    );
+    expect(first.status).toBe(101);
+    const second = await stub.fetch(
+      `https://realtime.internal/session?ticket=${ticket}`,
+      { headers: { Upgrade: "websocket" } },
+    );
+    expect(second.status).toBe(401);
+  });
+
+  it("auto-responds to pings without invoking the message handler", async () => {
+    const stub = roomStub("tenant:8802");
+    const ticket = await issueTicket(stub, {
+      principalId: "ping-user",
+      topics: ["records"],
+    });
+    const { socket, received } = await connectSocket(stub, ticket);
+    socket.send("ping");
+    await waitFor(received, (message) => message.type === "pong");
+    const closed = new Promise<number>((resolve) =>
+      socket.addEventListener("close", (event) => resolve(event.code)),
+    );
+    socket.send('{"type":"subscribe"}');
+    expect(await closed).toBe(1008);
+    await runInDurableObject(stub, async (_instance, state) => {
+      expect(state.getWebSocketAutoResponse()?.request).toBe("ping");
+      expect(state.getWebSocketAutoResponse()?.response).toBe("pong");
+    });
+  });
+
+  it("bounds expiry cleanup and leaves valid tickets usable", async () => {
+    const stub = roomStub("tenant:8803");
+    const ticket = await issueTicket(stub, {
+      principalId: "cleanup-user",
+      topics: ["records"],
+    });
+    await runInDurableObject(stub, async (_instance, state) => {
+      for (let i = 0; i < 200; i++)
+        state.storage.sql.exec(
+          "INSERT INTO realtime_tickets VALUES (?, ?, ?, ?)",
+          `expired-${i}`,
+          "old",
+          '["records"]',
+          0,
+        );
+    });
+    await issueTicket(stub, {
+      principalId: "cleanup-user",
+      topics: ["records"],
+    });
+    await runInDurableObject(stub, async (_instance, state) => {
+      expect(
+        state.storage.sql
+          .exec<{ count: number }>(
+            "SELECT count(*) AS count FROM realtime_tickets WHERE expires = 0",
+          )
+          .one().count,
+      ).toBe(72);
+    });
+    (await connectSocket(stub, ticket)).socket.close();
+  });
+
+  it("propagates capacity throttling through the hub client", async () => {
+    const hub = createRealtimeHubClient(env.REALTIME_HUB);
+    for (let i = 0; i < 8; i++)
+      await hub.issue("tenant:8804", {
+        principalId: "pending",
+        topics: ["records"],
+      });
+    await expect(
+      hub.issue("tenant:8804", { principalId: "pending", topics: ["records"] }),
+    ).rejects.toMatchObject({ status: 429 });
+  });
+
+  it("caps simultaneous connections per principal", async () => {
+    const stub = roomStub("tenant:8801");
+    const sockets: WebSocket[] = [];
+    for (let i = 0; i < 8; i++) {
+      const ticket = await issueTicket(stub, {
+        principalId: "limited",
+        topics: ["records"],
+      });
+      sockets.push((await connectSocket(stub, ticket)).socket);
+    }
+    const response = await stub.fetch("https://realtime.internal/issue", {
+      method: "POST",
+      body: JSON.stringify({ principalId: "limited", topics: ["records"] }),
+    });
+    expect(response.status).toBe(429);
+    for (const socket of sockets) socket.close();
+  });
+
+  it("issues tickets by role and publishes user mutations", async () => {
+    await seedTenant();
+    await seedMembershipActor("test-agency-administrator", 101, "agency_admin");
+    const hub = createRealtimeHubClient(env.REALTIME_HUB);
+    const administratorApp = createApp(
+      env.DB,
+      env.DOCUMENTS,
+      undefined,
+      platformAdministratorAuthenticator(),
+      identityUserAdministrator(),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      hub,
+    );
+    const memberApp = createApp(
+      env.DB,
+      env.DOCUMENTS,
+      undefined,
+      agencyMemberAuthenticator(),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      hub,
+    );
+
+    const forbidden = await memberApp.request("/v1/realtime/ticket", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ topics: ["users"] }),
+    });
+    expect(forbidden.status).toBe(403);
+
+    const ticketed = await administratorApp.request("/v1/realtime/ticket", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ topics: ["users"] }),
+    });
+    expect(ticketed.status).toBe(201);
+    const ticketBody = (await ticketed.json()) as {
+      data: { room: string; ticket: string; topics: string[] };
+    };
+    expect(ticketBody.data).toMatchObject({
+      room: "platform",
+      topics: ["users"],
+    });
+
+    const platformWorkspaceTicket = await administratorApp.request(
+      "/v1/realtime/ticket",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ topics: ["records"], tenantId: 0 }),
+      },
+    );
+    expect(platformWorkspaceTicket.status).toBe(201);
+    expect(await platformWorkspaceTicket.json()).toMatchObject({
+      data: { room: "tenant:0", topics: ["records"] },
+    });
+
+    const viewing = await connectSocket(
+      roomStub("platform"),
+      ticketBody.data.ticket,
+    );
+    const accessControlApp = createTestApp({
+      auth: agencyAdministratorAuthenticator(),
+      realtime: hub,
+    });
+    const accessControlTicket = await accessControlApp.request(
+      "/v1/realtime/ticket",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ topics: ["access-control"], tenantId: 101 }),
+      },
+    );
+    expect(accessControlTicket.status).toBe(201);
+    const accessControlTicketBody = (await accessControlTicket.json()) as {
+      data: { ticket: string };
+    };
+    const accessControlSocket = await connectSocket(
+      roomStub("tenant:101"),
+      accessControlTicketBody.data.ticket,
+    );
+
+    const provisioned = await administratorApp.request("/v1/identity/users", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        email: "realtime.user@acme.test",
+        firstName: "Realtime",
+        lastName: "User",
+        platformAdmin: false,
+        membership: { agencyId: 101, role: "operator" },
+      }),
+    });
+    expect(provisioned.status).toBe(201);
+
+    const created = await waitFor(
+      viewing.received,
+      (message) => message.type === "created",
+    );
+    expect(created).toMatchObject({ topic: "users" });
+    expect(typeof created.id).toBe("string");
+    const membershipChanged = await waitFor(
+      accessControlSocket.received,
+      (message) =>
+        message.topic === "access-control" && message.type === "updated",
+    );
+    expect(membershipChanged).toMatchObject({
+      collection: "memberships",
+      type: "updated",
+    });
+    const provisionedBody = (await provisioned.json()) as {
+      data: { id: string };
+    };
+    const membershipUpdated = await administratorApp.request(
+      `/v1/identity/users/${provisionedBody.data.id}`,
+      {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          membership: { tenantId: 101, role: "tenant_admin" },
+        }),
+      },
+    );
+    expect(membershipUpdated.status).toBe(200);
+    const membershipRoleChanged = await waitFor(
+      accessControlSocket.received,
+      (message) =>
+        message.topic === "access-control" && message.type === "updated",
+    );
+    expect(membershipRoleChanged).toMatchObject({
+      collection: "memberships",
+      id: provisionedBody.data.id,
+    });
+    accessControlSocket.socket.close();
+    viewing.socket.close();
+  });
+
+  it("authorizes record topics by tenant membership", async () => {
+    const hub = createRealtimeHubClient(env.REALTIME_HUB);
+    const memberApp = createApp(
+      env.DB,
+      env.DOCUMENTS,
+      undefined,
+      agencyMemberAuthenticator(),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      hub,
+    );
+
+    const foreignSocket = await memberApp.request(
+      `/v1/realtime/subscribe?room=tenant:999&ticket=${crypto.randomUUID()}`,
+      { headers: { Upgrade: "websocket" } },
+    );
+    expect(foreignSocket.status).toBe(403);
+
+    const missingTenant = await memberApp.request("/v1/realtime/ticket", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ topics: ["records"] }),
+    });
+    expect(missingTenant.status).toBe(400);
+
+    const reservedTenant = await memberApp.request("/v1/realtime/ticket", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ topics: ["records"], tenantId: 0 }),
+    });
+    expect(reservedTenant.status).toBe(403);
+
+    const foreign = await memberApp.request("/v1/realtime/ticket", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ topics: ["records"], tenantId: 999 }),
+    });
+    expect(foreign.status).toBe(403);
+
+    const allowed = await memberApp.request("/v1/realtime/ticket", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ topics: ["records"], tenantId: 101 }),
+    });
+    expect(allowed.status).toBe(201);
+    expect(await allowed.json()).toMatchObject({
+      data: { room: "tenant:101", topics: ["records"] },
+    });
+    for (let i = 0; i < 7; i++) {
+      const response = await memberApp.request("/v1/realtime/ticket", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ topics: ["records"], tenantId: 101 }),
+      });
+      expect(response.status).toBe(201);
+    }
+    const capacity = await memberApp.request("/v1/realtime/ticket", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ topics: ["records"], tenantId: 101 }),
+    });
+    expect(capacity.status).toBe(429);
+    expect(capacity.headers.get("Retry-After")).toBe("60");
+    expect(await capacity.json()).toMatchObject({
+      error: { code: "REALTIME_LIMIT" },
+    });
+
+    // The emulated binding resets on wall-clock minute boundaries. Control
+    // its decision here so CI crossing a minute cannot reset the test burst.
+    // The route must still scope attempts to the actor and enforce both the
+    // rate-limit response and membership checks when requests are allowed.
+    const limit = vi
+      .fn<RateLimit["limit"]>()
+      .mockResolvedValue({ success: true });
+    const rateLimitEnv = { ...env, REALTIME_RATE_LIMITER: { limit } };
+    for (let i = 0; i < 30; i++) {
+      const response = await memberApp.request(
+        `/v1/realtime/subscribe?room=tenant:999&ticket=${crypto.randomUUID()}`,
+        { headers: { Upgrade: "websocket" } },
+        rateLimitEnv,
+      );
+      expect(response.status).toBe(403);
+    }
+    limit.mockResolvedValueOnce({ success: false });
+    const throttled = await memberApp.request(
+      `/v1/realtime/subscribe?room=tenant:999&ticket=${crypto.randomUUID()}`,
+      { headers: { Upgrade: "websocket" } },
+      rateLimitEnv,
+    );
+    expect(throttled.status).toBe(429);
+    expect(throttled.headers.get("Retry-After")).toBe("60");
+    expect(await throttled.json()).toMatchObject({
+      error: { code: "REALTIME_LIMIT" },
+    });
+    const recovered = await memberApp.request(
+      `/v1/realtime/subscribe?room=tenant:999&ticket=${crypto.randomUUID()}`,
+      { headers: { Upgrade: "websocket" } },
+      rateLimitEnv,
+    );
+    expect(recovered.status).toBe(403);
+    expect(limit).toHaveBeenCalledTimes(32);
+    expect(
+      limit.mock.calls.every(
+        ([input]) => input.key === "principal:test-agency-member",
+      ),
+    ).toBe(true);
+  });
+
+  it("authorizes access-control tickets for tenant managers only and scopes tenant 0", async () => {
+    await seedTenant(101);
+    await seedTenant(102);
+    await seedMembershipActor("test-agency-administrator", 101, "agency_admin");
+    await seedMembershipActor("test-agency-member", 101, "viewer");
+    await env.DB.prepare(
+      "INSERT INTO identity_principal(id,issuer,subject,email,display_name,is_active,created_at,updated_at) VALUES('test-platform-admin','savia:better-auth','test-platform-admin','admin@savia.test','Platform Admin',1,'2026-01-01','2026-01-01')",
+    ).run();
+    await ensureBootstrapAdministrator(env.DB, "test-platform-admin");
+    const hub = createRealtimeHubClient(env.REALTIME_HUB);
+    const managerApp = createTestApp({
+      auth: agencyAdministratorAuthenticator(),
+      realtime: hub,
+    });
+    const memberApp = createTestApp({
+      auth: agencyMemberAuthenticator(),
+      realtime: hub,
+    });
+    const platformApp = createTestApp({
+      auth: platformAdministratorAuthenticator(),
+      realtime: hub,
+    });
+    const ticket = (app: ReturnType<typeof createTestApp>, tenantId: number) =>
+      app.request("/v1/realtime/ticket", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ topics: ["access-control"], tenantId }),
+      });
+
+    const allowedManager = await ticket(managerApp, 101);
+    expect(allowedManager.status).toBe(201);
+    expect(await allowedManager.json()).toMatchObject({
+      data: { room: "tenant:101", topics: ["access-control"] },
+    });
+    expect((await ticket(managerApp, 102)).status).toBe(403);
+    expect((await ticket(memberApp, 101)).status).toBe(403);
+
+    const platform = await ticket(platformApp, 0);
+    expect(platform.status).toBe(201);
+    expect(await platform.json()).toMatchObject({
+      data: { room: "tenant:0", topics: ["access-control"] },
+    });
+  });
+
+  it("allows principal topics only in the authenticated principal room", async () => {
+    const hub = createRealtimeHubClient(env.REALTIME_HUB);
+    const memberApp = createTestApp({
+      auth: agencyMemberAuthenticator(),
+      realtime: hub,
+    });
+    const own = await memberApp.request("/v1/realtime/ticket", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ topics: ["notifications", "account"] }),
+    });
+    expect(own.status).toBe(201);
+    expect(await own.json()).toMatchObject({
+      data: {
+        room: "principal:test-agency-member",
+        topics: ["notifications", "account"],
+      },
+    });
+
+    const impersonation = await memberApp.request("/v1/realtime/ticket", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        topics: ["notifications"],
+        principalId: "another-principal",
+      }),
+    });
+    expect(impersonation.status).toBe(403);
+
+    const mixedScopes = await memberApp.request("/v1/realtime/ticket", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        topics: ["records", "notifications"],
+        tenantId: 101,
+      }),
+    });
+    expect(mixedScopes.status).toBe(400);
+
+    const foreignRoom = await memberApp.request(
+      `/v1/realtime/subscribe?room=principal:another-principal&ticket=${crypto.randomUUID()}`,
+      { headers: { Upgrade: "websocket" } },
+    );
+    expect(foreignRoom.status).toBe(403);
+  });
+});

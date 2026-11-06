@@ -1,0 +1,383 @@
+.conversation-dialog {
+  width: min(940px, calc(100vw - 40px)) !important;
+  max-width: 940px !important;
+  padding: 0 !important;
+  gap: 0 !important;
+  max-height: calc(100dvh - 48px) !important;
+  overflow-y: auto !important;
+  background: var(--card);
+}
+.conversation-dialog > [data-slot="dialog-header"] {
+  padding: 22px 32px 18px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+}
+.conversation-dialog [data-slot="dialog-title"] {
+  font-size: 15px;
+}
+.conversation-dialog [data-slot="dialog-description"] {
+  font-size: 12px;
+}
+.conversation-dialog > [data-slot="dialog-close"] {
+  top: 22px;
+  right: 20px;
+}
+.conversation-dialog > .delete-section {
+  padding: 0 32px 20px;
+  margin: 0;
+}
+.conversation-wizard {
+  --conversation-ink: var(--primary);
+  --conversation-soft: var(--muted);
+  width: 100%;
+  max-width: 940px;
+  margin: 0 auto;
+  color: var(--conversation-ink);
+  background: var(--card);
+  min-width: 0;
+}
+.conversation-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 22px 40px 14px;
+  font-size: 12px;
+  color: var(--conversation-soft);
+}
+.conversation-object {
+  font-weight: 600;
+  max-width: 60%;
+  overflow-wrap: anywhere;
+}
+.conversation-counter {
+  white-space: nowrap;
+}
+.conversation-progress {
+  height: 3px;
+  background: var(--muted);
+  margin: 0 40px;
+}
+.conversation-progress > span {
+  display: block;
+  height: 100%;
+  background: var(--primary);
+  width: 100%;
+  transform-origin: left;
+  transition: transform 0.28s ease-out;
+}
+.conversation-body {
+  max-width: 670px;
+  margin: 0 auto;
+  padding: 50px 36px 32px;
+  min-height: 455px;
+}
+.conversation-prompt {
+  animation: conversation-arrive 0.24s ease-out;
+}
+.conversation-section {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--conversation-soft);
+  margin-bottom: 18px;
+}
+.conversation-optional {
+  padding: 2px 8px;
+  background: var(--card);
+  border-radius: 4px;
+  font-size: 11px;
+}
+.conversation-prompt h3 {
+  font-size: clamp(25px, 3vw, 36px);
+  line-height: 1.25;
+  letter-spacing: -0.025em;
+  font-weight: 600;
+  text-wrap: balance;
+  overflow-wrap: anywhere;
+  outline: none;
+  margin-bottom: 14px;
+}
+.conversation-prompt > p {
+  font-size: 15px;
+  line-height: 1.65;
+  color: var(--conversation-soft);
+  max-width: 55ch;
+  margin: 0 0 30px;
+}
+.conversation-wizard .form-field:has(.conversation-field-label[hidden]) {
+  display: none;
+}
+.conversation-wizard .form-field {
+  margin: 0;
+  min-width: 0;
+}
+.conversation-wizard .fe-form {
+  display: block;
+}
+.conversation-wizard .fe-form > div {
+  margin-top: 0;
+}
+.conversation-wizard [data-active-question="true"] > input,
+.conversation-wizard [data-active-question="true"] > textarea {
+  font-size: 22px;
+  line-height: 1.5;
+  min-height: 60px;
+  height: auto;
+  padding: 12px 16px;
+  border-radius: 8px;
+  background: white;
+  border-color: var(--border);
+  box-shadow: none;
+}
+.conversation-wizard [data-active-question="true"] > textarea {
+  min-height: 130px;
+  font-size: 18px;
+  resize: vertical;
+}
+.conversation-wizard [data-active-question="true"] input:focus-visible,
+.conversation-wizard [data-active-question="true"] textarea:focus-visible {
+  border-color: var(--primary);
+  outline: 2px solid var(--primary);
+  outline-offset: 3px;
+  box-shadow: none;
+}
+.conversation-wizard [data-active-question="true"] input[aria-invalid="true"] {
+  border-color: var(--destructive);
+}
+.conversation-choices {
+  display: grid;
+  gap: 10px;
+}
+.conversation-choices > button {
+  width: 100%;
+  min-height: 54px;
+  height: auto;
+  padding: 12px 16px;
+  justify-content: flex-start;
+  white-space: normal;
+  text-align: left;
+  font-size: 16px;
+  border-color: var(--border);
+  border-radius: 8px;
+  color: var(--conversation-ink);
+  background: var(--card);
+  box-shadow: none;
+}
+.conversation-choices > button:hover {
+  background: var(--card);
+  border-color: var(--primary);
+}
+.conversation-choices > button[aria-checked="true"] {
+  background: var(--card);
+  border-color: var(--primary);
+  box-shadow: inset 0 0 0 1px var(--primary);
+}
+.conversation-choice-index {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.conversation-choice-check {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+.conversation-actions {
+  margin-top: 30px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.conversation-primary-action {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex: 1;
+  flex-wrap: wrap;
+}
+.conversation-primary-action > button {
+  min-height: 48px;
+  padding: 12px 22px;
+  font-size: 15px;
+  border-radius: 8px;
+}
+.conversation-key-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--conversation-soft);
+}
+.conversation-footnote {
+  width: 100%;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--conversation-soft);
+  margin-top: 10px;
+}
+.conversation-field-error,
+.conversation-error {
+  color: var(--destructive);
+  font-size: 13px;
+  line-height: 1.5;
+  margin-top: 14px;
+}
+.conversation-error {
+  padding: 12px 14px;
+  background: var(--card);
+  border-radius: 8px;
+}
+.conversation-review > section {
+  margin-bottom: 24px;
+}
+.conversation-review h4 {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--conversation-soft);
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+.conversation-answer {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border);
+}
+.conversation-answer > div {
+  flex: 1;
+  min-width: 0;
+}
+.conversation-answer dt {
+  font-size: 12px;
+  color: var(--conversation-soft);
+  margin-bottom: 5px;
+}
+.conversation-answer dd {
+  font-size: 16px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.conversation-empty-value {
+  color: var(--muted-foreground);
+  font-size: 14px;
+}
+.conversation-success {
+  display: grid;
+  justify-items: center;
+  gap: 16px;
+  padding: 64px 30px;
+  text-align: center;
+  color: var(--primary);
+}
+.conversation-success h3 {
+  font-size: 25px;
+}
+.conversation-success p {
+  font-size: 14px;
+  color: var(--conversation-soft);
+}
+.conversation-wizard .studio-relation {
+  margin-top: 0;
+}
+.conversation-wizard .studio-relation input {
+  min-height: 48px;
+}
+.conversation-wizard .studio-relation-options button {
+  padding: 12px;
+}
+.conversation-wizard .studio-relation-selected button {
+  font-size: 14px;
+}
+.conversation-wizard .studio-pager {
+  margin-top: 8px;
+}
+@keyframes conversation-arrive {
+  from {
+    translate: 0 7px;
+  }
+  to {
+    translate: 0 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .conversation-prompt {
+    animation: none;
+  }
+  .conversation-progress > span {
+    transition: none;
+  }
+}
+@media (max-width: 600px) {
+  .conversation-dialog {
+    width: 100vw !important;
+    max-width: 100vw !important;
+    max-height: 100dvh !important;
+    height: 100dvh;
+    border-radius: 0 !important;
+    border: 0 !important;
+    top: 0 !important;
+    left: 0 !important;
+    transform: none !important;
+    translate: none !important;
+    display: block !important;
+  }
+  .conversation-dialog > [data-slot="dialog-header"] {
+    padding: 22px 44px 16px 20px;
+  }
+  .conversation-header {
+    padding: 20px 22px 14px;
+  }
+  .conversation-progress {
+    margin: 0 22px;
+  }
+  .conversation-body {
+    padding: 34px 22px 28px;
+    min-height: 380px;
+  }
+  .conversation-prompt h3 {
+    font-size: 28px;
+  }
+  .conversation-prompt > p {
+    font-size: 14px;
+    margin-bottom: 24px;
+  }
+  .conversation-section {
+    margin-bottom: 14px;
+  }
+  .conversation-key-hint {
+    display: none;
+  }
+  .conversation-wizard [data-active-question="true"] > input {
+    font-size: 20px;
+    min-height: 56px;
+  }
+  .conversation-actions {
+    gap: 10px;
+  }
+  .conversation-primary-action > button {
+    width: 100%;
+  }
+  .conversation-actions > button {
+    min-height: 48px;
+  }
+  .conversation-choice-index {
+    width: 22px;
+    height: 22px;
+  }
+  .conversation-dialog > .delete-section {
+    padding: 0 22px 20px;
+  }
+  .conversation-footnote {
+    font-size: 11px;
+  }
+}

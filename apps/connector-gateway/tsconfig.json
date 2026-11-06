@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "skipLibCheck": true
+  },
+  "include": [
+    "src/app.ts",
+    "src/index.ts",
+    "src/registry.ts",
+    "vitest.config.ts",
+    "worker-configuration.d.ts"
+  ]
+}

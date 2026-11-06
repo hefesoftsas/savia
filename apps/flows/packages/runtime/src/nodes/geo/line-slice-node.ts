@@ -1,0 +1,74 @@
+import { lineSlice } from "@savia/flows-geo";
+import { ExecutableNode, type NodeContext } from "@savia/flows-runtime";
+import type { NodeExecution, NodeType } from "@savia/flows-types";
+
+export class LineSliceNode extends ExecutableNode {
+  public static readonly nodeType: NodeType = {
+    id: "line-slice",
+    name: "Line Slice",
+    type: "line-slice",
+    description:
+      "Takes a line, a start Point, and a stop point and returns a subsection of the line in-between those points",
+    tags: ["Geo", "GeoJSON", "Transform", "LineSlice"],
+    icon: "scissors",
+    documentation:
+      "This node extracts a portion of a LineString between two specified points.",
+    inlinable: true,
+    asTool: false,
+    inputs: [
+      {
+        name: "startPt",
+        type: "geojson",
+        description: "Starting point",
+        required: true,
+      },
+      {
+        name: "stopPt",
+        type: "geojson",
+        description: "Stopping point",
+        required: true,
+      },
+      {
+        name: "line",
+        type: "geojson",
+        description: "Line to slice",
+        required: true,
+      },
+    ],
+    outputs: [
+      {
+        name: "sliced",
+        type: "geojson",
+        description: "Sliced line feature",
+      },
+    ],
+  };
+
+  public async execute(context: NodeContext): Promise<NodeExecution> {
+    try {
+      const { startPt, stopPt, line } = context.inputs;
+
+      if (!startPt) {
+        return this.createErrorResult("Missing startPt input");
+      }
+
+      if (!stopPt) {
+        return this.createErrorResult("Missing stopPt input");
+      }
+
+      if (!line) {
+        return this.createErrorResult("Missing line input");
+      }
+
+      // Delegate everything to Turf.js lineSlice function
+      const slicedLine = lineSlice(startPt, stopPt, line);
+
+      return this.createSuccessResult({
+        sliced: slicedLine,
+      });
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      return this.createErrorResult(`Error slicing line: ${error.message}`);
+    }
+  }
+}

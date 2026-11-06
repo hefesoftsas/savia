@@ -1,0 +1,5 @@
+# Preserve pinned PDF fixtures byte-for-byte, including their xref spacing.
+apps/flows/api/test/fixtures/hello.pdf binary
+apps/flows/packages/runtime/test/fixtures/hello.pdf binary
+# Dependency patches retain upstream context indentation and header separators.
+patches/@cloudflare__vitest-pool-workers@0.19.1.patch -whitespace

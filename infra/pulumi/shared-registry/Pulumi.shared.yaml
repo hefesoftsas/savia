@@ -1,0 +1,4 @@
+config:
+  savia-shared-registry:adoptExisting: "true"
+  savia-shared-registry:accountId: 08a0d36f8b0357684f83e4bfeb6628b6
+encryptionsalt: v1:Ebf10JTbdDk=:v1:L4OUDFaUK93BXTOY:Bg+dkZxDgAxvCfgUIyhfeRzz6kEFwg==

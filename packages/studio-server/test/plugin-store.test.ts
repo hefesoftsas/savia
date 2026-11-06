@@ -1,0 +1,3259 @@
+import { migrationStatements } from "./migration-statements";
+import deploymentWorker, {
+  deploymentTenants,
+} from "../../../scripts/plugin-deployment/worker";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { getPlatformProxy } from "wrangler";
+import { existsSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
+import { deflateRawSync } from "node:zlib";
+import { createStudioApp } from "../src/index";
+import { ExtensionConnectionRepository } from "../src/extension-connections";
+import { ExtensionSettingsRepository } from "../src/extension-settings";
+import { isExtensionAvailable } from "../src/extensions";
+import { shellBootstrapJs, type PluginStoreOptions } from "../src/plugin-store";
+import { verifyPluginEntryGrant } from "@savia/studio-shared/plugin-entry-grant";
+
+let platform: Awaited<
+  ReturnType<typeof getPlatformProxy<{ DB: D1Database; POC_LOCAL: string }>>
+>;
+
+// --- Escritor ZIP mínimo (stored + deflated) para las pruebas ---
+
+function crc32(bytes: Uint8Array): number {
+  let table = (crc32 as { table?: Int32Array }).table;
+  if (!table) {
+    table = new Int32Array(256);
+    for (let n = 0; n < 256; n++) {
+      let c = n;
+      for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+      table[n] = c;
+    }
+    (crc32 as { table?: Int32Array }).table = table;
+  }
+  let crc = -1;
+  for (const byte of bytes) crc = table[(crc ^ byte) & 0xff] ^ (crc >>> 8);
+  return (crc ^ -1) >>> 0;
+}
+
+function makeZip(
+  files: ReadonlyArray<{ name: string; data: Uint8Array; deflate?: boolean }>,
+): Uint8Array {
+  const encoder = new TextEncoder();
+  const chunks: Uint8Array[] = [];
+  const central: Uint8Array[] = [];
+  let offset = 0;
+  for (const file of files) {
+    const name = encoder.encode(file.name);
+    const raw = file.data;
+    const payload = file.deflate ? deflateRawSync(raw) : raw;
+    const header = new DataView(new ArrayBuffer(30));
+    header.setUint32(0, 0x04034b50, true);
+    header.setUint16(4, 20, true);
+    header.setUint16(8, file.deflate ? 8 : 0, true);
+    header.setUint32(14, crc32(raw), true);
+    header.setUint32(18, payload.length, true);
+    header.setUint32(22, raw.length, true);
+    header.setUint16(26, name.length, true);
+    chunks.push(
+      new Uint8Array(header.buffer),
+      name,
+      payload instanceof Uint8Array ? payload : new Uint8Array(payload),
+    );
+    const centralHeader = new DataView(new ArrayBuffer(46));
+    centralHeader.setUint32(0, 0x02014b50, true);
+    centralHeader.setUint16(6, 20, true);
+    centralHeader.setUint16(10, file.deflate ? 8 : 0, true);
+    centralHeader.setUint32(16, crc32(raw), true);
+    centralHeader.setUint32(20, payload.length, true);
+    centralHeader.setUint32(24, raw.length, true);
+    centralHeader.setUint16(28, name.length, true);
+    centralHeader.setUint32(42, offset, true);
+    central.push(new Uint8Array(centralHeader.buffer), name);
+    offset += 30 + name.length + payload.length;
+  }
+  const centralSize = central.reduce((sum, part) => sum + part.length, 0);
+  const end = new DataView(new ArrayBuffer(22));
+  end.setUint32(0, 0x06054b50, true);
+  end.setUint16(8, files.length, true);
+  end.setUint16(10, files.length, true);
+  end.setUint32(12, centralSize, true);
+  end.setUint32(16, offset, true);
+  const total = offset + centralSize + 22;
+  const out = new Uint8Array(total);
+  let cursor = 0;
+  for (const part of [...chunks, ...central, new Uint8Array(end.buffer)]) {
+    out.set(part, cursor);
+    cursor += part.length;
+  }
+  return out;
+}
+
+const text = (value: string) => new TextEncoder().encode(value);
+
+function pluginZip(
+  overrides: {
+    manifest?: Record<string, unknown>;
+    entry?: string;
+    store?: Record<string, unknown>;
+    badStore?: boolean;
+    sourceEntry?: string;
+  } = {},
+  options: { deflate?: boolean; omitEntry?: boolean } = {},
+): Uint8Array {
+  const manifest = {
+    format: "savia.extension",
+    formatVersion: 1,
+    id: "custom.demo",
+    version: "1.0.0",
+    label: "Demo",
+    description: "Plugin de demostración.",
+    requires: [],
+    apiVersion: 1,
+    ...overrides.manifest,
+  };
+  const files = [
+    {
+      name: "savia-extension.json",
+      data: text(JSON.stringify(manifest)),
+      deflate: options.deflate,
+    },
+  ];
+  if (!options.omitEntry)
+    files.push({
+      name: "dist/plugin.js",
+      data: text(
+        overrides.entry ??
+          `export function render(el, savia) { el.textContent = "demo"; }`,
+      ),
+      deflate: options.deflate,
+    });
+  if (overrides.store !== undefined)
+    files.push({
+      name: "store.json",
+      data: text(JSON.stringify(overrides.store)),
+      deflate: options.deflate,
+    });
+  if (overrides.badStore)
+    files.push({
+      name: "store.json",
+      data: text("no es json"),
+      deflate: options.deflate,
+    });
+  if (overrides.sourceEntry !== undefined)
+    files.push({
+      name: "src/entry.tsx",
+      data: text(overrides.sourceEntry),
+      deflate: options.deflate,
+    });
+  return makeZip(files);
+}
+
+const encryptionKey = btoa(String.fromCharCode(...new Uint8Array(32).fill(7)));
+
+function app(tenant: string, options: Partial<PluginStoreOptions> = {}) {
+  return createStudioApp(tenant, { seedObjects: [], ...options });
+}
+
+function appWithRuntime(tenant: string) {
+  const isActive = (tenantId: string, extensionId: string) =>
+    isExtensionAvailable(platform.env.DB, tenantId, extensionId, undefined);
+  return createStudioApp(tenant, {
+    seedObjects: [],
+    principalId: "user-store",
+    connectionRepository: new ExtensionConnectionRepository(platform.env.DB, {
+      encryptionKey,
+      isExtensionActive: isActive,
+    }),
+    settingsRepository: new ExtensionSettingsRepository(platform.env.DB, {
+      isExtensionActive: isActive,
+    }),
+  });
+}
+
+function countPreparedStatements(database: D1Database) {
+  const statements: string[] = [];
+  const counted = new Proxy(database, {
+    get(target, property) {
+      if (property === "prepare")
+        return (query: string) => {
+          statements.push(query);
+          return target.prepare(query);
+        };
+      const value = Reflect.get(target, property, target);
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  });
+  return { database: counted, statements };
+}
+
+async function api(
+  tenant: string,
+  path: string,
+  method = "GET",
+  body?: unknown,
+): Promise<{ status: number; json: any }> {
+  const response = await appWithRuntime(tenant).request(
+    "http://localhost/api" + path,
+    {
+      method,
+      headers: { "content-type": "application/json" },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    },
+    platform.env,
+  );
+  const text = await response.text();
+  return {
+    status: response.status,
+    json: (text ? JSON.parse(text) : null) as any,
+  };
+}
+
+async function uploadZip(
+  tenant: string,
+  zip: Uint8Array,
+  name = "plugin.zip",
+  env: typeof platform.env = platform.env,
+): Promise<Response> {
+  const form = new FormData();
+  form.set(
+    "file",
+    new File([zip as BlobPart], name, { type: "application/zip" }),
+  );
+  return app(tenant).request(
+    "http://localhost/api/plugin-store/upload",
+    { method: "POST", body: form },
+    env,
+  );
+}
+
+function raceStoreWritesAfterRead(db: D1Database): D1Database {
+  const writeVersions = new WeakMap<object, string>();
+  let latestReads = 0;
+  let releaseLatestReads!: () => void;
+  const bothLatestReads = new Promise<void>((resolve) => {
+    releaseLatestReads = resolve;
+  });
+  let releaseHigherWrite!: () => void;
+  const higherWriteFinished = new Promise<void>((resolve) => {
+    releaseHigherWrite = resolve;
+  });
+  const latestReadSql =
+    "SELECT version FROM plugin_store_artifacts WHERE tenant_id=? AND id=?";
+  return new Proxy(db, {
+    get(target, property) {
+      if (property === "prepare")
+        return (query: string) => {
+          const statement = target.prepare(query);
+          return new Proxy(statement, {
+            get(prepared, method) {
+              if (method === "bind")
+                return (...values: unknown[]) => {
+                  const bound = prepared.bind(...values);
+                  const normalizedQuery = query.trimStart();
+                  if (
+                    normalizedQuery.startsWith(
+                      "INSERT INTO plugin_store_artifacts",
+                    )
+                  )
+                    writeVersions.set(bound, String(values[2]));
+                  else if (
+                    normalizedQuery.startsWith("WITH candidate(p0,p1,p2) AS") &&
+                    normalizedQuery.includes(
+                      "INSERT INTO plugin_store_artifacts",
+                    )
+                  )
+                    writeVersions.set(
+                      bound,
+                      values.slice(0, 3).map(String).join("."),
+                    );
+                  return bound;
+                };
+              if (method === "all" && query === latestReadSql)
+                return async (...values: unknown[]) => {
+                  const result = await prepared.all(...values);
+                  if (++latestReads === 2) releaseLatestReads();
+                  await bothLatestReads;
+                  return result;
+                };
+              const value = Reflect.get(prepared, method, prepared);
+              return typeof value === "function" ? value.bind(prepared) : value;
+            },
+          });
+        };
+      if (property === "batch")
+        return async (statements: D1PreparedStatement[]) => {
+          const version = statements
+            .map((statement) => writeVersions.get(statement))
+            .find(Boolean);
+          if (version === "1.4.4") await higherWriteFinished;
+          const result = await target.batch(statements);
+          if (version === "1.4.5") releaseHigherWrite();
+          return result;
+        };
+      const value = Reflect.get(target, property, target);
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  });
+}
+
+beforeAll(async () => {
+  platform = await getPlatformProxy({
+    configPath: "wrangler.jsonc",
+    persist: false,
+  });
+  for (const file of readdirSync("migrations")
+    .filter((name) => name.endsWith(".sql"))
+    .sort())
+    for (const sql of migrationStatements(
+      readFileSync(`migrations/${file}`, "utf8"),
+    ))
+      await platform.env.DB.prepare(sql).run();
+});
+
+afterAll(async () => {
+  await platform?.dispose();
+});
+
+describe("plugin store por tenant", () => {
+  it("genera un bootstrap parseable como módulo (sin ejecutar UI).", async () => {
+    const url = `data:text/javascript,${encodeURIComponent(shellBootstrapJs())}`;
+    const failure = await import(url).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    // Sin window/parent en Node debe fallar en runtime, nunca en sintaxis.
+    expect(failure).toBeInstanceOf(Error);
+    expect((failure as Error).constructor.name).not.toBe("SyntaxError");
+  });
+
+  it("serializes configured search fields in sandbox collection queries", () => {
+    expect(shellBootstrapJs()).toContain(
+      'params.set("searchFields", options.searchFields.join(","))',
+    );
+  });
+
+  it("elige render para pantallas y el handler declarado para widgets", () => {
+    const source = shellBootstrapJs().match(
+      /function selectRender\(module, widgetId\) \{[\s\S]*?\n\}/,
+    )?.[0];
+    expect(source).toBeDefined();
+    const selectRender = new Function(`${source}; return selectRender;`)() as (
+      module: {
+        render?: () => void;
+        renderWidget?: () => void;
+        widgets?: Record<string, () => void>;
+      },
+      widgetId: string,
+    ) => (() => void) | undefined;
+    const render = () => undefined;
+    const renderWidget = () => undefined;
+    const summary = () => undefined;
+    const module = { render, renderWidget, widgets: { summary } };
+    expect(selectRender(module, "")).toBe(render);
+    expect(selectRender(module, "summary")).toBe(summary);
+    expect(selectRender(module, "other")).toBe(renderWidget);
+  });
+
+  it("sirve el bootstrap del sandbox sin scripts inline ni unsafe-eval.", async () => {
+    const tenant = "store-bootstrap";
+    const bootstrap = await app(tenant).request(
+      "http://localhost/api/plugin-store/shell-bootstrap.js",
+      {},
+      platform.env,
+    );
+    expect(bootstrap.status).toBe(200);
+    expect(bootstrap.headers.get("content-type")).toContain("javascript");
+    expect(bootstrap.headers.get("access-control-allow-origin")).toBe("*");
+    const code = await bootstrap.text();
+    expect(code).toContain("import.meta.url");
+    expect(code).toContain("storeBasePath");
+
+    const uploaded = await uploadZip(tenant, pluginZip());
+    expect(uploaded.status, await uploaded.text()).toBe(200);
+    await app(tenant).request(
+      "http://localhost/api/extensions/custom.demo/install",
+      { method: "POST", headers: { "content-type": "application/json" } },
+      platform.env,
+    );
+    const shell = await app(tenant).request(
+      "http://localhost/api/plugin-store/custom.demo/shell",
+      {},
+      platform.env,
+    );
+    expect(shell.status).toBe(200);
+    const html = await shell.text();
+    // Sin <script> inline: todo el JS vive en shell-bootstrap.js.
+    expect(html).not.toMatch(/<script(?![^>]*\bsrc=)[^>]*>/);
+    expect(html).toContain("shell-bootstrap.js?plugin=custom.demo");
+    const csp = html.match(/Content-Security-Policy" content="([^"]+)"/)?.[1];
+    const scriptSrc = csp
+      ?.split(";")
+      .map((part) => part.trim())
+      .find((part) => part.startsWith("script-src"));
+    expect(scriptSrc).toBe("script-src 'self'");
+    expect(csp).not.toContain("unsafe-eval");
+    // Sin red directa posible: el shim usa postMessage y el CSP la niega.
+    expect(csp).toContain("connect-src 'none'");
+
+    const wizardShell = await app(tenant).request(
+      "http://localhost/api/plugin-store/custom.demo/shell?screen=cotizador_por_pasos&view=records",
+      {},
+      platform.env,
+    );
+    expect(wizardShell.headers.get("cache-control")).toBe(
+      "private, no-store, no-transform",
+    );
+    const wizardHtml = await wizardShell.text();
+    expect(wizardHtml).toContain("screen=cotizador_por_pasos");
+    expect(wizardHtml).toContain("view=records");
+    expect(code).toContain('params.get("screen")');
+    const panelShell = await app(tenant).request(
+      "http://localhost/api/plugin-store/custom.demo/shell?screen=accounts&view=records&panel=1",
+      {},
+      platform.env,
+    );
+    const panelHtml = await panelShell.text();
+    expect(panelHtml).toContain("panel=1");
+    expect(panelHtml).toContain("#root{padding:0}");
+    expect(html).toContain("#root{padding:16px}");
+
+    const darkShell = await app(tenant).request(
+      "http://localhost/api/plugin-store/custom.demo/shell?theme=dark",
+      {},
+      platform.env,
+    );
+    const darkHtml = await darkShell.text();
+    expect(darkHtml).toContain("color-scheme:dark");
+    expect(darkHtml).toContain("--background:oklch(0.145 0 0)");
+    expect(html).toContain("color-scheme:light");
+
+    const scopedShell = await createStudioApp(tenant, {
+      seedObjects: [],
+      apiBasePath: "/v1/data-domains/platform",
+    }).request(
+      "http://localhost/api/plugin-store/custom.demo/shell?screen=cotizador_por_pasos",
+      {},
+      platform.env,
+    );
+    expect(scopedShell.status).toBe(200);
+    const scopedHtml = await scopedShell.text();
+    const bootstrapPath = scopedHtml.match(
+      /<script type="module" src="([^"]+)"/,
+    )?.[1];
+    expect(bootstrapPath).toBeDefined();
+    const bootstrapUrl = new URL(bootstrapPath!, "http://localhost");
+    expect(bootstrapUrl.pathname).toBe(
+      "/v1/data-domains/platform/api/plugin-store/shell-bootstrap.js",
+    );
+    expect(bootstrapUrl.searchParams.get("entry")).toBe(
+      "/v1/data-domains/platform/api/plugin-store/custom.demo/entry?version=1.0.0",
+    );
+    expect(code).toContain("entryUrl.origin !== bootstrapUrl.origin");
+
+    const signedShell = await createStudioApp(tenant, {
+      seedObjects: [],
+      apiBasePath: "/v1/data-domains/platform",
+      entryGrantSecret: "test-secret",
+    }).request(
+      "http://localhost/api/plugin-store/custom.demo/shell?screen=cotizador_por_pasos",
+      {},
+      platform.env,
+    );
+    expect(signedShell.status).toBe(200);
+    const signedHtml = await signedShell.text();
+    const signedPath = signedHtml.match(
+      /<script type="module" src="([^"]+)"/,
+    )?.[1];
+    const signedUrl = new URL(
+      signedPath!.replaceAll("&amp;", "&"),
+      "http://localhost",
+    );
+    expect(signedUrl.pathname).toBe(
+      "/api/public/plugin-store/shell-bootstrap.js",
+    );
+    const signedEntry = new URL(
+      signedUrl.searchParams.get("entry")!,
+      "http://localhost",
+    );
+    expect(signedEntry.pathname).toBe(
+      "/api/public/plugin-store/custom.demo/entry",
+    );
+    // Discover the module before the bootstrap script finishes downloading.
+    const preload = signedHtml.match(
+      /<link rel="modulepreload" href="([^"]+)" crossorigin="anonymous">/,
+    )?.[1];
+    expect(preload?.replaceAll("&amp;", "&")).toBe(
+      signedUrl.searchParams.get("entry"),
+    );
+    expect(
+      await verifyPluginEntryGrant(
+        "test-secret",
+        {
+          tenantId: signedEntry.searchParams.get("tenant")!,
+          pluginId: "custom.demo",
+          version: signedEntry.searchParams.get("version")!,
+          expiresAt: Number(signedEntry.searchParams.get("expires")),
+        },
+        signedEntry.searchParams.get("signature")!,
+      ),
+    ).toBe(true);
+  });
+
+  it("sube, instala, sirve y desactiva un plugin ZIP.", async () => {
+    const tenant = "store-basic";
+    const uploaded = await uploadZip(tenant, pluginZip());
+    expect(uploaded.status, await uploaded.text()).toBe(200);
+
+    const listed = await app(tenant).request(
+      "http://localhost/api/plugin-store",
+      {},
+      platform.env,
+    );
+    const catalog = (await listed.json()) as any;
+    expect(catalog.data).toHaveLength(1);
+    expect(catalog.data[0].manifest.id).toBe("custom.demo");
+
+    // Visible en el catálogo de extensiones como store:true.
+    const extensions = (await (
+      await app(tenant).request(
+        "http://localhost/api/extensions",
+        {},
+        platform.env,
+      )
+    ).json()) as any;
+    const entry = extensions.data.find(
+      (row: any) => row.manifest.id === "custom.demo",
+    );
+    expect(entry).toMatchObject({ builtIn: false, store: true });
+
+    // Instalar + activar por tenant.
+    const installed = await app(tenant).request(
+      "http://localhost/api/extensions/custom.demo/install",
+      { method: "POST", headers: { "content-type": "application/json" } },
+      platform.env,
+    );
+    expect(installed.status, await installed.text()).toBe(200);
+
+    const shell = await app(tenant).request(
+      "http://localhost/api/plugin-store/custom.demo/shell",
+      {},
+      platform.env,
+    );
+    expect(shell.status).toBe(200);
+    expect(shell.headers.get("content-type")).toContain("text/html");
+
+    const served = await app(tenant).request(
+      "http://localhost/api/plugin-store/custom.demo/entry",
+      {},
+      platform.env,
+    );
+    expect(served.status).toBe(200);
+    expect(served.headers.get("content-type")).toContain("javascript");
+    expect(await served.text()).toContain("demo");
+
+    // Desactivar: el shell deja de servirse.
+    const disabled = await app(tenant).request(
+      "http://localhost/api/extensions/custom.demo",
+      {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ enabled: false }),
+      },
+      platform.env,
+    );
+    expect(disabled.status).toBe(200);
+    const blocked = await app(tenant).request(
+      "http://localhost/api/plugin-store/custom.demo/shell",
+      {},
+      platform.env,
+    );
+    expect(blocked.status).toBe(404);
+  });
+
+  it("loads all catalog configuration with a bounded number of D1 reads", async () => {
+    const tenant = "store-catalog-query-count";
+    for (const id of [
+      "custom.catalog-one",
+      "custom.catalog-two",
+      "custom.catalog-three",
+      "custom.catalog-four",
+    ]) {
+      const uploaded = await uploadZip(
+        tenant,
+        pluginZip({
+          manifest: { id },
+          store: {
+            format: "savia.store",
+            formatVersion: 1,
+            screens: [{ object: "records" }],
+          },
+        }),
+      );
+      expect(uploaded.status, await uploaded.text()).toBe(200);
+    }
+
+    const counted = countPreparedStatements(platform.env.DB);
+    const response = await app(tenant).request(
+      "http://localhost/api/extensions",
+      {},
+      { ...platform.env, DB: counted.database },
+    );
+    const body = (await response.json()) as {
+      data: Array<{ store?: boolean }>;
+    };
+
+    expect(response.status).toBe(200);
+    expect(body.data.filter((entry) => entry.store)).toHaveLength(4);
+    expect(counted.statements).toHaveLength(2);
+  });
+
+  it("preserves installed, latest, missing, and corrupt catalog configuration behavior", async () => {
+    const tenant = "store-catalog-compatibility";
+    const installedOld = {
+      format: "savia.store",
+      formatVersion: 1,
+      screens: [{ object: "installed_old" }],
+      widgets: [
+        {
+          id: "installed-widget",
+          collection: "installed_old",
+          title: { es: "Antiguo", en: "Old" },
+        },
+      ],
+    };
+    const installedLatest = {
+      format: "savia.store",
+      formatVersion: 1,
+      screens: [{ object: "installed_latest" }],
+      widgets: [
+        {
+          id: "latest-widget",
+          collection: "installed_latest",
+          title: { es: "Nuevo", en: "Latest" },
+        },
+      ],
+    };
+    const latestAvailable = {
+      format: "savia.store",
+      formatVersion: 1,
+      screens: [{ object: "available_latest" }],
+      widgets: [
+        {
+          id: "available-widget",
+          collection: "available_latest",
+          title: { es: "Disponible", en: "Available" },
+        },
+      ],
+    };
+
+    expect(
+      (
+        await uploadZip(
+          tenant,
+          pluginZip({
+            manifest: { id: "custom.catalog-installed" },
+            store: installedOld,
+          }),
+        )
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await app(tenant).request(
+          "http://localhost/api/extensions/custom.catalog-installed/install",
+          { method: "POST" },
+          platform.env,
+        )
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await app(tenant).request(
+          "http://localhost/api/extensions/custom.catalog-installed",
+          {
+            method: "PATCH",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ enabled: false }),
+          },
+          platform.env,
+        )
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await uploadZip(
+          tenant,
+          pluginZip({
+            manifest: {
+              id: "custom.catalog-installed",
+              version: "1.1.0",
+            },
+            store: installedLatest,
+          }),
+        )
+      ).status,
+    ).toBe(200);
+
+    expect(
+      (
+        await uploadZip(
+          tenant,
+          pluginZip({
+            manifest: { id: "custom.catalog-available" },
+            store: {
+              ...latestAvailable,
+              screens: [{ object: "available_1_9" }],
+            },
+          }),
+        )
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await uploadZip(
+          tenant,
+          pluginZip({
+            manifest: {
+              id: "custom.catalog-available",
+              version: "1.10.0",
+            },
+            store: latestAvailable,
+          }),
+        )
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await uploadZip(
+          `${tenant}-other`,
+          pluginZip({
+            manifest: { id: "custom.catalog-available" },
+            store: {
+              ...latestAvailable,
+              screens: [{ object: "other_tenant" }],
+            },
+          }),
+        )
+      ).status,
+    ).toBe(200);
+
+    expect(
+      (
+        await uploadZip(
+          tenant,
+          pluginZip({
+            manifest: { id: "custom.catalog-dangling" },
+            store: installedOld,
+          }),
+        )
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await app(tenant).request(
+          "http://localhost/api/extensions/custom.catalog-dangling/install",
+          { method: "POST" },
+          platform.env,
+        )
+      ).status,
+    ).toBe(200);
+    await platform.env.DB.prepare(
+      "UPDATE studio_extension_installations SET version=? WHERE tenant_id=? AND id=?",
+    )
+      .bind("9.9.9", tenant, "custom.catalog-dangling")
+      .run();
+
+    expect(
+      (
+        await uploadZip(
+          tenant,
+          pluginZip({
+            manifest: { id: "custom.catalog-corrupt-config" },
+            store: installedOld,
+          }),
+        )
+      ).status,
+    ).toBe(200);
+    await platform.env.DB.prepare(
+      "UPDATE plugin_store_artifacts SET store_json=? WHERE tenant_id=? AND id=?",
+    )
+      .bind(
+        JSON.stringify({
+          format: "savia.store",
+          formatVersion: 1,
+          actions: "not-an-array",
+        }),
+        tenant,
+        "custom.catalog-corrupt-config",
+      )
+      .run();
+
+    expect(
+      (
+        await uploadZip(
+          tenant,
+          pluginZip({
+            manifest: { id: "custom.catalog-corrupt-manifest" },
+            store: installedOld,
+          }),
+        )
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await uploadZip(
+          tenant,
+          pluginZip({
+            manifest: {
+              id: "custom.catalog-corrupt-manifest",
+              version: "2.0.0",
+            },
+            store: installedLatest,
+          }),
+        )
+      ).status,
+    ).toBe(200);
+    await platform.env.DB.prepare(
+      "UPDATE plugin_store_artifacts SET manifest=? WHERE tenant_id=? AND id=? AND version=?",
+    )
+      .bind(
+        JSON.stringify({
+          format: "invalid",
+          id: "custom.catalog-corrupt-manifest",
+        }),
+        tenant,
+        "custom.catalog-corrupt-manifest",
+        "2.0.0",
+      )
+      .run();
+
+    const response = await app(tenant).request(
+      "http://localhost/api/extensions",
+      {},
+      platform.env,
+    );
+    const body = (await response.json()) as {
+      data: Array<{
+        manifest: { id: string; version: string };
+        screens: Array<{ object: string }>;
+        installed: { version: string; enabled: boolean } | null;
+      }>;
+    };
+    const entry = (id: string) =>
+      body.data.find((candidate) => candidate.manifest.id === id);
+
+    expect(response.status).toBe(200);
+    expect(entry("custom.catalog-installed")).toMatchObject({
+      manifest: { version: "1.1.0" },
+      screens: [{ object: "installed_old" }],
+      widgets: [{ id: "installed-widget", collection: "installed_old" }],
+      installed: { version: "1.0.0", enabled: false },
+    });
+    expect(entry("custom.catalog-available")).toMatchObject({
+      manifest: { version: "1.10.0" },
+      screens: [{ object: "available_latest" }],
+      widgets: [{ id: "available-widget", collection: "available_latest" }],
+    });
+    expect(entry("custom.catalog-dangling")).toMatchObject({
+      installed: { version: "9.9.9", enabled: true },
+      screens: [],
+      widgets: [],
+    });
+    expect(entry("custom.catalog-corrupt-config")).toMatchObject({
+      screens: [],
+      widgets: [],
+    });
+    expect(entry("custom.catalog-corrupt-manifest")).toBeUndefined();
+  });
+
+  it("keeps the manifest catalog available when an older schema lacks store_json", async () => {
+    const tenant = "store-catalog-legacy-schema";
+    expect(
+      (
+        await uploadZip(
+          tenant,
+          pluginZip({
+            manifest: { id: "custom.catalog-legacy" },
+            store: {
+              format: "savia.store",
+              formatVersion: 1,
+              screens: [{ object: "legacy_config" }],
+            },
+          }),
+        )
+      ).status,
+    ).toBe(200);
+
+    const legacyDatabase = new Proxy(platform.env.DB, {
+      get(target, property) {
+        if (property === "prepare")
+          return (query: string) => {
+            if (
+              /SELECT .*store_json.* FROM plugin_store_artifacts/i.test(query)
+            )
+              return {
+                bind: () => ({
+                  all: async () => {
+                    throw new Error("no such column: store_json");
+                  },
+                }),
+              } as unknown as D1PreparedStatement;
+            return target.prepare(query);
+          };
+        const value = Reflect.get(target, property, target);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+    const response = await app(tenant).request(
+      "http://localhost/api/extensions",
+      {},
+      { ...platform.env, DB: legacyDatabase },
+    );
+    const body = (await response.json()) as {
+      data: Array<{
+        manifest: { id: string };
+        screens: Array<{ object: string }>;
+      }>;
+    };
+
+    expect(response.status).toBe(200);
+    expect(
+      body.data.find((entry) => entry.manifest.id === "custom.catalog-legacy"),
+    ).toMatchObject({ screens: [] });
+  });
+
+  it("keeps installed screen bindings until a newer ZIP is installed", async () => {
+    const tenant = "store-installed-screens";
+    const oldStore = {
+      format: "savia.store",
+      formatVersion: 1,
+      screens: [{ object: "legacy_screen", view: "records" }],
+    };
+    const newStore = {
+      format: "savia.store",
+      formatVersion: 1,
+      screens: [{ object: "new_screen", view: "records" }],
+    };
+    expect(
+      (await uploadZip(tenant, pluginZip({ store: oldStore }))).status,
+    ).toBe(200);
+    expect(
+      (
+        await app(tenant).request(
+          "http://localhost/api/extensions/custom.demo/install",
+          { method: "POST", headers: { "content-type": "application/json" } },
+          platform.env,
+        )
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await uploadZip(
+          tenant,
+          pluginZip({ manifest: { version: "1.1.0" }, store: newStore }),
+        )
+      ).status,
+    ).toBe(200);
+
+    const extensions = (await (
+      await app(tenant).request(
+        "http://localhost/api/extensions",
+        {},
+        platform.env,
+      )
+    ).json()) as {
+      data: Array<{ manifest: { id: string }; screens: unknown }>;
+    };
+    expect(
+      extensions.data.find((row) => row.manifest.id === "custom.demo")?.screens,
+    ).toMatchObject([{ object: "legacy_screen", view: "records" }]);
+  });
+
+  it("aísla el store por tenant.", async () => {
+    await uploadZip("store-tenant-a", pluginZip());
+    const other = (await (
+      await app("store-tenant-b").request(
+        "http://localhost/api/plugin-store",
+        {},
+        platform.env,
+      )
+    ).json()) as any;
+    expect(other.data).toHaveLength(0);
+    const missing = await app("store-tenant-b").request(
+      "http://localhost/api/extensions/custom.demo/install",
+      { method: "POST", headers: { "content-type": "application/json" } },
+      platform.env,
+    );
+    expect(missing.status).toBe(404);
+  });
+
+  it("acepta entradas deflated y rechaza ZIPs inválidos.", async () => {
+    const tenant = "store-deflate";
+    const uploaded = await uploadZip(tenant, pluginZip({}, { deflate: true }));
+    expect(uploaded.status, await uploaded.text()).toBe(200);
+
+    const noEntry = await uploadZip(
+      "store-no-entry",
+      pluginZip({}, { omitEntry: true }),
+    );
+    expect(noEntry.status).toBe(422);
+
+    const wrongId = await uploadZip(
+      "store-wrong-id",
+      pluginZip({ manifest: { id: "No-valido!" } }),
+    );
+    expect(wrongId.status).toBe(422);
+
+    const evil = await uploadZip(
+      "store-evil",
+      pluginZip({
+        entry: `export function render(el){ fetch("https://evil.test"); }`,
+      }),
+    );
+    expect(evil.status).toBe(422);
+
+    const notZip = await uploadZip("store-not-zip", text("hola"));
+    expect(notZip.status).toBe(422);
+  });
+
+  it("resuelve la última versión con semver (1.10.0 > 1.9.0).", async () => {
+    const tenant = "store-semver";
+    expect(
+      (await uploadZip(tenant, pluginZip({ manifest: { version: "1.9.0" } })))
+        .status,
+    ).toBe(200);
+    expect(
+      (await uploadZip(tenant, pluginZip({ manifest: { version: "1.10.0" } })))
+        .status,
+    ).toBe(200);
+    const installed = await app(tenant).request(
+      "http://localhost/api/extensions/custom.demo/install",
+      { method: "POST", headers: { "content-type": "application/json" } },
+      platform.env,
+    );
+    const installedBody = (await installed.json()) as any;
+    expect(installed.status, JSON.stringify(installedBody)).toBe(200);
+    expect(installedBody.data.version).toBe("1.10.0");
+  });
+
+  it("rejects new releases below the current latest but permits unchanged retries", async () => {
+    const tenant = "store-monotonic-version";
+    expect(
+      (await uploadZip(tenant, pluginZip({ manifest: { version: "1.4.3" } })))
+        .status,
+    ).toBe(200);
+
+    const oldRetry = await uploadZip(
+      tenant,
+      pluginZip({ manifest: { version: "1.4.3" } }),
+    );
+    expect(oldRetry.status).toBe(200);
+    expect(((await oldRetry.json()) as any).data.deduped).toBe(true);
+
+    const lower = await uploadZip(
+      tenant,
+      pluginZip({ manifest: { version: "1.2.0" } }),
+    );
+    expect(lower.status).toBe(409);
+    expect(await lower.text()).toContain("mayor");
+
+    expect(
+      (await uploadZip(tenant, pluginZip({ manifest: { version: "1.4.4" } })))
+        .status,
+    ).toBe(200);
+  });
+
+  it("orders long numeric version components without floating-point rounding", async () => {
+    const tenant = "store-large-version-components";
+    expect(
+      (
+        await uploadZip(
+          tenant,
+          pluginZip({ manifest: { version: "9007199254740992.0.0" } }),
+        )
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await uploadZip(
+          tenant,
+          pluginZip({ manifest: { version: "9007199254740993.0.0" } }),
+        )
+      ).status,
+    ).toBe(200);
+  });
+
+  it("serializes concurrent version checks and stores source only for the winning artifact", async () => {
+    const tenant = "store-monotonic-race";
+    expect(
+      (await uploadZip(tenant, pluginZip({ manifest: { version: "1.4.3" } })))
+        .status,
+    ).toBe(200);
+    const env = {
+      ...platform.env,
+      DB: raceStoreWritesAfterRead(platform.env.DB),
+    };
+    const [higher, lower] = await Promise.all([
+      uploadZip(
+        tenant,
+        pluginZip({
+          manifest: { version: "1.4.5" },
+          sourceEntry: "export const render = () => 'higher';",
+        }),
+        "higher.zip",
+        env,
+      ),
+      uploadZip(
+        tenant,
+        pluginZip({
+          manifest: { version: "1.4.4" },
+          sourceEntry: "export const render = () => 'lower';",
+        }),
+        "lower.zip",
+        env,
+      ),
+    ]);
+
+    expect(higher.status, await higher.clone().text()).toBe(200);
+    expect(lower.status, await lower.clone().text()).toBe(409);
+    const artifacts = await platform.env.DB.prepare(
+      "SELECT version FROM plugin_store_artifacts WHERE tenant_id=? AND id=? ORDER BY version",
+    )
+      .bind(tenant, "custom.demo")
+      .all<{ version: string }>();
+    expect(artifacts.results.map((row) => row.version)).toEqual([
+      "1.4.3",
+      "1.4.5",
+    ]);
+    const sources = await platform.env.DB.prepare(
+      "SELECT version FROM plugin_store_sources WHERE tenant_id=? AND id=? ORDER BY version",
+    )
+      .bind(tenant, "custom.demo")
+      .all<{ version: string }>();
+    expect(sources.results.map((row) => row.version)).toEqual(["1.4.5"]);
+  });
+
+  it("aplica cuota de 10 versiones por plugin.", async () => {
+    const tenant = "store-quota";
+    for (let minor = 0; minor < 10; minor++) {
+      const uploaded = await uploadZip(
+        tenant,
+        pluginZip({ manifest: { version: `1.${minor}.0` } }),
+      );
+      expect(uploaded.status).toBe(200);
+    }
+    const rejected = await uploadZip(
+      tenant,
+      pluginZip({ manifest: { version: "1.10.0" } }),
+    );
+    expect(rejected.status).toBe(409);
+  });
+
+  it("allows catalogs above 20 MiB but keeps the 64 MiB tenant limit", async () => {
+    const seedUsage = async (tenant: string, sizeBytes: number) => {
+      await platform.env.DB.prepare(
+        "INSERT INTO plugin_store_artifacts(tenant_id,id,version,manifest,entry_js,sha256,size_bytes) VALUES (?,?,?,?,?,?,?)",
+      )
+        .bind(
+          tenant,
+          "custom.seed",
+          "1.0.0",
+          JSON.stringify({ id: "custom.seed", version: "1.0.0" }),
+          "export function render() {}",
+          "seed",
+          sizeBytes,
+        )
+        .run();
+    };
+
+    const catalogTenant = "store-quota-catalog-over-20";
+    await seedUsage(catalogTenant, 25 * 1024 * 1024);
+    const accepted = await uploadZip(catalogTenant, pluginZip());
+    expect(accepted.status, await accepted.text()).toBe(200);
+
+    const fullTenant = "store-quota-over-64";
+    await seedUsage(fullTenant, 64 * 1024 * 1024);
+    expect((await uploadZip(fullTenant, pluginZip())).status).toBe(413);
+  });
+
+  it("rechaza versiones duplicadas con distinto contenido.", async () => {
+    const tenant = "store-dedupe";
+    const first = await uploadZip(tenant, pluginZip());
+    expect(first.status).toBe(200);
+    const same = await uploadZip(tenant, pluginZip());
+    expect(same.status).toBe(200);
+    expect(((await same.json()) as any).data.deduped).toBe(true);
+    const different = await uploadZip(
+      tenant,
+      pluginZip({ manifest: { version: "1.0.0", label: "Otro" } }),
+    );
+    expect(different.status).toBe(409);
+  });
+
+  it("dedupes legacy store JSON before the monitors default without weakening immutability", async () => {
+    const tenant = "store-dedupe-legacy-monitors";
+    const fields = [
+      "process_id",
+      "source_id",
+      "status",
+      "deadline",
+      "enabled",
+      "checked",
+      "error",
+      "name",
+    ];
+    const legacyStore = {
+      format: "savia.store",
+      formatVersion: 1,
+      actions: [
+        {
+          id: "detail",
+          kind: "mcp",
+          sourceId: "secop_live",
+          tool: "detalle_licitacion",
+          mapping: { idField: ":id" },
+          inputArguments: ["id"],
+        },
+      ],
+      collections: [
+        {
+          object: {
+            name: "opportunities",
+            label: "Opportunities",
+            description: "",
+            config: {
+              version: 2,
+              fields: Object.fromEntries(
+                fields.map((field) => [
+                  field,
+                  { type: "Textbox", label: field },
+                ]),
+              ),
+              fieldOrder: fields,
+            },
+          },
+          requiredFields: {},
+        },
+      ],
+    };
+    const manifest = { id: "insurance.accounting", version: "1.1.6" };
+    const zip = pluginZip({ manifest, store: legacyStore });
+    expect((await uploadZip(tenant, zip)).status).toBe(200);
+
+    // A deployed artifact predating `monitors` has no monitors key in its JSON.
+    await platform.env.DB.prepare(
+      "UPDATE plugin_store_artifacts SET store_json=? WHERE tenant_id=? AND id=? AND version=?",
+    )
+      .bind(
+        JSON.stringify(legacyStore),
+        tenant,
+        "insurance.accounting",
+        "1.1.6",
+      )
+      .run();
+
+    const same = await uploadZip(tenant, zip);
+    expect(same.status, await same.clone().text()).toBe(200);
+    expect(((await same.json()) as any).data.deduped).toBe(true);
+
+    const changedStore = {
+      ...legacyStore,
+      monitors: [
+        {
+          id: "tracking",
+          collection: "opportunities",
+          actionId: "detail",
+          lookup: { field: "process_id", argument: "id" },
+          matchField: "source_id",
+          status: { field: "status", resultFields: ["estado"] },
+          deadline: { field: "deadline", resultFields: ["fecha_limite"] },
+          enabledField: "enabled",
+          checkedAtField: "checked",
+          errorField: "error",
+          titleField: "name",
+          notifications: {
+            changedTitle: "Status changed",
+            changedBody: "A status change was found",
+            closingTitle: "Closing soon",
+            closingBody: "A deadline is approaching",
+            connectionTitle: "Connection issue",
+            connectionBody: "Check the connection",
+          },
+        },
+      ],
+    };
+    const changed = await uploadZip(
+      tenant,
+      pluginZip({ manifest, store: changedStore }),
+    );
+    expect(changed.status, await changed.text()).toBe(409);
+  });
+
+  it("rejects changed JavaScript or settings under an immutable version", async () => {
+    const tenant = "store-immutable-code";
+    expect((await uploadZip(tenant, pluginZip())).status).toBe(200);
+    expect(
+      (
+        await uploadZip(
+          tenant,
+          pluginZip({
+            entry: 'export function render(el) { el.textContent = "changed"; }',
+          }),
+        )
+      ).status,
+    ).toBe(409);
+    expect(
+      (
+        await uploadZip(
+          tenant,
+          pluginZip({
+            store: {
+              format: "savia.store",
+              formatVersion: 1,
+              settings: { defaults: { changed: true } },
+            },
+          }),
+        )
+      ).status,
+    ).toBe(409);
+    expect(
+      (await uploadZip(tenant, pluginZip({}, { deflate: true }))).status,
+    ).toBe(200);
+  });
+
+  it("deployment updates never install or enable optional plugins", async () => {
+    const tenant = "store-deploy-update";
+    await uploadZip(tenant, pluginZip());
+    const request = (path: string, init: RequestInit = { method: "POST" }) =>
+      app(tenant).request(
+        `http://localhost/api/extensions/custom.demo${path}`,
+        init,
+        platform.env,
+      );
+    expect((await request("/install?update=enabled")).status).toBe(409);
+    expect((await request("/install")).status).toBe(200);
+    expect((await request("/install?update=enabled")).status).toBe(200);
+    expect(
+      (
+        await request("", {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ enabled: false }),
+        })
+      ).status,
+    ).toBe(200);
+    expect((await request("/install?update=enabled")).status).toBe(409);
+  });
+
+  it("exige desactivar antes de eliminar.", async () => {
+    const tenant = "store-delete";
+    await uploadZip(tenant, pluginZip());
+    await app(tenant).request(
+      "http://localhost/api/extensions/custom.demo/install",
+      { method: "POST", headers: { "content-type": "application/json" } },
+      platform.env,
+    );
+    const blocked = await app(tenant).request(
+      "http://localhost/api/plugin-store/custom.demo",
+      { method: "DELETE" },
+      platform.env,
+    );
+    expect(blocked.status).toBe(409);
+    await app(tenant).request(
+      "http://localhost/api/extensions/custom.demo",
+      {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ enabled: false }),
+      },
+      platform.env,
+    );
+    const deleted = await app(tenant).request(
+      "http://localhost/api/plugin-store/custom.demo",
+      { method: "DELETE" },
+      platform.env,
+    );
+    expect(deleted.status, await deleted.text()).toBe(200);
+  });
+
+  it("deletes one inactive version and its sources without removing a different installed version", async () => {
+    const tenant = "store-delete-one-version";
+    await uploadZip(
+      tenant,
+      pluginZip({
+        manifest: { version: "1.0.0" },
+        sourceEntry: "export const old = true;",
+      }),
+    );
+    await uploadZip(
+      tenant,
+      pluginZip({
+        manifest: { version: "2.0.0" },
+        sourceEntry: "export const current = true;",
+      }),
+    );
+    await appWithRuntime(tenant).request(
+      "http://localhost/api/extensions/custom.demo/install",
+      { method: "POST", headers: { "content-type": "application/json" } },
+      platform.env,
+    );
+
+    const deleted = await app(tenant).request(
+      "http://localhost/api/plugin-store/custom.demo?version=1.0.0",
+      { method: "DELETE" },
+      platform.env,
+    );
+    expect(deleted.status, await deleted.text()).toBe(200);
+    const artifacts = await platform.env.DB.prepare(
+      "SELECT version FROM plugin_store_artifacts WHERE tenant_id=? AND id=? ORDER BY version",
+    )
+      .bind(tenant, "custom.demo")
+      .all<{ version: string }>();
+    expect(artifacts.results.map(({ version }) => version)).toEqual(["2.0.0"]);
+    const sources = await platform.env.DB.prepare(
+      "SELECT version FROM plugin_store_sources WHERE tenant_id=? AND id=? ORDER BY version",
+    )
+      .bind(tenant, "custom.demo")
+      .all<{ version: string }>();
+    expect(sources.results.map(({ version }) => version)).toEqual(["2.0.0"]);
+    const installation = await platform.env.DB.prepare(
+      "SELECT version,enabled FROM studio_extension_installations WHERE tenant_id=? AND id=?",
+    )
+      .bind(tenant, "custom.demo")
+      .first<{ version: string; enabled: number }>();
+    expect(installation).toEqual({ version: "2.0.0", enabled: 1 });
+  });
+
+  it("blocks only deletion of the installed enabled version and returns 404 for missing versions", async () => {
+    const tenant = "store-delete-active-version";
+    await uploadZip(
+      tenant,
+      pluginZip({
+        manifest: { version: "1.0.0" },
+        sourceEntry: "export const old = true;",
+      }),
+    );
+    await uploadZip(
+      tenant,
+      pluginZip({
+        manifest: { version: "2.0.0" },
+        sourceEntry: "export const current = true;",
+      }),
+    );
+    await appWithRuntime(tenant).request(
+      "http://localhost/api/extensions/custom.demo/install",
+      { method: "POST", headers: { "content-type": "application/json" } },
+      platform.env,
+    );
+
+    const activeVersion = await app(tenant).request(
+      "http://localhost/api/plugin-store/custom.demo?version=2.0.0",
+      { method: "DELETE" },
+      platform.env,
+    );
+    expect(activeVersion.status).toBe(409);
+    const oldVersion = await app(tenant).request(
+      "http://localhost/api/plugin-store/custom.demo?version=1.0.0",
+      { method: "DELETE" },
+      platform.env,
+    );
+    expect(oldVersion.status).toBe(200);
+    const missing = await app(tenant).request(
+      "http://localhost/api/plugin-store/custom.demo?version=3.0.0",
+      { method: "DELETE" },
+      platform.env,
+    );
+    expect(missing.status).toBe(404);
+    const stillInstalled = await platform.env.DB.prepare(
+      "SELECT version,enabled FROM studio_extension_installations WHERE tenant_id=? AND id=?",
+    )
+      .bind(tenant, "custom.demo")
+      .first<{ version: string; enabled: number }>();
+    expect(stillInstalled).toEqual({ version: "2.0.0", enabled: 1 });
+  });
+
+  it("validates deletion coordinates and keeps registry credentials unavailable without publish access", async () => {
+    const tenant = "store-delete-validation";
+    const rejected = await app(tenant).request(
+      "http://localhost/api/plugin-store/custom.demo?version=not-a-version",
+      { method: "DELETE" },
+      platform.env,
+    );
+    expect(rejected.status).toBe(400);
+
+    const response = await app(tenant, {
+      pluginRegistry: {
+        url: "https://registry.example",
+        token: "reader-secret",
+      },
+    }).request("http://localhost/api/plugin-store", {}, platform.env);
+    expect(await response.json()).toMatchObject({
+      canDeleteFromRegistry: false,
+    });
+  });
+
+  it("removes remote releases before local data and preserves local data on registry failure", async () => {
+    const tenant = "store-delete-registry-order";
+    await uploadZip(
+      tenant,
+      pluginZip({
+        manifest: { version: "1.0.0" },
+        sourceEntry: "export const one = true;",
+      }),
+    );
+    await uploadZip(
+      tenant,
+      pluginZip({
+        manifest: { version: "2.0.0" },
+        sourceEntry: "export const two = true;",
+      }),
+    );
+    const fetchMock = vi.fn(async () => new Response(null, { status: 500 }));
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const failed = await app(tenant, {
+        pluginRegistry: {
+          url: "https://registry.example",
+          token: "reader-secret",
+          publishToken: "writer-secret",
+        },
+        canManageExtension: () => true,
+      }).request(
+        "http://localhost/api/plugin-store/custom.demo?version=1.0.0&registry=true",
+        { method: "DELETE" },
+        platform.env,
+      );
+      expect(failed.status).toBe(502);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      const stillLocal = await platform.env.DB.prepare(
+        "SELECT version FROM plugin_store_artifacts WHERE tenant_id=? AND id=? ORDER BY version",
+      )
+        .bind(tenant, "custom.demo")
+        .all<{ version: string }>();
+      expect(stillLocal.results.map(({ version }) => version)).toEqual([
+        "1.0.0",
+        "2.0.0",
+      ]);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("preserves a version activated during remote deletion and explains the shared ZIP is already gone", async () => {
+    const tenant = "store-delete-registry-activation-race";
+    await uploadZip(
+      tenant,
+      pluginZip({ sourceEntry: "export const source = true;" }),
+    );
+    const fetchMock = vi.fn(async () => {
+      await platform.env.DB.prepare(
+        "INSERT INTO studio_extension_installations(tenant_id,id,version,enabled,manifest) VALUES (?,?,?,1,?)",
+      )
+        .bind(
+          tenant,
+          "custom.demo",
+          "1.0.0",
+          JSON.stringify({ id: "custom.demo" }),
+        )
+        .run();
+      return Response.json({
+        data: { id: "custom.demo", version: "1.0.0", deleted: true },
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const response = await app(tenant, {
+        pluginRegistry: {
+          url: "https://registry.example",
+          token: "reader-secret",
+          publishToken: "writer-secret",
+        },
+        canManageExtension: () => true,
+      }).request(
+        "http://localhost/api/plugin-store/custom.demo?version=1.0.0&registry=true",
+        { method: "DELETE" },
+        platform.env,
+      );
+
+      expect(response.status).toBe(409);
+      expect(await response.text()).toContain(
+        "Se eliminaron los archivos del catálogo compartido",
+      );
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      const artifact = await platform.env.DB.prepare(
+        "SELECT version FROM plugin_store_artifacts WHERE tenant_id=? AND id=?",
+      )
+        .bind(tenant, "custom.demo")
+        .first<{ version: string }>();
+      expect(artifact).toEqual({ version: "1.0.0" });
+      const sources = await platform.env.DB.prepare(
+        "SELECT version FROM plugin_store_sources WHERE tenant_id=? AND id=?",
+      )
+        .bind(tenant, "custom.demo")
+        .all<{ version: string }>();
+      expect(sources.results).toEqual([{ version: "1.0.0" }]);
+      const installation = await platform.env.DB.prepare(
+        "SELECT version,enabled FROM studio_extension_installations WHERE tenant_id=? AND id=?",
+      )
+        .bind(tenant, "custom.demo")
+        .first<{ version: string; enabled: number }>();
+      expect(installation).toEqual({ version: "1.0.0", enabled: 1 });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("requires registry delete permission and deletes each remote version before removing local versions", async () => {
+    const tenant = "store-delete-registry-success";
+    await uploadZip(
+      tenant,
+      pluginZip({
+        manifest: { version: "1.0.0" },
+        sourceEntry: "export const one = true;",
+      }),
+    );
+    await uploadZip(
+      tenant,
+      pluginZip({
+        manifest: { version: "2.0.0" },
+        sourceEntry: "export const two = true;",
+      }),
+    );
+    const config = {
+      url: "https://registry.example",
+      token: "reader-secret",
+      publishToken: "writer-secret",
+    };
+    const fetchMock = vi.fn(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        expect(init?.method).toBe("DELETE");
+        expect(new Headers(init?.headers).get("authorization")).toBe(
+          "Bearer writer-secret",
+        );
+        return String(input).endsWith("/1.0.0")
+          ? Response.json({
+              data: { id: "custom.demo", version: "1.0.0", deleted: true },
+            })
+          : Response.json(
+              { error: { code: "RELEASE_NOT_FOUND" } },
+              { status: 404 },
+            );
+      },
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const forbidden = await app(tenant, {
+        pluginRegistry: config,
+      }).request(
+        "http://localhost/api/plugin-store/custom.demo?registry=true",
+        { method: "DELETE" },
+        platform.env,
+      );
+      expect(forbidden.status).toBe(403);
+      expect(fetchMock).not.toHaveBeenCalled();
+
+      const allowedApp = app(tenant, {
+        pluginRegistry: config,
+        canManageExtension: () => true,
+      });
+      const capability = await allowedApp.request(
+        "http://localhost/api/plugin-store",
+        {},
+        platform.env,
+      );
+      expect(await capability.json()).toMatchObject({
+        canDeleteFromRegistry: true,
+      });
+      const deleted = await allowedApp.request(
+        "http://localhost/api/plugin-store/custom.demo?registry=true",
+        { method: "DELETE" },
+        platform.env,
+      );
+      expect(deleted.status, await deleted.text()).toBe(200);
+      expect(fetchMock.mock.calls.map(([input]) => String(input))).toEqual([
+        "https://registry.example/v1/plugins/custom.demo/1.0.0",
+        "https://registry.example/v1/plugins/custom.demo/2.0.0",
+      ]);
+      const remaining = await platform.env.DB.prepare(
+        "SELECT version FROM plugin_store_artifacts WHERE tenant_id=? AND id=?",
+      )
+        .bind(tenant, "custom.demo")
+        .all();
+      expect(remaining.results).toEqual([]);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("explains publisher ownership failures and preserves the local copy", async () => {
+    const tenant = "store-delete-registry-owner";
+    await uploadZip(tenant, pluginZip());
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        Response.json(
+          { error: { code: "FORBIDDEN", message: "Only publisher" } },
+          { status: 403 },
+        ),
+      ),
+    );
+    try {
+      const response = await app(tenant, {
+        pluginRegistry: {
+          url: "https://registry.example",
+          token: "reader-secret",
+          publishToken: "writer-secret",
+        },
+        canManageExtension: () => true,
+      }).request(
+        "http://localhost/api/plugin-store/custom.demo?version=1.0.0&registry=true",
+        { method: "DELETE" },
+        platform.env,
+      );
+      expect(response.status).toBe(403);
+      expect(await response.text()).toContain(
+        "desmarcar la eliminación del registro",
+      );
+      const remaining = await platform.env.DB.prepare(
+        "SELECT version FROM plugin_store_artifacts WHERE tenant_id=? AND id=?",
+      )
+        .bind(tenant, "custom.demo")
+        .all();
+      expect(remaining.results).toHaveLength(1);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});
+
+const quoteStore = {
+  format: "savia.store",
+  formatVersion: 1,
+  actions: [
+    {
+      id: "quote",
+      kind: "simulation",
+      output: {
+        type: "quote",
+        provider: "simulation",
+        status: "success",
+        data: {
+          quoteNumber: "SIM-{{input.quoteInput.vehicle.plate}}",
+          premiumTotal: 1200000,
+          currency: "COP",
+          simulated: true,
+        },
+      },
+    },
+    {
+      id: "lookup-plate",
+      kind: "simulation",
+      output: {
+        type: "vehicle_lookup",
+        provider: "simulation",
+        status: "success",
+        data: { vehicle: "{{input.quoteInput.vehicle}}" },
+      },
+    },
+  ],
+  settings: {
+    defaults: {
+      quotePages: { direct: true, wizard: true },
+      vehicleLookup: { enabled: true },
+    },
+  },
+};
+
+describe("acciones simuladas y configuración del store", () => {
+  it("rechaza un store.json inválido.", async () => {
+    const bad = await uploadZip(
+      "store-bad-json",
+      pluginZip({ badStore: true }),
+    );
+    expect(bad.status).toBe(422);
+    const badKind = await uploadZip(
+      "store-bad-kind",
+      pluginZip({
+        store: {
+          format: "savia.store",
+          formatVersion: 1,
+          actions: [{ id: "quote", kind: "http", output: {} }],
+        },
+      }),
+    );
+    expect(badKind.status).toBe(422);
+  });
+
+  it("ejecuta acciones simuladas con plantillas del input.", async () => {
+    const tenant = "store-simulate";
+    expect(
+      (await uploadZip(tenant, pluginZip({ store: quoteStore }))).status,
+    ).toBe(200);
+    const installed = await api(
+      tenant,
+      "/extensions/custom.demo/install",
+      "POST",
+    );
+    expect(installed.status).toBe(200);
+
+    const quote = await api(
+      tenant,
+      "/extensions/custom.demo/actions/quote",
+      "POST",
+      {
+        input: {
+          mode: "live",
+          flowId: "demo-flow",
+          quoteInput: { vehicle: { plate: "abc123" } },
+        },
+      },
+    );
+    expect(quote.status).toBe(201);
+    expect(quote.json.data.output).toMatchObject({
+      type: "quote",
+      status: "success",
+      data: {
+        quoteNumber: "SIM-abc123",
+        premiumTotal: 1200000,
+        simulated: true,
+      },
+    });
+    expect(quote.json.data.run.status).toBe("succeeded");
+
+    const lookup = await api(
+      tenant,
+      "/extensions/custom.demo/actions/lookup-plate",
+      "POST",
+      { input: { quoteInput: { vehicle: { plate: "XYZ" } } } },
+    );
+    expect(lookup.status).toBe(201);
+    expect(lookup.json.data.output.data.vehicle).toEqual({ plate: "XYZ" });
+
+    const unknown = await api(
+      tenant,
+      "/extensions/custom.demo/actions/otra",
+      "POST",
+      { input: {} },
+    );
+    expect(unknown.status).toBe(404);
+  });
+
+  it("bloquea acciones simuladas cuando el plugin está desactivado.", async () => {
+    const tenant = "store-simulate-off";
+    await uploadZip(tenant, pluginZip({ store: quoteStore }));
+    await api(tenant, "/extensions/custom.demo/install", "POST");
+    await api(tenant, "/extensions/custom.demo", "PATCH", { enabled: false });
+    const blocked = await api(
+      tenant,
+      "/extensions/custom.demo/actions/quote",
+      "POST",
+      { input: {} },
+    );
+    expect(blocked.status).toBe(404);
+  });
+
+  it("sirve y actualiza la configuración declarada del store.", async () => {
+    const tenant = "store-settings";
+    await uploadZip(tenant, pluginZip({ store: quoteStore }));
+    await api(tenant, "/extensions/custom.demo/install", "POST");
+
+    const initial = await api(tenant, "/extensions/custom.demo/settings");
+    expect(initial.status).toBe(200);
+    expect(initial.json.data.value).toEqual({
+      quotePages: { direct: true, wizard: true },
+      vehicleLookup: { enabled: true },
+    });
+    expect(initial.json.data.version).toBe(0);
+
+    const replaced = await api(
+      tenant,
+      "/extensions/custom.demo/settings",
+      "PUT",
+      {
+        value: {
+          quotePages: { direct: false, wizard: true },
+          vehicleLookup: { enabled: true },
+        },
+        version: 0,
+      },
+    );
+    expect(replaced.status).toBe(200);
+    expect(replaced.json.data.version).toBe(1);
+
+    const conflict = await api(
+      tenant,
+      "/extensions/custom.demo/settings",
+      "PUT",
+      { value: {}, version: 0 },
+    );
+    expect(conflict.status).toBe(409);
+  });
+
+  it("acepta entradas grandes de ~1.3 MB (tamaño del bundle de cotizaciones).", async () => {
+    const tenant = "store-big-entry";
+    const bigEntry = `export function render(el, savia) { el.textContent = "demo"; }\n/*${"x".repeat(1300 * 1024)}*/`;
+    const uploaded = await uploadZip(tenant, pluginZip({ entry: bigEntry }));
+    expect(uploaded.status, await uploaded.text()).toBe(200);
+    await api(tenant, "/extensions/custom.demo/install", "POST");
+    const served = await app(tenant).request(
+      "http://localhost/api/plugin-store/custom.demo/entry",
+      {},
+      platform.env,
+    );
+    expect(served.status).toBe(200);
+    expect((await served.text()).length).toBeGreaterThan(1300 * 1024);
+  });
+});
+
+const tareasStore = {
+  format: "savia.store",
+  formatVersion: 1,
+  collections: [
+    {
+      object: {
+        name: "tareas",
+        label: "Tareas",
+        description: "Tareas del plugin.",
+        config: {
+          version: 2,
+          fields: {
+            name: { type: "Textbox", label: "Nombre", required: true },
+          },
+          fieldOrder: ["name"],
+        },
+      },
+      requiredFields: { name: { types: ["Textbox"], required: true } },
+    },
+  ],
+};
+
+async function storedObject(tenant: string, name: string) {
+  return platform.env.DB.prepare(
+    "SELECT name,label,config,version FROM studio_objects WHERE tenant_id=? AND name=?",
+  )
+    .bind(tenant, name)
+    .first<{ name: string; label: string; config: string; version: number }>();
+}
+
+describe("provisión de colecciones del store", () => {
+  it("rejects invalid collection declarations instead of silently omitting them", async () => {
+    const tasks = tareasStore.collections[0];
+    const store = {
+      ...tareasStore,
+      collections: [
+        {
+          ...tasks,
+          object: {
+            ...tasks.object,
+            config: { ...tasks.object.config, fieldOrder: ["missing"] },
+          },
+        },
+      ],
+    };
+    const uploaded = await uploadZip(
+      "store-invalid-collection",
+      pluginZip({ store }),
+    );
+    expect(uploaded.status).toBe(422);
+  });
+
+  it("adds missing optional fields on upgrade without replacing custom fields", async () => {
+    const tenant = "store-additive-upgrade";
+    await uploadZip(tenant, pluginZip({ store: tareasStore }));
+    expect(
+      (await api(tenant, "/extensions/custom.demo/install", "POST")).status,
+    ).toBe(200);
+    const object = tareasStore.collections[0].object;
+    const customConfig = {
+      ...object.config,
+      fields: {
+        ...object.config.fields,
+        name: { ...object.config.fields.name, label: "Custom name" },
+        custom_tag: { type: "Textbox", label: "Custom tag" },
+      },
+      fieldOrder: ["name", "custom_tag"],
+    };
+    await platform.env.DB.prepare(
+      "UPDATE studio_objects SET config=? WHERE tenant_id=? AND name='tareas'",
+    )
+      .bind(JSON.stringify(customConfig), tenant)
+      .run();
+    const store = {
+      ...tareasStore,
+      collections: [
+        {
+          ...tareasStore.collections[0],
+          object: {
+            ...object,
+            config: {
+              ...object.config,
+              fields: {
+                ...object.config.fields,
+                snapshot: { type: "Textarea", label: "Snapshot" },
+                conditional_new: {
+                  type: "Textbox",
+                  label: "Conditional new",
+                  config: {
+                    requiredWhen: {
+                      field: "name",
+                      op: "eq",
+                      value: "Required",
+                    },
+                  },
+                },
+                required_new: {
+                  type: "Textbox",
+                  label: "Required new",
+                  required: true,
+                },
+              },
+              fieldOrder: [
+                "name",
+                "snapshot",
+                "required_new",
+                "conditional_new",
+              ],
+            },
+          },
+        },
+      ],
+    };
+    const uploaded = await uploadZip(
+      tenant,
+      pluginZip({ manifest: { version: "1.0.1" }, store }),
+    );
+    expect(uploaded.status).toBe(200);
+    expect(
+      (await api(tenant, "/extensions/custom.demo/install", "POST")).status,
+    ).toBe(200);
+    const upgraded = await storedObject(tenant, "tareas");
+    expect(upgraded?.version).toBe(2);
+    const config = JSON.parse(upgraded!.config);
+    expect(config.fields.name).toEqual(customConfig.fields.name);
+    expect(config.fields.custom_tag).toEqual(customConfig.fields.custom_tag);
+    expect(config.fields.snapshot).toEqual({
+      type: "Textarea",
+      label: "Snapshot",
+    });
+    expect(config.fields.required_new).toBeUndefined();
+    expect(config.fields.conditional_new).toBeUndefined();
+    expect(config.fieldOrder).toEqual(["name", "custom_tag", "snapshot"]);
+    expect(
+      (await api(tenant, "/extensions/custom.demo/install", "POST")).status,
+    ).toBe(200);
+    expect((await storedObject(tenant, "tareas"))?.version).toBe(2);
+  });
+
+  it("provisions every collection declared by one plugin", async () => {
+    const tenant = "store-multiple-collections";
+    const tasks = tareasStore.collections[0];
+    const store = {
+      ...tareasStore,
+      collections: [
+        tasks,
+        {
+          ...tasks,
+          object: {
+            ...tasks.object,
+            name: "task_details",
+            label: "Task details",
+          },
+        },
+      ],
+    };
+    const uploaded = await uploadZip(tenant, pluginZip({ store }));
+    expect(uploaded.status, await uploaded.text()).toBe(200);
+    const installed = await api(
+      tenant,
+      "/extensions/custom.demo/install",
+      "POST",
+    );
+    expect(installed.status).toBe(200);
+    expect(await storedObject(tenant, "tareas")).not.toBeNull();
+    expect(await storedObject(tenant, "task_details")).not.toBeNull();
+  });
+
+  it("crea la colección al instalar y la repara al reinstalar.", async () => {
+    const tenant = "store-provision";
+    await uploadZip(tenant, pluginZip({ store: tareasStore }));
+    const installed = await app(tenant).request(
+      "http://localhost/api/extensions/custom.demo/install",
+      { method: "POST", headers: { "content-type": "application/json" } },
+      platform.env,
+    );
+    expect(installed.status, await installed.text()).toBe(200);
+    const created = await storedObject(tenant, "tareas");
+    expect(created).toMatchObject({
+      name: "tareas",
+      label: "Tareas",
+      version: 1,
+    });
+
+    await app(tenant).request(
+      "http://localhost/api/objects/tareas",
+      { method: "DELETE" },
+      platform.env,
+    );
+    const repaired = await app(tenant).request(
+      "http://localhost/api/extensions/custom.demo/install",
+      { method: "POST", headers: { "content-type": "application/json" } },
+      platform.env,
+    );
+    expect(repaired.status).toBe(200);
+    expect(await storedObject(tenant, "tareas")).not.toBeNull();
+    expect(await storedObject("store-provision-otro", "tareas")).toBeNull();
+  });
+
+  it("conserva la colección compatible y rechaza la incompatible.", async () => {
+    const compatible = "store-compatible";
+    await platform.env.DB.prepare(
+      "INSERT INTO studio_objects(tenant_id,name,label,description,config,version) VALUES (?,?,?,?,?,1)",
+    )
+      .bind(
+        compatible,
+        "tareas",
+        "Tareas",
+        "Tareas del plugin.",
+        JSON.stringify({
+          version: 2,
+          fields: {
+            name: { type: "Textbox", label: "Nombre", required: true },
+            extra: { type: "Textbox", label: "Extra" },
+          },
+          fieldOrder: ["name", "extra"],
+        }),
+      )
+      .run();
+    await uploadZip(compatible, pluginZip({ store: tareasStore }));
+    const kept = await app(compatible).request(
+      "http://localhost/api/extensions/custom.demo/install",
+      { method: "POST", headers: { "content-type": "application/json" } },
+      platform.env,
+    );
+    expect(kept.status).toBe(200);
+    expect(
+      JSON.parse((await storedObject(compatible, "tareas"))!.config),
+    ).toHaveProperty("fields.extra");
+
+    const incompatible = "store-incompatible";
+    await platform.env.DB.prepare(
+      "INSERT INTO studio_objects(tenant_id,name,label,description,config,version) VALUES (?,?,?,?,?,1)",
+    )
+      .bind(
+        incompatible,
+        "tareas",
+        "Tareas",
+        "Otra.",
+        JSON.stringify({
+          version: 2,
+          fields: { name: { type: "Textarea", label: "Nombre" } },
+          fieldOrder: ["name"],
+        }),
+      )
+      .run();
+    await uploadZip(incompatible, pluginZip({ store: tareasStore }));
+    const rejected = await app(incompatible).request(
+      "http://localhost/api/extensions/custom.demo/install",
+      { method: "POST", headers: { "content-type": "application/json" } },
+      platform.env,
+    );
+    expect(rejected.status).toBe(409);
+    const installation = await platform.env.DB.prepare(
+      "SELECT count(*) as count FROM studio_extension_installations WHERE tenant_id=? AND id=?",
+    )
+      .bind(incompatible, "custom.demo")
+      .first<{ count: number }>();
+    expect(installation).toEqual({ count: 0 });
+  });
+});
+
+const httpStore = {
+  format: "savia.store",
+  formatVersion: 1,
+  connectors: [
+    {
+      id: "sura",
+      label: "Sura Seguros",
+      secretFields: ["apiKey"],
+      configSchema: {
+        type: "object",
+        required: ["baseUrl", "apiKey"],
+        properties: {
+          baseUrl: { type: "string" },
+          apiKey: { type: "string" },
+          mode: { type: "string", enum: ["prod", "test"] },
+        },
+      },
+      allowedHosts: ["api.sura.com"],
+    },
+  ],
+  actions: [
+    {
+      id: "cotizar",
+      kind: "http",
+      connector: "sura",
+      request: {
+        method: "POST",
+        url: "https://{{connection.baseUrl}}/cotizar",
+        headers: {
+          Authorization: "Bearer {{connection.apiKey}}",
+          "content-type": "application/json",
+        },
+        body: { placa: "{{input.placa}}", mode: "{{connection.mode}}" },
+      },
+    },
+    {
+      id: "ping",
+      kind: "http",
+      connector: "sura",
+      connectionOptional: true,
+      request: { method: "GET", url: "https://api.sura.com/ping" },
+    },
+  ],
+};
+
+describe("acciones http declarativas", () => {
+  const realFetch = globalThis.fetch;
+  let seen: Array<{ url: string; init: RequestInit }>;
+  const tenant = "store-http";
+
+  async function setup() {
+    seen = [];
+    globalThis.fetch = (async (url: any, init: any) => {
+      seen.push({ url: String(url), init });
+      return Response.json({
+        quoteNumber: "Q-1",
+        apiKey: "OTRA-CLAVE",
+        nested: { token: "T", prima: 5 },
+      });
+    }) as typeof fetch;
+    await uploadZip(tenant, pluginZip({ store: httpStore }));
+    await api(tenant, "/extensions/custom.demo/install", "POST");
+  }
+
+  afterAll(() => {
+    globalThis.fetch = realFetch;
+  });
+
+  it("valida la conexión contra el esquema y ejecuta con secretos redactados.", async () => {
+    await setup();
+    const bad = await api(
+      tenant,
+      "/extensions/custom.demo/connections/sura",
+      "PUT",
+      { connectorId: "sura", values: { baseUrl: "api.sura.com" } },
+    );
+    expect(bad.status).toBe(422);
+    const badEnum = await api(
+      tenant,
+      "/extensions/custom.demo/connections/sura",
+      "PUT",
+      {
+        connectorId: "sura",
+        values: { baseUrl: "api.sura.com", apiKey: "K", mode: "otro" },
+      },
+    );
+    expect(badEnum.status).toBe(422);
+    const unknown = await api(
+      tenant,
+      "/extensions/custom.demo/connections/otro",
+      "PUT",
+      { connectorId: "otro", values: {} },
+    );
+    expect(unknown.status).toBe(422);
+
+    const saved = await api(
+      tenant,
+      "/extensions/custom.demo/connections/sura",
+      "PUT",
+      {
+        connectorId: "sura",
+        values: { baseUrl: "api.sura.com", apiKey: "K-SECRETA", mode: "test" },
+      },
+    );
+    expect(saved.status).toBe(204);
+
+    const listed = await api(tenant, "/extensions/custom.demo/connections");
+    expect(listed.status).toBe(200);
+    expect(listed.json.data).toHaveLength(1);
+
+    const missing = await api(
+      tenant,
+      "/extensions/custom.demo/actions/cotizar",
+      "POST",
+      { input: { placa: "TESTCAR" } },
+    );
+    expect(missing.status).toBe(422);
+
+    const quote = await api(
+      tenant,
+      "/extensions/custom.demo/actions/cotizar",
+      "POST",
+      { connectionId: "sura", input: { placa: "TESTCAR" } },
+    );
+    expect(quote.status).toBe(201);
+    expect(seen).toHaveLength(1);
+    expect(seen[0].url).toBe("https://api.sura.com/cotizar");
+    expect(seen[0].init.method).toBe("POST");
+    expect(
+      (seen[0].init.headers as Record<string, string>)["Authorization"],
+    ).toBe("Bearer K-SECRETA");
+    expect(JSON.parse(seen[0].init.body as string)).toEqual({
+      placa: "TESTCAR",
+      mode: "test",
+    });
+    expect(quote.json.data.output).toEqual({
+      status: 200,
+      data: { quoteNumber: "Q-1", nested: { prima: 5 } },
+    });
+  });
+
+  it("ejecuta acciones opcionales sin conexión y rechaza hosts fuera del allowlist.", async () => {
+    await setup();
+    const ping = await api(
+      tenant,
+      "/extensions/custom.demo/actions/ping",
+      "POST",
+      { input: {} },
+    );
+    expect(ping.status).toBe(201);
+    expect(seen[0].url).toBe("https://api.sura.com/ping");
+  });
+
+  it("rechaza plantillas que apuntan fuera del allowlist.", async () => {
+    const evilTenant = "store-http-evil";
+    await uploadZip(
+      evilTenant,
+      pluginZip({
+        store: {
+          ...httpStore,
+          actions: [
+            {
+              id: "evil",
+              kind: "http",
+              connector: "sura",
+              connectionOptional: true,
+              request: { method: "GET", url: "https://evil.test/x" },
+            },
+          ],
+        },
+      }),
+    );
+    await api(evilTenant, "/extensions/custom.demo/install", "POST");
+    const blocked = await api(
+      evilTenant,
+      "/extensions/custom.demo/actions/evil",
+      "POST",
+      { input: {} },
+    );
+    expect(blocked.status).toBe(422);
+  });
+
+  it("devuelve 502 si el proveedor falla.", async () => {
+    await setup();
+    globalThis.fetch = (async () =>
+      new Response("falla", { status: 500 })) as typeof fetch;
+    await api(tenant, "/extensions/custom.demo/connections/sura", "PUT", {
+      connectorId: "sura",
+      values: { baseUrl: "api.sura.com", apiKey: "K" },
+    });
+    const failed = await api(
+      tenant,
+      "/extensions/custom.demo/actions/cotizar",
+      "POST",
+      { connectionId: "sura", input: { placa: "X" } },
+    );
+    expect(failed.status).toBe(502);
+  });
+
+  it("rechaza respuestas que reflejan un secreto.", async () => {
+    await setup();
+    globalThis.fetch = (async () =>
+      Response.json({
+        quoteNumber: "Q-1",
+        apiKey: "K-SECRETA",
+      })) as typeof fetch;
+    await api(tenant, "/extensions/custom.demo/connections/sura", "PUT", {
+      connectorId: "sura",
+      values: { baseUrl: "api.sura.com", apiKey: "K-SECRETA" },
+    });
+    const reflected = await api(
+      tenant,
+      "/extensions/custom.demo/actions/cotizar",
+      "POST",
+      { connectionId: "sura", input: { placa: "X" } },
+    );
+    expect(reflected.status).toBe(502);
+  });
+
+  it("permite el host configurado y usa el contexto en plantillas.", async () => {
+    const tenant = "store-http-configured";
+    await uploadZip(
+      tenant,
+      pluginZip({
+        store: {
+          format: "savia.store",
+          formatVersion: 1,
+          connectors: [
+            {
+              id: "gw",
+              label: "Gateway",
+              secretFields: ["token"],
+              configSchema: {
+                type: "object",
+                required: ["endpoint", "token"],
+                properties: {
+                  endpoint: { type: "string" },
+                  token: { type: "string" },
+                },
+              },
+              allowedHosts: [],
+              allowConfiguredHost: true,
+            },
+          ],
+          actions: [
+            {
+              id: "enviar",
+              kind: "http",
+              connector: "gw",
+              request: {
+                method: "POST",
+                url: "{{connection.endpoint}}/enviar",
+                headers: {
+                  Authorization: "Bearer {{connection.token}}",
+                  "Idempotency-Key":
+                    "{{tenant}}:{{action}}:{{input.operationKey}}",
+                },
+                body: { operationKey: "{{input.operationKey}}" },
+              },
+            },
+          ],
+        },
+      }),
+    );
+    await api(tenant, "/extensions/custom.demo/install", "POST");
+    await api(tenant, "/extensions/custom.demo/connections/gw", "PUT", {
+      connectorId: "gw",
+      values: { endpoint: "https://proveedor.dinamico.test", token: "T" },
+    });
+    let idempotency = "";
+    globalThis.fetch = (async (url: any, init: any) => {
+      idempotency = (init.headers as Record<string, string>)["Idempotency-Key"];
+      return Response.json({ reference: "R-1", state: "accepted" });
+    }) as typeof fetch;
+    try {
+      const result = await api(
+        tenant,
+        "/extensions/custom.demo/actions/enviar",
+        "POST",
+        { connectionId: "gw", input: { operationKey: "OP-12345678" } },
+      );
+      expect(result.status).toBe(201);
+      expect(idempotency).toBe(`${tenant}:enviar:OP-12345678`);
+      expect(result.json.data.output).toEqual({
+        status: 200,
+        data: { reference: "R-1", state: "accepted" },
+      });
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  });
+});
+
+const mcpStore = {
+  format: "savia.store",
+  formatVersion: 1,
+  actions: [
+    {
+      id: "eco",
+      kind: "simulation",
+      output: { ok: true },
+      mcp: { label: "Eco", summary: "Devuelve un eco de demostración." },
+    },
+    {
+      id: "interna",
+      kind: "simulation",
+      output: { ok: true },
+    },
+  ],
+};
+
+describe("catálogo mcp del store", () => {
+  it("lista solo plugins activos con acciones de lectura.", async () => {
+    const tenant = "store-mcp";
+    await uploadZip(tenant, pluginZip({ store: mcpStore }));
+    const empty = await app(tenant).request(
+      "http://localhost/api/plugin-store/mcp-catalog",
+      {},
+      platform.env,
+    );
+    expect(((await empty.json()) as any).data).toEqual([]);
+
+    await app(tenant).request(
+      "http://localhost/api/extensions/custom.demo/install",
+      { method: "POST", headers: { "content-type": "application/json" } },
+      platform.env,
+    );
+    const catalog = (await (
+      await app(tenant).request(
+        "http://localhost/api/plugin-store/mcp-catalog",
+        {},
+        platform.env,
+      )
+    ).json()) as any;
+    expect(catalog.data).toEqual([
+      {
+        pluginId: "custom.demo",
+        label: "Demo",
+        actions: [
+          {
+            id: "eco",
+            kind: "simulation",
+            label: "[custom.demo/eco] Eco",
+            summary: "Devuelve un eco de demostración.",
+          },
+        ],
+      },
+    ]);
+
+    await app(tenant).request(
+      "http://localhost/api/extensions/custom.demo",
+      {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ enabled: false }),
+      },
+      platform.env,
+    );
+    const off = (await (
+      await app(tenant).request(
+        "http://localhost/api/plugin-store/mcp-catalog",
+        {},
+        platform.env,
+      )
+    ).json()) as any;
+    expect(off.data).toEqual([]);
+  });
+});
+
+describe("widgets del store", () => {
+  const widgetStore = {
+    format: "savia.store",
+    formatVersion: 1,
+    widgets: [
+      {
+        id: "resumen",
+        collection: "polizas",
+        title: { es: "Resumen" },
+      },
+    ],
+  };
+
+  it("sirve el shell del widget solo si está declarado y activo.", async () => {
+    const tenant = "store-widget";
+    await uploadZip(tenant, pluginZip({ store: widgetStore }));
+    const missing = await app(tenant).request(
+      "http://localhost/api/plugin-store/custom.demo/widget?widget=resumen&collection=polizas",
+      {},
+      platform.env,
+    );
+    expect(missing.status).toBe(404);
+
+    await app(tenant).request(
+      "http://localhost/api/extensions/custom.demo/install",
+      { method: "POST", headers: { "content-type": "application/json" } },
+      platform.env,
+    );
+    const shell = await app(tenant).request(
+      "http://localhost/api/plugin-store/custom.demo/widget?widget=resumen&collection=polizas",
+      {},
+      platform.env,
+    );
+    expect(shell.status).toBe(200);
+    const html = await shell.text();
+    expect(html).toContain("widget=resumen");
+
+    const unknown = await app(tenant).request(
+      "http://localhost/api/plugin-store/custom.demo/widget?widget=otro&collection=polizas",
+      {},
+      platform.env,
+    );
+    expect(unknown.status).toBe(404);
+
+    const extensions = (await (
+      await app(tenant).request(
+        "http://localhost/api/extensions",
+        {},
+        platform.env,
+      )
+    ).json()) as any;
+    expect(
+      extensions.data.find((row: any) => row.manifest.id === "custom.demo")
+        .widgets,
+    ).toEqual([
+      { id: "resumen", collection: "polizas", title: { es: "Resumen" } },
+    ]);
+  });
+});
+
+const ECHO_ARTIFACT = new URL(
+  "../../../dist/plugin-store/custom.http-echo-1.0.0.store.zip",
+  import.meta.url,
+);
+
+// Requiere `pnpm store:pack store-ports/http-echo`. En CI sin artefacto se omite.
+const hasEchoArtifact = existsSync(ECHO_ARTIFACT);
+const maybeEcho = hasEchoArtifact ? it : it.skip;
+
+describe("port real custom.http-echo", () => {
+  const echoFetch = globalThis.fetch;
+  maybeEcho(
+    "sube el ZIP empaquetado y ejecuta la acción http de punta a punta.",
+    async () => {
+      const tenant = "store-http-echo";
+      const zip = readFileSync(ECHO_ARTIFACT);
+      const form = new FormData();
+      form.set(
+        "file",
+        new File([zip as BlobPart], "echo.store.zip", {
+          type: "application/zip",
+        }),
+      );
+      const uploaded = await app(tenant).request(
+        "http://localhost/api/plugin-store/upload",
+        { method: "POST", body: form },
+        platform.env,
+      );
+      expect(uploaded.status, await uploaded.text()).toBe(200);
+      await api(tenant, "/extensions/custom.http-echo/install", "POST");
+      const saved = await api(
+        tenant,
+        "/extensions/custom.http-echo/connections/demo",
+        "PUT",
+        {
+          connectorId: "demo",
+          values: { baseUrl: "api.ejemplo.test", apiKey: "SECRETO" },
+        },
+      );
+      expect(saved.status).toBe(204);
+
+      globalThis.fetch = (async (url: any, init: any) => {
+        expect(String(url)).toBe("https://api.ejemplo.test/eco");
+        expect((init.headers as Record<string, string>)["Authorization"]).toBe(
+          "Bearer SECRETO",
+        );
+        return Response.json({ eco: "hola", apiKey: "SECRETO" });
+      }) as typeof fetch;
+      try {
+        const result = await api(
+          tenant,
+          "/extensions/custom.http-echo/actions/eco",
+          "POST",
+          { connectionId: "demo", input: { mensaje: "hola" } },
+        );
+        expect(result.status).toBe(201);
+        expect(result.json.data.output).toEqual({
+          status: 200,
+          data: { eco: "hola" },
+        });
+      } finally {
+        globalThis.fetch = echoFetch;
+      }
+    },
+  );
+});
+
+describe("release deployment worker", () => {
+  it("discovers all tenant scopes and installs, updates and reactivates without changing settings", async () => {
+    const db = platform.env.DB;
+    await db
+      .prepare("CREATE TABLE IF NOT EXISTS tenants(id INTEGER PRIMARY KEY)")
+      .run();
+    await db
+      .prepare("INSERT INTO tenants(id) VALUES (0),(901),(902),(903)")
+      .run();
+    await db
+      .prepare(
+        "INSERT INTO studio_objects(tenant_id,name,label,config) VALUES ('tenant:902','example','Example','{}'),('tenant:903','example','Example','{}')",
+      )
+      .run();
+    expect(await deploymentTenants(db)).toEqual([
+      "tenant:0",
+      "tenant:901",
+      "tenant:902",
+      "tenant:903",
+    ]);
+    const env = {
+      ...platform.env,
+      DEPLOYMENT_SESSION: "deployment-test-secret",
+    };
+    const call = (path: string, init: RequestInit = {}) =>
+      deploymentWorker.fetch(
+        new Request(`https://deployment.internal${path}`, {
+          ...init,
+          headers: {
+            ...init.headers,
+            authorization: "Bearer deployment-test-secret",
+          },
+        }),
+        env,
+      );
+    expect(
+      (
+        await deploymentWorker.fetch(
+          new Request("https://deployment.internal/tenants"),
+          env,
+        )
+      ).status,
+    ).toBe(401);
+    expect(
+      (
+        await call("/install?tenant=tenant:999&id=custom.demo", {
+          method: "POST",
+        })
+      ).status,
+    ).toBe(404);
+    for (const tenant of await deploymentTenants(db)) {
+      const form = new FormData();
+      form.set(
+        "file",
+        new File([pluginZip({ store: quoteStore }) as BlobPart], "demo.zip"),
+      );
+      const uploaded = await call(
+        `/upload?tenant=${encodeURIComponent(tenant)}`,
+        { method: "POST", body: form },
+      );
+      expect(uploaded.status, await uploaded.text()).toBe(200);
+      const installed = await call(
+        `/install?tenant=${encodeURIComponent(tenant)}&id=custom.demo`,
+        { method: "POST" },
+      );
+      expect(installed.status, await installed.text()).toBe(200);
+    }
+    const tenant = "tenant:901";
+    const changed = await api(
+      tenant,
+      "/extensions/custom.demo/settings",
+      "PUT",
+      {
+        value: {
+          quotePages: { direct: false, wizard: true },
+          vehicleLookup: { enabled: false },
+        },
+        version: 0,
+      },
+    );
+    expect(changed.status).toBe(200);
+    expect(
+      (
+        await api(tenant, "/extensions/custom.demo", "PATCH", {
+          enabled: false,
+        })
+      ).status,
+    ).toBe(200);
+    const form = new FormData();
+    form.set(
+      "file",
+      new File(
+        [
+          pluginZip({
+            store: quoteStore,
+            manifest: { version: "1.1.0" },
+          }) as BlobPart,
+        ],
+        "demo.zip",
+      ),
+    );
+    expect(
+      (await call(`/upload?tenant=${tenant}`, { method: "POST", body: form }))
+        .status,
+    ).toBe(200);
+    const updated = await call(`/install?tenant=${tenant}&id=custom.demo`, {
+      method: "POST",
+    });
+    expect(updated.status).toBe(200);
+    expect(((await updated.json()) as any).data).toMatchObject({
+      enabled: true,
+      version: "1.1.0",
+    });
+    const settings = await api(tenant, "/extensions/custom.demo/settings");
+    expect(settings.json.data.value).toEqual(changed.json.data.value);
+    expect(settings.json.data.version).toBe(1);
+    expect(
+      (
+        await call(`/install?tenant=${tenant}&id=custom.demo`, {
+          method: "POST",
+        })
+      ).status,
+    ).toBe(200);
+  });
+});
+
+describe("explicit plugin store install versions", () => {
+  it("does not install or provision a store extension deleted after resolution", async () => {
+    const tenant = "store-install-delete-race";
+    expect(
+      (await uploadZip(tenant, pluginZip({ store: tareasStore }))).status,
+    ).toBe(200);
+
+    let installBatchStarted!: () => void;
+    let resumeInstallBatch!: () => void;
+    const batchStarted = new Promise<void>((resolve) => {
+      installBatchStarted = resolve;
+    });
+    const resume = new Promise<void>((resolve) => {
+      resumeInstallBatch = resolve;
+    });
+    let paused = false;
+    const guardedDb = new Proxy(platform.env.DB, {
+      get(target, property) {
+        if (property === "batch")
+          return async (statements: D1PreparedStatement[]) => {
+            if (!paused) {
+              paused = true;
+              installBatchStarted();
+              await resume;
+            }
+            return target.batch(statements);
+          };
+        const value = Reflect.get(target, property, target);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+    const env = { ...platform.env, DB: guardedDb };
+    const pendingInstall = app(tenant).request(
+      "http://localhost/api/extensions/custom.demo/install",
+      { method: "POST", headers: { "content-type": "application/json" } },
+      env,
+    );
+
+    await batchStarted;
+    const deleted = await app(tenant).request(
+      "http://localhost/api/plugin-store/custom.demo?version=1.0.0",
+      { method: "DELETE" },
+      platform.env,
+    );
+    expect(deleted.status, await deleted.text()).toBe(200);
+    resumeInstallBatch();
+
+    const installed = await pendingInstall;
+    expect(installed.status).toBe(409);
+    expect(
+      await platform.env.DB.prepare(
+        "SELECT 1 FROM studio_extension_installations WHERE tenant_id=? AND id=?",
+      )
+        .bind(tenant, "custom.demo")
+        .first(),
+    ).toBeNull();
+    expect(await storedObject(tenant, "tareas")).toBeNull();
+    expect(
+      await platform.env.DB.prepare(
+        "SELECT count(*) as count FROM studio_schema_versions WHERE tenant_id=? AND object_name=?",
+      )
+        .bind(tenant, "tareas")
+        .first<{ count: number }>(),
+    ).toEqual({ count: 0 });
+    expect(
+      await platform.env.DB.prepare(
+        "SELECT count(*) as count FROM plugin_store_artifacts WHERE tenant_id=? AND id=?",
+      )
+        .bind(tenant, "custom.demo")
+        .first<{ count: number }>(),
+    ).toEqual({ count: 0 });
+  });
+
+  it("installs the requested version, rejects implicit downgrade, and permits only an explicit admin rollback", async () => {
+    const older = pluginZip({ manifest: { version: "1.0.0" } });
+    const newer = pluginZip({ manifest: { version: "2.0.0" } });
+    const selectedTenant = "store-version-selected";
+    expect((await uploadZip(selectedTenant, older)).status).toBe(200);
+    expect((await uploadZip(selectedTenant, newer)).status).toBe(200);
+    const selected = await api(
+      selectedTenant,
+      "/extensions/custom.demo/install",
+      "POST",
+      { version: "1.0.0" },
+    );
+    expect(selected.status).toBe(200);
+    expect(selected.json.data.version).toBe("1.0.0");
+
+    const rollbackTenant = "store-version-rollback";
+    expect((await uploadZip(rollbackTenant, older)).status).toBe(200);
+    expect((await uploadZip(rollbackTenant, newer)).status).toBe(200);
+    const studio = createStudioApp(rollbackTenant, {
+      seedObjects: [],
+      principalId: "admin-user",
+      canManageExtension: () => true,
+    });
+    const install = (body?: unknown) =>
+      studio.request(
+        "http://localhost/api/extensions/custom.demo/install",
+        body === undefined
+          ? { method: "POST" }
+          : {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify(body),
+            },
+        platform.env,
+      );
+    expect((await install()).status).toBe(200);
+    expect((await install({ version: "1.0.0" })).status).toBe(409);
+    const malformed = await studio.request(
+      "http://localhost/api/extensions/custom.demo/install",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: "{",
+      },
+      platform.env,
+    );
+    expect(malformed.status).toBe(400);
+    const noAdmin = createStudioApp(rollbackTenant, {
+      seedObjects: [],
+      principalId: "ordinary-user",
+    });
+    const deniedRollback = await noAdmin.request(
+      "http://localhost/api/extensions/custom.demo/install",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ version: "1.0.0", allowDowngrade: true }),
+      },
+      platform.env,
+    );
+    expect(deniedRollback.status).toBe(403);
+    const rolledBack = await install({
+      version: "1.0.0",
+      allowDowngrade: true,
+    });
+    expect(rolledBack.status).toBe(200);
+    expect(await rolledBack.json()).toMatchObject({
+      data: { id: "custom.demo", version: "1.0.0", enabled: true },
+    });
+  });
+});
+
+describe("studio plugin registry consumer", () => {
+  const registry = {
+    url: "https://registry.example",
+    token: "registry-secret",
+  };
+
+  it("fails closed for registry routes when tenant admin authorization is absent", async () => {
+    const studio = createStudioApp("registry-tenant", {
+      seedObjects: [],
+      principalId: "registry-user",
+      pluginRegistry: registry,
+    });
+    const list = await studio.request(
+      "http://localhost/api/plugin-store/registry",
+      {},
+      platform.env,
+    );
+    const imported = await studio.request(
+      "http://localhost/api/plugin-store/registry/import",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          id: "custom.demo",
+          version: "1.0.0",
+          sha256: "a".repeat(64),
+        }),
+      },
+      platform.env,
+    );
+    expect(list.status).toBe(403);
+    expect(imported.status).toBe(403);
+    expect(await list.text()).not.toContain(registry.token);
+  });
+
+  it("lists validated releases with cursor and keeps credentials server-side", async () => {
+    const fetchMock = vi.fn(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        expect(String(input)).toBe(
+          "https://registry.example/v1/plugins?cursor=next-1",
+        );
+        expect(new Headers(init?.headers).get("authorization")).toBe(
+          `Bearer ${registry.token}`,
+        );
+        return Response.json({
+          data: [
+            {
+              id: "custom.demo",
+              version: "1.0.0",
+              label: "Demo",
+              sha256: "a".repeat(64),
+              sizeBytes: 123,
+              createdAt: "2026-09-30T12:00:00.000Z",
+            },
+          ],
+          cursor: null,
+        });
+      },
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const studio = createStudioApp("registry-tenant", {
+        seedObjects: [],
+        principalId: "registry-user",
+        pluginRegistry: registry,
+        canManageExtension: () => true,
+      });
+      const response = await studio.request(
+        "http://localhost/api/plugin-store/registry?cursor=next-1",
+        {},
+        platform.env,
+      );
+      expect(response.status).toBe(200);
+      expect(response.headers.get("cache-control")).toBe("private, no-store");
+      const body = (await response.json()) as any;
+      expect(body).toMatchObject({
+        configured: true,
+        cursor: null,
+        data: [{ id: "custom.demo" }],
+      });
+      expect(JSON.stringify(body)).not.toContain(registry.token);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("rejects caller-supplied URLs before any registry fetch", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const studio = createStudioApp("registry-tenant", {
+        seedObjects: [],
+        principalId: "registry-user",
+        pluginRegistry: registry,
+        canManageExtension: () => true,
+      });
+      const response = await studio.request(
+        "http://localhost/api/plugin-store/registry/import",
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            id: "custom.demo",
+            version: "1.0.0",
+            sha256: "a".repeat(64),
+            url: "https://attacker.example/evil.zip",
+          }),
+        },
+        platform.env,
+      );
+      expect(response.status).toBe(400);
+      expect(fetchMock).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("checks the requested digest and manifest identity before persistence", async () => {
+    const zip = pluginZip();
+    const digestBytes = await crypto.subtle.digest(
+      "SHA-256",
+      zip as unknown as ArrayBuffer,
+    );
+    const digest = [...new Uint8Array(digestBytes)]
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
+    const fetchMock = vi.fn(
+      async () => new Response(zip, { headers: { "x-plugin-sha256": digest } }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const studio = createStudioApp("registry-import-checks", {
+        seedObjects: [],
+        principalId: "registry-user",
+        pluginRegistry: registry,
+        canManageExtension: () => true,
+      });
+      const request = (id: string, sha256: string) =>
+        studio.request(
+          "http://localhost/api/plugin-store/registry/import",
+          {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ id, version: "1.0.0", sha256 }),
+          },
+          platform.env,
+        );
+      expect((await request("custom.demo", "a".repeat(64))).status).toBe(422);
+      expect((await request("custom.other", digest)).status).toBe(422);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("persists an imported artifact locally so it remains available during a registry outage", async () => {
+    const zip = pluginZip();
+    const digestBytes = await crypto.subtle.digest(
+      "SHA-256",
+      zip as unknown as ArrayBuffer,
+    );
+    const digest = [...new Uint8Array(digestBytes)]
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(zip, { headers: { "x-plugin-sha256": digest } }),
+      )
+      .mockRejectedValueOnce(new Error("registry unavailable"));
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const studio = createStudioApp("registry-import-outage", {
+        seedObjects: [],
+        principalId: "registry-user",
+        pluginRegistry: registry,
+        canManageExtension: () => true,
+      });
+      const imported = await studio.request(
+        "http://localhost/api/plugin-store/registry/import",
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            id: "custom.demo",
+            version: "1.0.0",
+            sha256: digest,
+          }),
+        },
+        platform.env,
+      );
+      expect(imported.status).toBe(200);
+      const catalog = await studio.request(
+        "http://localhost/api/plugin-store",
+        {},
+        platform.env,
+      );
+      expect(catalog.status).toBe(200);
+      expect(await catalog.json()).toMatchObject({
+        data: [{ manifest: { id: "custom.demo" }, version: "1.0.0" }],
+      });
+      const unavailable = await studio.request(
+        "http://localhost/api/plugin-store/registry",
+        {},
+        platform.env,
+      );
+      expect(unavailable.status).toBe(503);
+      const stillLocal = await studio.request(
+        "http://localhost/api/plugin-store",
+        {},
+        platform.env,
+      );
+      expect(stillLocal.status).toBe(200);
+      expect(await stillLocal.json()).toMatchObject({
+        data: [{ manifest: { id: "custom.demo" } }],
+      });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("bounds expanded ZIP bytes and rejects repeated paths", async () => {
+    const oversized = makeZip([
+      { name: "dist/plugin.js", data: new Uint8Array(2 * 1024 * 1024 + 1) },
+    ]);
+    expect((await uploadZip("registry-zip-bounds", oversized)).status).toBe(
+      422,
+    );
+    const manifest = {
+      format: "savia.extension",
+      formatVersion: 1,
+      id: "custom.duplicate",
+      version: "1.0.0",
+      label: "Duplicate",
+      description: "Duplicate entry test.",
+      requires: [],
+      apiVersion: 1,
+    };
+    const duplicate = makeZip([
+      { name: "savia-extension.json", data: text(JSON.stringify(manifest)) },
+      { name: "dist/plugin.js", data: text("export function render() {}") },
+      { name: "dist/plugin.js", data: text("export function render() {}") },
+    ]);
+    expect((await uploadZip("registry-zip-duplicate", duplicate)).status).toBe(
+      422,
+    );
+  });
+});
+
+describe("read-only MCP store execution", () => {
+  it("requires an available host executor and passes authenticated context rather than caller destinations", async () => {
+    const tenant = "mcp-plugin-actions";
+    const action = {
+      id: "search",
+      kind: "mcp",
+      sourceId: "secop_live",
+      tool: "buscar_licitaciones",
+      mapping: { idField: ":id", itemsPointer: "/data", arguments: {} },
+      inputArguments: ["q"],
+    };
+    const uploaded = await uploadZip(
+      tenant,
+      pluginZip({
+        store: { format: "savia.store", formatVersion: 1, actions: [action] },
+      }),
+    );
+    expect(uploaded.status, await uploaded.clone().text()).toBe(200);
+    expect(
+      (await api(tenant, "/extensions/custom.demo/install", "POST")).status,
+    ).toBe(200);
+    expect(
+      (
+        await api(tenant, "/extensions/custom.demo/actions/search", "POST", {
+          input: { q: "software" },
+        })
+      ).status,
+    ).toBe(503);
+    const executeMcpAction = vi.fn(async () => ({
+      data: [{ id: "123", name: "Public opportunity" }],
+      page: 1,
+      perPage: 20,
+      hasNext: false,
+    }));
+    const isActive = (tenantId: string, extensionId: string) =>
+      isExtensionAvailable(platform.env.DB, tenantId, extensionId);
+    const runtime = createStudioApp(tenant, {
+      principalId: "mcp-plugin-owner",
+      seedObjects: [],
+      executeMcpAction,
+      connectionRepository: new ExtensionConnectionRepository(platform.env.DB, {
+        encryptionKey,
+        isExtensionActive: isActive,
+      }),
+    });
+    const response = await runtime.request(
+      "http://localhost/api/extensions/custom.demo/actions/search",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ input: { q: "software" } }),
+      },
+      platform.env,
+    );
+    expect(response.status, await response.clone().text()).toBe(201);
+    expect(executeMcpAction).toHaveBeenCalledWith({
+      tenantId: tenant,
+      principalId: "mcp-plugin-owner",
+      extensionId: "custom.demo",
+      action: expect.objectContaining(action),
+      input: { q: "software" },
+    });
+    expect(await response.json()).toMatchObject({
+      data: { run: { status: "succeeded" }, output: { data: [{ id: "123" }] } },
+    });
+    const runs = await runtime.request(
+      "http://localhost/api/extensions/custom.demo/actions/runs",
+      {},
+      platform.env,
+    );
+    expect(await runs.text()).not.toContain("Public opportunity");
+  });
+});

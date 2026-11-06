@@ -1,0 +1,33 @@
+{
+  "name": "@savia/flows-utils",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "files": [
+    "dist/**"
+  ],
+  "scripts": {
+    "test": "vitest run",
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check",
+    "check": "biome check --write",
+    "format": "biome format --write",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@savia/flows-types": "workspace:*",
+    "d3-geo": "3.1.1"
+  },
+  "devDependencies": {
+    "@types/d3-geo": "3.1.1",
+    "typescript": "5.9.3",
+    "vitest": "4.1.11"
+  }
+}

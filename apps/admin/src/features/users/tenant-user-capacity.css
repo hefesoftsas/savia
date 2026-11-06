@@ -1,0 +1,10 @@
+.tenant-user-capacity-editor {
+  container: tenant-user-capacity / inline-size;
+}
+
+@container tenant-user-capacity (min-width: 28rem) {
+  .tenant-user-capacity-controls {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: end;
+  }
+}

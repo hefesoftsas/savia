@@ -1,0 +1,20 @@
+# Project defaults. Full-access permissions are inherited from local user config.
+model_reasoning_effort = "medium"
+
+[features]
+multi_agent = true
+
+[agents]
+max_threads = 2
+
+[agents.default]
+description = "Luna worker for bounded implementation and exploration assigned by Astra."
+config_file = "agents/luna.toml"
+
+[agents.worker]
+description = "Luna worker for bounded implementation assigned by Astra."
+config_file = "agents/luna.toml"
+
+[agents.explorer]
+description = "Luna worker for focused repository exploration assigned by Astra."
+config_file = "agents/luna.toml"

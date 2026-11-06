@@ -1,0 +1,13 @@
+{
+  "measuredAt": "2026-10-04T06:08:20.811Z",
+  "test": "QuickJS catastrophic RegExp /^(a+)+$/ on 32 a characters plus !",
+  "expected": "Guest should finish or be interrupted within the normal hook budget",
+  "status": "failed-isolation-budget",
+  "externalTimeoutMs": 5000,
+  "elapsedAfterReadyMs": 5010.975490000001,
+  "timedOut": true,
+  "exitCode": null,
+  "signal": "SIGKILL",
+  "stdout": "ready\n",
+  "stderr": ""
+}

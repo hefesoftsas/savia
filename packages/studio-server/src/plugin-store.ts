@@ -1,0 +1,2149 @@
+import { resolvePublishedPluginFiles } from "./plugin-development-snapshot";
+import { connectPluginPanelHost } from "@savia/studio-shared/plugin-panels";
+import {
+  PLUGIN_STORE_CONFIG_PATH,
+  PLUGIN_STORE_ENTRY_PATH,
+  PLUGIN_STORE_MANIFEST_PATH,
+  PLUGIN_STORE_MAX_ENTRY_BYTES,
+  PLUGIN_STORE_MAX_ZIP_BYTES,
+  assertStoreHttpUrl,
+  pluginStoreManifestSchema,
+  redactSecrets,
+  renderTemplate,
+  sanitizeStoreCollection,
+  storeJsonSchema,
+  storeMcpActions,
+  validatePluginEntrySource,
+  type PluginStoreManifest,
+  type StoreCollection,
+  type StoreConnector,
+  type StoreHttpAction,
+  type StoreJson,
+  type StoreSaviaRequestAction,
+} from "@savia/studio-shared/plugin-store";
+import {
+  pluginEntryGrantExpiresAt,
+  signPluginEntryGrant,
+} from "@savia/studio-shared/plugin-entry-grant";
+import {
+  insuranceSaviaRequestBundle,
+  isInsuranceSaviaRequestFlow,
+  lookupQuoteInputSchema,
+  normalizeInsuranceAction,
+  providerForFlow,
+  quoteInputSchema,
+  saviaRequestActionInputSchema,
+  saviaRequestFlowRunSchema,
+  toSaviaRequestInput,
+  type SaviaRequestService,
+} from "@savia/studio-shared/savia-request-quotes";
+import {
+  canonicalJson,
+  compareSolutionVersions,
+} from "@savia/studio-shared/solution-package";
+import type { ExtensionObjectRequirement } from "@savia/studio-shared/extension-package";
+import type { ExtensionConnectorDefinition } from "@savia/studio-shared/extension-runtime";
+import type { WorkflowBundle } from "@savia/studio-shared/workflow-bundles";
+import { z } from "zod";
+import { type Env, fail } from "./context";
+import { audit, transaction } from "./services";
+import {
+  encodePluginFilesJson,
+  decodePluginFilesJson,
+} from "./plugin-file-storage";
+import type { Hono } from "hono";
+import {
+  deletePluginRegistryRelease,
+  PluginRegistryDeleteError,
+  registerPluginRegistry,
+} from "./plugin-registry";
+import {
+  parsePluginOriginalSourceFiles,
+  pluginStoreSourceFilesSchema,
+  type PluginStoreSourceFiles,
+} from "@savia/studio-shared/plugin-projects";
+import { registerPluginEditorExtensions } from "./plugin-editor-extensions";
+import { registerPluginProjects } from "./plugin-projects";
+
+export type PluginStoreOptions = {
+  pluginDevelopmentAccess?: {
+    workspaceLabel: string;
+    read: boolean;
+    publish: boolean;
+  };
+  apiBasePath?: string;
+  entryGrantSecret?: string;
+  pluginRegistry?: { url: string; token: string; publishToken?: string };
+  canManageExtension?: (input: {
+    tenantId: string;
+    principalId: string;
+    extensionId: string;
+  }) => Promise<boolean> | boolean;
+};
+
+/** Per-tenant quotas: 10 versions per plugin, 64 MiB in total. */
+export const PLUGIN_STORE_MAX_VERSIONS_PER_ID = 10;
+export const PLUGIN_STORE_MAX_BYTES_PER_TENANT = 64 * 1024 * 1024;
+
+async function assertStoreQuota(
+  db: D1Database,
+  tenant: string,
+  pluginId: string,
+  sizeBytes: number,
+): Promise<void> {
+  const usage = await db
+    .prepare(
+      `SELECT coalesce(sum(case when id=? then 1 else 0 end),0) as plugin_versions,
+              coalesce(sum(size_bytes),0) as total_bytes
+       FROM plugin_store_artifacts WHERE tenant_id=?`,
+    )
+    .bind(pluginId, tenant)
+    .first<{ plugin_versions: number; total_bytes: number }>();
+  if (!usage) return;
+  if (usage.plugin_versions >= PLUGIN_STORE_MAX_VERSIONS_PER_ID)
+    fail(
+      `El plugin ya tiene ${PLUGIN_STORE_MAX_VERSIONS_PER_ID} versiones. Elimina alguna antes de subir otra.`,
+      409,
+    );
+  if (usage.total_bytes + sizeBytes > PLUGIN_STORE_MAX_BYTES_PER_TENANT)
+    fail("El espacio alcanzó la cuota de 64 MiB del store.", 413);
+}
+
+export type ParsedStoreZip = {
+  manifest: PluginStoreManifest;
+  entryJs: string;
+  store: StoreJson | null;
+  sourceFiles?: PluginStoreSourceFiles;
+  sha256: string;
+  sizeBytes: number;
+};
+
+export type StoreUploadResult = {
+  id: string;
+  version: string;
+  sha256: string;
+  deduped: boolean;
+};
+
+// --- Lector ZIP mínimo (stored + deflated) sobre APIs del Worker ---
+
+type ZipEntry = { name: string; method: number; data: Uint8Array };
+
+function dataView(bytes: Uint8Array): DataView {
+  return new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+}
+
+function decodeAscii(bytes: Uint8Array): string {
+  let out = "";
+  for (const byte of bytes) out += String.fromCharCode(byte);
+  return out;
+}
+
+function findCentralDirectory(bytes: Uint8Array): number {
+  // EOCD: busca la firma desde el final (sin comentario o con comentario).
+  const view = dataView(bytes);
+  const start = Math.max(0, bytes.length - 22 - 65535);
+  for (let i = bytes.length - 22; i >= start; i--) {
+    if (view.getUint32(i, true) === 0x06054b50) return i;
+  }
+  throw new Error("El ZIP no contiene un directorio central válido.");
+}
+
+async function inflateRaw(data: Uint8Array, name: string): Promise<Uint8Array> {
+  try {
+    const owned = data.slice();
+    const stream = new Blob([owned as BlobPart])
+      .stream()
+      .pipeThrough(new DecompressionStream("deflate-raw"));
+    const reader = stream.getReader();
+    const chunks: Uint8Array[] = [];
+    let length = 0;
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        length += value.byteLength;
+        if (length > PLUGIN_STORE_MAX_ENTRY_BYTES) {
+          await reader.cancel();
+          throw new Error(`La entrada ${name} supera el tamaño máximo.`);
+        }
+        chunks.push(value);
+      }
+    } finally {
+      reader.releaseLock();
+    }
+    const output = new Uint8Array(length);
+    let offset = 0;
+    for (const chunk of chunks) {
+      output.set(chunk, offset);
+      offset += chunk.length;
+    }
+    return output;
+  } catch {
+    throw new Error(`No se pudo descomprimir ${name}.`);
+  }
+}
+
+async function unzipEntries(bytes: Uint8Array): Promise<ZipEntry[]> {
+  if (bytes.length < 22) throw new Error("El archivo no es un ZIP válido.");
+  const view = dataView(bytes);
+  const eocd = findCentralDirectory(bytes);
+  const totalEntries = view.getUint16(eocd + 10, true);
+  const centralOffset = view.getUint32(eocd + 16, true);
+  if (totalEntries > 256)
+    throw new Error("El ZIP contiene demasiadas entradas.");
+  const entries: ZipEntry[] = [];
+  const names = new Set<string>();
+  let expandedBytes = 0;
+  let cursor = centralOffset;
+  for (let i = 0; i < totalEntries; i++) {
+    if (view.getUint32(cursor, true) !== 0x02014b50)
+      throw new Error("El ZIP está corrupto.");
+    const method = view.getUint16(cursor + 10, true);
+    const compressedSize = view.getUint32(cursor + 20, true);
+    const fileNameLength = view.getUint16(cursor + 28, true);
+    const extraLength = view.getUint16(cursor + 30, true);
+    const commentLength = view.getUint16(cursor + 32, true);
+    const localHeaderOffset = view.getUint32(cursor + 42, true);
+    const nameBytes = bytes.subarray(cursor + 46, cursor + 46 + fileNameLength);
+    cursor += 46 + fileNameLength + extraLength + commentLength;
+
+    const name = new TextDecoder().decode(nameBytes);
+    if (name.endsWith("/")) continue; // directorio
+    if (names.has(name)) throw new Error(`El ZIP repite la entrada ${name}.`);
+    names.add(name);
+    if (
+      name.includes("..") ||
+      name.startsWith("/") ||
+      name.startsWith("\\") ||
+      /[A-Z]:/.test(name)
+    )
+      throw new Error(`El ZIP contiene una ruta no permitida: ${name}.`);
+
+    if (view.getUint32(localHeaderOffset, true) !== 0x04034b50)
+      throw new Error("El ZIP está corrupto.");
+    const localNameLength = view.getUint16(localHeaderOffset + 26, true);
+    const localExtraLength = view.getUint16(localHeaderOffset + 28, true);
+    const dataStart =
+      localHeaderOffset + 30 + localNameLength + localExtraLength;
+    if (dataStart + compressedSize > bytes.length)
+      throw new Error("El ZIP está corrupto.");
+    const data = bytes.slice(dataStart, dataStart + compressedSize);
+    let expanded: Uint8Array;
+    if (method === 0) expanded = data;
+    else if (method === 8) expanded = await inflateRaw(data, name);
+    else throw new Error(`El ZIP usa un método no soportado en ${name}.`);
+    if (expanded.byteLength > PLUGIN_STORE_MAX_ENTRY_BYTES)
+      throw new Error(`La entrada ${name} supera el tamaño máximo.`);
+    expandedBytes += expanded.byteLength;
+    if (expandedBytes > PLUGIN_STORE_MAX_ZIP_BYTES)
+      throw new Error("El ZIP expandido supera el máximo permitido.");
+    entries.push({ name, method, data: expanded });
+  }
+  return entries;
+}
+
+export async function sha256Hex(bytes: Uint8Array): Promise<string> {
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    bytes as unknown as ArrayBuffer,
+  );
+  return [...new Uint8Array(digest)]
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+export async function parsePluginStoreZip(
+  bytes: Uint8Array,
+): Promise<ParsedStoreZip> {
+  if (bytes.length === 0) throw new Error("El archivo ZIP está vacío.");
+  if (bytes.length > PLUGIN_STORE_MAX_ZIP_BYTES)
+    throw new Error("El ZIP supera el máximo de 6 MB.");
+  // Firma local de ZIP.
+  if (!(bytes[0] === 0x50 && bytes[1] === 0x4b))
+    throw new Error("El archivo no es un ZIP válido.");
+
+  const entries = await unzipEntries(bytes);
+  const byName = new Map(entries.map((entry) => [entry.name, entry]));
+  const manifestEntry = byName.get(PLUGIN_STORE_MANIFEST_PATH);
+  if (!manifestEntry)
+    throw new Error("El ZIP debe incluir savia-extension.json en la raíz.");
+  const entryFile = byName.get(PLUGIN_STORE_ENTRY_PATH);
+  if (!entryFile)
+    throw new Error("El ZIP debe incluir dist/plugin.js compilado.");
+
+  let manifestJson: unknown;
+  try {
+    manifestJson = JSON.parse(new TextDecoder().decode(manifestEntry.data));
+  } catch {
+    throw new Error("savia-extension.json no contiene JSON válido.");
+  }
+  const manifest = pluginStoreManifestSchema.parse(manifestJson);
+  const entryJs = new TextDecoder().decode(entryFile.data);
+  validatePluginEntrySource(entryJs);
+  const storeEntry = byName.get(PLUGIN_STORE_CONFIG_PATH);
+  let store: StoreJson | null = null;
+  if (storeEntry) {
+    try {
+      store = storeJsonSchema.parse(
+        JSON.parse(new TextDecoder().decode(storeEntry.data)),
+      );
+      for (const collection of store.collections ?? [])
+        sanitizeStoreCollection(collection);
+    } catch {
+      throw new Error("store.json no cumple el contrato savia.store v1.");
+    }
+  }
+  const sourceEntry = byName.get("src/entry.tsx");
+  const previewEntry = byName.get("src/preview.json");
+  const originalSourceEntry = byName.get("src/original-source.json");
+  const originalSource = originalSourceEntry
+    ? new TextDecoder().decode(originalSourceEntry.data)
+    : undefined;
+  if (originalSource !== undefined)
+    parsePluginOriginalSourceFiles(originalSource);
+  const sourceFiles =
+    sourceEntry || originalSourceEntry
+      ? pluginStoreSourceFilesSchema.parse({
+          "entry.tsx": sourceEntry
+            ? new TextDecoder().decode(sourceEntry.data)
+            : entryJs,
+          "savia-extension.json": new TextDecoder().decode(manifestEntry.data),
+          "store.json": storeEntry
+            ? new TextDecoder().decode(storeEntry.data)
+            : JSON.stringify({
+                format: "savia.store",
+                formatVersion: 1,
+                actions: [],
+                connectors: [],
+                collections: [],
+                bundles: [],
+                widgets: [],
+                screens: [],
+              }),
+          "preview.json": previewEntry
+            ? new TextDecoder().decode(previewEntry.data)
+            : JSON.stringify({ collections: {}, settings: {} }),
+          ...(originalSource === undefined
+            ? {}
+            : { "original-source.json": originalSource }),
+        })
+      : undefined;
+  return {
+    manifest,
+    entryJs,
+    store,
+    ...(sourceFiles ? { sourceFiles } : {}),
+    sha256: await sha256Hex(bytes),
+    sizeBytes: bytes.length,
+  };
+}
+
+/** Persist an already validated package through the normal local upload path. */
+export async function persistParsedStoreArtifact(
+  db: D1Database,
+  tenant: string,
+  principalId: string | null,
+  parsed: ParsedStoreZip,
+  guardedWrite?: { start: D1PreparedStatement[]; end: D1PreparedStatement[] },
+): Promise<StoreUploadResult> {
+  const storedSourceFiles = parsed.sourceFiles
+    ? await encodePluginFilesJson(canonicalJson(parsed.sourceFiles))
+    : undefined;
+  const existing = await db
+    .prepare(
+      "SELECT * FROM plugin_store_artifacts WHERE tenant_id=? AND id=? AND version=?",
+    )
+    .bind(tenant, parsed.manifest.id, parsed.manifest.version)
+    .first<{
+      manifest: string;
+      entry_js: string;
+      store_json?: string | null;
+    }>();
+  if (existing) {
+    if (guardedWrite) fail("Plugin head changed before publication.", 409);
+    let existingStore: unknown = null;
+    if (existing.store_json) {
+      try {
+        const decoded = JSON.parse(existing.store_json);
+        try {
+          // Normalize defaults added to the store schema (for example the
+          // monitors array) before comparing immutable historical artifacts.
+          existingStore = storeJsonSchema.parse(decoded);
+        } catch {
+          existingStore = decoded;
+        }
+      } catch {
+        existingStore = existing.store_json;
+      }
+    }
+    if (
+      canonicalJson(JSON.parse(existing.manifest)) !==
+        canonicalJson(parsed.manifest) ||
+      existing.entry_js !== parsed.entryJs ||
+      canonicalJson(existingStore) !== canonicalJson(parsed.store ?? null)
+    )
+      fail(
+        "Esta versión ya existe con otro contenido. Publica una versión nueva.",
+        409,
+      );
+    if (parsed.sourceFiles) {
+      const source = await db
+        .prepare(
+          "SELECT files FROM plugin_store_sources WHERE tenant_id=? AND id=? AND version=?",
+        )
+        .bind(tenant, parsed.manifest.id, parsed.manifest.version)
+        .first<{ files: string }>();
+      if (
+        source &&
+        canonicalJson(JSON.parse(await decodePluginFilesJson(source.files))) !==
+          canonicalJson(parsed.sourceFiles)
+      )
+        fail("Esta versión ya existe con otro código fuente.", 409);
+      if (!source) {
+        try {
+          await db
+            .prepare(
+              "INSERT INTO plugin_store_sources(tenant_id,id,version,files) VALUES(?,?,?,?)",
+            )
+            .bind(
+              tenant,
+              parsed.manifest.id,
+              parsed.manifest.version,
+              storedSourceFiles,
+            )
+            .run();
+        } catch {
+          const concurrentSource = await db
+            .prepare(
+              "SELECT files FROM plugin_store_sources WHERE tenant_id=? AND id=? AND version=?",
+            )
+            .bind(tenant, parsed.manifest.id, parsed.manifest.version)
+            .first<{ files: string }>();
+          if (
+            !concurrentSource ||
+            canonicalJson(
+              JSON.parse(await decodePluginFilesJson(concurrentSource.files)),
+            ) !== canonicalJson(parsed.sourceFiles)
+          )
+            fail("Esta versión ya existe con otro código fuente.", 409);
+        }
+      }
+    }
+    return {
+      id: parsed.manifest.id,
+      version: parsed.manifest.version,
+      sha256: parsed.sha256,
+      deduped: true,
+    };
+  }
+
+  const catalogVersions = await db
+    .prepare(
+      "SELECT version FROM plugin_store_artifacts WHERE tenant_id=? AND id=?",
+    )
+    .bind(tenant, parsed.manifest.id)
+    .all<{ version: string }>();
+  const latestVersion = catalogVersions.results.reduce<string | null>(
+    (latest, candidate) =>
+      latest === null || compareSolutionVersions(candidate.version, latest) > 0
+        ? candidate.version
+        : latest,
+    null,
+  );
+  if (
+    latestVersion !== null &&
+    compareSolutionVersions(parsed.manifest.version, latestVersion) <= 0
+  )
+    fail(
+      `La nueva versión debe ser mayor que la última versión publicada (${latestVersion}).`,
+      409,
+    );
+
+  await assertStoreQuota(db, tenant, parsed.manifest.id, parsed.sizeBytes);
+  let hasConfigColumn = true;
+  try {
+    await db
+      .prepare("SELECT store_json FROM plugin_store_artifacts LIMIT 1")
+      .first();
+  } catch {
+    hasConfigColumn = false;
+  }
+  if (parsed.store && !hasConfigColumn)
+    fail("Este entorno aún no soporta store.json (migración pendiente).", 428);
+  const [major, minor, patch] = parsed.manifest.version.split(".");
+  const nextVersionParts = [major, minor, patch] as const;
+  const versionPart = (index: number) =>
+    `substr(substr(version,instr(version,'.')+1),${index === 1 ? `1,instr(substr(version,instr(version,'.')+1),'.')-1` : `instr(substr(version,instr(version,'.')+1),'.')+1`})`;
+  const existingMajor = "substr(version,1,instr(version,'.')-1)";
+  const existingMinor = versionPart(1);
+  const existingPatch = versionPart(2);
+  // Versions are validated decimal triplets (up to 30 chars total). Compare
+  // zero-padded text so SQLite never rounds a large component through INTEGER.
+  const padded = (part: string) =>
+    `substr('000000000000000000000000000000'||${part},-30)`;
+  const artifactColumns = hasConfigColumn
+    ? "tenant_id,id,version,manifest,entry_js,store_json,sha256,size_bytes,created_by"
+    : "tenant_id,id,version,manifest,entry_js,sha256,size_bytes,created_by";
+  const artifactValues = hasConfigColumn
+    ? [
+        tenant,
+        parsed.manifest.id,
+        parsed.manifest.version,
+        canonicalJson(parsed.manifest),
+        parsed.entryJs,
+        parsed.store ? canonicalJson(parsed.store) : null,
+        parsed.sha256,
+        parsed.sizeBytes,
+        principalId,
+      ]
+    : [
+        tenant,
+        parsed.manifest.id,
+        parsed.manifest.version,
+        canonicalJson(parsed.manifest),
+        parsed.entryJs,
+        parsed.sha256,
+        parsed.sizeBytes,
+        principalId,
+      ];
+  const artifactStatement = db
+    .prepare(
+      `WITH candidate(p0,p1,p2) AS (VALUES (?,?,?)),
+       existing_parts AS (
+         SELECT ${existingMajor} AS p0, ${existingMinor} AS p1, ${existingPatch} AS p2
+         FROM plugin_store_artifacts WHERE tenant_id=? AND id=?
+       )
+       INSERT INTO plugin_store_artifacts(${artifactColumns})
+       SELECT ${artifactValues.map(() => "?").join(",")} FROM candidate c
+       WHERE NOT EXISTS (
+         SELECT 1 FROM existing_parts e
+         WHERE ${padded("e.p0")} > ${padded("c.p0")}
+            OR (${padded("e.p0")} = ${padded("c.p0")} AND ${padded("e.p1")} > ${padded("c.p1")})
+            OR (${padded("e.p0")} = ${padded("c.p0")} AND ${padded("e.p1")} = ${padded("c.p1")} AND ${padded("e.p2")} >= ${padded("c.p2")})
+       )`,
+    )
+    .bind(...nextVersionParts, tenant, parsed.manifest.id, ...artifactValues);
+  const statements = [artifactStatement];
+  // D1 batch is transactional; only attach authored sources if the guarded
+  // artifact statement inserted its row.
+  if (parsed.sourceFiles)
+    statements.push(
+      db
+        .prepare(
+          "INSERT INTO plugin_store_sources(tenant_id,id,version,files) SELECT ?,?,?,? WHERE changes()=1",
+        )
+        .bind(
+          tenant,
+          parsed.manifest.id,
+          parsed.manifest.version,
+          storedSourceFiles,
+        ),
+    );
+  const results = guardedWrite
+    ? (
+        await transaction(db, [
+          ...guardedWrite.start,
+          ...statements,
+          ...guardedWrite.end,
+        ])
+      ).slice(guardedWrite.start.length)
+    : await db.batch(statements);
+  if (results[0]?.meta?.changes !== 1) {
+    if (guardedWrite) fail("Plugin head changed during publication.", 409);
+    const sameVersion = await db
+      .prepare(
+        "SELECT * FROM plugin_store_artifacts WHERE tenant_id=? AND id=? AND version=?",
+      )
+      .bind(tenant, parsed.manifest.id, parsed.manifest.version)
+      .first();
+    if (sameVersion)
+      return persistParsedStoreArtifact(db, tenant, principalId, parsed);
+    const latestVersions = await db
+      .prepare(
+        "SELECT version FROM plugin_store_artifacts WHERE tenant_id=? AND id=?",
+      )
+      .bind(tenant, parsed.manifest.id)
+      .all<{ version: string }>();
+    const latestVersion = latestVersions.results.reduce<string | null>(
+      (latest, candidate) =>
+        latest === null ||
+        compareSolutionVersions(candidate.version, latest) > 0
+          ? candidate.version
+          : latest,
+      null,
+    );
+    fail(
+      `La nueva versión debe ser mayor que la última versión publicada (${latestVersion ?? "desconocida"}).`,
+      409,
+    );
+  }
+  await audit(
+    db,
+    tenant,
+    "plugin-store.uploaded",
+    "plugin",
+    parsed.manifest.id,
+    {
+      version: parsed.manifest.version,
+      sha256: parsed.sha256,
+    },
+  )
+    .run()
+    .catch(() => undefined);
+  return {
+    id: parsed.manifest.id,
+    version: parsed.manifest.version,
+    sha256: parsed.sha256,
+    deduped: false,
+  };
+}
+
+// --- Acceso a D1 ---
+
+export type StoreArtifactRow = {
+  id: string;
+  version: string;
+  manifest: string;
+  store_json?: string | null;
+  sha256: string;
+  size_bytes: number;
+  created_by: string | null;
+  created_at: string;
+};
+
+/**
+ * Requisitos de colección declarados por un plugin del store, listos
+ * para `prepareExtensionObjectProvisioning`. Entradas corruptas se
+ * ignoran (la subida ya validó el contrato).
+ */
+export async function storeObjectRequirements(
+  db: D1Database,
+  tenant: string,
+  extensionId: string,
+  version?: string,
+): Promise<ExtensionObjectRequirement[]> {
+  const config = await storeConfigFor(
+    db,
+    tenant,
+    extensionId,
+    version ? { version } : "latest",
+  );
+  if (!config) return [];
+  const requirements: ExtensionObjectRequirement[] = [];
+  for (const collection of config.collections ?? []) {
+    try {
+      const sanitized = sanitizeStoreCollection(collection as StoreCollection);
+      requirements.push({ id: extensionId, ...sanitized });
+    } catch {
+      // Se ignora: la subida validó; ante corrupción no se provisiona.
+    }
+  }
+  return requirements;
+}
+
+/**
+ * Bundles de automatización de plugins del store instalados y activos,
+ * con su extensionId sellado para el gate de disponibilidad.
+ */
+export async function storeWorkflowBundles(
+  db: D1Database,
+  tenant: string,
+): Promise<WorkflowBundle[]> {
+  if (!(await storeTableExists(db))) return [];
+  const installed = await db
+    .prepare(
+      "SELECT id FROM studio_extension_installations WHERE tenant_id=? AND enabled=1",
+    )
+    .bind(tenant)
+    .all<{ id: string }>();
+  const bundles: WorkflowBundle[] = [];
+  for (const row of installed.results) {
+    const config = await storeConfigFor(db, tenant, row.id);
+    for (const bundle of config?.bundles ?? []) {
+      bundles.push({
+        ...(bundle as unknown as WorkflowBundle),
+        extensionId: row.id,
+      });
+    }
+  }
+  return bundles;
+}
+
+/** Resumen declarativo para la UI (conectores, acciones, ajustes). */
+function storeDeclarations(storeJson: string | null | undefined) {
+  const empty = {
+    actions: [],
+    connectors: [],
+    collections: [],
+    bundles: [],
+    widgets: [],
+    hasSettings: false,
+  };
+  try {
+    if (!storeJson) return empty;
+    const config = storeJsonSchema.parse(JSON.parse(storeJson));
+    return {
+      actions: config.actions.map((action) => ({
+        id: action.id,
+        kind: action.kind,
+      })),
+      connectors: config.connectors.map((connector) => ({
+        id: connector.id,
+        label: connector.label,
+        fields: Object.entries(connector.configSchema.properties).map(
+          ([name, field]) => ({
+            name,
+            type: field.type,
+            required: connector.configSchema.required.includes(name),
+            secret: connector.secretFields.includes(name),
+          }),
+        ),
+      })),
+      collections: (config.collections ?? [])
+        .map((collection) => {
+          const object = collection.object as { name?: unknown } | null;
+          return typeof object?.name === "string" ? object.name : null;
+        })
+        .filter((name): name is string => name !== null),
+      bundles: (config.bundles ?? []).map((bundle) => ({
+        id: bundle.id,
+        label: bundle.label,
+      })),
+      widgets: (config.widgets ?? []).map((widget) => ({
+        id: widget.id,
+        collection: widget.collection,
+        title: widget.title,
+      })),
+      hasSettings: config.settings !== undefined,
+    };
+  } catch {
+    return empty;
+  }
+}
+
+async function storeTableExists(db: D1Database): Promise<boolean> {
+  try {
+    await db.prepare("SELECT 1 FROM plugin_store_artifacts LIMIT 1").first();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Última versión por id con comparación semver (MAX() miente con 1.10.0). */
+function latestById(
+  rows: ReadonlyArray<{ id: string; version: string }>,
+): Map<string, string> {
+  const latest = new Map<string, string>();
+  for (const row of rows) {
+    const current = latest.get(row.id);
+    if (
+      current === undefined ||
+      compareSolutionVersions(row.version, current) > 0
+    )
+      latest.set(row.id, row.version);
+  }
+  return latest;
+}
+
+/** Manifiestos del store del tenant (última versión por id). */
+export async function storePluginCatalog(
+  db: D1Database,
+  tenant: string,
+): Promise<PluginStoreManifest[]> {
+  if (!(await storeTableExists(db))) return [];
+  const rows = await db
+    .prepare(
+      "SELECT id,version,manifest FROM plugin_store_artifacts WHERE tenant_id=?",
+    )
+    .bind(tenant)
+    .all<{ id: string; version: string; manifest: string }>();
+  const latest = latestById(rows.results);
+  const catalog: PluginStoreManifest[] = [];
+  for (const row of rows.results) {
+    if (latest.get(row.id) !== row.version) continue;
+    try {
+      catalog.push(pluginStoreManifestSchema.parse(JSON.parse(row.manifest)));
+    } catch {
+      // Artefacto corrupto: se ignora en el catálogo, sigue listado en el store.
+    }
+  }
+  return catalog;
+}
+
+export type StorePluginCatalogEntry = {
+  manifest: PluginStoreManifest;
+  config: StoreJson | null;
+};
+
+function isMissingStoreJsonColumn(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /(?:no such column:\s*store_json|column ["']?store_json["']? does not exist|store_json.*(?:no such column|does not exist))/i.test(
+    message,
+  );
+}
+
+function isMissingStoreArtifactTable(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /(?:no such table:\s*plugin_store_artifacts|table ["']?plugin_store_artifacts["']? does not exist)/i.test(
+    message,
+  );
+}
+
+function parseStoreJson(value: string | null | undefined): StoreJson | null {
+  if (!value) return null;
+  try {
+    return storeJsonSchema.parse(JSON.parse(value));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Tenant catalog manifests and their displayed configuration from one artifact
+ * read. Installed artifacts keep their version even when disabled; dangling
+ * installations deliberately do not fall back to the latest upload.
+ */
+export async function storePluginCatalogWithConfigs(
+  db: D1Database,
+  tenant: string,
+  installedVersions: ReadonlyMap<string, string>,
+): Promise<StorePluginCatalogEntry[]> {
+  let rows: Array<{
+    id: string;
+    version: string;
+    manifest: string;
+    store_json: string | null;
+  }>;
+  try {
+    const result = await db
+      .prepare(
+        "SELECT id,version,manifest,store_json FROM plugin_store_artifacts WHERE tenant_id=?",
+      )
+      .bind(tenant)
+      .all<{
+        id: string;
+        version: string;
+        manifest: string;
+        store_json: string | null;
+      }>();
+    rows = result.results;
+  } catch (error) {
+    if (isMissingStoreArtifactTable(error)) return [];
+    if (isMissingStoreJsonColumn(error)) {
+      return (await storePluginCatalog(db, tenant)).map((manifest) => ({
+        manifest,
+        config: null,
+      }));
+    }
+    throw error;
+  }
+
+  const latestVersions = latestById(rows);
+  const latestRows = new Map<string, (typeof rows)[number]>();
+  const artifactRowsByVersion = new Map<string, (typeof rows)[number]>();
+  for (const row of rows) {
+    artifactRowsByVersion.set(`${row.id}\0${row.version}`, row);
+    if (latestVersions.get(row.id) === row.version) latestRows.set(row.id, row);
+  }
+
+  const catalog: StorePluginCatalogEntry[] = [];
+  for (const [id, latestRow] of latestRows) {
+    let manifest: PluginStoreManifest;
+    try {
+      manifest = pluginStoreManifestSchema.parse(
+        JSON.parse(latestRow.manifest),
+      );
+    } catch {
+      // Keep the existing behavior: a corrupt latest manifest hides this id.
+      continue;
+    }
+    const configVersion = installedVersions.get(id) ?? latestRow.version;
+    const configRow = artifactRowsByVersion.get(`${id}\0${configVersion}`);
+    catalog.push({
+      manifest,
+      config: parseStoreJson(configRow?.store_json),
+    });
+  }
+  return catalog;
+}
+
+async function latestArtifactRow<T>(
+  db: D1Database,
+  tenant: string,
+  id: string,
+  columns: string,
+): Promise<(T & { version: string }) | null> {
+  const rows = await db
+    .prepare(
+      `SELECT ${columns} FROM plugin_store_artifacts WHERE tenant_id=? AND id=?`,
+    )
+    .bind(tenant, id)
+    .all<T & { version: string }>();
+  let best: (T & { version: string }) | null = null;
+  for (const row of rows.results) {
+    if (best === null || compareSolutionVersions(row.version, best.version) > 0)
+      best = row;
+  }
+  return best;
+}
+
+export type StoredPluginManifestRecord = {
+  manifest: PluginStoreManifest;
+  version: string;
+  storedManifest: string;
+};
+
+export async function storePluginManifestRecord(
+  db: D1Database,
+  tenant: string,
+  id: string,
+  version?: string,
+): Promise<StoredPluginManifestRecord | null> {
+  if (!(await storeTableExists(db))) return null;
+  const row = version
+    ? await db
+        .prepare(
+          "SELECT version,manifest FROM plugin_store_artifacts WHERE tenant_id=? AND id=? AND version=?",
+        )
+        .bind(tenant, id, version)
+        .first<{ version: string; manifest: string }>()
+    : await latestArtifactRow<{ manifest: string }>(
+        db,
+        tenant,
+        id,
+        "version,manifest",
+      );
+  if (!row) return null;
+  try {
+    return {
+      manifest: pluginStoreManifestSchema.parse(JSON.parse(row.manifest)),
+      version: row.version,
+      storedManifest: row.manifest,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function storePluginManifest(
+  db: D1Database,
+  tenant: string,
+  id: string,
+  version?: string,
+): Promise<PluginStoreManifest | null> {
+  return (
+    (await storePluginManifestRecord(db, tenant, id, version))?.manifest ?? null
+  );
+}
+
+async function storeEntryJs(
+  db: D1Database,
+  tenant: string,
+  id: string,
+  version: string,
+): Promise<string | null> {
+  const row = await db
+    .prepare(
+      "SELECT entry_js FROM plugin_store_artifacts WHERE tenant_id=? AND id=? AND version=?",
+    )
+    .bind(tenant, id, version)
+    .first<{ entry_js: string }>();
+  return row?.entry_js ?? null;
+}
+
+/**
+ * Declarative configuration of the installed artifact. Catalog and install
+ * preparation can request the latest uploaded artifact explicitly.
+ */
+export async function storeConfigFor(
+  db: D1Database,
+  tenant: string,
+  id: string,
+  selection: "installed" | "latest" | { version: string } = "installed",
+): Promise<StoreJson | null> {
+  try {
+    const installed =
+      selection === "installed"
+        ? await db
+            .prepare(
+              "SELECT version FROM studio_extension_installations WHERE tenant_id=? AND id=?",
+            )
+            .bind(tenant, id)
+            .first<{ version: string }>()
+        : null;
+    const selectedVersion =
+      typeof selection === "object" ? selection.version : installed?.version;
+    const row = selectedVersion
+      ? await db
+          .prepare(
+            "SELECT store_json FROM plugin_store_artifacts WHERE tenant_id=? AND id=? AND version=?",
+          )
+          .bind(tenant, id, selectedVersion)
+          .first<{ store_json: string | null }>()
+      : selection === "latest"
+        ? await latestArtifactRow<{ store_json: string | null }>(
+            db,
+            tenant,
+            id,
+            "version,store_json",
+          )
+        : null;
+    return parseStoreJson(row?.store_json);
+  } catch {
+    return null;
+  }
+}
+
+function zodFieldFromJson(
+  field: StoreConnector["configSchema"]["properties"][string],
+): z.ZodTypeAny {
+  let schema: z.ZodTypeAny =
+    field.type === "string"
+      ? z.string()
+      : field.type === "number"
+        ? z.number()
+        : z.boolean();
+  if (field.enum?.length) {
+    const literals = field.enum.map((option) =>
+      typeof option === "string"
+        ? z.literal(option)
+        : typeof option === "number"
+          ? z.literal(option)
+          : z.literal(option as boolean),
+    ) as unknown as [z.ZodTypeAny, ...z.ZodTypeAny[]];
+    schema = z.union(literals);
+  }
+  return schema;
+}
+
+/** Definición de conector del store compatible con el repositorio. */
+export async function storeConnectorDefinition(
+  db: D1Database,
+  tenant: string,
+  extensionId: string,
+  connectorId: string,
+): Promise<ExtensionConnectorDefinition | null> {
+  const config = await storeConfigFor(db, tenant, extensionId);
+  const connector = config?.connectors.find((item) => item.id === connectorId);
+  if (!connector) return null;
+  const required = new Set(connector.configSchema.required);
+  return {
+    extensionId,
+    connectorId: connector.id,
+    label: connector.label,
+    configurationSchema: z
+      .object(
+        Object.fromEntries(
+          Object.entries(connector.configSchema.properties).map(
+            ([name, field]) => [
+              name,
+              required.has(name)
+                ? zodFieldFromJson(field)
+                : zodFieldFromJson(field).optional(),
+            ],
+          ),
+        ),
+      )
+      .strict(),
+    secretFields: connector.secretFields,
+  };
+}
+
+export class StoreHttpInputError extends Error {}
+export class StoreHttpProviderError extends Error {}
+
+const STORE_HTTP_TIMEOUT_MS = 20000;
+const STORE_HTTP_MAX_RESPONSE_BYTES = 1024 * 1024;
+
+/** Ejecuta una acción http declarativa con valores ya revelados. */
+export async function executeStoreHttpAction(input: {
+  action: StoreHttpAction;
+  connector: Pick<
+    StoreConnector,
+    "allowedHosts" | "allowConfiguredHost" | "secretFields"
+  >;
+  values: Record<string, unknown>;
+  actionInput: Record<string, unknown>;
+  context: {
+    tenantId: string;
+    principalId: string;
+    extensionId: string;
+    actionId: string;
+    runId: string;
+  };
+  fetchImpl?: typeof fetch;
+}): Promise<unknown> {
+  const scopes = {
+    input: input.actionInput,
+    connection: input.values,
+    tenant: input.context.tenantId,
+    principal: input.context.principalId,
+    extension: input.context.extensionId,
+    action: input.context.actionId,
+    run: input.context.runId,
+  };
+  const renderedUrl = renderTemplate(input.action.request.url, scopes);
+  if (typeof renderedUrl !== "string" || !renderedUrl.trim())
+    throw new StoreHttpInputError("La plantilla no produjo una URL válida.");
+  const allowedHosts = [...input.connector.allowedHosts];
+  if (input.connector.allowConfiguredHost) {
+    const endpoint = input.values["endpoint"];
+    if (typeof endpoint !== "string" || !endpoint.trim())
+      throw new StoreHttpInputError("La conexión no define endpoint.");
+    let configured: URL;
+    try {
+      configured = new URL(endpoint.trim());
+    } catch {
+      throw new StoreHttpInputError("El endpoint configurado no es válido.");
+    }
+    if (
+      configured.protocol !== "https:" ||
+      configured.username ||
+      configured.password ||
+      configured.hostname === "169.254.169.254" ||
+      configured.hostname === "100.100.100.200"
+    )
+      throw new StoreHttpInputError(
+        "El endpoint configurado no está permitido.",
+      );
+    allowedHosts.push(configured.hostname.toLowerCase());
+  }
+  let url: URL;
+  try {
+    url = assertStoreHttpUrl(renderedUrl.trim(), allowedHosts);
+  } catch (error) {
+    throw new StoreHttpInputError(
+      error instanceof Error ? error.message : "La URL no está permitida.",
+    );
+  }
+  const headers: Record<string, string> = {};
+  for (const [name, template] of Object.entries(input.action.request.headers)) {
+    const rendered = renderTemplate(template, scopes);
+    if (typeof rendered !== "string")
+      throw new StoreHttpInputError(`La cabecera ${name} no es texto.`);
+    headers[name] = rendered;
+  }
+  const renderedBody =
+    input.action.request.method === "GET" ||
+    input.action.request.method === "HEAD"
+      ? undefined
+      : renderTemplate(input.action.request.body ?? null, scopes);
+  let response: Response;
+  try {
+    response = await (input.fetchImpl ?? fetch)(url.toString(), {
+      method: input.action.request.method,
+      headers,
+      body:
+        renderedBody === undefined || renderedBody === null
+          ? undefined
+          : JSON.stringify(renderedBody),
+      redirect: "manual",
+      signal: AbortSignal.timeout(STORE_HTTP_TIMEOUT_MS),
+    });
+  } catch (error) {
+    if (error instanceof StoreHttpInputError) throw error;
+    throw new StoreHttpProviderError("No se pudo contactar al proveedor.");
+  }
+  const raw = await response.text();
+  if (raw.length > STORE_HTTP_MAX_RESPONSE_BYTES)
+    throw new StoreHttpProviderError(
+      "La respuesta del proveedor es muy grande.",
+    );
+  if (!response.ok)
+    throw new StoreHttpProviderError(
+      `El proveedor rechazó la solicitud (HTTP ${response.status}).`,
+    );
+  const contentType = response.headers.get("content-type") ?? "";
+  let data: unknown = raw;
+  if (contentType.includes("json")) {
+    try {
+      data = JSON.parse(raw);
+    } catch {
+      throw new StoreHttpProviderError("El proveedor devolvió JSON inválido.");
+    }
+  }
+  const secrets = input.connector.secretFields.flatMap((field) => {
+    const value = input.values[field];
+    return typeof value === "string" && value ? [value] : [];
+  });
+  for (const secret of secrets) {
+    if (secret.length >= 8 && raw.includes(secret))
+      throw new StoreHttpProviderError(
+        "El proveedor reflejó un secreto en la respuesta.",
+      );
+  }
+  return { status: response.status, data: redactSecrets(data, secrets) };
+}
+
+/**
+ * Ejecuta una acción savia-request declarativa con el servicio del host.
+ * Réplica la ruta compilada: valida, mapea el input, propaga tenant y
+ * actor, y normaliza la respuesta.
+ */
+export async function executeStoreSaviaRequestAction(input: {
+  action: StoreSaviaRequestAction;
+  actionInput: Record<string, unknown>;
+  context: { tenantId: string; principalId: string };
+  service: SaviaRequestService | undefined;
+}): Promise<unknown> {
+  let request: {
+    mode: "mock" | "live";
+    flowId: string;
+    quoteInput: unknown;
+  };
+  try {
+    request = saviaRequestActionInputSchema.parse(input.actionInput);
+  } catch {
+    throw new StoreHttpInputError("La entrada de la acción no es válida.");
+  }
+  if (!input.action.flows.includes(request.flowId))
+    throw new StoreHttpInputError("Flow no permitido para este plugin.");
+  if (!isInsuranceSaviaRequestFlow(request.flowId))
+    throw new StoreHttpInputError("Flow de Seguros no permitido.");
+  const isLookup =
+    insuranceSaviaRequestBundle.flows.find((flow) => flow.id === request.flowId)
+      ?.role === "lookup";
+  let quoteInput: unknown;
+  try {
+    quoteInput = isLookup
+      ? lookupQuoteInputSchema.parse(request.quoteInput)
+      : quoteInputSchema.parse(request.quoteInput);
+  } catch {
+    throw new StoreHttpInputError("Los datos de cotización no son válidos.");
+  }
+  if (!input.service)
+    throw new StoreHttpProviderError("Savia Request no está disponible.");
+  let response: Response;
+  try {
+    response = await input.service.fetch(
+      new Request(
+        `https://savia-request.internal/api/flows/${request.flowId}/runs`,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-savia-tenant": input.context.tenantId,
+            "x-savia-actor": input.context.principalId,
+          },
+          body: JSON.stringify({
+            mode: request.mode,
+            input: toSaviaRequestInput(request.flowId, quoteInput as never),
+          }),
+        },
+      ),
+    );
+  } catch {
+    throw new StoreHttpProviderError("Savia Request no está disponible.");
+  }
+  const body = await response.json().catch(() => null);
+  const run = saviaRequestFlowRunSchema.safeParse(body);
+  if (!response.ok || !run.success || run.data.status !== "success")
+    throw new StoreHttpProviderError("Savia Request no completó la ejecución.");
+  return normalizeInsuranceAction(
+    providerForFlow(request.flowId),
+    request.flowId,
+    run.data.result,
+  );
+}
+
+async function assertCanManage(
+  tenant: string,
+  principalId: string,
+  options: PluginStoreOptions,
+  extensionId: string,
+): Promise<void> {
+  if (!options.canManageExtension) return;
+  const allowed = await options.canManageExtension({
+    tenantId: tenant,
+    principalId: principalId,
+    extensionId,
+  });
+  if (!allowed) fail("Se requiere permiso de administración del espacio.", 403);
+}
+
+// --- Shell del sandbox ---
+//
+// El bootstrap vive en un archivo externo (`shell-bootstrap.js`) para que
+// la CSP pueda prohibir `unsafe-inline`/`unsafe-eval`: ni eval(), ni
+// new Function(), ni setTimeout("código") ejecutan aunque eludan la
+// validación estática. El puente savia sigue siendo postMessage.
+
+const SHELL_CSP =
+  "default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; connect-src 'none';";
+
+let bootstrapRevision: string | undefined;
+function shellBootstrapRevision(): string {
+  if (bootstrapRevision === undefined) {
+    // Cache identity only; integrity and authorization use separate controls.
+    let hash = 2166136261;
+    for (const character of shellBootstrapJs())
+      hash = Math.imul(hash ^ character.charCodeAt(0), 16777619);
+    bootstrapRevision = (hash >>> 0).toString(36);
+  }
+  return bootstrapRevision;
+}
+
+export function shellBootstrapPath(
+  pluginId: string,
+  entryUrl: string,
+  extra?: Record<string, string>,
+  storeBasePath = "/api/plugin-store",
+): string {
+  const params = new URLSearchParams({ plugin: pluginId, entry: entryUrl });
+  for (const [key, value] of Object.entries(extra ?? {}))
+    params.set(key, value);
+  params.set("runtime", shellBootstrapRevision());
+  return `${storeBasePath}/shell-bootstrap.js?${params}`;
+}
+
+export function shellBootstrapJs(): string {
+  return `const params = new URL(import.meta.url).searchParams;
+const PLUGIN_ID = params.get("plugin") ?? "unknown";
+const bootstrapUrl = new URL(import.meta.url);
+const storeBasePath = bootstrapUrl.pathname.replace(/\\/shell-bootstrap\\.js$/, "");
+const entryUrl = new URL(params.get("entry") ?? "", bootstrapUrl);
+if (entryUrl.origin !== bootstrapUrl.origin ||
+    entryUrl.pathname !== storeBasePath + "/" + encodeURIComponent(PLUGIN_ID) + "/entry")
+  throw new Error("URL de entrada no válida.");
+const ENTRY_URL = entryUrl.href;
+const pending = new Map();
+const recordListeners = new Set();
+const routeListeners = new Set();
+let seq = 0;
+// Report the natural content height, not the viewport-sized document height.
+// The host can then scroll screens without a second scrollbar in the iframe.
+const root = document.getElementById("root");
+let lastHeight = 0;
+let resizeScheduled = false;
+function scheduleResize() {
+  if (resizeScheduled) return;
+  resizeScheduled = true;
+  requestAnimationFrame(() => {
+    resizeScheduled = false;
+    const height = Math.ceil(Math.max(root.scrollHeight, root.getBoundingClientRect().height));
+    if (height > 0 && height !== lastHeight) {
+      lastHeight = height;
+      parent.postMessage({ ns: "savia-plugin", type: "resize", height }, "*");
+    }
+  });
+}
+if (params.has("screen") && params.get("panel") !== "1") {
+  new ResizeObserver(scheduleResize).observe(root);
+  addEventListener("resize", scheduleResize);
+  document.fonts?.ready.then(scheduleResize);
+  scheduleResize();
+}
+const standby = params.get("standby") === "1";
+let activePanelId = null;
+function requestHost(path, method, body, panelId, consistency) {
+  if (standby && (!panelId || panelId !== activePanelId))
+    return Promise.reject(new Error("The editor activation ended."));
+  return new Promise((resolve, reject) => {
+    const id = String(++seq);
+    pending.set(id, { resolve, reject, panelId });
+    parent.postMessage({ ns: "savia-plugin", type: "request", id, path, method, body, panelId, consistency }, "*");
+    setTimeout(() => {
+      if (pending.has(id)) {
+        pending.delete(id);
+        reject(new Error("El host no respondió a tiempo."));
+      }
+    }, path.startsWith("/extensions/") && path.endsWith("/document-analysis") ? 90000 : 30000);
+  });
+}
+addEventListener("message", (event) => {
+  if (event.source !== parent) return;
+  const message = event.data;
+  if (message?.ns === "savia-plugin" && message.type === "route-changed" && !standby) {
+    for (const listener of routeListeners) listener(message.state);
+    return;
+  }
+  if (message?.ns === "savia-plugin" && message.type === "theme") {
+    const allowed = ["--background", "--foreground", "--card", "--border", "--input", "--muted", "--muted-foreground", "--primary", "--primary-foreground", "--accent", "--destructive", "--ring"];
+    for (const name of allowed) {
+      const value = message.vars?.[name];
+      if (typeof value === "string" && value.length < 200)
+        document.documentElement.style.setProperty(name, value);
+    }
+    document.documentElement.style.colorScheme = message.dark ? "dark" : "light";
+    return;
+  }
+  if (message?.ns === "savia-plugin" && message.type === "records-changed" && !standby) {
+    for (const listener of recordListeners) listener(message.status);
+    return;
+  }
+  if (!message || message.ns !== "savia-plugin" || message.type !== "response") return;
+  const slot = pending.get(message.id);
+  if (!slot || (standby && (slot.panelId !== activePanelId || message.panelId !== slot.panelId))) return;
+  pending.delete(message.id);
+  if (message.ok) slot.resolve(message.data);
+  else {
+    const error = new Error(message.error || "Error del host.");
+    if (Number.isInteger(message.errorStatus) && message.errorStatus >= 100 && message.errorStatus <= 599)
+      error.status = message.errorStatus;
+    if (typeof message.errorCode === "string" && /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$/.test(message.errorCode))
+      error.code = message.errorCode;
+    if (typeof message.errorFileId === "string" && /^[0-9a-f-]{36}$/i.test(message.errorFileId))
+      error.fileId = message.errorFileId;
+    slot.reject(error);
+  }
+});
+function createSavia(panelId) {
+const callHost = (path, method, body, consistency) => requestHost(path, method, body, panelId, consistency);
+function collection(name, local = false) {
+  const send = (path, method, body) => callHost(path, method, body, local ? "local-first" : undefined);
+  const receipt = (result) => local ? { data: result?.data, persistence: result?.local === true ? "local" : "server", ...(result?.mutationId ? { mutationId: result.mutationId } : {}) } : result?.data;
+  const resource = encodeURIComponent(name);
+  return {
+    async list(options = {}) {
+      const params = new URLSearchParams({
+        page: String(options.page ?? 1),
+        perPage: String(options.perPage ?? 25),
+        sort: options.sort ?? "updated_at",
+        order: options.order ?? "DESC",
+      });
+      if (options.filters) {
+        params.set("filters", JSON.stringify(options.filters));
+      }
+      if (options.q) {
+        params.set("q", options.q);
+      }
+      if (options.searchFields?.length) {
+        params.set("searchFields", options.searchFields.join(","));
+      }
+      return send("/records/" + resource + "?" + params, "GET");
+    },
+    async get(id) {
+      return (await send("/records/" + resource + "/" + encodeURIComponent(id), "GET")).data;
+    },
+    async create(input) {
+      return receipt(await send("/records/" + resource, "POST", input));
+    },
+    async update(id, input, update = {}) {
+      return receipt(await send("/records/" + resource + "/" + encodeURIComponent(id), "PATCH",
+        update.version === undefined ? input : { ...input, _version: update.version }));
+    },
+    async remove(id, update = {}) {
+      const params = new URLSearchParams();
+      if (update.version !== undefined) params.set("version", String(update.version));
+      const suffix = params.size ? "?" + params : "";
+      return receipt(await send("/records/" + resource + "/" + encodeURIComponent(id) + suffix, "DELETE"));
+    },
+    async describe() {
+      return (await send("/objects", "GET")).data.find((c) => c.name === name);
+    },
+    async removeMany(records) {
+      return (await send("/records/" + resource + "/bulk", "POST", { action: "delete", records })).data;
+    },
+  };
+}
+const extensionPath = "/extensions/" + encodeURIComponent(PLUGIN_ID);
+const savia = {
+  pluginId: PLUGIN_ID,
+  assistant: {
+    async open(value) {
+      await callHost(extensionPath + "/assistant/open", "POST", value);
+    },
+  },
+  route: {
+    get() { return callHost(extensionPath + "/route", "GET"); },
+    async set(state, options) { await callHost(extensionPath + "/route", "PUT", { state, replace: options?.replace === true }); },
+    subscribe(listener) { routeListeners.add(listener); return () => routeListeners.delete(listener); },
+  },
+  localRecords: {
+    collection: (name) => collection(name, true),
+    subscribe(listener) { recordListeners.add(listener); return () => recordListeners.delete(listener); }
+  },
+  collections: {
+    async list() {
+      return (await callHost("/objects", "GET")).data;
+    },
+    collection,
+  },
+  settings: {
+    async get() {
+      return (await callHost(extensionPath + "/settings", "GET")).data;
+    },
+    async replace(value, version) {
+      return (await callHost(extensionPath + "/settings", "PUT", { value, version })).data;
+    },
+  },
+  connections: {
+    async list() {
+      return (await callHost(extensionPath + "/connections", "GET")).data;
+    },
+    async replace(connectionId, value) {
+      await callHost(extensionPath + "/connections/" + encodeURIComponent(connectionId), "PUT", value);
+    },
+    async remove(connectionId) {
+      await callHost(extensionPath + "/connections/" + encodeURIComponent(connectionId), "DELETE");
+    },
+  },
+  actions: {
+    async execute(actionId, input) {
+      return (await callHost(extensionPath + "/actions/" + encodeURIComponent(actionId), "POST", input)).data;
+    },
+    async list(options = {}) {
+      const limit = Math.min(100, Math.max(1, options.limit ?? 20));
+      return (await callHost(extensionPath + "/actions/runs?limit=" + limit, "GET")).data;
+    },
+  },
+  access: {
+    async effective() {
+      return (await callHost("/access-context", "GET")).data;
+    },
+  },
+};
+return savia;
+}
+const savia = createSavia(null);
+// The sandbox has no direct network access. Forward /api/* calls to
+// the parent, which uses the current user's session and permissions.
+const nativeFetch = window.fetch.bind(window);
+window.fetch = (resource, init) => {
+  const url = typeof resource === "string" ? resource : resource.url;
+  if (url.startsWith("/api/")) {
+    const method = (init && init.method) || "GET";
+    let body;
+    if (init && init.body !== undefined && typeof init.body === "string") {
+      try { body = JSON.parse(init.body); } catch { body = undefined; }
+    }
+    return requestHost(url.slice("/api".length), method, body, null).then((data) =>
+      Response.json(data, { status: 200 }),
+    );
+  }
+  return nativeFetch(resource, init);
+};
+// External links are opened by the authenticated host, never by the sandbox.
+function routePluginExternalClick(event) {
+  if (!event.isTrusted || event.defaultPrevented || event.button !== 0) return;
+  const anchor = event.target?.closest?.("a[href]");
+  if (!anchor || anchor.target !== "_blank" || anchor.hasAttribute("download")) return;
+  event.preventDefault();
+  const previous = anchor.nextElementSibling;
+  if (previous?.hasAttribute("data-plugin-link-error")) previous.remove();
+  void requestHost("/navigation/external", "POST", { url: anchor.href }, activePanelId).catch(() => {
+    if (!anchor.isConnected) return;
+    const status = document.createElement("span");
+    status.setAttribute("role", "alert");
+    status.setAttribute("data-plugin-link-error", "");
+    const language = (document.documentElement.lang || "es").split("-")[0];
+    const messages = {
+      es: "No se pudo abrir el enlace. Usa el menú del enlace para abrirlo o copiar su dirección.",
+      en: "Could not open the link. Use the link menu to open it or copy its address.",
+      pt: "Não foi possível abrir o link. Use o menu do link para abri-lo ou copiar o endereço.",
+    };
+    status.textContent = " " + (messages[language] || messages.en);
+    anchor.insertAdjacentElement("afterend", status);
+    scheduleResize();
+  });
+}
+document.addEventListener("click", routePluginExternalClick);
+function selectRender(module, widgetId) {
+  if (!widgetId) return module.render;
+  return module.widgets?.[widgetId] ?? module.renderWidget ?? module.render;
+}
+try {
+  let module;
+  let cleanup;
+  let queuedApi = null;
+  const lifecycle = {
+    change(api) {
+      activePanelId = null;
+      const previous = cleanup;
+      cleanup = undefined;
+      if (previous) previous();
+      for (const [id, slot] of pending) {
+        pending.delete(id);
+        slot.reject(new Error("The editor activation ended."));
+      }
+      queuedApi = api;
+      if (!api || !module) return;
+      try {
+        if (typeof module.renderPanel !== "function") throw new Error("Reusable editor unavailable.");
+        activePanelId = api.panel.panelId;
+        const editor = createSavia(activePanelId);
+        editor.ui = api;
+        cleanup = module.renderPanel(document.getElementById("root"), editor);
+        if (typeof cleanup !== "function") throw new Error("Reusable editor must return cleanup.");
+        parent.postMessage({ ns: "savia-plugin", type: "ready", panelId: activePanelId }, "*");
+      } catch (error) {
+        parent.postMessage({ ns: "savia-plugin", type: "error", panelId: activePanelId }, "*");
+      }
+    }
+  };
+  savia.ui = await (${connectPluginPanelHost.toString()})(window, params.get("panel") === "1", { standby, onChange: (api) => lifecycle.change(api) });
+  module = await import(ENTRY_URL);
+  if (standby) {
+    if (typeof module.renderPanel !== "function") throw new Error("Reusable editor unavailable.");
+    parent.postMessage({ ns: "savia-plugin", type: "prepared" }, "*");
+    if (queuedApi) lifecycle.change(queuedApi);
+  } else {
+  if (savia.ui && typeof module.renderPanel !== "function") savia.ui.preparePanel = undefined;
+  const widgetId = params.get("widget") ?? "";
+  const widgetCollection = params.get("collection") ?? "";
+  const screenObject = params.get("screen") ?? "";
+  const screenView = params.get("view") ?? "records";
+  const widgetFn = selectRender(module, widgetId);
+  if (typeof widgetFn !== "function") throw new Error("El plugin debe exportar render(element, savia) o widgets.");
+  if (widgetId) {
+    await widgetFn(document.getElementById("root"), savia, {
+      kind: \`plugin:\${PLUGIN_ID}:\${widgetId}\`,
+      collection: widgetCollection,
+    });
+  } else {
+    await widgetFn(document.getElementById("root"), savia,
+      screenObject ? { object: screenObject, view: screenView } : undefined);
+  }
+  parent.postMessage({ ns: "savia-plugin", type: "ready" }, "*");
+  }
+} catch (error) {
+  document.getElementById("root").innerHTML =
+    '<p class="plugin-error">' + String((error && error.message) || error) + "</p>";
+  parent.postMessage({ ns: "savia-plugin", type: "error", error: String((error && error.message) || error) }, "*");
+}`;
+}
+
+function shellHtml(
+  pluginId: string,
+  label: string,
+  entryUrl: string,
+  storeBasePath: string,
+  extra?: Record<string, string>,
+  dark = false,
+): string {
+  const safeLabel = label.replace(/[<>&"]/g, "");
+  const initialTheme = dark
+    ? "color-scheme:dark;--background:oklch(0.145 0 0);--foreground:oklch(0.985 0 0);--card:oklch(0.205 0 0);--border:oklch(1 0 0 / 10%);--input:oklch(1 0 0 / 15%);--muted:oklch(0.269 0 0);--muted-foreground:oklch(0.708 0 0);--primary:oklch(0.922 0 0);--primary-foreground:oklch(0.205 0 0);--accent:oklch(0.269 0 0);--destructive:oklch(0.704 0.191 22.216);--ring:oklch(0.556 0 0)"
+    : "color-scheme:light;--background:#fff;--foreground:#171717;--card:#fff;--border:#e5e5e5;--input:#e5e5e5;--muted:#f5f5f5;--muted-foreground:#737373;--primary:#0f766e;--primary-foreground:#fff;--accent:#f5f5f5;--destructive:#dc2626;--ring:#0f766e";
+  return `<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="${SHELL_CSP}">
+<link rel="modulepreload" href="${entryUrl.replaceAll("&", "&amp;").replaceAll('"', "&quot;")}" crossorigin="anonymous">
+<title>${safeLabel}</title>
+<style>:root{${initialTheme}}body{margin:0;font-family:system-ui,sans-serif;background:var(--background);color:var(--foreground)}#root{padding:${extra?.panel === "1" ? "0" : "16px"}}.plugin-error{color:#b91c1c;white-space:pre-wrap}</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="module" src="${shellBootstrapPath(pluginId, entryUrl, extra, storeBasePath)}"></script>
+</body>
+</html>`;
+}
+
+async function shellAssetPaths(
+  options: PluginStoreOptions,
+  tenantId: string,
+  pluginId: string,
+  version: string,
+) {
+  if (options.entryGrantSecret) {
+    const storeBasePath = "/api/public/plugin-store";
+    const expiresAt = pluginEntryGrantExpiresAt();
+    const signature = await signPluginEntryGrant(options.entryGrantSecret, {
+      tenantId,
+      pluginId,
+      version,
+      expiresAt,
+    });
+    const query = new URLSearchParams({
+      tenant: tenantId,
+      version,
+      expires: String(expiresAt),
+      signature,
+    });
+    return {
+      storeBasePath,
+      entryUrl: `${storeBasePath}/${encodeURIComponent(pluginId)}/entry?${query}`,
+    };
+  }
+  const storeBasePath = `${options.apiBasePath ?? ""}/api/plugin-store`;
+  return {
+    storeBasePath,
+    entryUrl: `${storeBasePath}/${encodeURIComponent(pluginId)}/entry?version=${encodeURIComponent(version)}`,
+  };
+}
+
+// --- Rutas ---
+
+export function registerPluginStore(
+  app: Hono<Env>,
+  options: PluginStoreOptions = {},
+) {
+  registerPluginRegistry(app, options);
+  registerPluginProjects(app, options);
+  registerPluginEditorExtensions(app, options);
+
+  app.get("/api/plugin-store", async (c) => {
+    const tenant = c.get("tenant");
+    const canDeleteFromRegistry = Boolean(options.pluginRegistry?.publishToken);
+    if (!(await storeTableExists(c.env.DB)))
+      return c.json({ data: [], canDeleteFromRegistry });
+    let rows: StoreArtifactRow[];
+    try {
+      rows = (
+        await c.env.DB.prepare(
+          `SELECT id,version,manifest,store_json,sha256,size_bytes,created_by,created_at
+           FROM plugin_store_artifacts WHERE tenant_id=? ORDER BY id,version`,
+        )
+          .bind(tenant)
+          .all<StoreArtifactRow & { store_json: string | null }>()
+      ).results;
+    } catch {
+      rows = (
+        await c.env.DB.prepare(
+          `SELECT id,version,manifest,sha256,size_bytes,created_by,created_at
+           FROM plugin_store_artifacts WHERE tenant_id=? ORDER BY id,version`,
+        )
+          .bind(tenant)
+          .all<StoreArtifactRow>()
+      ).results.map((row) => ({ ...row, store_json: null }));
+    }
+    const installed = await c.env.DB.prepare(
+      "SELECT id,version,enabled FROM studio_extension_installations WHERE tenant_id=?",
+    )
+      .bind(tenant)
+      .all<{ id: string; version: string; enabled: number }>();
+    const state = new Map(installed.results.map((row) => [row.id, row]));
+    return c.json({
+      canDeleteFromRegistry,
+      data: rows.map((row) => ({
+        manifest: JSON.parse(row.manifest),
+        version: row.version,
+        sha256: row.sha256,
+        sizeBytes: row.size_bytes,
+        createdBy: row.created_by,
+        createdAt: row.created_at,
+        declarations: storeDeclarations(row.store_json),
+        installed: state.get(row.id)
+          ? {
+              version: state.get(row.id)!.version,
+              enabled: state.get(row.id)!.enabled === 1,
+            }
+          : null,
+      })),
+    });
+  });
+
+  app.post("/api/plugin-store/upload", async (c) => {
+    const tenant = c.get("tenant");
+    if (!(await storeTableExists(c.env.DB)))
+      return fail("El store de plugins no está migrado en este entorno.", 428);
+    const body = await c.req.parseBody();
+    const file = body["file"];
+    if (!(file instanceof File)) return fail("Sube un archivo ZIP.", 400);
+    if (!/\.zip$/i.test(file.name))
+      return fail("El archivo debe ser .zip.", 400);
+    let parsed: ParsedStoreZip;
+    try {
+      parsed = await parsePluginStoreZip(
+        new Uint8Array(await file.arrayBuffer()),
+      );
+    } catch (error) {
+      return fail(
+        error instanceof Error ? error.message : "El ZIP no es válido.",
+        422,
+      );
+    }
+    await assertCanManage(
+      c.get("tenant"),
+      c.get("principalId"),
+      options,
+      parsed.manifest.id,
+    );
+    const result = await persistParsedStoreArtifact(
+      c.env.DB,
+      tenant,
+      c.get("principalId") || null,
+      parsed,
+    );
+    return c.json({ data: result });
+  });
+
+  app.get("/api/plugin-store/shell-bootstrap.js", async (c) => {
+    return new Response(shellBootstrapJs(), {
+      headers: {
+        "content-type": "text/javascript; charset=utf-8",
+        "access-control-allow-origin": "*",
+        "cache-control": "public, max-age=3600",
+        "content-security-policy": "default-src 'none';",
+      },
+    });
+  });
+
+  // Catálogo para el asistente: solo plugins activos con acciones
+  // de lectura declaradas, ya saneadas. Sin manager: es lectura del
+  // propio tenant con la sesión actual.
+  app.get("/api/plugin-store/mcp-catalog", async (c) => {
+    const tenant = c.get("tenant");
+    if (!(await storeTableExists(c.env.DB))) return c.json({ data: [] });
+    const installed = await c.env.DB.prepare(
+      "SELECT id,version,enabled,manifest FROM studio_extension_installations WHERE tenant_id=? AND enabled=1",
+    )
+      .bind(tenant)
+      .all<{
+        id: string;
+        version: string;
+        enabled: number;
+        manifest: string;
+      }>();
+    const entries = [];
+    for (const row of installed.results) {
+      let manifest: PluginStoreManifest;
+      try {
+        manifest = pluginStoreManifestSchema.parse(JSON.parse(row.manifest));
+      } catch {
+        continue;
+      }
+      // Solo ids del store (custom.*): los compilados no tienen store.json.
+      if (!manifest.id.startsWith("custom.")) continue;
+      const config = await storeConfigFor(c.env.DB, tenant, row.id);
+      if (!config) continue;
+      const actions = storeMcpActions(row.id, config);
+      if (!actions.length) continue;
+      entries.push({ pluginId: row.id, label: manifest.label, actions });
+    }
+    return c.json({ data: entries });
+  });
+
+  app.get("/api/plugin-store/:id/entry", async (c) => {
+    const tenant = c.get("tenant");
+    const id = c.req.param("id");
+    const version = c.req.query("version");
+    let resolvedVersion = version;
+    if (!resolvedVersion) {
+      const installed = await c.env.DB.prepare(
+        "SELECT version FROM studio_extension_installations WHERE tenant_id=? AND id=? AND enabled=1",
+      )
+        .bind(tenant, id)
+        .first<{ version: string }>();
+      if (!installed)
+        return fail("El plugin no está activo en este espacio.", 404);
+      resolvedVersion = installed.version;
+    }
+    const entryJs = await storeEntryJs(c.env.DB, tenant, id, resolvedVersion);
+    if (entryJs === null) return fail("Artefacto no encontrado.", 404);
+    return new Response(entryJs, {
+      headers: {
+        "content-type": "text/javascript; charset=utf-8",
+        "cache-control": "private, max-age=300",
+        // El iframe opaco necesita CORS para importar el módulo.
+        "access-control-allow-origin": "*",
+        "content-security-policy": "default-src 'none';",
+      },
+    });
+  });
+
+  app.get("/api/plugin-store/:id/source", async (c) => {
+    const tenant = c.get("tenant");
+    const principalId = c.get("principalId");
+    const id = c.req.param("id");
+    const version = c.req.query("version");
+    if (!tenant || !principalId)
+      return fail("Authentication is required.", 401);
+    if (!version) return fail("An explicit plugin version is required.", 400);
+    if (!options.canManageExtension)
+      return fail("Extension administration is not available.", 403);
+    let allowed = false;
+    try {
+      allowed = await options.canManageExtension({
+        tenantId: tenant,
+        principalId,
+        extensionId: id,
+      });
+    } catch {
+      allowed = false;
+    }
+    if (!allowed) return fail("Extension administration is required.", 403);
+    const source = await c.env.DB.prepare(
+      "SELECT files FROM plugin_store_sources WHERE tenant_id=? AND id=? AND version=?",
+    )
+      .bind(tenant, id, version)
+      .first<{ files: string }>();
+    if (source) {
+      try {
+        const files = pluginStoreSourceFilesSchema.parse(
+          JSON.parse(await decodePluginFilesJson(source.files)),
+        );
+        return c.json({ data: { files, synthesized: false } });
+      } catch {
+        return fail("Plugin source is unavailable.", 404);
+      }
+    }
+    // Legacy store ZIPs have no authored source. Recover the retained compiled
+    // entry so the plugin IDE shows the actual runtime instead of a fake starter.
+    let artifact: {
+      manifest: string;
+      entry_js: string;
+      store_json?: string | null;
+    } | null = null;
+    try {
+      artifact = await c.env.DB.prepare(
+        "SELECT manifest,entry_js,store_json FROM plugin_store_artifacts WHERE tenant_id=? AND id=? AND version=?",
+      )
+        .bind(tenant, id, version)
+        .first<{
+          manifest: string;
+          entry_js: string;
+          store_json: string | null;
+        }>();
+    } catch {
+      try {
+        const legacy = await c.env.DB.prepare(
+          "SELECT manifest,entry_js FROM plugin_store_artifacts WHERE tenant_id=? AND id=? AND version=?",
+        )
+          .bind(tenant, id, version)
+          .first<{ manifest: string; entry_js: string }>();
+        artifact = legacy
+          ? {
+              manifest: legacy.manifest,
+              entry_js: legacy.entry_js,
+              store_json: null,
+            }
+          : null;
+      } catch {
+        artifact = null;
+      }
+    }
+    if (!artifact) {
+      return fail("Plugin source is not available for this version.", 404);
+    }
+    const { files } = await resolvePublishedPluginFiles(artifact);
+    return c.json({
+      data: { files, synthesized: true, sourceKind: "compiled" as const },
+    });
+  });
+
+  app.get("/api/plugin-store/:id/shell", async (c) => {
+    const tenant = c.get("tenant");
+    const id = c.req.param("id");
+    const installed = await c.env.DB.prepare(
+      "SELECT version,manifest FROM studio_extension_installations WHERE tenant_id=? AND id=? AND enabled=1",
+    )
+      .bind(tenant, id)
+      .first<{ version: string; manifest: string }>();
+    if (!installed)
+      return fail("El plugin no está activo en este espacio.", 404);
+    const manifest = JSON.parse(installed.manifest) as { label?: string };
+    const { storeBasePath, entryUrl } = await shellAssetPaths(
+      options,
+      tenant,
+      id,
+      installed.version,
+    );
+    const screen = c.req.query("screen");
+    const view = c.req.query("view");
+    const context = {
+      ...(screen ? { screen, view: view || "records" } : {}),
+      ...(c.req.query("panel") === "1"
+        ? {
+            panel: "1",
+            ...(c.req.query("standby") === "1" ? { standby: "1" } : {}),
+          }
+        : {}),
+    };
+    return new Response(
+      shellHtml(
+        id,
+        manifest.label ?? id,
+        entryUrl,
+        storeBasePath,
+        context,
+        c.req.query("theme") === "dark",
+      ),
+      {
+        headers: {
+          "content-type": "text/html; charset=utf-8",
+          "cache-control": "private, no-store, no-transform",
+          "referrer-policy": "no-referrer",
+          "x-frame-options": "SAMEORIGIN",
+        },
+      },
+    );
+  });
+
+  app.get("/api/plugin-store/:id/widget", async (c) => {
+    const tenant = c.get("tenant");
+    const id = c.req.param("id");
+    const widgetId = c.req.query("widget") ?? "";
+    const collection = c.req.query("collection") ?? "";
+    const installed = await c.env.DB.prepare(
+      "SELECT version,manifest FROM studio_extension_installations WHERE tenant_id=? AND id=? AND enabled=1",
+    )
+      .bind(tenant, id)
+      .first<{ version: string; manifest: string }>();
+    if (!installed)
+      return fail("El plugin no está activo en este espacio.", 404);
+    const config = await storeConfigFor(c.env.DB, tenant, id);
+    const widget = config?.widgets.find((item) => item.id === widgetId);
+    if (!widgetId || !widget)
+      return fail("El widget no está declarado por el plugin.", 404);
+    const manifest = JSON.parse(installed.manifest) as { label?: string };
+    const { storeBasePath, entryUrl } = await shellAssetPaths(
+      options,
+      tenant,
+      id,
+      installed.version,
+    );
+    const html = shellHtml(
+      id,
+      manifest.label ?? id,
+      entryUrl,
+      storeBasePath,
+      {
+        widget: widgetId,
+        collection: collection || widget.collection,
+      },
+      c.req.query("theme") === "dark",
+    );
+    return new Response(html, {
+      headers: {
+        "content-type": "text/html; charset=utf-8",
+        "cache-control": "private, no-store",
+        "referrer-policy": "no-referrer",
+        "x-frame-options": "SAMEORIGIN",
+      },
+    });
+  });
+
+  app.delete("/api/plugin-store/:id", async (c) => {
+    const tenant = c.get("tenant");
+    const id = c.req.param("id");
+    const version = c.req.query("version");
+    const registryQuery = c.req.query("registry");
+    if (
+      registryQuery !== undefined &&
+      !["true", "false"].includes(registryQuery)
+    )
+      return fail("El parámetro registry no es válido.", 400);
+    const deleteFromRegistry = registryQuery === "true";
+    if (
+      version !== undefined &&
+      !/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.test(
+        version,
+      )
+    )
+      return fail("La versión no es válida.", 400);
+
+    if (!deleteFromRegistry) {
+      await assertCanManage(c.get("tenant"), c.get("principalId"), options, id);
+    } else {
+      if (!options.pluginRegistry?.publishToken)
+        return c.json(
+          { error: "La eliminación en el registro no está configurada." },
+          503,
+        );
+      if (!options.canManageExtension)
+        return fail("Se requiere permiso de administración del espacio.", 403);
+      const allowed = await options.canManageExtension({
+        tenantId: tenant,
+        principalId: c.get("principalId"),
+        extensionId: id,
+      });
+      if (!allowed)
+        return fail("Se requiere permiso de administración del espacio.", 403);
+    }
+
+    const versions = await c.env.DB.prepare(
+      `SELECT version FROM plugin_store_artifacts WHERE tenant_id=? AND id=?${version === undefined ? "" : " AND version=?"} ORDER BY version`,
+    )
+      .bind(...(version === undefined ? [tenant, id] : [tenant, id, version]))
+      .all<{ version: string }>();
+    if (!versions.results.length) return fail("La versión no existe.", 404);
+
+    const installations = await c.env.DB.prepare(
+      "SELECT version,enabled FROM studio_extension_installations WHERE tenant_id=? AND id=?",
+    )
+      .bind(tenant, id)
+      .all<{ version: string; enabled: number }>();
+    if (
+      installations.results.some(
+        (installation) =>
+          installation.enabled === 1 &&
+          (version === undefined || installation.version === version),
+      )
+    )
+      return fail("Desactiva el plugin antes de eliminar su artefacto.", 409);
+
+    if (deleteFromRegistry) {
+      try {
+        for (const release of versions.results)
+          await deletePluginRegistryRelease(
+            options.pluginRegistry!,
+            id,
+            release.version,
+          );
+      } catch (error) {
+        if (error instanceof PluginRegistryDeleteError && error.status === 403)
+          return fail(
+            "Solo puedes borrar del catálogo las versiones publicadas con la credencial de este espacio. Puedes desmarcar la eliminación del registro para borrar solo la copia local.",
+            403,
+          );
+        return fail("No se pudo eliminar la versión del registro.", 502);
+      }
+    }
+
+    const targetVersionPredicate =
+      version === undefined
+        ? ` AND version IN (${versions.results.map(() => "?").join(",")})`
+        : " AND version=?";
+    const targetVersionBinds =
+      version === undefined
+        ? versions.results.map((release) => release.version)
+        : [version];
+    const activeVersionPredicate =
+      version === undefined ? "" : " AND version=?";
+    const artifactDelete = c.env.DB.prepare(
+      `DELETE FROM plugin_store_artifacts WHERE tenant_id=? AND id=?${targetVersionPredicate}
+       AND NOT EXISTS (
+         SELECT 1 FROM studio_extension_installations
+         WHERE tenant_id=? AND id=? AND enabled=1${activeVersionPredicate}
+       )`,
+    ).bind(
+      tenant,
+      id,
+      ...targetVersionBinds,
+      tenant,
+      id,
+      ...(version === undefined ? [] : [version]),
+    );
+    const sourcesDelete = c.env.DB.prepare(
+      `DELETE FROM plugin_store_sources WHERE tenant_id=? AND id=?${targetVersionPredicate}
+       AND NOT EXISTS (
+         SELECT 1 FROM plugin_store_artifacts
+         WHERE tenant_id=? AND id=? AND version=plugin_store_sources.version
+       )`,
+    ).bind(tenant, id, ...targetVersionBinds, tenant, id);
+    const installationDelete = c.env.DB.prepare(
+      `DELETE FROM studio_extension_installations WHERE tenant_id=? AND id=? AND enabled=0${targetVersionPredicate}
+       AND NOT EXISTS (
+         SELECT 1 FROM plugin_store_artifacts WHERE tenant_id=? AND id=? AND version=studio_extension_installations.version
+       )`,
+    ).bind(tenant, id, ...targetVersionBinds, tenant, id);
+    const deleted = await c.env.DB.batch([
+      artifactDelete,
+      sourcesDelete,
+      installationDelete,
+    ]);
+    if ((deleted[0]?.meta?.changes ?? 0) < versions.results.length) {
+      const activeVersionPredicate = version ? " AND version=?" : "";
+      const activeNow = await c.env.DB.prepare(
+        `SELECT 1 FROM studio_extension_installations WHERE tenant_id=? AND id=? AND enabled=1${activeVersionPredicate}`,
+      )
+        .bind(...(version ? [tenant, id, version] : [tenant, id]))
+        .first();
+      return activeNow
+        ? fail(
+            deleteFromRegistry
+              ? "Se eliminaron los archivos del catálogo compartido, pero el plugin se activó durante el borrado y su copia local se conserva. Desactívalo antes de volver a eliminarlo."
+              : "Desactiva el plugin antes de eliminar su artefacto.",
+            409,
+          )
+        : fail("La versión no existe.", 404);
+    }
+    return c.json({ data: { id, deleted: true } });
+  });
+}

@@ -1,0 +1,362 @@
+import { env } from "cloudflare:workers";
+import { beforeAll, describe, expect, it } from "vitest";
+
+const migrationSqls = Object.entries(
+  import.meta.glob<string>("../../../packages/db/migrations/*.sql", {
+    eager: true,
+    import: "default",
+    query: "?raw",
+  }),
+)
+  .sort(([left], [right]) => left.localeCompare(right))
+  .map(([, sql]) => sql);
+
+type TableInfo = { name: string; type: string };
+type ForeignKey = { table: string; from: string; to: string };
+type IndexInfo = { name: string; unique: number };
+
+function migrationStatements(sql: string): string[] {
+  return sql
+    .split("--> statement-breakpoint")
+    .map((statement) =>
+      statement
+        .replace(/^--.*$/gm, "")
+        .replace(/\s+/g, " ")
+        .trim(),
+    )
+    .filter(Boolean);
+}
+
+async function applyMigrations() {
+  for (const migration of migrationSqls) {
+    for (const statement of migrationStatements(migration)) {
+      await env.DB.exec(statement);
+    }
+  }
+}
+
+describe("full D1 schema projection", () => {
+  beforeAll(applyMigrations);
+
+  it("projects every application table and omits PostGIS", async () => {
+    const tables = await env.DB.prepare(
+      "SELECT name, sql AS type FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' ORDER BY name",
+    ).all<TableInfo>();
+    const names = tables.results.map((table) => table.name);
+
+    expect(names).not.toEqual(
+      expect.arrayContaining([
+        "agencies",
+        "agency_branches",
+        "agency_contacts",
+        "app_economicactivity",
+        "attachment_uploads",
+        "auto_light_quote_offers",
+        "auto_light_quote_requests",
+        "business_commercialunit",
+        "categories",
+        "cities",
+        "countries",
+        "crm_sync_jobs",
+        "crm_sync_mappings",
+        "crm_sync_rules",
+        "customer_address",
+        "customer_client",
+        "customer_clientagency",
+        "customer_crm_sync_records",
+        "customer_group",
+        "customer_legalperson",
+        "customer_legalpersoncontact",
+        "customer_naturalperson",
+        "departments",
+        "document_ownership",
+        "insurer_companies",
+        "legacy_import_snapshots",
+        "legacy_import_streams",
+        "managed_customer_extensions",
+        "managed_customer_requests",
+        "ramos",
+        "sub_ramos",
+        "tenant_consolidation_agency_bootstraps",
+        "tenant_consolidation_discards",
+        "tenant_consolidation_sources",
+        "tenant_namespace_migrations",
+      ]),
+    );
+    expect(names).toEqual(
+      expect.arrayContaining([
+        "studio_record_counts",
+        "studio_record_read_cache",
+        "studio_record_summary_definitions",
+        "studio_record_summary_groups",
+        "studio_record_search",
+        "studio_record_search_fts",
+        "access_revisions",
+        "access_roles",
+        "access_grants",
+        "access_assignments",
+        "access_audit",
+        "personal_api_keys",
+        "studio_access_deliveries",
+        "studio_file_revisions",
+        "workflows",
+        "workflow_versions",
+        "workflow_events",
+        "workflow_executions",
+        "workflow_jobs",
+        "workflow_tasks",
+        "workflow_write_context",
+        "workflow_webhook_endpoints",
+        "workflow_webhook_receipts",
+        "workflow_webhook_admissions",
+        "workflow_webhook_destinations",
+        "workflow_webhook_destination_versions",
+        "workflow_webhook_deliveries",
+        "workflow_webhook_attempts",
+
+        "assistant_virtual_employees",
+        "assistant_virtual_employee_files",
+        "assistant_virtual_employee_chunks",
+        "request_page_runs",
+        "installed_bundles",
+        "public_forms",
+        "public_form_short_links",
+        "tenant_branding",
+        "tenant_branding_assets",
+        "public_form_submissions",
+        "studio_objects",
+        "studio_collection_versions",
+        "crm_sync_changes",
+        "crm_sync_receipts",
+        "studio_record_history",
+        "studio_record_history_context",
+        "offline_collection_policies",
+        "studio_solution_installations",
+        "studio_extension_installations",
+        "extension_connections",
+        "extension_connection_audit_events",
+        "extension_action_runs",
+        "extension_settings",
+        "plugin_store_artifacts",
+        "studio_solution_objects",
+        "studio_business_links",
+        "studio_collection_sources",
+        "crm_collection_bindings",
+        "studio_collection_requests",
+        "studio_collection_relations",
+        "studio_record_links",
+        "studio_native_relation_overrides",
+        "studio_records",
+        "studio_views",
+        "studio_integrations",
+        "studio_audit",
+        "studio_unique_values",
+        "studio_write_guards",
+        "studio_requests",
+        "studio_schema_versions",
+        "studio_schema_data",
+        "studio_settings",
+        "studio_integration_runs",
+        "studio_notes",
+        "studio_files",
+        "studio_file_revisions",
+        "studio_access_deliveries",
+        "workflows",
+        "workflow_versions",
+        "workflow_events",
+        "workflow_executions",
+        "workflow_jobs",
+        "workflow_tasks",
+        "workflow_write_context",
+        "workflow_webhook_endpoints",
+        "workflow_webhook_receipts",
+        "workflow_webhook_admissions",
+        "workflow_webhook_destinations",
+        "workflow_webhook_destination_versions",
+        "workflow_webhook_deliveries",
+        "workflow_webhook_attempts",
+
+        "studio_record_counts",
+        "studio_record_read_cache",
+        "studio_record_summary_definitions",
+        "studio_record_summary_groups",
+        "studio_record_search",
+        "studio_record_search_fts",
+        "access_revisions",
+        "access_roles",
+        "access_grants",
+        "access_assignments",
+        "access_audit",
+        "personal_api_keys",
+        "studio_file_drafts",
+        "studio_automations",
+        "studio_automation_runs",
+        "studio_tasks",
+        "flows",
+        "flow_versions",
+        "flow_variables",
+        "flow_runs",
+        "folders",
+        "server_id_sequences",
+        "admin_oauth_transactions",
+        "identity_principal",
+        "identity_global_role",
+        "identity_tenant_membership",
+        "tenants",
+        "assistant_pending_actions",
+        "tenant_crm_connections",
+        "tenant_crm_connection_audit_events",
+        "personal_integration_connections",
+        "personal_integration_audit_events",
+        "user_navigation_preferences",
+        "user_appearance_preferences",
+        "user_my_day_widgets",
+        "user_provider_credentials",
+        "user_provider_credential_audit_events",
+        "assistant_openrouter_settings",
+        "assistant_active_tenants",
+        "notification_events",
+        "notification_deliveries",
+        "notification_recipient_retries",
+        "notification_subscriptions",
+        "notification_admin_audit",
+        "notification_send_limits",
+        "notification_scope_settings",
+        "notification_maintenance_checkpoints",
+      ]),
+    );
+
+    const views = await env.DB.prepare(
+      "SELECT name FROM sqlite_master WHERE type = 'view' ORDER BY name",
+    ).all<{ name: string }>();
+    const viewNames = views.results.map((view) => view.name);
+    expect(viewNames).not.toEqual(
+      expect.arrayContaining([
+        "agency_crm_connections",
+        "agency_crm_connection_audit_events",
+        "assistant_active_agencies",
+      ]),
+    );
+
+    const crmConnectionColumns = await env.DB.prepare(
+      "PRAGMA table_info(tenant_crm_connections)",
+    ).all<{ name: string }>();
+    expect(crmConnectionColumns.results.map((column) => column.name)).toContain(
+      "external_account_id",
+    );
+    expect(crmConnectionColumns.results.map((column) => column.name)).toContain(
+      "tenant_id",
+    );
+    const personalConnectionIndexes = await env.DB.prepare(
+      "PRAGMA index_list(personal_integration_connections)",
+    ).all<IndexInfo>();
+    expect(personalConnectionIndexes.results).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: "personal_integration_connections_active_unique",
+          unique: 1,
+        }),
+      ]),
+    );
+    expect(names).not.toContain("spatial_ref_sys");
+    expect(names).not.toContain("geography_columns");
+
+    const tenantColumns = await env.DB.prepare(
+      "PRAGMA table_info(tenants)",
+    ).all<TableInfo>();
+    expect(tenantColumns.results).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: "kind", type: "TEXT" }),
+      ]),
+    );
+  });
+
+  it("stores encrypted provider bundles with agency-scoped audit evidence", async () => {
+    const [
+      credentialColumns,
+      credentialForeignKeys,
+      credentialIndexes,
+      auditColumns,
+      auditForeignKeys,
+    ] = await Promise.all([
+      env.DB.prepare("PRAGMA table_info(user_provider_credentials)").all<{
+        name: string;
+        type: string;
+      }>(),
+      env.DB.prepare(
+        "PRAGMA foreign_key_list(user_provider_credentials)",
+      ).all<ForeignKey>(),
+      env.DB.prepare(
+        "PRAGMA index_list(user_provider_credentials)",
+      ).all<IndexInfo>(),
+      env.DB.prepare(
+        "PRAGMA table_info(user_provider_credential_audit_events)",
+      ).all<{ name: string; type: string }>(),
+      env.DB.prepare(
+        "PRAGMA foreign_key_list(user_provider_credential_audit_events)",
+      ).all<ForeignKey>(),
+    ]);
+
+    expect(credentialColumns.results).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: "credential_ciphertext",
+          type: "TEXT",
+        }),
+        expect.objectContaining({ name: "credential_iv", type: "TEXT" }),
+        expect.objectContaining({ name: "schema_version", type: "INTEGER" }),
+        expect.objectContaining({
+          name: "last_validation_status",
+          type: "TEXT",
+        }),
+        expect.objectContaining({
+          name: "last_validation_error_code",
+          type: "TEXT",
+        }),
+      ]),
+    );
+    expect(credentialIndexes.results).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: "user_provider_credentials_owner_provider_unique",
+          unique: 1,
+        }),
+      ]),
+    );
+    expect(credentialForeignKeys.results).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          from: "owner_principal_id",
+          table: "identity_principal",
+        }),
+        expect.objectContaining({
+          from: "created_by_principal_id",
+          table: "identity_principal",
+        }),
+        expect.objectContaining({
+          from: "updated_by_principal_id",
+          table: "identity_principal",
+        }),
+      ]),
+    );
+    expect(auditColumns.results).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: "event_type", type: "TEXT" }),
+        expect.objectContaining({ name: "outcome", type: "TEXT" }),
+        expect.objectContaining({ name: "error_code", type: "TEXT" }),
+      ]),
+    );
+    expect(auditForeignKeys.results).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          from: "owner_principal_id",
+          table: "identity_principal",
+        }),
+        expect.objectContaining({
+          from: "actor_principal_id",
+          table: "identity_principal",
+        }),
+      ]),
+    );
+  });
+});

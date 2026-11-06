@@ -1,0 +1,111 @@
+import type { Units } from "@savia/flows-geo";
+import { rhumbDestination } from "@savia/flows-geo";
+import { ExecutableNode, type NodeContext } from "@savia/flows-runtime";
+import type { NodeExecution, NodeType } from "@savia/flows-types";
+import type { GeoProperties } from "./geo-input";
+import { isUnits, UNITS_LIST } from "./geo-input";
+
+export class RhumbDestinationNode extends ExecutableNode {
+  public static readonly nodeType: NodeType = {
+    id: "rhumb-destination",
+    name: "Rhumb Destination",
+    type: "rhumb-destination",
+    description:
+      "Calculates the destination point along a rhumb line (constant bearing) from an origin point",
+    tags: ["Geo", "GeoJSON", "Measurement", "RhumbDestination"],
+    icon: "map-pin",
+    documentation:
+      "This node calculates a destination point given a starting point, bearing, and distance using rhumb lines.",
+    inlinable: true,
+    asTool: false,
+    inputs: [
+      {
+        name: "origin",
+        type: "geojson",
+        description: "Origin point (Feature or Point geometry)",
+        required: true,
+      },
+      {
+        name: "distance",
+        type: "number",
+        description: "Distance to travel along the rhumb line",
+        required: true,
+      },
+      {
+        name: "bearing",
+        type: "number",
+        description: "Bearing/direction in degrees (0 = north, 90 = east)",
+        required: true,
+      },
+      {
+        name: "units",
+        type: "string",
+        description:
+          "Units for distance (kilometers, miles, meters, degrees, radians)",
+        required: false,
+      },
+      {
+        name: "properties",
+        type: "json",
+        description: "Properties to assign to the destination point feature",
+        required: false,
+      },
+    ],
+    outputs: [
+      {
+        name: "destination",
+        type: "geojson",
+        description: "Destination point feature",
+      },
+    ],
+  };
+
+  public async execute(context: NodeContext): Promise<NodeExecution> {
+    try {
+      const { origin, distance, bearing, units, properties } = context.inputs;
+
+      if (!origin) {
+        return this.createErrorResult("Missing origin point input");
+      }
+
+      if (distance === undefined || distance === null) {
+        return this.createErrorResult("Missing distance input");
+      }
+
+      if (bearing === undefined || bearing === null) {
+        return this.createErrorResult("Missing bearing input");
+      }
+
+      // Prepare options for rhumb destination calculation
+      const options: { units?: Units; properties?: GeoProperties } = {};
+
+      if (units !== undefined && units !== null) {
+        if (!isUnits(units)) {
+          return this.createErrorResult(`Units must be one of: ${UNITS_LIST}`);
+        }
+        options.units = units;
+      }
+
+      if (properties !== undefined && properties !== null) {
+        options.properties = properties;
+      }
+
+      // Calculate the rhumb destination using Turf.js
+      const destinationPoint = rhumbDestination(
+        origin,
+        distance,
+        bearing,
+        options
+      );
+
+      return this.createSuccessResult({
+        destination: destinationPoint,
+      });
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      return this.createErrorResult(
+        `Error calculating rhumb destination: ${error.message}`
+      );
+    }
+  }
+}

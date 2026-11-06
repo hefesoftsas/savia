@@ -1,0 +1,2125 @@
+import Audit from "./audit-panel";
+import { ExtensionLocaleBridge } from "@/i18n/app-locale-provider";
+import { useMessages, useAppLocale, intlLocale } from "@/i18n/core";
+import { defaultAppLocale, isAppLocale } from "@/i18n/app-locale";
+import { automationMessages } from "@/i18n/locales/automation";
+import { studioMessages } from "@/i18n/locales/studio";
+import { isTenantApiBasePath } from "@/features/studio/studio-navigation";
+import {
+  canDuplicateRecord,
+  duplicateRecordValues,
+} from "./record-duplication";
+import { saveRelatedRecords } from "./save-related-records";
+import { reconcileLocalQueries } from "./local-query-sync";
+import {
+  createStudioQueryClient,
+  getStudioQueryOwner,
+  isStudioBootstrapped,
+  markStudioBootstrapped,
+  markStudioBootstrapFailed,
+} from "./studio-query-cache";
+import { RecordOriginLinks } from "./record-origin-links";
+import {
+  collectionCapabilities,
+  supportsLocalRecordTools,
+} from "./collection-capabilities";
+import { isHubspotArchive } from "./crm-provider";
+import React, {
+  Fragment,
+  Suspense,
+  lazy,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+
+import { QueryClient, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  CoreAdminContext,
+  ListBase,
+  useListContext,
+  useStore,
+  memoryStore,
+} from "ra-core";
+import { DataTable } from "@/components/admin/data-table";
+import { ListPagination } from "@/components/admin/list-pagination";
+import { ScreenListSkeleton } from "@/components/admin/page-skeletons";
+import { i18nProvider } from "@/lib/i18nProvider";
+import { Button } from "@/components/ui/button";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { CollectionFollow } from "@/features/notifications/collection-follow";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import {
+  Drawer,
+  DrawerContent,
+  DrawerDescription,
+  DrawerHeader,
+  DrawerTitle,
+} from "@/components/ui/drawer";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Toaster, toast } from "sonner";
+import {
+  ArrowUpRight,
+  ArrowLeft,
+  Plus,
+  Search,
+  SlidersHorizontal,
+  Table2,
+  Columns3,
+  Building2,
+  Users,
+  Target,
+  CheckSquare,
+  Activity,
+  Boxes,
+  Plug,
+  History,
+  KeyRound,
+  Leaf,
+  ChevronDown,
+  ChevronRight,
+  ArrowDownToLine,
+  Save,
+  Trash2,
+  PanelLeftClose,
+  Menu,
+  Database,
+  GripVertical,
+  CalendarDays,
+  Check,
+  Code2,
+  Info,
+  X,
+  FileSpreadsheet,
+} from "lucide-react";
+import { CollectionImportWizard } from "./collection-import-wizard";
+import { api, pluginApi, dataProvider } from "./api";
+import {
+  attachTemporaryR2Attachments,
+  deleteTemporaryR2Attachments,
+  uploadTemporaryR2Attachment,
+} from "./r2-attachment-upload";
+import { getStudioRuntime } from "./runtime";
+import { StudioRealtimeBridge } from "./studio-realtime";
+import { useListObjects, getListObjectsQueryKey } from "./generated/studio";
+import type { ScreenDeletionPreview } from "@savia/studio-shared/screen-deletion";
+import {
+  fieldEntries,
+  makeConfig,
+  recordSurface,
+  isDrawerSurface,
+  stageOptions,
+  type StudioObject,
+  type StudioRecord,
+} from "@savia/studio-shared/metadata";
+import {
+  getMenuBlocks,
+  reconcileMenuLayout,
+  type ScreenMenuLayout,
+} from "@savia/studio-shared/screen-menu-layout";
+import { exampleOpenApi } from "@savia/studio-shared/seed";
+import { inspectDocument } from "@savia/studio-shared/openapi";
+import "./style.css";
+import { sortScreens, withScreen } from "./screen-metadata";
+import {
+  ScreenManager,
+  ScreenAdministration,
+  ScreenMenuReorder,
+} from "./lazy-studio-panels";
+import {
+  extensionApiFor,
+  extensionScreenDefaultHidden,
+  extensionScreenFor,
+  isExtensionScreenEnabled,
+  isPluginScreen,
+  isStorePluginScreen,
+  storeScreenDefaultHidden,
+  storeScreenFor,
+  pluginLookupFields,
+  type StoreScreenInstallation,
+} from "./extension-screens";
+import { CustomPluginFrame } from "./custom-plugin-frame";
+import { StudioHelpTooltip } from "./studio-help-tooltip";
+import "./screen-manager.css";
+const studioAppMessages = { ...automationMessages, ...studioMessages };
+const PublicLinkManager = lazy(() =>
+  import("../public-forms/public-link-manager").then((module) => ({
+    default: module.PublicLinkManager,
+  })),
+);
+const DynamicForm = lazy(() => import("./collection-record-form"));
+const RequestPage = lazy(() => import("./request-page"));
+const RequestPageGenerator = lazy(() => import("./request-page-generator"));
+const Records = lazy(() => import("./records"));
+const CollectionSourcesPanel = lazy(() => import("./collection-sources-panel"));
+const ServiceCredentials = lazy(() => import("./service-credentials"));
+const Operations = lazy(() => import("./operations"));
+const PluginLookupSettings = lazy(() => import("./plugin-lookup-settings"));
+const CollectionRelations = lazy(() => import("./collection-relations"));
+const RecordDetail = lazy(() => import("./record-detail"));
+const Designer = lazy(() => import("./designer"));
+
+const icons: Record<string, typeof Boxes> = {
+  account: Building2,
+  contact: Users,
+  opportunity: Target,
+  task: CheckSquare,
+  activity: Activity,
+};
+const initials = (value: unknown) =>
+  String(value ?? "")
+    .split(" ")
+    .slice(0, 2)
+    .map((w) => w[0])
+    .join("");
+const Loading = () => {
+  const t = useMessages(automationMessages);
+
+  return (
+    <div
+      className="w-full space-y-4 py-4"
+      role="status"
+      aria-label={t("Cargando espacio de trabajo…")}
+    >
+      <span className="sr-only">{t("Cargando espacio de trabajo…")}</span>
+      <ScreenListSkeleton count={4} />
+    </div>
+  );
+};
+function Modal({
+  title,
+  description,
+  children,
+  onClose,
+  wide = false,
+  conversational = false,
+  page = false,
+  drawer = false,
+  drawerLong = false,
+  dialogClassName = "",
+}: {
+  title: string;
+  description: string;
+  children: React.ReactNode;
+  onClose: () => void;
+  wide?: boolean;
+  conversational?: boolean;
+  page?: boolean;
+  drawer?: boolean;
+  drawerLong?: boolean;
+  dialogClassName?: string;
+}) {
+  const t = useMessages(automationMessages);
+
+  if (page)
+    return (
+      <section
+        className={
+          "record-page " + (conversational ? "record-page-conversation" : "")
+        }
+      >
+        <Button variant="ghost" onClick={onClose}>
+          <ArrowLeft size={16} />
+          {t("Volver a")}{" "}
+          {title.split(" · ").slice(1).join(" · ") || t("la lista")}
+        </Button>
+        <header className="record-page-heading">
+          <h1>{title}</h1>
+          <p>
+            {conversational
+              ? t(
+                  "Vamos paso a paso. Podrás revisar tus respuestas antes de guardar.",
+                )
+              : description}
+          </p>
+        </header>
+        <Suspense fallback={<Loading />}>{children}</Suspense>
+      </section>
+    );
+  const copy = conversational
+    ? t("Vamos paso a paso. Podrás revisar tus respuestas antes de guardar.")
+    : description;
+  if (drawer)
+    return (
+      <Drawer
+        open
+        direction="right"
+        onOpenChange={(open) => !open && onClose()}
+      >
+        <DrawerContent
+          className={
+            drawerLong
+              ? "record-drawer record-drawer-long data-[vaul-drawer-direction=right]:w-[min(48rem,92vw)] data-[vaul-drawer-direction=right]:sm:max-w-3xl"
+              : "record-drawer record-drawer-short data-[vaul-drawer-direction=right]:w-[min(24rem,92vw)] data-[vaul-drawer-direction=right]:sm:max-w-md"
+          }
+        >
+          <DrawerHeader>
+            <DrawerTitle>{title}</DrawerTitle>
+            <DrawerDescription>{copy}</DrawerDescription>
+          </DrawerHeader>
+          <div className="record-drawer-body">
+            <Suspense fallback={<Loading />}>{children}</Suspense>
+          </div>
+        </DrawerContent>
+      </Drawer>
+    );
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent
+        className={
+          "savia-crm-record-dialog " +
+          dialogClassName +
+          " " +
+          (conversational
+            ? "record-dialog conversation-dialog"
+            : wide
+              ? "wide-dialog"
+              : "record-dialog")
+        }
+      >
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>{copy}</DialogDescription>
+        </DialogHeader>
+        <Suspense fallback={<Loading />}>{children}</Suspense>
+      </DialogContent>
+    </Dialog>
+  );
+}
+function updateLocation(params: URLSearchParams, replace = false) {
+  const runtime = getStudioRuntime();
+  if (runtime.navigate) {
+    runtime.navigate(params.toString(), replace);
+    return;
+  }
+  window.history[replace ? "replaceState" : "pushState"](
+    null,
+    "",
+    "?" + params,
+  );
+}
+function screenManagementTab(params: URLSearchParams): "menu" | "screens" {
+  const tab = params.get("tab");
+  return tab === "screens" || tab === "table" ? "screens" : "menu";
+}
+function App({
+  embedded = false,
+  search,
+}: {
+  embedded?: boolean;
+  search?: string;
+}) {
+  const t = useMessages(studioAppMessages);
+  const extensionLocale = useAppLocale();
+  const extensionLocaleRef = useRef(extensionLocale);
+  extensionLocaleRef.current = extensionLocale;
+
+  const activeQueryClient = useQueryClient();
+  const runtime = getStudioRuntime();
+  const [ready, setReady] = useState(() => {
+      const tenantId = getStudioRuntime().tenantId;
+      const owner = getStudioQueryOwner();
+      return Boolean(
+        tenantId !== undefined &&
+        owner &&
+        isStudioBootstrapped(`tenant:${tenantId}`, owner),
+      );
+    }),
+    [bootError, setBootError] = useState("");
+  useEffect(() => {
+    let active = true;
+    const runtime = getStudioRuntime();
+    const tenantId = runtime.tenantId;
+    const owner = getStudioQueryOwner();
+    // Evita que /bootstrap bloquee cada regreso al mismo dominio: solo en
+    // la primera entrada de cada tenant (o tras recargar, fallo previo o
+    // cambio de dominio). Al regresar, el contenido conservado se muestra
+    // de inmediato y las consultas vencidas se actualizan en segundo plano.
+    if (
+      tenantId !== undefined &&
+      owner &&
+      isStudioBootstrapped(`tenant:${tenantId}`, owner)
+    ) {
+      setReady(true);
+      return () => {
+        active = false;
+      };
+    }
+    void (async () => {
+      const bootstrap = async (path: string) => {
+        if (!runtime.transport) return api(path, "POST");
+        const response = await runtime.transport("/api" + path, {
+          method: "POST",
+        });
+        if (!response.ok) {
+          const body = (await response.json()) as { error?: string };
+          throw new Error(body.error ?? t("No se pudo preparar el tenant."));
+        }
+      };
+      try {
+        await bootstrap("/bootstrap");
+        // Optional business packages must never gate tenant screen authoring.
+        // Install them through their explicit setup flow instead.
+        if (tenantId !== undefined && owner)
+          markStudioBootstrapped(`tenant:${tenantId}`, owner);
+        if (active) setReady(true);
+      } catch (e) {
+        if (tenantId !== undefined && owner)
+          markStudioBootstrapFailed(`tenant:${tenantId}`, owner);
+        if (active) setBootError((e as Error).message);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const objectsQuery = useListObjects({
+    query: { enabled: ready, staleTime: 5 * 60_000 },
+  });
+  const objectsResponse = objectsQuery.data as unknown as {
+    data?: StudioObject[];
+    menuLayout?: ScreenMenuLayout | null;
+  };
+  const objects = objectsResponse?.data ?? [];
+  const menuLayout = objectsResponse?.menuLayout ?? null;
+  const [location, setLocation] = useState(
+    () => new URLSearchParams(search ?? window.location.search),
+  );
+  const selected =
+      location.get("object") ?? (embedded ? "clientes" : "opportunity"),
+    view = location.get("view") ?? "records";
+  const [mobile, setMobile] = useState(false),
+    [newObjectState, setNewObject] = useState(false),
+    [editingState, setEditing] = useState<StudioRecord | "new" | null>(null);
+  const screensTab = screenManagementTab(location);
+  useEffect(() => {
+    if (search == null) return;
+    const params = new URLSearchParams(search);
+    setLocation(params);
+    const nextView = params.get("view");
+    if (nextView === "screens" || nextView === "remove-screen")
+      setEditing(null);
+  }, [search]);
+  const extensionsQuery = useQuery({
+    queryKey: ["extension-client-screens", getStudioRuntime().tenantId],
+    queryFn: () =>
+      api<{
+        data: Array<
+          StoreScreenInstallation & {
+            manifest: { id: string };
+            builtIn: boolean;
+            installed: { enabled: boolean; version?: string } | null;
+          }
+        >;
+      }>("/extensions"),
+    enabled: ready,
+    staleTime: 60_000,
+  });
+  // La respuesta puede no ser una lista (mocks, proxies): normalizar.
+  const extensionInstallations = Array.isArray(extensionsQuery.data?.data)
+    ? extensionsQuery.data.data
+    : undefined;
+  const isObjectHidden = (o: StudioObject) => {
+    if (o.config.studio?.screen?.hidden !== undefined) {
+      return Boolean(o.config.studio?.screen?.hidden);
+    }
+    if (extensionScreenDefaultHidden(o.name)) return true;
+    return storeScreenDefaultHidden(o.name, extensionInstallations);
+  };
+  const visibleObjects = sortScreens(objects.filter((o) => !isObjectHidden(o)));
+  const designerObjects = useMemo(() => sortScreens(objects), [objects]);
+  const publishableScreens = useMemo(() => {
+    return sortScreens(
+      objects.filter((item) => {
+        const isQuote = ["cotizador", "cotizador_por_pasos"].includes(
+          item.name,
+        );
+        return (
+          isQuote ||
+          (!isPluginScreen(item.name) &&
+            !isStorePluginScreen(item.name, extensionInstallations) &&
+            !item.config.studio?.collection)
+        );
+      }),
+    );
+  }, [objects, extensionInstallations]);
+  const resolvedMenuLayout = useMemo(
+    () =>
+      reconcileMenuLayout(
+        menuLayout,
+        visibleObjects.map((object) => object.name),
+      ),
+    [menuLayout, visibleObjects],
+  );
+  const menuBlocks = useMemo(() => {
+    const byName = new Map(
+      visibleObjects.map((object) => [object.name, object]),
+    );
+    return getMenuBlocks(resolvedMenuLayout)
+      .map((block) => ({
+        ...block,
+        objects: block.screens
+          .map((name) => byName.get(name))
+          .filter((object): object is StudioObject => Boolean(object)),
+      }))
+      .filter((block) => block.objects.length > 0);
+  }, [resolvedMenuLayout, visibleObjects]);
+  const newObject =
+    view === "new-object" || view === "import-spreadsheet" || newObjectState;
+  const removeScreen =
+    view === "remove-screen"
+      ? objects.find((item) => item.name === selected)
+      : undefined;
+  const [duplicate, setDuplicate] = useState<{
+    object: string;
+    values: Record<string, unknown>;
+  } | null>(null);
+  const [writeKey, setWriteKey] = useState(() => crypto.randomUUID());
+  const recordId = location.get("record");
+  const object =
+    objects.find((o) => o.name === selected) ??
+    (view === "designer" ? designerObjects[0] : visibleObjects[0]) ??
+    objects[0];
+  const resolvedObjectName = object?.name ?? selected;
+  const contribution = extensionScreenFor(resolvedObjectName, view);
+  const storeScreen = storeScreenFor(
+    resolvedObjectName,
+    view,
+    extensionInstallations,
+  );
+  const ExtensionScreen = isExtensionScreenEnabled(
+    contribution,
+    extensionsQuery.data?.data,
+  )
+    ? contribution.Screen
+    : null;
+  const extensionApi = useMemo(
+    () =>
+      contribution
+        ? extensionApiFor(
+            contribution,
+            pluginApi,
+            () => extensionLocaleRef.current,
+          )
+        : null,
+    [contribution?.extensionId],
+  );
+  useEffect(() => {
+    if (!ready || !object || selected === object.name) return;
+    const normalized = new URLSearchParams(location);
+    normalized.set("object", object.name);
+    updateLocation(normalized, true);
+    setLocation(normalized);
+  }, [location, object, ready, selected]);
+  const detailQuery = useQuery({
+    queryKey: ["open-record", resolvedObjectName, recordId],
+    queryFn: () => api(`/records/${resolvedObjectName}/${recordId}`),
+    enabled:
+      ready &&
+      !!recordId &&
+      !!object &&
+      collectionCapabilities(object).read &&
+      (view === "records" || view === "edit"),
+  });
+  const editing =
+    view === "create"
+      ? "new"
+      : view === "edit"
+        ? (detailQuery.data?.data ?? editingState)
+        : editingState;
+  const openRecord = (record: StudioRecord) => {
+    const params = new URLSearchParams({
+      object: resolvedObjectName,
+      view: "records",
+      record: record.id,
+    });
+    updateLocation(params);
+    setLocation(params);
+  };
+  const closeRecord = () => {
+    const params = new URLSearchParams({ object: selected, view: "records" });
+    updateLocation(params);
+    setLocation(params);
+  };
+  const navigate = (
+    name: string,
+    next = "records",
+    extra?: Record<string, string>,
+  ) => {
+    const params = new URLSearchParams({ object: name, view: next, ...extra });
+    updateLocation(params);
+    setLocation(params);
+    setMobile(false);
+    setEditing(null);
+    setDuplicate(null);
+  };
+  const selectTab = (tab: string) => {
+    const params = new URLSearchParams(location);
+    params.set("tab", tab);
+    updateLocation(params);
+    setLocation(params);
+  };
+  const editRecord = (record: StudioRecord | "new") => {
+    if (
+      !object ||
+      !(record === "new"
+        ? collectionCapabilities(object).create
+        : collectionCapabilities(object).update)
+    )
+      return;
+    setDuplicate(null);
+    setWriteKey(crypto.randomUUID());
+    const surface = recordSurface(object, record === "new" ? "create" : "edit");
+    if (surface === "page") {
+      if (record === "new") navigate(object.name, "create");
+      else {
+        const params = new URLSearchParams({
+          object: object.name,
+          view: "edit",
+          record: record.id,
+        });
+        updateLocation(params);
+        setLocation(params);
+        setMobile(false);
+        setEditing(record);
+      }
+      return;
+    }
+    setEditing(record);
+  };
+  const duplicateRecord = (record: StudioRecord) => {
+    if (!object || !canDuplicateRecord(object)) return;
+    const values = duplicateRecordValues(object, record);
+    editRecord("new");
+    setDuplicate({ object: object.name, values });
+  };
+  useEffect(() => {
+    if (embedded) return;
+    const pop = () => {
+      setLocation(new URLSearchParams(window.location.search));
+      setEditing(null);
+      setDuplicate(null);
+      setWriteKey(crypto.randomUUID());
+    };
+    window.addEventListener("popstate", pop);
+    return () => window.removeEventListener("popstate", pop);
+  }, [embedded]);
+  useEffect(() => {
+    if (
+      view === "designer" &&
+      designerObjects.length &&
+      !designerObjects.some((o) => o.name === selected)
+    ) {
+      const params = new URLSearchParams({
+        object: designerObjects[0].name,
+        view: "designer",
+      });
+      updateLocation(params, true);
+      setLocation(params);
+      setEditing(null);
+    }
+  }, [view, selected, designerObjects]);
+  useEffect(() => {
+    if (!ready || objectsQuery.isPending) return;
+    window.postMessage(
+      {
+        type: "savia-studio-navigation",
+        tenantId: getStudioRuntime().tenantId,
+        objects: objects.map((item) => {
+          const hidden = isObjectHidden(item);
+          return {
+            name: item.name,
+            label: item.label,
+            count: item.config.studio?.requestPage ? undefined : item.count,
+            hidden,
+            config: {
+              studio: {
+                screen: {
+                  hidden,
+                  section: item.config.studio?.screen?.section,
+                  icon: item.config.studio?.screen?.icon,
+                },
+              },
+            },
+          };
+        }),
+      },
+      window.location.origin,
+    );
+  }, [objects, objectsQuery.isPending, ready]);
+  const refresh = () => activeQueryClient.invalidateQueries();
+  const updateScreenVisibility = async (
+    target: StudioObject,
+    hidden: boolean,
+  ) => {
+    try {
+      const list = await api<{ data: StudioObject[] }>("/objects");
+      const latest =
+        list.data.find((item) => item.name === target.name) ?? target;
+      const result = await api<{ data: StudioObject }>(
+        `/objects/${target.name}/screen`,
+        "PATCH",
+        {
+          hidden,
+          version: latest.version ?? 1,
+        },
+      );
+      activeQueryClient.setQueryData(
+        getListObjectsQueryKey(),
+        (previous: { data: StudioObject[] } | undefined) =>
+          previous
+            ? {
+                ...previous,
+                data: previous.data.map((item) =>
+                  item.name === result.data.name ? result.data : item,
+                ),
+              }
+            : previous,
+      );
+      await refresh();
+      toast.success(
+        hidden ? t("Pantalla eliminada del menú") : t("Pantalla recuperada"),
+      );
+    } catch (error) {
+      toast.error((error as Error).message);
+      throw error;
+    }
+  };
+  const saveMenuLayout = async (layout: ScreenMenuLayout) => {
+    try {
+      await api("/objects/reorder", "PUT", { layout });
+      await refresh();
+      toast.success(t("Menú de pantallas actualizado"));
+    } catch (error) {
+      toast.error((error as Error).message);
+      throw error;
+    }
+  };
+  const loadScreenDeletionPreview = useCallback(
+    async (target: StudioObject) => {
+      const response = await api<{ data: ScreenDeletionPreview }>(
+        `/objects/${encodeURIComponent(target.name)}/deletion-preview`,
+      );
+      return response.data;
+    },
+    [],
+  );
+  const deleteScreenPermanently = async (
+    target: StudioObject,
+    options: {
+      deleteRecords?: boolean;
+      deleteRelated?: boolean;
+      deletionToken?: string;
+    } = {},
+  ) => {
+    try {
+      const response = await api<{
+        data: {
+          name: string;
+          deleted: true;
+          deletedRecords: number;
+          deletedObjects: string[];
+        };
+      }>(`/objects/${encodeURIComponent(target.name)}`, "DELETE", {
+        deleteRecords: Boolean(options.deleteRecords),
+        deleteRelated: Boolean(options.deleteRelated),
+        deletionToken: options.deletionToken,
+      });
+      const deletedNames = new Set(response.data.deletedObjects);
+      activeQueryClient.setQueryData(
+        getListObjectsQueryKey(),
+        (
+          previous:
+            { data: StudioObject[]; [key: string]: unknown } | undefined,
+        ) =>
+          previous
+            ? {
+                ...previous,
+                data: previous.data.filter(
+                  (item) => !deletedNames.has(item.name),
+                ),
+              }
+            : previous,
+      );
+      await refresh();
+      const deletedRecords = response.data.deletedRecords;
+      const deletedScreenCount = response.data.deletedObjects.length;
+      toast.success(
+        deletedScreenCount > 1 || options.deleteRelated
+          ? t("Se eliminaron %{value0} pantallas y %{value1} registros", {
+              value0: deletedScreenCount,
+              value1: deletedRecords,
+            })
+          : deletedRecords > 0
+            ? t(
+                "Se eliminaron %{value0} registros de la pantalla «%{value1}»",
+                {
+                  value0: deletedRecords,
+                  value1: target.label,
+                },
+              )
+            : t("Pantalla «%{value0}» eliminada permanentemente", {
+                value0: target.label,
+              }),
+      );
+      if (deletedNames.has(selected)) {
+        const remaining = objects.filter(
+          (item) => !deletedNames.has(item.name),
+        );
+        const nextVisible = sortScreens(
+          remaining.filter((item) => !item.config.studio?.screen?.hidden),
+        )[0];
+        navigate(nextVisible?.name ?? remaining[0]?.name ?? selected, "admin");
+      }
+    } catch (error) {
+      toast.error((error as Error).message);
+      throw error;
+    }
+  };
+  useEffect(() => {
+    if (!embedded) return;
+    const refreshObjects = () => {
+      void activeQueryClient.invalidateQueries();
+    };
+    window.addEventListener("savia-studio-objects-changed", refreshObjects);
+    return () =>
+      window.removeEventListener(
+        "savia-studio-objects-changed",
+        refreshObjects,
+      );
+  }, [activeQueryClient, embedded]);
+  useEffect(() => {
+    if (!object || view !== "designer") return;
+    const capabilities = collectionCapabilities(object);
+    if (!capabilities.schema && !capabilities.customFields)
+      navigate(object.name, "records", { configure: "form" });
+  }, [object, view]);
+  if (view === "request-page-generator" && ready)
+    return (
+      <main className="page-content">
+        <Suspense fallback={<Loading />}>
+          <RequestPageGenerator
+            onCreated={async (created) => {
+              await refresh();
+              navigate(created.name, "records");
+            }}
+          />
+        </Suspense>
+      </main>
+    );
+  if (bootError)
+    return (
+      <div className="fatal">
+        <Leaf />
+        <h1>{t("No pudimos conectar con Studio")}</h1>
+        <p>{bootError}</p>
+        <Button onClick={() => window.location.reload()}>
+          {t("Reintentar")}
+        </Button>
+      </div>
+    );
+  const domainContent =
+    view === "integrations" ? (
+      <Suspense fallback={<Loading />}>
+        <CollectionSourcesPanel
+          onBound={async (bound) => {
+            await activeQueryClient.invalidateQueries({
+              queryKey: getListObjectsQueryKey(),
+            });
+            navigate(bound.name, "admin-screen");
+          }}
+          onImported={(name) => {
+            refresh();
+            navigate(name);
+          }}
+          initialSection="integrations"
+        />
+      </Suspense>
+    ) : view === "operations" ? (
+      <Suspense fallback={<Loading />}>
+        <Operations
+          objects={objects}
+          tab={location.get("tab") ?? "tasks"}
+          onTabChange={selectTab}
+        />
+      </Suspense>
+    ) : view === "audit" ? (
+      <Audit />
+    ) : null;
+  if (!object)
+    return objectsQuery.error ? (
+      <div role="alert">{(objectsQuery.error as Error).message}</div>
+    ) : !ready || objectsQuery.isPending ? (
+      <Loading />
+    ) : (
+      <main className="page-content">
+        {domainContent ??
+          (view === "collection-sources" ? (
+            <>
+              <Suspense fallback={<Loading />}>
+                <CollectionSourcesPanel
+                  onBound={async (bound) => {
+                    await activeQueryClient.invalidateQueries({
+                      queryKey: getListObjectsQueryKey(),
+                    });
+                    navigate(bound.name, "admin-screen");
+                  }}
+                  onImported={(name) => {
+                    refresh();
+                    navigate(name);
+                  }}
+                  initialSection={location.get("tab") ?? undefined}
+                />
+              </Suspense>
+            </>
+          ) : (
+            <Suspense fallback={<Loading />}>
+              <ScreenAdministration
+                objects={[]}
+                selected={selected}
+                detail={false}
+                tenantTools={true}
+                onNavigate={navigate}
+                onVisibilityChange={updateScreenVisibility}
+                menuLayout={resolvedMenuLayout}
+                onMenuLayoutChange={saveMenuLayout}
+                onDeletePermanent={deleteScreenPermanently}
+                onLoadDeletionPreview={loadScreenDeletionPreview}
+                onSolutionsChanged={refresh}
+                extensions={extensionInstallations}
+                tab={
+                  location.get("tab") === "extensions"
+                    ? "extensions"
+                    : location.get("tab") === "packages"
+                      ? "packages"
+                      : "screens"
+                }
+                onTabChange={selectTab}
+              />
+            </Suspense>
+          ))}
+        {newObject && (
+          <NewObject
+            initialMode={
+              view === "import-spreadsheet" ? "spreadsheet" : "blank"
+            }
+            onClose={() => {
+              setNewObject(false);
+              navigate(selected, "admin");
+            }}
+            onCreated={async (name, createdObject) => {
+              if (createdObject) {
+                activeQueryClient.setQueryData(
+                  getListObjectsQueryKey(),
+                  (
+                    previous:
+                      | {
+                          data: StudioObject[];
+                          menuLayout?: ScreenMenuLayout | null;
+                        }
+                      | undefined,
+                  ) => {
+                    const prevList = previous?.data ?? [];
+                    return previous
+                      ? {
+                          ...previous,
+                          data: prevList.some(
+                            (item) => item.name === createdObject.name,
+                          )
+                            ? prevList.map((item) =>
+                                item.name === createdObject.name
+                                  ? createdObject
+                                  : item,
+                              )
+                            : [...prevList, createdObject],
+                        }
+                      : { data: [createdObject], menuLayout: null };
+                  },
+                );
+              }
+              setNewObject(false);
+              navigate(name, "designer");
+              void activeQueryClient.refetchQueries({
+                queryKey: getListObjectsQueryKey(),
+              });
+            }}
+          />
+        )}
+      </main>
+    );
+  const capabilities = collectionCapabilities(object);
+  const closeEditor = () => {
+    setEditing(null);
+    setDuplicate(null);
+    if (view === "create" || view === "edit") navigate(object.name);
+  };
+  const editorSurface = recordSurface(
+    object,
+    editing === "new" || view === "create" ? "create" : "edit",
+  );
+  const copying = editing === "new" && duplicate?.object === object.name;
+  const recordEditor =
+    editing &&
+    (editing === "new" ? capabilities.create : capabilities.update) ? (
+      <Modal
+        page={editorSurface === "page"}
+        drawer={isDrawerSurface(editorSurface)}
+        drawerLong={editorSurface === "drawer-long"}
+        conversational={
+          !!object.config.studio?.wizard?.enabled &&
+          object.config.studio.wizard.presentation !== "steps"
+        }
+        title={
+          editing === "new"
+            ? `${copying ? t("Duplicar registro") : t("Nuevo registro")} · ${object.label}`
+            : String(editing.name ?? t("Editar registro"))
+        }
+        description={
+          editing === "new"
+            ? copying
+              ? t(
+                  "Se copiaron los campos simples editables. Se excluyen identificadores, propietarios, fechas de auditoría, campos únicos, ocultos o calculados, archivos y relaciones. Revisa los datos antes de guardar. Al cerrar se descarta esta copia.",
+                )
+              : t("Completa los datos. Los campos con * son obligatorios.")
+            : t("Edita los datos y guarda tus cambios.")
+        }
+        onClose={closeEditor}
+      >
+        {editing !== "new" && <RecordOriginLinks record={editing} />}
+        <DynamicForm
+          key={writeKey}
+          ephemeralDraft={copying}
+          object={object}
+          values={
+            editing === "new" ? (copying ? duplicate.values : {}) : editing
+          }
+          onCancel={editorSurface === "page" ? undefined : closeEditor}
+          onSave={async (data, previous, relations, saveOptions) => {
+            if (object.config.studio?.collection)
+              data = Object.fromEntries(
+                Object.entries(data).filter(
+                  ([key]) => !object.config.fields[key]?.readOnly,
+                ),
+              );
+            const target =
+              previous ?? (editing === "new" ? undefined : editing);
+            const creating = !target;
+            if (relations)
+              return saveRelatedRecords(
+                object.name,
+                data,
+                target,
+                relations,
+                saveOptions?.idempotencyKey ?? writeKey,
+              );
+            const result = await api<{ data: StudioRecord }>(
+              `/records/${object.name}${creating ? "" : "/" + target.id}`,
+              creating ? "POST" : "PATCH",
+              creating ? data : { ...data, _version: target._version },
+              creating ? { headers: { "Idempotency-Key": writeKey } } : {},
+            );
+            return result.data;
+          }}
+          onDiscardTemporaryAttachments={deleteTemporaryR2Attachments}
+          onPersistTemporaryAttachments={(record, attachments) =>
+            attachTemporaryR2Attachments(record.id, attachments)
+          }
+          onUploadTemporaryAttachment={(field, file) =>
+            uploadTemporaryR2Attachment(object.name, field, file)
+          }
+          onSaved={(saved) => {
+            toast.success(
+              saved && saved._localPending
+                ? t("Guardado en este dispositivo · sincronización pendiente")
+                : editing === "new"
+                  ? t("Registro creado")
+                  : t("Cambios guardados"),
+            );
+            closeEditor();
+            refresh();
+            if (
+              getStudioRuntime().tenantId === 0 &&
+              (object.name === "agencias" ||
+                object.name === "tenants" ||
+                object.name === "organizations" ||
+                object.name === "organizaciones")
+            )
+              window.dispatchEvent(new Event("savia-studio-tenants-changed"));
+          }}
+        />
+        {editing !== "new" && (
+          <DeleteRecord
+            object={object}
+            record={editing}
+            onDeleted={() => {
+              closeEditor();
+              closeRecord();
+              refresh();
+            }}
+          />
+        )}
+      </Modal>
+    ) : null;
+  return (
+    <div className="app-shell">
+      <StudioRealtimeBridge />
+      {!embedded ? (
+        <aside className={"sidebar " + (mobile ? "is-open" : "")}>
+          <a className="brand" href="?object=opportunity">
+            <span className="brand-symbol">
+              <Leaf size={25} />
+            </span>
+            <span>
+              {t("savia")}
+              <span className="brand-dot">.</span>
+            </span>
+            <span className="studio-label">{t("Studio")}</span>
+          </a>
+          <div className="workspace-switch">
+            <span className="workspace-icon">S</span>
+            <div>
+              <strong>{t("Espacio de Savia")}</strong>
+              <span>{t("Demostración local")}</span>
+            </div>
+            <span className="workspace-status" />
+          </div>
+          <p className="nav-caption">{t("Tu negocio")}</p>
+          <nav aria-label={t("Módulos de Studio")}>
+            {menuBlocks.map((block) => (
+              <Fragment key={block.kind === "section" ? block.id : "ungrouped"}>
+                {block.kind === "section" ? (
+                  <p className="nav-section-caption">{block.label}</p>
+                ) : null}
+                {block.objects.map((o) => {
+                  const Icon = icons[o.name] ?? Boxes;
+                  return (
+                    <div className="nav-screen" key={o.name}>
+                      <button
+                        className={
+                          "nav-item " +
+                          (selected === o.name &&
+                          (view === "records" ||
+                            view === "create" ||
+                            view === "edit")
+                            ? "active"
+                            : "")
+                        }
+                        onClick={() => navigate(o.name)}
+                      >
+                        <Icon size={18} />
+                        <span>{o.label}</span>
+                        <span className="nav-count">{o.count ?? 0}</span>
+                      </button>
+                      <button
+                        className="nav-screen-delete"
+                        aria-label={t("Eliminar pantalla %{value0}", {
+                          value0: o.label,
+                        })}
+                        title={t("Eliminar pantalla %{value0}", {
+                          value0: o.label,
+                        })}
+                        onClick={() => navigate(o.name, "remove-screen")}
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </div>
+                  );
+                })}
+              </Fragment>
+            ))}
+          </nav>
+          <button
+            className="nav-item"
+            onClick={() => navigate(selected, "admin")}
+          >
+            <SlidersHorizontal size={18} /> {t("Administrar")}
+          </button>
+          <button
+            className={
+              "nav-item " + (view === "service-credentials" ? "active" : "")
+            }
+            onClick={() => navigate(selected, "service-credentials")}
+          >
+            <KeyRound size={18} /> {t("Claves y servicios")}
+          </button>
+          <div className="sidebar-bottom">
+            <div className="storage-note">
+              <Database size={15} />
+              <span>{t("Datos persistidos en D1")}</span>
+              <span className="live-dot" />
+            </div>
+            <div className="profile">
+              <span className="avatar">{t("SV")}</span>
+              <div>
+                <strong>{t("Equipo Savia")}</strong>
+                <span>{t("Sesión de demostración")}</span>
+              </div>
+              <PanelLeftClose size={17} />
+            </div>
+          </div>
+        </aside>
+      ) : null}
+      {!embedded && mobile ? (
+        <button
+          className="sidebar-backdrop"
+          aria-label={t("Cerrar menú")}
+          onClick={() => setMobile(false)}
+        />
+      ) : null}
+      <main className="main">
+        {!embedded ? (
+          <header className="topbar">
+            <div className="breadcrumb">
+              <button
+                className="mobile-menu"
+                aria-label={t("Abrir menú")}
+                onClick={() => setMobile(true)}
+              >
+                <Menu size={20} />
+              </button>
+              <span>{t("Espacio de Savia")}</span>
+              <ChevronRight size={14} />
+              <strong>
+                {view === "records" || view === "create" || view === "edit"
+                  ? object.label
+                  : view === "collection-sources"
+                    ? t("Fuentes y colecciones")
+                    : view === "designer"
+                      ? t("Diseñador")
+                      : view === "integrations"
+                        ? t("Integraciones")
+                        : view === "service-credentials"
+                          ? t("Claves y servicios")
+                          : view === "operations"
+                            ? t("Operaciones")
+                            : view === "screens" || view === "remove-screen"
+                              ? t("Pantallas")
+                              : view === "screen-public-link"
+                                ? t("Enlace público")
+                                : view.startsWith("admin")
+                                  ? t("Administración")
+                                  : t("Historial")}
+              </strong>
+            </div>
+            <span className="demo-label">
+              <span className="live-dot" /> {t("Entorno de prueba")}
+            </span>
+          </header>
+        ) : null}
+        <div className="page-content">
+          {domainContent ? (
+            domainContent
+          ) : view.startsWith("admin") || view === "new-object" ? (
+            <Suspense fallback={<Loading />}>
+              <ScreenAdministration
+                key={`${view}:${selected}`}
+                objects={objects}
+                selected={selected}
+                detail={view === "admin-screen"}
+                tenantTools={true}
+                onNavigate={navigate}
+                onVisibilityChange={updateScreenVisibility}
+                menuLayout={resolvedMenuLayout}
+                onMenuLayoutChange={saveMenuLayout}
+                onDeletePermanent={deleteScreenPermanently}
+                onLoadDeletionPreview={loadScreenDeletionPreview}
+                onSolutionsChanged={refresh}
+                extensions={extensionInstallations}
+                tab={
+                  location.get("tab") === "extensions"
+                    ? "extensions"
+                    : location.get("tab") === "packages"
+                      ? "packages"
+                      : "screens"
+                }
+                onTabChange={selectTab}
+              />
+            </Suspense>
+          ) : storeScreen ? (
+            <CustomPluginFrame
+              pluginId={storeScreen.extensionId}
+              installationVersion={
+                extensionInstallations?.find(
+                  (entry) => entry.manifest.id === storeScreen.extensionId,
+                )?.installed?.version
+              }
+              title={object?.label ?? storeScreen.object}
+              screen={{ object: storeScreen.object, view: storeScreen.view }}
+            />
+          ) : ExtensionScreen ? (
+            <ExtensionScreen savia={extensionApi!} />
+          ) : view === "create" || view === "edit" ? (
+            (recordEditor ?? <Loading />)
+          ) : view === "screens" ||
+            view === "remove-screen" ||
+            view === "screen-settings" ? (
+            <div className="screens-page">
+              <div className="page-heading">
+                <div>
+                  <p className="eyebrow">{t("Tu negocio")}</p>
+                  <div className="page-heading-title-row">
+                    <h1>
+                      {removeScreen
+                        ? t("Eliminar pantalla · %{value0}", {
+                            value0: removeScreen.label,
+                          })
+                        : view === "screen-settings"
+                          ? t("Presentación")
+                          : t("Gestionar pantallas")}
+                    </h1>
+                    {view !== "screen-settings" ? (
+                      <StudioHelpTooltip
+                        label={t("Ayuda sobre gestionar pantallas")}
+                      >
+                        {t(
+                          "Reordena el menú de Tu negocio, crea secciones, activa u oculta pantallas y configura cómo se abren sus formularios.",
+                        )}
+                      </StudioHelpTooltip>
+                    ) : null}
+                  </div>
+                </div>
+                {view === "screen-settings" ? (
+                  <select
+                    aria-label={t("Pantalla a configurar")}
+                    className="select-input screen-presentation-picker"
+                    disabled={!objects.length}
+                    value={selected}
+                    onChange={(event) =>
+                      navigate(event.target.value, "screen-settings")
+                    }
+                  >
+                    {sortScreens(objects).map((item) => (
+                      <option key={item.name} value={item.name}>
+                        {item.label}
+                        {item.config.studio?.screen?.hidden
+                          ? t(" · Oculta")
+                          : ""}
+                      </option>
+                    ))}
+                  </select>
+                ) : null}
+              </div>
+              {view === "screens" ? (
+                <Tabs
+                  value={screensTab}
+                  onValueChange={(val) => selectTab(val as "menu" | "screens")}
+                  className="w-full space-y-4"
+                >
+                  <TabsList className="bg-muted/70 p-1 rounded-xl h-10">
+                    <TabsTrigger
+                      value="menu"
+                      className="gap-2 px-3.5 py-1.5 text-xs font-medium rounded-lg data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs transition-all"
+                    >
+                      <GripVertical className="size-3.5" aria-hidden="true" />
+                      {t("Orden del menú")}
+                    </TabsTrigger>
+                    <TabsTrigger
+                      value="screens"
+                      className="gap-2 px-3.5 py-1.5 text-xs font-medium rounded-lg data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-xs transition-all"
+                    >
+                      <Table2 className="size-3.5" aria-hidden="true" />
+                      {t("Pantallas")}
+                    </TabsTrigger>
+                  </TabsList>
+
+                  <TabsContent
+                    value="menu"
+                    className="m-0 focus-visible:outline-none"
+                  >
+                    <Suspense fallback={<Loading />}>
+                      <ScreenMenuReorder
+                        className="screen-manager-menu-reorder"
+                        objects={objects}
+                        menuLayout={resolvedMenuLayout}
+                        onMenuLayoutChange={saveMenuLayout}
+                      />
+                    </Suspense>
+                  </TabsContent>
+
+                  <TabsContent
+                    value="screens"
+                    className="m-0 focus-visible:outline-none"
+                  >
+                    <div className="savia-surface-card screen-manager-shell">
+                      <Suspense fallback={<Loading />}>
+                        <ScreenManager
+                          variant="table"
+                          objects={objects}
+                          onCancel={() => navigate(object.name, "screens")}
+                          onSaved={async (updated) => {
+                            activeQueryClient.setQueryData(
+                              getListObjectsQueryKey(),
+                              (previous: any) =>
+                                previous
+                                  ? {
+                                      ...previous,
+                                      data: previous.data.map(
+                                        (o: StudioObject) =>
+                                          o.name === updated.name
+                                            ? { ...o, ...updated }
+                                            : o,
+                                      ),
+                                    }
+                                  : previous,
+                            );
+                            await refresh();
+                            if (
+                              updated.config.studio?.screen?.hidden &&
+                              selected === updated.name
+                            ) {
+                              const next = objects.find(
+                                (o) =>
+                                  o.name !== updated.name &&
+                                  !o.config.studio?.screen?.hidden,
+                              );
+                              navigate(
+                                next?.name ?? updated.name,
+                                next ? "records" : "designer",
+                              );
+                            }
+                          }}
+                        />
+                      </Suspense>
+                    </div>
+                  </TabsContent>
+                </Tabs>
+              ) : (
+                <div className="savia-surface-card screen-manager-shell">
+                  <Suspense fallback={<Loading />}>
+                    <ScreenManager
+                      variant={view === "screen-settings" ? "detail" : "table"}
+                      objects={
+                        removeScreen
+                          ? [
+                              objects.find(
+                                (item) => item.name === removeScreen.name,
+                              ) ?? removeScreen,
+                            ]
+                          : view === "screen-settings"
+                            ? [object]
+                            : objects
+                      }
+                      initialRemoval={removeScreen?.name}
+                      onCancel={() =>
+                        navigate(
+                          object.name,
+                          view === "screen-settings"
+                            ? "admin-screen"
+                            : "screens",
+                          view === "screen-settings"
+                            ? undefined
+                            : { tab: "screens" },
+                        )
+                      }
+                      onSaved={async (updated) => {
+                        activeQueryClient.setQueryData(
+                          getListObjectsQueryKey(),
+                          (previous: any) =>
+                            previous
+                              ? {
+                                  ...previous,
+                                  data: previous.data.map((o: StudioObject) =>
+                                    o.name === updated.name
+                                      ? { ...o, ...updated }
+                                      : o,
+                                  ),
+                                }
+                              : previous,
+                        );
+                        await refresh();
+                        if (
+                          updated.config.studio?.screen?.hidden &&
+                          selected === updated.name
+                        ) {
+                          const next = objects.find(
+                            (o) =>
+                              o.name !== updated.name &&
+                              !o.config.studio?.screen?.hidden,
+                          );
+                          navigate(
+                            next?.name ?? updated.name,
+                            view === "screen-settings"
+                              ? "admin"
+                              : next
+                                ? "records"
+                                : "designer",
+                          );
+                        } else if (view === "remove-screen") {
+                          navigate(object.name, "screens", { tab: "screens" });
+                        }
+                      }}
+                    />
+                  </Suspense>
+                </div>
+              )}
+            </div>
+          ) : view === "screen-public-link" ? (
+            <div className="screens-page mx-auto w-full">
+              <div className="page-heading">
+                <div>
+                  <p className="eyebrow flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      className="hover:underline cursor-pointer"
+                      onClick={() => navigate(selected, "admin-screen")}
+                    >
+                      {object?.label ?? selected}
+                    </button>
+                    <span>·</span>
+                    <span>{t("Configuración")}</span>
+                  </p>
+                  <div className="page-heading-title-row">
+                    <h1>{t("Enlace público")}</h1>
+                    <StudioHelpTooltip
+                      label={t("Ayuda sobre enlaces públicos")}
+                    >
+                      {t(
+                        "Genera enlaces seguros para que personas externas envíen registros o soliciten cotizaciones sin iniciar sesión.",
+                      )}
+                    </StudioHelpTooltip>
+                  </div>
+                </div>
+                {publishableScreens.length > 1 && (
+                  <select
+                    aria-label={t("Pantalla a configurar")}
+                    className="select-input screen-presentation-picker"
+                    value={selected}
+                    onChange={(event) =>
+                      navigate(event.target.value, "screen-public-link")
+                    }
+                  >
+                    {publishableScreens.map((item) => (
+                      <option key={item.name} value={item.name}>
+                        {item.label}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+              {runtime.tenantId !== undefined && runtime.publicFormTransport ? (
+                <Suspense fallback={<Loading />}>
+                  <PublicLinkManager
+                    key={`${runtime.tenantId}:${selected}`}
+                    tenantId={runtime.tenantId}
+                    objectName={selected}
+                    kind={
+                      ["cotizador", "cotizador_por_pasos"].includes(selected)
+                        ? "quote"
+                        : "record"
+                    }
+                    request={runtime.publicFormTransport}
+                    screenTitle={object?.label}
+                    onBack={() => navigate(selected, "admin-screen")}
+                  />
+                </Suspense>
+              ) : (
+                <div className="savia-surface-card p-6 text-sm text-muted-foreground">
+                  {t(
+                    "No se pueden publicar enlaces todavía: falta configurar la verificación de seguridad. Contacta al administrador.",
+                  )}
+                </div>
+              )}
+            </div>
+          ) : view === "records" && object.config.studio?.requestPage ? (
+            <Suspense fallback={<Loading />}>
+              <RequestPage key={object.name} object={object} />
+            </Suspense>
+          ) : view === "records" || view === "new-object" ? (
+            <>
+              <div className="page-heading">
+                <div>
+                  <p className="eyebrow">{t("Relaciones que crecen")}</p>
+                  <h1>
+                    {object.label}
+                    {object.count !== undefined && (
+                      <span className="title-count">{object.count}</span>
+                    )}
+                  </h1>
+                  {object.description &&
+                    !/^(Colección existente:|Recurso JSON:API:)/.test(
+                      object.description,
+                    ) && <p>{object.description}</p>}
+                </div>
+                <div className="heading-actions">
+                  <CollectionFollow collection={object.name} />
+                  {capabilities.create && (
+                    <Button onClick={() => editRecord("new")}>
+                      <Plus size={17} />
+                      {t("Nuevo")}
+                    </Button>
+                  )}
+                </div>
+              </div>
+              <Suspense fallback={<Loading />}>
+                {capabilities.list ? (
+                  <Records
+                    key={object.name}
+                    object={object}
+                    onOpen={openRecord}
+                    initialConfigTab={
+                      location.get("configure") === "form" ? "form" : undefined
+                    }
+                  />
+                ) : (
+                  <p role="alert">
+                    {t("Esta colección no permite listar registros.")}
+                  </p>
+                )}
+              </Suspense>
+            </>
+          ) : view === "designer" ? (
+            <>
+              <div className="page-heading">
+                <div>
+                  <p className="eyebrow">{t("Tu Studio, a tu manera")}</p>
+                  <h1>{t("Diseña una vez. Úsalo siempre.")}</h1>
+                </div>
+                <select
+                  aria-label={t("Objeto a diseñar")}
+                  className="select-input"
+                  disabled={!designerObjects.length}
+                  value={
+                    designerObjects.find((o) => o.name === selected)?.name ??
+                    designerObjects[0]?.name ??
+                    ""
+                  }
+                  onChange={(e) => navigate(e.target.value, "designer")}
+                >
+                  {designerObjects.map((o) => (
+                    <option key={o.name} value={o.name}>
+                      {o.label}
+                      {o.config.studio?.screen?.hidden ? t(" · Oculta") : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <Suspense fallback={<Loading />}>
+                {designerObjects.length ? (
+                  <Designer
+                    object={
+                      designerObjects.find((o) => o.name === selected) ??
+                      designerObjects[0]
+                    }
+                    onSaved={refresh}
+                  />
+                ) : (
+                  <div className="empty-screens">
+                    <h2>{t("No hay pantallas activas")}</h2>
+                    <p>
+                      {t(
+                        "Crea un objeto o recupera una pantalla para diseñar su formulario.",
+                      )}
+                    </p>
+                    <Button onClick={() => navigate(selected, "screens")}>
+                      {t("Gestionar pantallas")}
+                    </Button>
+                  </div>
+                )}
+              </Suspense>
+            </>
+          ) : view === "screen-lookups" &&
+            objects.some((o) => o.name === selected) ? (
+            <Suspense fallback={<Loading />}>
+              <PluginLookupSettings
+                object={objects.find((o) => o.name === selected)!}
+                objects={objects}
+                fields={pluginLookupFields(selected, extensionInstallations)}
+                onSaved={refresh}
+                onBack={() => navigate(selected, "admin-screen")}
+              />
+            </Suspense>
+          ) : view === "relations" || view === "screen-relations" ? (
+            <Suspense fallback={<Loading />}>
+              <CollectionRelations
+                focusObject={view === "screen-relations" ? selected : undefined}
+                objects={objects}
+                onOpenCollection={(name: string) => navigate(name)}
+              />
+            </Suspense>
+          ) : view === "collection-sources" &&
+            isTenantApiBasePath(getStudioRuntime().apiBasePath) ? (
+            <Suspense fallback={<Loading />}>
+              <CollectionSourcesPanel
+                initialSection={location.get("tab") ?? undefined}
+                onBound={async (bound) => {
+                  await activeQueryClient.invalidateQueries({
+                    queryKey: getListObjectsQueryKey(),
+                  });
+                  navigate(bound.name);
+                }}
+              />
+            </Suspense>
+          ) : view === "service-credentials" ? (
+            <Suspense fallback={<Loading />}>
+              <ServiceCredentials
+                selected={selected}
+                tenantTools={true}
+                onNavigate={navigate}
+              />
+            </Suspense>
+          ) : (
+            <Audit
+              objectName={view === "screen-audit" ? selected : undefined}
+            />
+          )}
+        </div>
+        {!embedded ? (
+          <footer className="app-footer">
+            <span>{t("Savia Studio")}</span>
+            <span>{t("Entorno local · Guardado en el servidor")}</span>
+          </footer>
+        ) : null}
+      </main>
+      {newObject && (
+        <NewObject
+          initialMode={view === "import-spreadsheet" ? "spreadsheet" : "blank"}
+          onClose={() => {
+            setNewObject(false);
+            if (view === "new-object" || view === "import-spreadsheet")
+              navigate(object.name);
+          }}
+          onCreated={async (name, createdObject) => {
+            if (createdObject) {
+              activeQueryClient.setQueryData(
+                getListObjectsQueryKey(),
+                (
+                  previous:
+                    | {
+                        data: StudioObject[];
+                        menuLayout?: ScreenMenuLayout | null;
+                      }
+                    | undefined,
+                ) => {
+                  const prevList = previous?.data ?? [];
+                  return previous
+                    ? {
+                        ...previous,
+                        data: prevList.some(
+                          (item) => item.name === createdObject.name,
+                        )
+                          ? prevList.map((item) =>
+                              item.name === createdObject.name
+                                ? createdObject
+                                : item,
+                            )
+                          : [...prevList, createdObject],
+                      }
+                    : { data: [createdObject], menuLayout: null };
+                },
+              );
+            }
+            setNewObject(false);
+            navigate(name, "designer");
+            void activeQueryClient.refetchQueries({
+              queryKey: getListObjectsQueryKey(),
+            });
+          }}
+        />
+      )}
+      {recordId && capabilities.read && !editing && detailQuery.data && (
+        <Suspense fallback={<Loading />}>
+          <RecordDetail
+            key={`${object.name}:${recordId}`}
+            object={object}
+            record={detailQuery.data.data}
+            onEdit={editRecord}
+            onDuplicate={duplicateRecord}
+            onNavigate={(name, id) => navigate(name, "records", { record: id })}
+            onQuotation={(record) =>
+              navigate("cotizaciones", "records", { record: record.id })
+            }
+            onClose={closeRecord}
+            onRefresh={refresh}
+          />
+        </Suspense>
+      )}
+      {recordId && !editing && detailQuery.error && (
+        <Modal
+          title={t("Registro no disponible")}
+          description={detailQuery.error.message}
+          onClose={closeRecord}
+        >
+          <Button onClick={closeRecord}>{t("Volver a la lista")}</Button>
+        </Modal>
+      )}
+      {view !== "create" &&
+        view !== "edit" &&
+        view !== "screens" &&
+        view !== "remove-screen" &&
+        recordEditor}
+      {!embedded ? <Toaster position="bottom-right" richColors /> : null}
+    </div>
+  );
+}
+function DeleteRecord({
+  object,
+  record,
+  onDeleted,
+}: {
+  object: StudioObject;
+  record: StudioRecord;
+  onDeleted: () => void;
+}) {
+  const t = useMessages(automationMessages);
+
+  const hubspotArchive = isHubspotArchive(
+    object.config.studio?.collection?.sourceId,
+    object.config.studio?.collection?.kind,
+  );
+  const permanent = !supportsLocalRecordTools(object);
+  const [confirm, setConfirm] = useState(false),
+    [busy, setBusy] = useState(false);
+  if (!collectionCapabilities(object).delete) return null;
+  return (
+    <div className="delete-section">
+      {confirm ? (
+        <>
+          <span>
+            {hubspotArchive
+              ? t("¿Archivar este registro en HubSpot?")
+              : permanent
+                ? t(
+                    "¿Eliminar permanentemente este registro? Esta acción no se puede deshacer.",
+                  )
+                : t("¿Mover este registro a la papelera?")}
+          </span>
+          <Button variant="ghost" onClick={() => setConfirm(false)}>
+            {t("Cancelar")}
+          </Button>
+          <Button
+            variant="destructive"
+            disabled={busy}
+            onClick={async () => {
+              setBusy(true);
+              try {
+                await api(
+                  `/records/${object.name}/${record.id}?version=${record._version}`,
+                  "DELETE",
+                );
+                toast.success(
+                  hubspotArchive
+                    ? t("Registro archivado en HubSpot")
+                    : permanent
+                      ? t("Registro eliminado")
+                      : t("Registro movido a la papelera"),
+                );
+                onDeleted();
+              } catch (e) {
+                toast.error((e as Error).message);
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            {hubspotArchive
+              ? t("Archivar en HubSpot")
+              : permanent
+                ? t("Eliminar permanentemente")
+                : t("Mover a papelera")}
+          </Button>
+        </>
+      ) : (
+        <Button
+          variant="ghost"
+          className="delete-button"
+          onClick={() => setConfirm(true)}
+        >
+          <Trash2 size={15} />
+          {hubspotArchive
+            ? t("Archivar en HubSpot")
+            : permanent
+              ? t("Eliminar permanentemente")
+              : t("Mover a papelera")}
+        </Button>
+      )}
+    </div>
+  );
+}
+function NewObject({
+  onClose,
+  onCreated,
+  initialMode = "blank",
+}: {
+  onClose: () => void;
+  onCreated: (
+    name: string,
+    createdObject?: StudioObject,
+  ) => void | Promise<void>;
+  initialMode?: "spreadsheet" | "blank";
+}) {
+  const t = useMessages(automationMessages);
+
+  const [mode, setMode] = useState<"spreadsheet" | "blank">(initialMode);
+  const [name, setName] = useState(""),
+    [label, setLabel] = useState(""),
+    [description, setDescription] = useState(""),
+    [showInSidebar, setShowInSidebar] = useState(true),
+    [error, setError] = useState(""),
+    [busy, setBusy] = useState(false);
+
+  if (mode === "spreadsheet") {
+    return (
+      <CollectionImportWizard
+        onClose={onClose}
+        onCreated={onCreated}
+        onSwitchToBlank={() => setMode("blank")}
+      />
+    );
+  }
+
+  return (
+    <Modal
+      title={t("Crea un objeto a tu medida")}
+      description={t("Define una entidad y dale forma en el diseñador.")}
+      onClose={onClose}
+      dialogClassName="savia-crm-new-object-dialog"
+    >
+      <div className="flex items-center justify-between p-2.5 mb-4 bg-emerald-50/70 border border-emerald-200/80 rounded-lg">
+        <div className="flex items-center gap-2 text-xs text-emerald-900 font-medium">
+          <FileSpreadsheet size={16} className="text-emerald-700 shrink-0" />
+          <span>{t("¿Tienes un archivo Excel o CSV?")}</span>
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="text-xs h-7 gap-1 bg-white hover:bg-emerald-50 text-emerald-800 border-emerald-300 shadow-none font-semibold cursor-pointer"
+          onClick={() => setMode("spreadsheet")}
+        >
+          {t("Crear desde archivo")}
+        </Button>
+      </div>
+      <form
+        className="standard-form new-object-form"
+        onSubmit={async (e) => {
+          e.preventDefault();
+          setBusy(true);
+          setError("");
+          try {
+            const baseConfig = makeConfig({
+              name: { type: "Textbox", label: t("Nombre"), required: true },
+            });
+            const finalConfig = showInSidebar
+              ? baseConfig
+              : {
+                  ...baseConfig,
+                  studio: {
+                    screen: {
+                      hidden: true,
+                    },
+                  },
+                };
+            const res = await api<{ data: StudioObject }>("/objects", "POST", {
+              name,
+              label,
+              description,
+              config: finalConfig,
+            });
+            const createdObject: StudioObject = res?.data ?? {
+              name,
+              label,
+              description,
+              config: finalConfig,
+            };
+            toast.success(t("Objeto creado"));
+            await onCreated(name, createdObject);
+          } catch (e) {
+            setError((e as Error).message);
+          } finally {
+            setBusy(false);
+          }
+        }}
+      >
+        <div className="new-object-field">
+          <Label htmlFor="object-label">{t("Nombre visible")}</Label>
+          <Input
+            id="object-label"
+            placeholder={t("Nombre del objeto")}
+            value={label}
+            onChange={(e) => {
+              setLabel(e.target.value);
+              setName(
+                e.target.value
+                  .normalize("NFD")
+                  .replace(/[\u0300-\u036f]/g, "")
+                  .toLowerCase()
+                  .replace(/[^a-z0-9]+/g, "_"),
+              );
+            }}
+            required
+          />
+        </div>
+        <div className="new-object-field">
+          <Label htmlFor="object-name">{t("Identificador")}</Label>
+          <Input
+            id="object-name"
+            placeholder={t("nombre_del_objeto")}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            pattern="[a-z][a-z0-9_]{0,47}"
+            required
+          />
+        </div>
+        <div className="new-object-field">
+          <Label htmlFor="object-description">{t("Descripción")}</Label>
+          <Input
+            id="object-description"
+            placeholder={t("Describe qué gestionarás")}
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+          />
+        </div>
+        <div className="new-object-field new-object-sidebar-toggle">
+          <div className="flex items-center justify-between gap-3 pt-1">
+            <div className="space-y-0.5">
+              <Label
+                htmlFor="object-sidebar-toggle"
+                className="text-sm font-medium cursor-pointer"
+              >
+                {t("Mostrar en la barra lateral")}
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                {t(
+                  "Desactívalo si esta pantalla solo se llamará desde otras páginas o flujos.",
+                )}
+              </p>
+            </div>
+            <Switch
+              id="object-sidebar-toggle"
+              checked={showInSidebar}
+              onCheckedChange={setShowInSidebar}
+              disabled={busy}
+              aria-label={t("Mostrar en la barra lateral")}
+            />
+          </div>
+        </div>
+        {error && (
+          <p role="alert" className="error-message">
+            {error}
+          </p>
+        )}
+        <Button type="submit" disabled={busy} className="form-submit">
+          <Plus size={16} />
+          {busy ? t("Creando…") : t("Crear y diseñar")}
+        </Button>
+      </form>
+    </Modal>
+  );
+}
+export default function Root({
+  embedded = false,
+  search,
+  queryClient: sharedQueryClient,
+}: {
+  embedded?: boolean;
+  search?: string;
+  queryClient?: QueryClient;
+} = {}) {
+  const t = useMessages(automationMessages);
+  // Read the outer admin store directly: useAppLocale() falls back to the
+  // default ra-core I18nContext ("en") when there is no outer provider
+  // (unit tests, standalone Root), which would force English incorrectly.
+  const [outerLocaleRaw] = useStore<string>("locale", defaultAppLocale);
+  const outerLocale = isAppLocale(outerLocaleRaw)
+    ? outerLocaleRaw
+    : defaultAppLocale;
+
+  // El cliente conservado vive fuera de StudioRoot (por sesión+tenant).
+  // Solo se crea uno efímero cuando no se inyecta el compartido
+  // (tests, uso standalone). El compartido se reutiliza al volver al
+  // mismo dominio y nunca se vacía al desmontar.
+  const [ephemeralClient] = useState(() => createStudioQueryClient());
+  const queryClient = sharedQueryClient ?? ephemeralClient;
+  const isSharedClient = sharedQueryClient != null;
+  const [store] = useState(() => memoryStore({ locale: outerLocale }));
+  useEffect(() => {
+    store.setItem("locale", outerLocale);
+  }, [store, outerLocale]);
+  const [authorizationError, setAuthorizationError] = useState<string>();
+  useEffect(() => {
+    const workspace = getStudioRuntime().localWorkspace;
+    if (!workspace) return;
+    let previous = new Set<string>();
+    let active = true;
+    const unsubscribe = workspace.store.subscribeQueryChanges((change) => {
+      if (!active) return;
+      setAuthorizationError(change.authorizationError);
+      const before = previous;
+      previous = change.current;
+      if (change.authorizationError) {
+        void queryClient.cancelQueries();
+        queryClient.clear();
+        // Perder autorización vacía las consultas conservadas y obliga a
+        // preparar el tenant de nuevo en la próxima entrada.
+        const tenantId = getStudioRuntime().tenantId;
+        const owner = getStudioQueryOwner();
+        if (tenantId !== undefined && owner)
+          markStudioBootstrapFailed(`tenant:${tenantId}`, owner);
+        return;
+      }
+      void reconcileLocalQueries(
+        queryClient,
+        before,
+        change.current,
+        change.changed,
+      ).catch(() => undefined);
+      if (change.metadataChanged) {
+        void queryClient.invalidateQueries({ queryKey: ["/api/objects"] });
+      }
+    });
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [queryClient]);
+
+  // Conservar el cliente no debe dejar sincronizadores activos: la
+  // suscripción a LocalWorkspace siempre se cierra al salir, y el
+  // workspace lo cierra StudioWorkspace. Solo el cliente efímero se
+  // vacía al desmontar; el compartido se reutiliza al regresar.
+  useEffect(() => {
+    if (isSharedClient) return;
+    return () => {
+      void queryClient.cancelQueries();
+      queryClient.clear();
+    };
+  }, [isSharedClient, queryClient]);
+  if (authorizationError)
+    return (
+      <div role="alert">
+        {t(
+          "Tu acceso a este espacio cambió. Conecta y verifica tu sesión para continuar.",
+        )}
+      </div>
+    );
+  return (
+    <div className={embedded ? "savia-crm savia-embedded" : "savia-crm"}>
+      <CoreAdminContext
+        dataProvider={dataProvider}
+        queryClient={queryClient}
+        store={store}
+        i18nProvider={i18nProvider}
+      >
+        <ExtensionLocaleBridge>
+          <App embedded={embedded} search={search} />
+        </ExtensionLocaleBridge>
+      </CoreAdminContext>
+    </div>
+  );
+}

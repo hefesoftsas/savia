@@ -1,0 +1,38 @@
+{
+  "name": "@savia/plugin-ui",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./workbench": "./src/workbench.tsx",
+    "./editor": "./src/editor.tsx",
+    "./hosted-editor": "./src/hosted-record-editor.tsx",
+    "./record-picker": "./src/record-lookup.tsx",
+    "./integrations": "./src/integrations.tsx",
+    "./data": "./src/data.ts",
+    "./schema": "./src/schema.ts",
+    "./types": "./src/types.ts",
+    "./localization": "./src/localization.ts",
+    "./workbench.css": "./src/workbench.css"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@savia/studio-shared": "workspace:*",
+    "react": "^19.2.8"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.3",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.3",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/jest-dom": "^6.9.1",
+    "jsdom": "^28.1.0",
+    "react-dom": "^19.2.8",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.11"
+  }
+}

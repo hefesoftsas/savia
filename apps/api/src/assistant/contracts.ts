@@ -1,0 +1,46 @@
+export type ActiveScreenContext = {
+  route?: string;
+  entityType?: string;
+  entityId?: string;
+  summary?: string;
+  metadata?: Record<string, unknown>;
+};
+
+export type AssistantChatRequest = {
+  principalId: string;
+  authorization: string;
+  messages: unknown[];
+  employeeId?: string;
+  employeeHandle?: string;
+  inferEmployeeFromMentions?: boolean;
+  responseMode?: "text";
+  model?: string;
+  trustedContext?: {
+    kind: "recording" | "session";
+    title: string;
+    content: string;
+  };
+  activeScreenContext?: ActiveScreenContext;
+};
+
+export type AssistantActionRequest = {
+  actionId: string;
+  principalId: string;
+  authorization: string;
+};
+
+export type AssistantActionResult =
+  | { state: "completed"; result: unknown }
+  | { state: "failed" }
+  | { state: "cancelled" }
+  | { state: "unavailable" };
+
+export type AssistantService = {
+  chat(request: AssistantChatRequest): Promise<Response>;
+  confirmAction(
+    request: AssistantActionRequest,
+  ): Promise<AssistantActionResult>;
+  cancelAction(
+    request: Omit<AssistantActionRequest, "authorization">,
+  ): Promise<AssistantActionResult>;
+};

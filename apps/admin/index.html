@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Savia</title>
+    <!-- Un solo favicon descubierto por el parser (SVG moderno): el HAR
+         mostraba ico + 32 + 16 + svg descargados a la vez. El PNG de 32px
+         sigue en /public para el sidebar colapsado y el .ico como fallback
+         automático de navegadores viejos. -->
+    <link rel="icon" type="image/svg+xml" sizes="any" href="/favicon.svg" />
+    <link
+      rel="apple-touch-icon"
+      sizes="180x180"
+      href="/apple-touch-icon-v5.png"
+    />
+    <link rel="manifest" href="/site.webmanifest" />
+    <meta name="theme-color" content="#0d9488" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Savia" />
+    <meta name="application-name" content="Savia" />
+    <meta name="msapplication-TileColor" content="#0d9488" />
+    <style>
+      /* Static boot splash: first paint before JS loads. Mirrors PwaSplash. */
+      .savia-boot {
+        min-height: 100svh;
+        margin: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 1.25rem;
+        padding: 1.5rem;
+        background: #ffffff;
+        color: #737373;
+        font-family: "Avenir Next", "Helvetica Neue", system-ui, sans-serif;
+        font-size: 0.875rem;
+      }
+      html.dark .savia-boot {
+        background: #171717;
+        color: #a3a3a3;
+      }
+      .savia-boot-mark {
+        position: relative;
+        width: 6rem;
+        height: 6rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .savia-boot-mark img {
+        width: 4rem;
+        height: 4rem;
+        border-radius: 1rem;
+      }
+      .savia-boot-ring {
+        position: absolute;
+        inset: 0;
+        border-radius: 9999px;
+        background: conic-gradient(
+          from 0deg,
+          #0d9488 0 26%,
+          transparent 26% 100%
+        );
+        -webkit-mask: radial-gradient(
+          farthest-side,
+          transparent calc(100% - 4.5px),
+          #000 calc(100% - 4px)
+        );
+        mask: radial-gradient(
+          farthest-side,
+          transparent calc(100% - 4.5px),
+          #000 calc(100% - 4px)
+        );
+        animation: savia-boot-spin 0.9s linear infinite;
+      }
+      @keyframes savia-boot-spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .savia-boot-ring {
+          animation: none;
+        }
+      }
+    </style>
+    <script>
+      (function () {
+        var root = document.documentElement;
+        var themeColor = document.querySelector('meta[name="theme-color"]');
+
+        function syncThemeColor() {
+          if (themeColor) {
+            themeColor.setAttribute(
+              "content",
+              root.classList.contains("dark") ? "#171717" : "#0d9488",
+            );
+          }
+        }
+
+        try {
+          var raw = localStorage.getItem("savia.appearance");
+          if (raw) {
+            var appearance = JSON.parse(raw);
+            if (appearance && appearance.colorTheme) {
+              root.dataset.colorTheme = appearance.colorTheme;
+            }
+            if (
+              appearance &&
+              (appearance.theme === "dark" ||
+                (appearance.theme === "system" &&
+                  window.matchMedia("(prefers-color-scheme: dark)").matches))
+            ) {
+              root.classList.add("dark");
+            } else if (
+              appearance &&
+              (appearance.theme === "light" ||
+                (appearance.theme === "system" &&
+                  !window.matchMedia("(prefers-color-scheme: dark)").matches))
+            ) {
+              root.classList.remove("dark");
+            }
+          }
+        } catch (_) {}
+
+        syncThemeColor();
+        new MutationObserver(syncThemeColor).observe(root, {
+          attributes: true,
+          attributeFilter: ["class"],
+        });
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root">
+      <div class="savia-boot" role="status" aria-label="Cargando Savia">
+        <div class="savia-boot-mark">
+          <span class="savia-boot-ring" aria-hidden="true"></span>
+          <img src="/savia-splash-192-v1.png" alt="" width="64" height="64" />
+        </div>
+        <p>Cargando Savia…</p>
+      </div>
+    </div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

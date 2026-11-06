@@ -1,0 +1,281 @@
+{
+  "format": "savia.store",
+  "formatVersion": 1,
+  "collections": [
+    {
+      "object": {
+        "name": "insurance_document_generation",
+        "label": "Documentos y firma",
+        "description": "Genera documentos desde plantillas y gestiona solicitudes de firma.",
+        "config": {
+          "version": 2,
+          "fields": {
+            "name": {
+              "type": "Textbox",
+              "label": "Nombre",
+              "labels": {},
+              "required": true,
+              "config": {
+                "maxLength": 160
+              }
+            },
+            "template": {
+              "type": "Textarea",
+              "label": "Contenido",
+              "labels": {},
+              "required": true,
+              "config": {
+                "maxLength": 10000
+              }
+            },
+            "kind": {
+              "type": "Dropdown",
+              "label": "Tipo",
+              "labels": {},
+              "required": true,
+              "options": [
+                {
+                  "value": "template",
+                  "label": "Plantilla"
+                },
+                {
+                  "value": "document",
+                  "label": "Documento"
+                }
+              ],
+              "config": {}
+            },
+            "stage": {
+              "type": "Dropdown",
+              "label": "Estado",
+              "labels": {},
+              "options": [
+                {
+                  "value": "draft",
+                  "label": "Borrador"
+                },
+                {
+                  "value": "generated",
+                  "label": "Generado"
+                },
+                {
+                  "value": "requested",
+                  "label": "Firma solicitada"
+                },
+                {
+                  "value": "signed",
+                  "label": "Evidencia recibida"
+                }
+              ],
+              "config": {}
+            },
+            "signature_recipient": {
+              "type": "Textbox",
+              "label": "Correo del firmante",
+              "labels": {},
+              "config": {
+                "maxLength": 320
+              }
+            },
+            "signature_reference": {
+              "type": "Textbox",
+              "label": "Referencia de firma",
+              "labels": {},
+              "config": {
+                "maxLength": 200
+              }
+            },
+            "artifact_file_id": {
+              "type": "Textbox",
+              "label": "Archivo generado",
+              "labels": {},
+              "config": {
+                "maxLength": 200
+              }
+            },
+            "artifact_file_version": {
+              "type": "Number",
+              "label": "Versión del archivo generado",
+              "labels": {},
+              "config": {
+                "minimum": 1,
+                "maximum": 90000000000
+              }
+            },
+            "signed_at": {
+              "type": "Textbox",
+              "label": "Fecha de firma",
+              "labels": {},
+              "config": {
+                "maxLength": 100
+              }
+            },
+            "evidence_url": {
+              "type": "Textbox",
+              "label": "Evidencia de firma",
+              "labels": {},
+              "config": {
+                "maxLength": 2000
+              }
+            }
+          },
+          "fieldOrder": [
+            "name",
+            "template",
+            "kind",
+            "stage",
+            "signature_recipient",
+            "signature_reference",
+            "artifact_file_id",
+            "artifact_file_version",
+            "signed_at",
+            "evidence_url"
+          ]
+        }
+      },
+      "requiredFields": {
+        "name": {
+          "types": [
+            "Textbox"
+          ],
+          "required": true
+        },
+        "template": {
+          "types": [
+            "Textarea"
+          ],
+          "required": true
+        },
+        "kind": {
+          "types": [
+            "Dropdown"
+          ],
+          "required": true,
+          "optionValues": [
+            "template",
+            "document"
+          ]
+        },
+        "stage": {
+          "types": [
+            "Dropdown"
+          ],
+          "optionValues": [
+            "draft",
+            "generated",
+            "requested",
+            "signed"
+          ]
+        },
+        "signature_recipient": {
+          "types": [
+            "Textbox"
+          ]
+        },
+        "signature_reference": {
+          "types": [
+            "Textbox"
+          ]
+        },
+        "artifact_file_id": {
+          "types": [
+            "Textbox"
+          ]
+        },
+        "artifact_file_version": {
+          "types": [
+            "Number"
+          ]
+        },
+        "signed_at": {
+          "types": [
+            "Textbox"
+          ]
+        },
+        "evidence_url": {
+          "types": [
+            "Textbox"
+          ]
+        }
+      }
+    }
+  ],
+  "screens": [
+    {
+      "object": "insurance_document_generation",
+      "view": "records"
+    }
+  ],
+  "connectors": [
+    {
+      "id": "insurance.document-generation.gateway",
+      "label": "Conexión de integración",
+      "secretFields": [
+        "token"
+      ],
+      "configSchema": {
+        "type": "object",
+        "required": [
+          "endpoint",
+          "token"
+        ],
+        "properties": {
+          "endpoint": {
+            "type": "string"
+          },
+          "token": {
+            "type": "string"
+          }
+        }
+      },
+      "allowedHosts": [],
+      "allowConfiguredHost": true
+    }
+  ],
+  "actions": [
+    {
+      "id": "request-signature",
+      "kind": "http",
+      "connector": "insurance.document-generation.gateway",
+      "request": {
+        "method": "POST",
+        "url": "{{connection.endpoint}}",
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer {{connection.token}}",
+          "Idempotency-Key": "{{tenant}}:{{extension}}:{{action}}:{{input.operationKey}}"
+        },
+        "body": {
+          "version": 1,
+          "extensionId": "{{extension}}",
+          "actionId": "{{action}}",
+          "tenantId": "{{tenant}}",
+          "principalId": "{{principal}}",
+          "payload": "{{input.payload}}"
+        }
+      }
+    },
+    {
+      "id": "signature-status",
+      "kind": "http",
+      "connector": "insurance.document-generation.gateway",
+      "request": {
+        "method": "POST",
+        "url": "{{connection.endpoint}}",
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer {{connection.token}}",
+          "Idempotency-Key": "{{tenant}}:{{extension}}:{{action}}:{{input.operationKey}}"
+        },
+        "body": {
+          "version": 1,
+          "extensionId": "{{extension}}",
+          "actionId": "{{action}}",
+          "tenantId": "{{tenant}}",
+          "principalId": "{{principal}}",
+          "payload": "{{input.payload}}"
+        }
+      }
+    }
+  ]
+}

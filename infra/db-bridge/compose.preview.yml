@@ -1,0 +1,70 @@
+name: savia-db-bridge-preview
+services:
+  bridge:
+    image: ${DB_BRIDGE_IMAGE:?Set the tested image tag}
+    restart: unless-stopped
+    environment:
+      DB_BRIDGE_HOST: 0.0.0.0
+      DB_BRIDGE_SHARED_SECRET: ${DB_BRIDGE_SHARED_SECRET:?Set a unique preview secret}
+      DB_BRIDGE_ALLOWED_HOSTS: postgres,mysql,mssql,mongodb
+    ports:
+      - "127.0.0.1:8791:8791"
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    healthcheck:
+      test:
+        [
+          CMD,
+          node,
+          -e,
+          "fetch('http://127.0.0.1:8791/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+  tunnel:
+    image: cloudflare/cloudflared:2026.9.0
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:?Set the dedicated preview tunnel token}
+    depends_on:
+      bridge:
+        condition: service_healthy
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: ${FIXTURE_PASSWORD:?Set a random fixture password}
+      POSTGRES_DB: savia_preview_fixture
+    volumes: [postgres-data:/var/lib/postgresql/data]
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${FIXTURE_PASSWORD}
+      MYSQL_DATABASE: savia_preview_fixture
+    volumes: [mysql-data:/var/lib/mysql]
+  mongodb:
+    image: mongo:8
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: savia_fixture
+      MONGO_INITDB_ROOT_PASSWORD: ${FIXTURE_PASSWORD}
+    volumes: [mongo-data:/data/db]
+  mssql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    restart: unless-stopped
+    environment:
+      ACCEPT_EULA: Y
+      MSSQL_PID: Developer
+      MSSQL_SA_PASSWORD: ${FIXTURE_PASSWORD}
+      MSSQL_MEMORY_LIMIT_MB: 2048
+    volumes: [mssql-data:/var/opt/mssql]
+volumes:
+  postgres-data:
+  mysql-data:
+  mongo-data:
+  mssql-data:

@@ -1,0 +1,14 @@
+import type { ExtensionManifest } from "@savia/studio-shared/extension-package";
+export const manifest = {
+  format: "savia.extension",
+  formatVersion: 1,
+  id: "insurance.data-quality",
+  version: "1.0.0",
+  label: "Importación y calidad",
+  description:
+    "Valida datos, detecta duplicados e importa registros con revisión previa.",
+  labels: {"en": "Import and data quality", "pt": "Importação e qualidade"},
+  descriptions: {"en": "Validate data, detect duplicates and import records after review.", "pt": "Valide dados, detecte duplicatas e importe registros após revisão."},
+  requires: [],
+  apiVersion: 1,
+} satisfies ExtensionManifest;

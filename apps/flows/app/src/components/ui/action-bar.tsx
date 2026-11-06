@@ -1,0 +1,106 @@
+import React from "react";
+
+import { Button } from "@/components/ui/button";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { cn } from "@/utils/utils";
+
+export interface ActionBarGroupProps {
+  children: React.ReactNode;
+  vertical?: boolean;
+  className?: string;
+}
+
+export function ActionBarGroup({
+  children,
+  vertical = false,
+  className = "",
+}: ActionBarGroupProps) {
+  const baseClasses =
+    "backdrop-blur-xs border border-neutral-200 dark:border-neutral-700 rounded-lg shadow-sm";
+  const horizontalClasses =
+    "flex items-center [&>*:first-child]:rounded-l-lg [&>*:first-child]:rounded-r-none [&>*:last-child]:rounded-r-lg [&>*:last-child]:rounded-l-none [&>*:only-child]:rounded-lg [&>*:not(:last-child)]:border-r [&>*:not(:last-child)]:border-neutral-200 dark:[&>*:not(:last-child)]:border-neutral-700";
+  const verticalClasses =
+    "flex flex-col items-center [&>*:first-child]:rounded-t-lg [&>*:first-child]:rounded-b-none [&>*:last-child]:rounded-b-lg [&>*:last-child]:rounded-t-none [&>*:only-child]:rounded-lg [&>*:not(:last-child)]:border-b [&>*:not(:last-child)]:border-neutral-200 dark:[&>*:not(:last-child)]:border-neutral-700";
+
+  return (
+    <div
+      className={cn(
+        baseClasses,
+        vertical ? verticalClasses : horizontalClasses,
+        className,
+      )}
+    >
+      {children}
+    </div>
+  );
+}
+
+/**
+ * Shape and size shared by every button in an action bar. Exported because a
+ * button that has to be its own trigger (a dropdown, a tooltip) cannot go
+ * through {@link ActionBarButton}, which owns its own `onClick`.
+ */
+export const actionBarButtonBaseClassName = "h-10 px-3 rounded-none border-0";
+
+/** The default, unaccented look. Colored variants pass their own instead. */
+export const actionBarButtonOutlineClassName =
+  "bg-white hover:bg-neutral-50 text-neutral-600 dark:bg-neutral-900 dark:hover:bg-neutral-800 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-200";
+
+/** The selected look for toggle-style buttons: the outline style, committed. */
+export const actionBarButtonActiveClassName =
+  "bg-neutral-100 text-neutral-900 hover:bg-neutral-100 dark:bg-neutral-800 dark:text-neutral-100 dark:hover:bg-neutral-800";
+
+export interface ActionBarButtonProps {
+  onClick: (e: React.MouseEvent) => void;
+  disabled?: boolean;
+  className?: string;
+  tooltip?: React.ReactNode;
+  accessibleName?: string;
+  children: React.ReactNode;
+  tooltipSide?: "top" | "bottom" | "left" | "right";
+}
+
+export function ActionBarButton({
+  onClick,
+  disabled = false,
+  className = "",
+  tooltip,
+  accessibleName,
+  children,
+  tooltipSide = "top",
+}: ActionBarButtonProps) {
+  const trigger = (
+    <Button
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={
+        accessibleName ?? (typeof tooltip === "string" ? tooltip : undefined)
+      }
+      className={cn(
+        actionBarButtonBaseClassName,
+        "disabled:opacity-100!",
+        className,
+        {
+          "cursor-not-allowed": disabled,
+        },
+      )}
+    >
+      <span className={cn({ "opacity-50": disabled })}>{children}</span>
+    </Button>
+  );
+  if (!tooltip) {
+    return trigger;
+  }
+  return (
+    <Tooltip delayDuration={0}>
+      <div className="rounded-none overflow-hidden">
+        <TooltipTrigger asChild>{trigger}</TooltipTrigger>
+        <TooltipContent side={tooltipSide}>{tooltip}</TooltipContent>
+      </div>
+    </Tooltip>
+  );
+}

@@ -1,0 +1,1 @@
+CREATE TABLE tenant_booking_agenda_grants (tenant_id BIGINT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE, principal_id TEXT NOT NULL REFERENCES identity_principal(id) ON DELETE CASCADE, config TEXT NOT NULL CHECK(json_valid(config) AND json_type(config)='object'), PRIMARY KEY(tenant_id,principal_id));

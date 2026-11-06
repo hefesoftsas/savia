@@ -1,0 +1,49 @@
+{
+  "format": "savia.store",
+  "formatVersion": 1,
+  "collections": [
+    {
+      "object": {
+        "name": "insurance_settlements",
+        "label": "Liquidaciones",
+        "description": "Calcula participaciones y estados de liquidación.",
+        "config": {
+          "version": 2,
+          "fields": {
+            "name": {
+              "type": "Textbox",
+              "label": "Referencia",
+              "labels": {},
+              "required": true,
+              "config": {
+                "maxLength": 200
+              }
+            }
+          },
+          "fieldOrder": [
+            "name"
+          ]
+        }
+      },
+      "requiredFields": {
+        "name": {
+          "types": [
+            "Textbox"
+          ],
+          "required": true
+        }
+      }
+    }
+  ],
+  "screens": [
+    {
+      "object": "insurance_settlements",
+      "view": "records"
+    }
+  ],
+  "settings": {
+    "defaults": {
+      "batches": []
+    }
+  }
+}

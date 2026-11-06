@@ -1,0 +1,587 @@
+// @vitest-environment-options {"url":"https://savia-preview.hefesoft.com/"}
+import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { App } from "@/app";
+import type { AppServices } from "@/app-services";
+import { ApiClientError } from "@/api/api-client";
+import { invalidateTenantWorkspaces } from "@/api/tenant-workspaces-client";
+
+const originalElementScrollTo = Object.getOwnPropertyDescriptor(
+  HTMLElement.prototype,
+  "scrollTo",
+);
+
+const tenant = {
+  id: 101,
+  name: "Comunidad",
+  idSlug: "comunidad",
+  isActive: true,
+  agencyId: null,
+  createdAt: "2026-09-09",
+  updatedAt: "2026-09-09",
+  kind: "commercial" as const,
+};
+const platformTenant = {
+  id: 0,
+  name: "Plataforma Savia",
+  idSlug: "savia-platform",
+  isActive: true,
+  agencyId: null,
+  createdAt: "2026-09-09",
+  updatedAt: "2026-09-09",
+  kind: "platform" as const,
+};
+function services() {
+  return {
+    authSession: {
+      checkSession: vi.fn(),
+      getPermissions: vi
+        .fn()
+        .mockResolvedValue({ memberships: [], canManageIdentity: true }),
+      getIdentity: vi.fn(),
+    },
+    authProvider: {
+      checkAuth: vi.fn().mockResolvedValue(undefined),
+      checkError: vi.fn(),
+      getIdentity: vi
+        .fn()
+        .mockResolvedValue({ id: "admin", fullName: "Admin" }),
+      getPermissions: vi
+        .fn()
+        .mockResolvedValue({ memberships: [], canManageIdentity: true }),
+      canAccess: vi.fn().mockResolvedValue(true),
+      login: vi.fn(),
+      logout: vi.fn(),
+    },
+    dataProvider: {
+      getList: vi.fn().mockImplementation((resource) =>
+        Promise.resolve({
+          data: resource === "tenants" ? [tenant] : [],
+          total: resource === "tenants" ? 1 : 0,
+        }),
+      ),
+      getOne: vi.fn().mockImplementation((_resource, params) =>
+        Promise.resolve({
+          data: Number(params.id) === 0 ? platformTenant : tenant,
+        }),
+      ),
+      getMany: vi.fn().mockResolvedValue({ data: [] }),
+      getManyReference: vi.fn(),
+      create: vi
+        .fn()
+        .mockImplementation((_resource, params) =>
+          Promise.resolve({ data: { ...tenant, ...params.data } }),
+        ),
+      update: vi
+        .fn()
+        .mockImplementation((_resource, params) =>
+          Promise.resolve({ data: { ...tenant, ...params.data } }),
+        ),
+      updateMany: vi.fn(),
+      delete: vi.fn(),
+      deleteMany: vi.fn(),
+    },
+    domains: { list: vi.fn().mockResolvedValue([]) },
+    commands: { execute: vi.fn() },
+    assistantConfiguration: {
+      summary: vi.fn().mockResolvedValue({ global: null, tenants: [] }),
+      models: vi.fn().mockResolvedValue([]),
+      activeTenant: vi.fn().mockResolvedValue({ tenants: [] }),
+    },
+  } as unknown as AppServices;
+}
+async function renderApp(appServices: AppServices) {
+  // Flush the immediately resolved session and list-query effects before
+  // starting an assertion timeout for the resulting page.
+  await act(async () => {
+    render(<App services={appServices} />);
+  });
+}
+function open(path: string) {
+  window.history.replaceState({}, "", "/");
+  window.location.hash = `#${path}`;
+}
+beforeEach(() => {
+  invalidateTenantWorkspaces();
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+    const path = new URL(String(input), window.location.origin).pathname;
+    if (path !== "/api/public/tenant-branding")
+      throw new Error(`Unexpected tenant-page request: ${path}`);
+    return new Response(JSON.stringify({ data: null }), {
+      headers: { "content-type": "application/json" },
+    });
+  });
+});
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+  invalidateTenantWorkspaces();
+  if (originalElementScrollTo) {
+    Object.defineProperty(
+      HTMLElement.prototype,
+      "scrollTo",
+      originalElementScrollTo,
+    );
+  } else {
+    Reflect.deleteProperty(HTMLElement.prototype, "scrollTo");
+  }
+});
+
+describe("generic tenant pages", () => {
+  it("transfers an assigned user without offering membership removal", async () => {
+    open("/users/principal-one");
+    const appServices = services();
+    const record = {
+      id: "principal-one",
+      displayName: "Persona Uno",
+      firstName: "Persona",
+      lastName: "Uno",
+      email: "person@example.test",
+      platformAdmin: false,
+      isActive: true,
+      isBanned: false,
+      twoFactorEnabled: false,
+      memberships: [
+        {
+          id: "membership-one",
+          tenantId: 101,
+          agencyId: 101,
+          role: "tenant_admin",
+          isActive: true,
+        },
+      ],
+    };
+    vi.mocked(appServices.dataProvider.getOne).mockResolvedValue({
+      data: record,
+    });
+    vi.mocked(appServices.dataProvider.getList).mockResolvedValue({
+      data: [tenant, { ...tenant, id: 102, name: "Destino" }],
+      total: 2,
+    });
+    await renderApp(appServices);
+    expect(await screen.findByText("Organización #101")).toBeVisible();
+    expect(
+      screen.queryByRole("button", { name: "Quitar" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Transferir usuario" }),
+    ).toBeVisible();
+  });
+
+  it("lists a tenant without an agency profile", async () => {
+    open("/tenants");
+    const appServices = services();
+    await renderApp(appServices);
+    expect(await screen.findByText("Comunidad")).toBeVisible();
+    expect(screen.getByRole("link", { name: "Nuevo tenant" })).toBeVisible();
+  });
+
+  it("opens the users list scoped to the selected tenant", async () => {
+    open("/tenants");
+    const user = userEvent.setup();
+    await renderApp(services());
+
+    await user.click(await screen.findByText("Comunidad"));
+
+    await waitFor(() => {
+      const [, query = ""] = window.location.hash.split("?");
+      expect(window.location.hash).toContain("#/users");
+      expect(new URLSearchParams(query).get("filter")).toBe('{"tenantId":101}');
+    });
+    expect(await screen.findByText("Usuarios de Comunidad")).toBeVisible();
+    expect(
+      screen.getByRole("link", { name: "Configurar acceso" }),
+    ).toHaveAttribute("href", "#/service-credentials?tenantId=101&tab=sso");
+
+    await user.click(
+      screen.getByRole("button", { name: "Ver todos los usuarios" }),
+    );
+    await waitFor(() => {
+      expect(
+        screen.queryByText("Usuarios de Comunidad"),
+      ).not.toBeInTheDocument();
+    });
+  });
+
+  it("shows the internal tenant and opens its platform users", async () => {
+    open("/tenants");
+    const user = userEvent.setup();
+    const appServices = services();
+    vi.mocked(appServices.dataProvider.getList).mockImplementation((resource) =>
+      Promise.resolve({
+        data: resource === "tenants" ? [platformTenant] : [],
+        total: resource === "tenants" ? 1 : 0,
+      }),
+    );
+    await renderApp(appServices);
+
+    expect(await screen.findByText("Interno")).toBeVisible();
+    expect(
+      screen.queryByRole("link", { name: /editar/i }),
+    ).not.toBeInTheDocument();
+    await user.click(screen.getByText("Plataforma Savia"));
+
+    await waitFor(() => {
+      const [, query = ""] = window.location.hash.split("?");
+      expect(new URLSearchParams(query).get("filter")).toBe('{"tenantId":0}');
+    });
+    expect(
+      await screen.findByText("Usuarios de Plataforma Savia"),
+    ).toBeVisible();
+  });
+
+  it("exposes the new-tenant action from the generic tenant list", async () => {
+    open("/tenants");
+    await renderApp(services());
+    const action = await screen.findByRole("link", { name: "Nuevo tenant" });
+    expect(action).toHaveAttribute("href", "#/tenants/create");
+  });
+
+  it("creates a tenant by transferring an existing user", async () => {
+    open("/tenants/create");
+    const appServices = services(),
+      user = userEvent.setup();
+    // jsdom does not implement the scroll operation used by the command list.
+    HTMLElement.prototype.scrollTo = vi.fn();
+    const person = {
+      id: "principal-one",
+      displayName: "Persona Uno",
+      firstName: "Persona",
+      lastName: "Uno",
+      email: "person@example.test",
+      platformAdmin: false,
+      isActive: true,
+      isBanned: false,
+      twoFactorEnabled: false,
+      memberships: [
+        {
+          id: "membership-one",
+          tenantId: 101,
+          agencyId: 101,
+          role: "tenant_admin",
+          isActive: true,
+        },
+      ],
+    };
+    vi.mocked(appServices.dataProvider.getList).mockImplementation((resource) =>
+      Promise.resolve({
+        data:
+          resource === "users"
+            ? [
+                person,
+                { ...person, id: "principal-two", email: "other@example.test" },
+              ]
+            : [],
+        total: resource === "users" ? 2 : 0,
+      }),
+    );
+    const createdTenant = {
+      ...tenant,
+      name: "Nueva comunidad",
+      idSlug: "nueva-comunidad-2",
+    };
+    vi.mocked(appServices.dataProvider.create).mockResolvedValue({
+      data: createdTenant,
+    });
+    vi.mocked(appServices.dataProvider.getOne).mockResolvedValue({
+      data: createdTenant,
+    });
+    await renderApp(appServices);
+    expect(await screen.findByText("Nuevo tenant")).toBeVisible();
+    // The shared text inputs do not associate their labels programmatically,
+    // so target them by field name like the record data does.
+    const nameInput = document.querySelector(
+      'input[name="name"]',
+    ) as HTMLInputElement;
+    expect(nameInput).not.toBe(null);
+    expect(document.querySelector('input[name="idSlug"]')).toBe(null);
+    expect(
+      screen.getByText(
+        "La URL del tenant se asigna automáticamente a partir de su nombre y no cambia al renombrarlo.",
+      ),
+    ).toBeVisible();
+    await user.type(nameInput, "Nueva comunidad");
+    await user.click(
+      await screen.findByRole("radio", {
+        name: "Transferir usuario existente",
+      }),
+    );
+    expect(
+      await screen.findByText(
+        "El usuario dejará su organización actual: la transferencia no comparte la cuenta.",
+      ),
+    ).toBeVisible();
+    expect(document.querySelector('input[name="initialUser.email"]')).toBe(
+      null,
+    );
+    await user.click(
+      await screen.findByRole("combobox", { name: "Usuario existente" }),
+    );
+    expect(
+      await screen.findByRole("option", {
+        name: "Persona Uno other@example.test",
+      }),
+    ).toBeVisible();
+    await user.type(
+      screen.getByRole("combobox", { name: "" }),
+      "person@example.test",
+    );
+    await waitFor(() =>
+      expect(appServices.dataProvider.getList).toHaveBeenCalledWith(
+        "users",
+        expect.objectContaining({ filter: { q: "person@example.test" } }),
+      ),
+    );
+    await user.click(
+      await screen.findByRole("option", {
+        name: "Persona Uno person@example.test",
+      }),
+    );
+    expect(
+      screen.getByRole("combobox", { name: "Usuario existente" }),
+    ).toHaveTextContent("Persona Uno person@example.test");
+    expect(
+      screen.getByRole("combobox", { name: "Usuario existente" }),
+    ).toHaveAccessibleDescription("Persona Uno person@example.test");
+    await user.click(screen.getByRole("button", { name: /Guardar/ }));
+    await waitFor(() =>
+      expect(appServices.dataProvider.create).toHaveBeenCalledWith(
+        "tenants",
+        expect.objectContaining({
+          data: expect.objectContaining({
+            name: "Nueva comunidad",
+            memberMode: "existing",
+            existingUserId: "principal-one",
+            existingRole: "tenant_admin",
+          }),
+        }),
+      ),
+    );
+    await user.click(await screen.findByRole("tab", { name: "Acceso" }));
+    const url = "https://nueva-comunidad-2.savia-preview.hefesoft.com";
+    expect(
+      await screen.findByRole("textbox", { name: "Tu URL de Savia" }),
+    ).toHaveValue(url);
+    expect(window.location.hash).toBe("#/tenants/101");
+    await user.click(screen.getByRole("button", { name: "Copiar enlace" }));
+    expect(await navigator.clipboard.readText()).toBe(url);
+    expect(await screen.findByText("Enlace copiado.")).toBeVisible();
+  });
+
+  it("edits the tenant state and explains the effect on member access", async () => {
+    open("/tenants/101");
+    const appServices = services(),
+      user = userEvent.setup();
+    Object.assign(appServices, {
+      apiClient: {
+        get: vi.fn((path: string) => {
+          if (path === "/v1/tenant-workspaces")
+            return Promise.resolve({ data: [] });
+          if (path.endsWith("/api-keys/members"))
+            return Promise.resolve({
+              members: [
+                {
+                  id: "member-1",
+                  displayName: "Alex",
+                  email: "alex@example.test",
+                },
+              ],
+            });
+          if (path.endsWith("/api-keys")) return Promise.resolve({ keys: [] });
+          return Promise.reject(new Error(`Unexpected API request: ${path}`));
+        }),
+        post: vi.fn(),
+        delete: vi.fn(),
+      },
+    });
+    await renderApp(appServices);
+    const name = await screen.findByDisplayValue("Comunidad");
+    await user.clear(name);
+    await user.type(name, "Comunidad renovada");
+    await user.click(await screen.findByRole("tab", { name: "Claves API" }));
+    await user.click(
+      await screen.findByRole("button", { name: "Nueva clave" }),
+    );
+    const keyName = await screen.findByLabelText("Nombre de la clave");
+    expect(keyName.closest("form")).toBeNull();
+    await user.type(keyName, "Companion{Enter}");
+    expect(appServices.dataProvider.update).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("tab", { name: "Acceso" }));
+    expect(
+      screen.getByRole("link", { name: "Configurar SSO" }),
+    ).toHaveAttribute("href", "#/service-credentials?tenantId=101&tab=sso");
+    expect(
+      screen.getByRole("link", { name: "Configurar Google / Microsoft" }),
+    ).toHaveAttribute("href", "#/service-credentials?tenantId=101&tab=social");
+    await user.click(screen.getByRole("tab", { name: "General" }));
+    expect(document.querySelector('input[name="idSlug"]')).toBe(null);
+    expect(
+      screen.getByText(
+        "La URL del tenant se asigna automáticamente a partir de su nombre y no cambia al renombrarlo.",
+      ),
+    ).toBeVisible();
+    expect(name).toHaveValue("Comunidad renovada");
+    expect(
+      screen.getByText(
+        "Desactivar el tenant suspende el acceso de sus miembros.",
+      ),
+    ).toBeVisible();
+    await user.click(screen.getByRole("button", { name: /Guardar/ }));
+    await waitFor(() =>
+      expect(appServices.dataProvider.update).toHaveBeenCalledWith(
+        "tenants",
+        expect.objectContaining({
+          id: "101",
+          data: expect.objectContaining({ name: "Comunidad renovada" }),
+        }),
+      ),
+    );
+  });
+
+  it("requires the exact tenant name before a platform admin can cascade delete it", async () => {
+    open("/tenants/101");
+    const appServices = services(),
+      user = userEvent.setup();
+    let finishDelete!: (result: { data: typeof tenant }) => void;
+    vi.mocked(appServices.dataProvider.delete).mockReturnValue(
+      new Promise((resolve) => {
+        finishDelete = resolve;
+      }),
+    );
+    await renderApp(appServices);
+
+    await user.click(
+      await screen.findByRole("button", {
+        name: "Eliminar tenant y todos sus datos",
+      }),
+    );
+    const confirmation = await screen.findByRole("textbox", {
+      name: "Escribe Comunidad para confirmar",
+    });
+    const confirmButton = screen.getByRole("button", {
+      name: "Eliminar definitivamente",
+    });
+
+    await user.type(confirmation, "comunidad");
+    await user.click(confirmButton);
+    expect(appServices.dataProvider.delete).not.toHaveBeenCalled();
+
+    await user.clear(confirmation);
+    await user.type(confirmation, "Comunidad");
+    await user.click(confirmButton);
+    await waitFor(() =>
+      expect(appServices.dataProvider.delete).toHaveBeenCalledWith(
+        "tenants",
+        expect.objectContaining({
+          id: 101,
+          meta: { cascade: true, confirmation: "Comunidad" },
+        }),
+      ),
+    );
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Eliminando…" })).toBeDisabled();
+    finishDelete({ data: tenant });
+    await waitFor(() => expect(window.location.hash).toBe("#/tenants"));
+  });
+
+  it("explains a cleanup failure and keeps the cascade dialog ready to retry", async () => {
+    open("/tenants/101");
+    const appServices = services(),
+      user = userEvent.setup();
+    vi.mocked(appServices.dataProvider.delete).mockRejectedValue(
+      new ApiClientError(
+        503,
+        "TENANT_CLEANUP_UNAVAILABLE",
+        "No se pudo eliminar la data de Savia Request. El tenant queda inactivo; reintenta la eliminación.",
+      ),
+    );
+    await renderApp(appServices);
+    await screen.findByDisplayValue("Comunidad");
+    vi.mocked(appServices.dataProvider.getOne).mockClear();
+
+    await user.click(
+      await screen.findByRole("button", {
+        name: "Eliminar tenant y todos sus datos",
+      }),
+    );
+    await user.type(
+      await screen.findByRole("textbox", {
+        name: "Escribe Comunidad para confirmar",
+      }),
+      "Comunidad",
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Eliminar definitivamente" }),
+    );
+
+    expect(
+      await screen.findByText(
+        "Algunos servicios de limpieza no están disponibles. Actualiza el tenant e intenta eliminarlo de nuevo.",
+      ),
+    ).toBeVisible();
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(
+      screen.getByRole("textbox", { name: "Escribe Comunidad para confirmar" }),
+    ).toHaveValue("Comunidad");
+    await waitFor(() =>
+      expect(appServices.dataProvider.getOne).toHaveBeenCalledWith(
+        "tenants",
+        expect.objectContaining({ id: "101" }),
+      ),
+    );
+  });
+
+  it("explains when the tenant name confirmation is stale", async () => {
+    open("/tenants/101");
+    const appServices = services(),
+      user = userEvent.setup();
+    vi.mocked(appServices.dataProvider.delete).mockRejectedValue(
+      new ApiClientError(
+        400,
+        "TENANT_CONFIRMATION_REQUIRED",
+        "Escribe el nombre exacto del tenant para eliminarlo con todos sus datos.",
+      ),
+    );
+    await renderApp(appServices);
+
+    await user.click(
+      await screen.findByRole("button", {
+        name: "Eliminar tenant y todos sus datos",
+      }),
+    );
+    await user.type(
+      await screen.findByRole("textbox", {
+        name: "Escribe Comunidad para confirmar",
+      }),
+      "Comunidad",
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Eliminar definitivamente" }),
+    );
+
+    expect(
+      await screen.findByText(
+        "El nombre del tenant cambió o no coincide. Actualiza el tenant y confirma con su nombre actual.",
+      ),
+    ).toBeVisible();
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
+
+  it("hides cascade deletion from users without platform administration", async () => {
+    open("/tenants/101");
+    const appServices = services();
+    vi.mocked(appServices.authProvider.getPermissions!).mockResolvedValue({
+      memberships: [{ tenantId: 101, role: "tenant_admin" }],
+      canManageIdentity: false,
+    });
+    await renderApp(appServices);
+
+    await screen.findByDisplayValue("Comunidad");
+    expect(
+      screen.queryByRole("button", {
+        name: "Eliminar tenant y todos sus datos",
+      }),
+    ).not.toBeInTheDocument();
+  });
+});

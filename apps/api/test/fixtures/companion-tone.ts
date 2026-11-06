@@ -1,0 +1,6 @@
+// Synthetic 440 Hz mono tone: 0.1s, 48 kHz, Ogg Opus 32 kbps.
+// Independently encoded with ffmpeg/libopus; no user audio.
+export const opusFixtureBase64 =
+  "T2dnUwACAAAAAAAAAACv5CKFAAAAAPcd+mQBE09wdXNIZWFkAQE4AYC7AAAAAABPZ2dTAAAAAAAAAAAAAK/kIoUBAAAAR/zJ3AE+T3B1c1RhZ3MNAAAATGF2ZjYyLjEyLjEwMAEAAAAdAAAAZW5jb2Rlcj1MYXZjNjIuMjguMTAwIGxpYm9wdXNPZ2dTAAT4EwAAAAAAAK/kIoUCAAAA5bdqBAZzS05NRTx4gXvGEXb0dQAABlG0a5Ft+cLLRLg5aL2HrOXfJs7Hhj/tOEIhhmh5WOT8vnwoLqujeaKxEM7LImHT4AZ6hRMTF/OS190pNNj0UZSWupqYvs+6ZF1tHgmGLN598OyWXn6iJfPo5jRB/1qB81FXg060bgEFeJ4eoef8lU1Oqhg6smU/0gzreL0g+swrsaq0Qf0AWCoCzh8UstvZS7TZz6DBHaS9s4OXQfHdwI9Su+tReibypfShDDW+q7thmb+9eJnCX3Mt0jM6RdiUEpuZXJzrJ2p6Xc1xilzDhK0a84iSrjUgbVVrhtzMMq3sBrbl5ZSVGVyjO2oAY26qZlDrTw1kxTQsIEbgb2E+3z8FeJnCX3Wc/ElKN67yyiC1odbPzLb5XSZRm4W3z+7if/ojVyRhZx5R2bgttn5slm9sj6Yc3YN3FHaM4nKrnkidp49kHwG1KEUw7Zy0i014mcJfdZz8RZ5y3gNOJcQKewpgxftOwEtkxDjgrReFGtka3ZFvxQqAmZTRKLECXzndFfAdC/aZ9ob5X5kkP/BsC3sOxQx4BYqXOi7/7M6oZJFjHOFFaOfIRlDoT8xn5vMsv/7APkKSVqUjATQOwgHPJRdvjEz3+6Li8evlTCPI21w=";
+export const opusFixture = () =>
+  Uint8Array.from(atob(opusFixtureBase64), (c) => c.charCodeAt(0));

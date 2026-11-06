@@ -1,0 +1,210 @@
+.wizard-header {
+  margin-bottom: 24px;
+}
+.wizard-steps {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 0 0 12px;
+  list-style: none;
+}
+.wizard-steps li {
+  flex: 1;
+  min-width: 120px;
+}
+.wizard-steps button,
+.wizard-steps .wizard-step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  padding: 9px 4px;
+  font-size: 12px;
+  color: var(--muted-foreground);
+  border-bottom: 2px solid var(--border);
+  background: transparent;
+}
+.wizard-steps .wizard-step-current {
+  color: var(--foreground);
+  border-color: var(--primary);
+  font-weight: 600;
+}
+.wizard-steps .wizard-step-upcoming {
+  opacity: 0.72;
+}
+.wizard-steps button.wizard-step-complete {
+  cursor: pointer;
+}
+.wizard-steps button.wizard-step-complete:hover:not(:disabled) {
+  color: var(--foreground);
+}
+.wizard-steps button:disabled {
+  cursor: default;
+}
+.wizard-step-number {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--border);
+  color: var(--primary);
+  font-size: 11px;
+}
+.wizard-steps .wizard-step-current .wizard-step-number {
+  background: var(--primary);
+  color: white;
+}
+.wizard-steps button[aria-current="step"] .wizard-step-number {
+  background: var(--primary);
+  color: white;
+}
+.wizard-progress {
+  font-size: 12px;
+  color: var(--muted-foreground);
+  margin: 8px 0;
+}
+.wizard-title {
+  font-size: 19px;
+  font-weight: 600;
+  margin-bottom: 6px;
+  color: var(--foreground);
+}
+.wizard-title:focus {
+  outline: none;
+}
+.wizard-steps button:focus-visible,
+.wizard-steps .wizard-step-current:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+.wizard-actions {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+  grid-column: 1/-1;
+}
+.wizard-actions button {
+  font-size: 12px;
+  font-weight: 600;
+}
+.wizard-actions .form-submit {
+  margin-top: 0;
+  margin-left: auto;
+  min-width: 140px;
+}
+.standard-form-actions {
+  margin-top: 28px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+.wizard-save-note {
+  flex-basis: 100%;
+  font-size: 12px;
+  color: var(--muted-foreground);
+  text-align: right;
+}
+.wizard-step-editor {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  margin: 18px 0;
+}
+.wizard-step-config {
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: color-mix(in oklab, var(--background) 94%, var(--muted) 6%);
+  overflow: hidden;
+}
+.wizard-step-config-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+.wizard-step-config-summary::-webkit-details-marker {
+  display: none;
+}
+.wizard-step-config-chevron {
+  flex-shrink: 0;
+  color: var(--muted-foreground);
+  transition: transform 180ms ease;
+}
+.wizard-step-config:not([open]) .wizard-step-config-chevron {
+  transform: rotate(-90deg);
+}
+.wizard-step-config-title {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  color: var(--muted-foreground);
+}
+.wizard-step-config-body {
+  display: grid;
+  gap: 10px;
+  padding: 0 12px 12px;
+  border-top: 1px solid color-mix(in oklab, var(--border) 80%, transparent);
+}
+.wizard-step-config-heading {
+  display: none;
+}
+.wizard-step-config-heading strong {
+  font-size: 13px;
+}
+.wizard-step-config-heading > div {
+  display: flex;
+}
+.wizard-assignments {
+  margin-top: 24px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 20px;
+}
+.wizard-assignments legend {
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 16px;
+}
+.wizard-settings > p {
+  margin: 10px 0;
+}
+.studio-form .form-field:has(.studio-field-heading[hidden]) {
+  display: none;
+}
+@media (max-width: 600px) {
+  .wizard-step-editor,
+  .wizard-assignments {
+    grid-template-columns: 1fr;
+  }
+  .wizard-steps li {
+    min-width: 104px;
+  }
+  .wizard-steps button,
+  .wizard-steps .wizard-step {
+    font-size: 11px;
+  }
+  .wizard-header {
+    margin-bottom: 18px;
+  }
+  .wizard-title {
+    font-size: 17px;
+  }
+  .wizard-save-note {
+    text-align: left;
+  }
+}

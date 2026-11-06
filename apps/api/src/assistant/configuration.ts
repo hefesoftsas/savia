@@ -1,0 +1,1411 @@
+import { AuthenticationError, type AppActor } from "../auth/types";
+
+const defaultOpenRouterModel = "deepseek/deepseek-v4-flash";
+const modelIdentifier = /^[a-z0-9][a-z0-9._-]*\/[a-z0-9][a-z0-9._:-]*$/i;
+const encoder = new TextEncoder();
+const decoder = new TextDecoder();
+
+export type AssistantSettingScope = "global" | "agency";
+
+export type EffectiveAssistantConfiguration = {
+  apiKey?: string;
+  model: string;
+  allowedModels?: string[];
+  transcriptionModel?: string;
+  transcriptionEndpoint?: AssistantTranscriptionEndpoint;
+  summaryModel?: string;
+  imageGenerationModel?: string;
+  speechModel?: string;
+  tenantId?: number;
+};
+
+export type AssistantTranscriptionEndpoint =
+  "audio/transcriptions" | "chat/completions";
+
+export type AssistantModelModalities = {
+  text: boolean;
+  image: boolean;
+  audio: boolean;
+  file: boolean;
+  imageOutput?: boolean;
+  speechOutput?: boolean;
+};
+
+export type AssistantImagePriceUnit = "image" | "megapixel" | "token";
+export type AssistantSpeechPriceUnit = "character" | "second" | "token";
+
+export type AssistantModelGenerationPricing = {
+  image?: {
+    price: number;
+    unit: AssistantImagePriceUnit;
+    variant?: string;
+    providerSlug?: string;
+  };
+  speech?: {
+    prompt?: { price: number; unit: "character" | "token" };
+    completion?: { price: number; unit: "second" | "token" };
+  };
+};
+
+export type AssistantModel = {
+  id: string;
+  name: string;
+  contextLength: number | null;
+  inputPricePerMillion: number | null;
+  outputPricePerMillion: number | null;
+  modalities?: AssistantModelModalities;
+  generationPricing?: AssistantModelGenerationPricing;
+  supportsTools?: boolean;
+  transcriptionEndpoint?: AssistantTranscriptionEndpoint;
+};
+
+export type AssistantModelCatalog = {
+  list(
+    configuration: EffectiveAssistantConfiguration,
+    options?: { includeGenerationPricing?: boolean },
+  ): Promise<AssistantModel[]>;
+};
+
+export type AssistantConfigurationWrite = {
+  actorId: string;
+  apiKey?: string;
+  clearApiKey?: boolean;
+  model?: string | null;
+  allowedModels?: string[] | null;
+  transcriptionModel?: string | null;
+  transcriptionEndpoint?: AssistantTranscriptionEndpoint | null;
+  summaryModel?: string | null;
+  imageGenerationModel?: string | null;
+  speechModel?: string | null;
+};
+
+type AssistantSettingRow = {
+  id: string;
+  scope: AssistantSettingScope;
+  agency_id: number | null;
+  api_key_ciphertext: string | null;
+  api_key_iv: string | null;
+  model: string | null;
+  allowed_models: string | null;
+  transcription_model: string | null;
+  transcription_endpoint: AssistantTranscriptionEndpoint | null;
+  summary_model: string | null;
+  image_generation_model: string | null;
+  speech_model: string | null;
+  updated_at: string;
+  updated_by: string;
+};
+
+type ActiveTenantRow = { tenant_id?: number; agency_id?: number };
+type ActiveAgencyRow = ActiveTenantRow;
+
+export type AssistantConfigurationSummary = {
+  global: AssistantConfigurationSettingSummary | null;
+  tenants: AssistantConfigurationSettingSummary[];
+  deployment: AssistantConfigurationDeploymentSummary;
+  canManageGlobal: boolean;
+  manageableTenantIds: number[];
+};
+
+export type AssistantConfigurationKeyState =
+  "configured" | "inherited" | "deployment_fallback" | "not_configured";
+
+export type AssistantConfigurationSettingSummary = {
+  scope: "global" | "tenant";
+  tenantId?: number;
+  keyState: AssistantConfigurationKeyState;
+  model: string | null;
+  allowedModels: string[] | null;
+  transcriptionModel?: string | null;
+  transcriptionEndpoint?: AssistantTranscriptionEndpoint | null;
+  summaryModel?: string | null;
+  imageGenerationModel?: string | null;
+  speechModel?: string | null;
+  updatedAt?: string;
+  updatedBy?: string;
+};
+
+export type AssistantConfigurationDeploymentSummary = {
+  keyState: "deployment_fallback" | "not_configured";
+  model: string;
+  transcriptionModel: string;
+  transcriptionEndpoint: AssistantTranscriptionEndpoint;
+  summaryModel: string;
+};
+
+export function transcriptionEndpointForModel(
+  model: string | null | undefined,
+): AssistantTranscriptionEndpoint {
+  return model && /(?:^|[/:_-])whisper(?:$|[/:_-])/i.test(model)
+    ? "audio/transcriptions"
+    : "chat/completions";
+}
+
+export class AssistantConfigurationUnavailableError extends Error {
+  readonly code = "ASSISTANT_CONFIGURATION_UNAVAILABLE" as const;
+
+  constructor() {
+    super("Assistant configuration encryption is unavailable");
+  }
+}
+
+function encodeBase64(bytes: Uint8Array): string {
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary);
+}
+
+function decodeBase64(value: string): Uint8Array<ArrayBuffer> {
+  try {
+    const binary = atob(value);
+    return Uint8Array.from(binary, (character) => character.charCodeAt(0));
+  } catch {
+    throw new AssistantConfigurationUnavailableError();
+  }
+}
+
+function encryptionAad(
+  scope: AssistantSettingScope,
+  agencyId?: number,
+): Uint8Array<ArrayBuffer> {
+  return encoder.encode(
+    `savia/assistant/openrouter/${scope}/${agencyId ?? "global"}`,
+  );
+}
+
+function settingId(scope: AssistantSettingScope, agencyId?: number): string {
+  return scope === "global" ? "global" : `agency:${agencyId}`;
+}
+
+function normalizedApiKey(apiKey: string): string {
+  const value = apiKey.trim();
+  if (!value) throw new TypeError("An OpenRouter API key cannot be blank");
+  return value;
+}
+
+export function normalizeAssistantModel(
+  candidate: string | null | undefined,
+): string | null | undefined {
+  if (candidate === undefined || candidate === null) return candidate;
+  const model = candidate.trim();
+  if (!model) return null;
+  if (!modelIdentifier.test(model)) {
+    throw new TypeError("An OpenRouter model must use provider/model format");
+  }
+  return model;
+}
+
+function normalizeAllowedModels(
+  candidates: string[] | null | undefined,
+): string[] | null | undefined {
+  if (candidates === null || candidates === undefined) return candidates;
+  if (!Array.isArray(candidates)) {
+    throw new TypeError("Allowed models must be an array");
+  }
+  if (candidates.length > 100) {
+    throw new TypeError("At most 100 allowed models can be configured");
+  }
+  const normalized: string[] = [];
+  const seen = new Set<string>();
+  for (const candidate of candidates) {
+    if (typeof candidate !== "string" || candidate.length > 160) {
+      throw new TypeError(
+        "Allowed model identifiers must be at most 160 characters",
+      );
+    }
+    const model = normalizeAssistantModel(candidate);
+    if (!model) {
+      throw new TypeError("An allowed model must use provider/model format");
+    }
+    if (!seen.has(model)) {
+      normalized.push(model);
+      seen.add(model);
+    }
+  }
+  return normalized;
+}
+
+function storedAllowedModels(
+  serialized: string | null | undefined,
+): string[] | null {
+  if (serialized == null) return null;
+  try {
+    const parsed: unknown = JSON.parse(serialized);
+    if (!Array.isArray(parsed)) return [];
+    return normalizeAllowedModels(parsed as string[]) ?? [];
+  } catch {
+    return [];
+  }
+}
+
+function summary(
+  row: AssistantSettingRow,
+  keyState: AssistantConfigurationKeyState,
+): AssistantConfigurationSettingSummary {
+  return {
+    scope: row.scope === "global" ? "global" : "tenant",
+    ...(row.agency_id === null ? {} : { tenantId: row.agency_id }),
+    keyState,
+    model: row.model,
+    allowedModels: storedAllowedModels(row.allowed_models),
+    transcriptionModel: row.transcription_model,
+    transcriptionEndpoint:
+      row.transcription_endpoint ??
+      (row.transcription_model
+        ? transcriptionEndpointForModel(row.transcription_model)
+        : null),
+    summaryModel: row.summary_model,
+    imageGenerationModel: row.image_generation_model,
+    speechModel: row.speech_model,
+    updatedAt: row.updated_at,
+    updatedBy: row.updated_by,
+  };
+}
+
+async function resolveKeyMaterial(masterKey: string): Promise<Uint8Array> {
+  const trimmed = masterKey.trim();
+  if (!trimmed) throw new AssistantConfigurationUnavailableError();
+
+  if (/^[0-9a-fA-F]{64}$/.test(trimmed)) {
+    const bytes = new Uint8Array(32);
+    for (let i = 0; i < 32; i++) {
+      bytes[i] = parseInt(trimmed.substring(i * 2, i * 2 + 2), 16);
+    }
+    return bytes;
+  }
+
+  try {
+    const binary = atob(trimmed);
+    if (binary.length === 32) {
+      return Uint8Array.from(binary, (character) => character.charCodeAt(0));
+    }
+  } catch {}
+
+  const utf8 = encoder.encode(trimmed);
+  if (utf8.byteLength === 32) {
+    return utf8;
+  }
+
+  const digest = await crypto.subtle.digest("SHA-256", utf8);
+  return new Uint8Array(digest);
+}
+
+export class AssistantEncryption {
+  private readonly cryptoKey: Promise<CryptoKey>;
+
+  constructor(masterKey: string) {
+    if (!masterKey?.trim()) {
+      throw new AssistantConfigurationUnavailableError();
+    }
+    this.cryptoKey = resolveKeyMaterial(masterKey).then((keyMaterial) =>
+      crypto.subtle.importKey(
+        "raw",
+        keyMaterial as BufferSource,
+        { name: "AES-GCM" },
+        false,
+        ["encrypt", "decrypt"],
+      ),
+    );
+  }
+
+  async encrypt(
+    scope: AssistantSettingScope,
+    agencyId: number | undefined,
+    apiKey: string,
+  ): Promise<{ ciphertext: string; iv: string }> {
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const ciphertext = await crypto.subtle.encrypt(
+      {
+        name: "AES-GCM",
+        iv,
+        additionalData: encryptionAad(scope, agencyId),
+      },
+      await this.cryptoKey,
+      encoder.encode(apiKey),
+    );
+    return {
+      ciphertext: encodeBase64(new Uint8Array(ciphertext)),
+      iv: encodeBase64(iv),
+    };
+  }
+
+  async decrypt(
+    scope: AssistantSettingScope,
+    agencyId: number | undefined,
+    ciphertext: string,
+    iv: string,
+  ): Promise<string> {
+    try {
+      const cleartext = await crypto.subtle.decrypt(
+        {
+          name: "AES-GCM",
+          iv: decodeBase64(iv),
+          additionalData: encryptionAad(scope, agencyId),
+        },
+        await this.cryptoKey,
+        decodeBase64(ciphertext),
+      );
+      return decoder.decode(cleartext);
+    } catch {
+      throw new AssistantConfigurationUnavailableError();
+    }
+  }
+}
+
+export type AssistantConfigurationRepositoryOptions = {
+  encryptionKey?: string;
+  deploymentApiKey?: string;
+  deploymentModel?: string;
+  deploymentTranscriptionModel?: string;
+  now?: () => Date;
+};
+
+export class AssistantConfigurationRepository {
+  private readonly encryption?: AssistantEncryption;
+  private readonly now: () => Date;
+  private readonly deploymentApiKey?: string;
+  private readonly deploymentModel: string;
+  private readonly deploymentTranscriptionModel: string;
+
+  constructor(
+    private readonly database: D1Database,
+    options: AssistantConfigurationRepositoryOptions = {},
+  ) {
+    const configuredKey = options.encryptionKey?.trim();
+    try {
+      this.encryption = configuredKey
+        ? new AssistantEncryption(configuredKey)
+        : undefined;
+    } catch {
+      this.encryption = undefined;
+    }
+    this.now = options.now ?? (() => new Date());
+    this.deploymentApiKey = options.deploymentApiKey?.trim() || undefined;
+    try {
+      this.deploymentModel =
+        normalizeAssistantModel(options.deploymentModel) ??
+        defaultOpenRouterModel;
+    } catch {
+      this.deploymentModel = defaultOpenRouterModel;
+    }
+    try {
+      this.deploymentTranscriptionModel =
+        normalizeAssistantModel(options.deploymentTranscriptionModel) ??
+        "google/gemini-2.5-flash";
+    } catch {
+      this.deploymentTranscriptionModel = "google/gemini-2.5-flash";
+    }
+  }
+
+  async saveGlobal(input: AssistantConfigurationWrite): Promise<void> {
+    await this.save("global", undefined, input);
+  }
+
+  async saveAgencyOverride(
+    agencyId: number,
+    input: AssistantConfigurationWrite,
+  ): Promise<void> {
+    await this.save("agency", agencyId, input);
+  }
+
+  async saveTenantOverride(
+    tenantId: number,
+    input: AssistantConfigurationWrite,
+  ): Promise<void> {
+    return this.saveAgencyOverride(tenantId, input);
+  }
+
+  async clearAgencyOverride(agencyId: number): Promise<boolean> {
+    const result = await this.database
+      .prepare(
+        "DELETE FROM assistant_openrouter_settings WHERE id = ? AND scope = 'agency'",
+      )
+      .bind(settingId("agency", agencyId))
+      .run();
+    return result.meta.changes > 0;
+  }
+
+  async clearTenantOverride(tenantId: number): Promise<boolean> {
+    return this.clearAgencyOverride(tenantId);
+  }
+
+  async summary(): Promise<AssistantConfigurationSummary> {
+    const rows = await this.database
+      .prepare(
+        `SELECT id, scope, agency_id, api_key_ciphertext, api_key_iv, model, transcription_model, transcription_endpoint, summary_model, image_generation_model, speech_model, allowed_models, updated_at, updated_by
+         FROM assistant_openrouter_settings
+         ORDER BY CASE scope WHEN 'global' THEN 0 ELSE 1 END, agency_id`,
+      )
+      .all<AssistantSettingRow>();
+    const global = rows.results.find((row) => row.scope === "global");
+    const deployment = {
+      keyState: this.deploymentApiKey
+        ? "deployment_fallback"
+        : "not_configured",
+      model: this.deploymentModel,
+      transcriptionModel: this.deploymentTranscriptionModel,
+      transcriptionEndpoint: transcriptionEndpointForModel(
+        this.deploymentTranscriptionModel,
+      ),
+      summaryModel: this.deploymentModel,
+    } as const;
+    const globalKeyState = global?.api_key_ciphertext
+      ? "configured"
+      : deployment.keyState;
+    const tenantSettings = rows.results
+      .filter((row) => row.scope === "agency")
+      .map((row) =>
+        summary(
+          row,
+          row.api_key_ciphertext
+            ? "configured"
+            : globalKeyState === "configured"
+              ? "inherited"
+              : globalKeyState,
+        ),
+      );
+    const tenants = await this.database
+      .prepare(
+        "SELECT id FROM tenants WHERE kind='commercial' AND is_active = 1 ORDER BY id",
+      )
+      .all<{ id: number }>();
+    return {
+      global: global ? summary(global, globalKeyState) : null,
+      tenants: tenantSettings,
+      deployment,
+      canManageGlobal: true,
+      manageableTenantIds: tenants.results.map((tenant) => tenant.id),
+    };
+  }
+
+  async manageableTenantIds(principalId: string): Promise<number[]> {
+    const tenants = await this.database
+      .prepare(
+        `SELECT tenants.id FROM identity_principal AS principal
+         INNER JOIN identity_tenant_membership AS membership
+           ON membership.principal_id = principal.id
+         INNER JOIN tenants ON tenants.id = membership.tenant_id
+         WHERE principal.id = ? AND principal.is_active = 1
+           AND membership.is_active = 1
+           AND membership.role IN ('tenant_admin', 'agency_admin')
+           AND tenants.kind = 'commercial' AND tenants.is_active = 1
+         ORDER BY tenants.id`,
+      )
+      .bind(principalId)
+      .all<{ id: number }>();
+    return tenants.results.map((tenant) => tenant.id);
+  }
+
+  async assertTenantAdministrator(
+    principalId: string,
+    tenantId: number,
+  ): Promise<void> {
+    if (!(await this.manageableTenantIds(principalId)).includes(tenantId)) {
+      throw new AuthenticationError(
+        "AUTHORIZATION_FORBIDDEN",
+        "An active tenant administrator membership is required",
+      );
+    }
+  }
+
+  async summaryForTenantAdministrator(
+    principalId: string,
+  ): Promise<AssistantConfigurationSummary> {
+    const manageableTenantIds = await this.manageableTenantIds(principalId);
+    if (!manageableTenantIds.length) {
+      throw new AuthenticationError(
+        "AUTHORIZATION_FORBIDDEN",
+        "An active tenant administrator membership is required",
+      );
+    }
+    const fullSummary = await this.summary();
+    const global = fullSummary.global
+      ? {
+          scope: "global" as const,
+          keyState: fullSummary.global.keyState,
+          model: fullSummary.global.model,
+          transcriptionModel: fullSummary.global.transcriptionModel ?? null,
+          transcriptionEndpoint:
+            fullSummary.global.transcriptionEndpoint ?? null,
+          summaryModel: fullSummary.global.summaryModel ?? null,
+          imageGenerationModel: fullSummary.global.imageGenerationModel ?? null,
+          speechModel: fullSummary.global.speechModel ?? null,
+          allowedModels: fullSummary.global.allowedModels,
+        }
+      : null;
+    return {
+      global,
+      tenants: fullSummary.tenants.filter(
+        (setting) =>
+          setting.tenantId !== undefined &&
+          manageableTenantIds.includes(setting.tenantId),
+      ),
+      deployment: fullSummary.deployment,
+      canManageGlobal: false,
+      manageableTenantIds,
+    };
+  }
+
+  async setActiveAgency(
+    principalId: string,
+    agencyId: number,
+    actor: AppActor,
+  ): Promise<void> {
+    if (actor.principal.id !== principalId) {
+      throw new AuthenticationError(
+        "AUTHORIZATION_FORBIDDEN",
+        "An actor can only select their own active agency",
+      );
+    }
+    const agency = await this.database
+      .prepare(
+        "SELECT id FROM tenants WHERE id = ? AND kind='commercial' AND is_active = 1",
+      )
+      .bind(agencyId)
+      .first<{ id: number }>();
+    if (!agency) {
+      throw new AuthenticationError(
+        "AUTHORIZATION_FORBIDDEN",
+        "The selected agency is not available",
+      );
+    }
+    const isPlatformAdministrator =
+      actor.globalRoles.includes("platform_admin");
+    if (!isPlatformAdministrator) {
+      const membership = await this.database
+        .prepare(
+          `SELECT id FROM identity_tenant_membership
+           WHERE principal_id = ? AND tenant_id = ? AND is_active = 1`,
+        )
+        .bind(principalId, agencyId)
+        .first<{ id: string }>();
+      if (!membership) {
+        throw new AuthenticationError(
+          "AUTHORIZATION_FORBIDDEN",
+          "The selected agency is not in the actor's active memberships",
+        );
+      }
+    }
+    await this.database
+      .prepare(
+        `INSERT INTO assistant_active_tenants (principal_id, tenant_id, updated_at)
+         VALUES (?, ?, ?)
+         ON CONFLICT(principal_id) DO UPDATE SET
+           tenant_id = excluded.tenant_id,
+           updated_at = excluded.updated_at`,
+      )
+      .bind(principalId, agencyId, this.now().toISOString())
+      .run();
+  }
+
+  async setActiveTenant(
+    principalId: string,
+    tenantId: number,
+    actor: AppActor,
+  ): Promise<void> {
+    return this.setActiveAgency(principalId, tenantId, actor);
+  }
+
+  async activeTenantFor(principalId: string): Promise<number | undefined> {
+    const row = await this.database
+      .prepare(
+        `SELECT active.tenant_id
+         FROM assistant_active_tenants AS active
+         INNER JOIN tenants ON tenants.id = active.tenant_id
+           AND tenants.kind = 'commercial'
+           AND tenants.is_active = 1
+         WHERE active.principal_id = ?
+           AND (
+             EXISTS (
+               SELECT 1 FROM identity_tenant_membership AS membership
+               WHERE membership.principal_id = active.principal_id
+                 AND membership.tenant_id = active.tenant_id
+                 AND membership.is_active = 1
+             )
+             OR EXISTS (
+               SELECT 1 FROM identity_global_role AS role
+               WHERE role.principal_id = active.principal_id
+                 AND role.role = 'platform_admin'
+             )
+           )`,
+      )
+      .bind(principalId)
+      .first<{ tenant_id: number }>();
+    if (row) return row.tenant_id;
+
+    const platformAdministrator = await this.database
+      .prepare(
+        `SELECT 1 AS present FROM identity_global_role
+         WHERE principal_id = ? AND role = 'platform_admin' LIMIT 1`,
+      )
+      .bind(principalId)
+      .first<{ present: number }>();
+    if (platformAdministrator) return undefined;
+
+    const memberships = await this.database
+      .prepare(
+        `SELECT membership.tenant_id
+         FROM identity_tenant_membership AS membership
+         INNER JOIN tenants ON tenants.id = membership.tenant_id
+           AND tenants.kind = 'commercial'
+           AND tenants.is_active = 1
+         WHERE membership.principal_id = ?
+           AND membership.is_active = 1
+         ORDER BY membership.tenant_id
+         LIMIT 2`,
+      )
+      .bind(principalId)
+      .all<{ tenant_id: number }>();
+    return memberships.results?.length === 1
+      ? memberships.results[0].tenant_id
+      : undefined;
+  }
+
+  async activeAgencyFor(principalId: string): Promise<number | undefined> {
+    return this.activeTenantFor(principalId);
+  }
+
+  async effectiveConfigurationFor(
+    principalId: string,
+  ): Promise<EffectiveAssistantConfiguration> {
+    const agencyId = await this.activeAgencyFor(principalId);
+    return this.configurationForTenant(agencyId);
+  }
+
+  async effectiveGlobalConfiguration(): Promise<EffectiveAssistantConfiguration> {
+    return this.configurationForTenant(undefined);
+  }
+
+  async effectiveConfigurationForPlatformTenant(
+    tenantId: number,
+  ): Promise<EffectiveAssistantConfiguration> {
+    const tenant = await this.database
+      .prepare(
+        "SELECT id FROM tenants WHERE id = ? AND kind='commercial' AND is_active = 1",
+      )
+      .bind(tenantId)
+      .first<{ id: number }>();
+    if (!tenant) {
+      throw new AuthenticationError(
+        "AUTHORIZATION_FORBIDDEN",
+        "The selected tenant is not available",
+      );
+    }
+    return this.configurationForTenant(tenantId);
+  }
+
+  async effectiveConfigurationForTenant(
+    principalId: string,
+    tenantId: number,
+  ): Promise<EffectiveAssistantConfiguration> {
+    const eligible = await this.database
+      .prepare(
+        `SELECT 1 AS eligible FROM identity_principal p
+      INNER JOIN identity_tenant_membership m ON m.principal_id=p.id
+      INNER JOIN tenants t ON t.id=m.tenant_id
+      WHERE p.id=? AND p.is_active=1 AND m.is_active=1 AND t.is_active=1 AND t.id=?
+      AND (t.id<>0 OR EXISTS (SELECT 1 FROM identity_global_role g WHERE g.principal_id=p.id AND g.role='platform_admin'))`,
+      )
+      .bind(principalId, tenantId)
+      .first();
+    if (!eligible)
+      throw new AuthenticationError(
+        "AUTHORIZATION_FORBIDDEN",
+        "An active tenant membership is required",
+      );
+    return this.configurationForTenant(tenantId === 0 ? undefined : tenantId);
+  }
+
+  private async configurationForTenant(
+    agencyId?: number,
+  ): Promise<EffectiveAssistantConfiguration> {
+    const rows = await this.database
+      .prepare(
+        `SELECT id, scope, agency_id, api_key_ciphertext, api_key_iv, model, transcription_model, transcription_endpoint, summary_model, image_generation_model, speech_model, allowed_models, updated_at, updated_by
+         FROM assistant_openrouter_settings
+         WHERE id = ? OR id = 'global'`,
+      )
+      .bind(
+        agencyId === undefined
+          ? "__no_active_agency__"
+          : settingId("agency", agencyId),
+      )
+      .all<AssistantSettingRow>();
+    const global = rows.results.find((row) => row.scope === "global");
+    const agency = rows.results.find((row) => row.scope === "agency");
+    const keyRow = agency?.api_key_ciphertext
+      ? agency
+      : global?.api_key_ciphertext
+        ? global
+        : undefined;
+    const apiKey = keyRow
+      ? await this.decryptKey(keyRow)
+      : this.deploymentApiKey;
+    const model = agency?.model ?? global?.model ?? this.deploymentModel;
+    const allowedModels =
+      storedAllowedModels(agency?.allowed_models) ??
+      storedAllowedModels(global?.allowed_models) ??
+      [];
+    const transcriptionModel =
+      agency?.transcription_model ??
+      global?.transcription_model ??
+      this.deploymentTranscriptionModel;
+    const transcriptionSource = agency?.transcription_model
+      ? agency
+      : global?.transcription_model
+        ? global
+        : undefined;
+    return {
+      ...(apiKey ? { apiKey } : {}),
+      model,
+      allowedModels,
+      transcriptionModel,
+      transcriptionEndpoint:
+        transcriptionSource?.transcription_endpoint ??
+        transcriptionEndpointForModel(transcriptionModel),
+      summaryModel: agency?.summary_model ?? global?.summary_model ?? model,
+      imageGenerationModel:
+        agency?.image_generation_model ??
+        global?.image_generation_model ??
+        undefined,
+      speechModel: agency?.speech_model ?? global?.speech_model ?? undefined,
+      ...(agencyId === undefined ? {} : { tenantId: agencyId }),
+    };
+  }
+
+  private async save(
+    scope: AssistantSettingScope,
+    agencyId: number | undefined,
+    input: AssistantConfigurationWrite,
+  ): Promise<void> {
+    const id = settingId(scope, agencyId);
+    const existing = await this.database
+      .prepare(
+        `SELECT id, scope, agency_id, api_key_ciphertext, api_key_iv, model, transcription_model, transcription_endpoint, summary_model, image_generation_model, speech_model, allowed_models, updated_at, updated_by
+         FROM assistant_openrouter_settings WHERE id = ?`,
+      )
+      .bind(id)
+      .first<AssistantSettingRow>();
+    let ciphertext = existing?.api_key_ciphertext ?? null;
+    let iv = existing?.api_key_iv ?? null;
+    if (input.apiKey !== undefined) {
+      if (input.clearApiKey) {
+        throw new TypeError(
+          "An API key cannot be replaced and cleared together",
+        );
+      }
+      if (!this.encryption) throw new AssistantConfigurationUnavailableError();
+      const encrypted = await this.encryption.encrypt(
+        scope,
+        agencyId,
+        normalizedApiKey(input.apiKey),
+      );
+      ciphertext = encrypted.ciphertext;
+      iv = encrypted.iv;
+    } else if (input.clearApiKey) {
+      ciphertext = null;
+      iv = null;
+    }
+    const model =
+      input.model === undefined
+        ? (existing?.model ?? null)
+        : normalizeAssistantModel(input.model);
+    const transcriptionModel =
+      input.transcriptionModel === undefined
+        ? (existing?.transcription_model ?? null)
+        : (normalizeAssistantModel(input.transcriptionModel) ?? null);
+    if (
+      input.transcriptionEndpoint != null &&
+      transcriptionModel === null &&
+      input.transcriptionModel === undefined
+    ) {
+      throw new TypeError(
+        "A transcription model is required to set an endpoint",
+      );
+    }
+    const transcriptionModelChanged =
+      input.transcriptionModel !== undefined &&
+      transcriptionModel !== existing?.transcription_model;
+    const transcriptionEndpoint =
+      transcriptionModel === null && input.transcriptionModel !== undefined
+        ? null
+        : input.transcriptionEndpoint === null
+          ? transcriptionModelChanged && transcriptionModel
+            ? transcriptionEndpointForModel(transcriptionModel)
+            : null
+          : input.transcriptionEndpoint !== undefined
+            ? input.transcriptionEndpoint
+            : transcriptionModelChanged && transcriptionModel
+              ? transcriptionEndpointForModel(transcriptionModel)
+              : (existing?.transcription_endpoint ?? null);
+    const summaryModel =
+      input.summaryModel === undefined
+        ? (existing?.summary_model ?? null)
+        : (normalizeAssistantModel(input.summaryModel) ?? null);
+    const imageGenerationModel =
+      input.imageGenerationModel === undefined
+        ? (existing?.image_generation_model ?? null)
+        : (normalizeAssistantModel(input.imageGenerationModel) ?? null);
+    const speechModel =
+      input.speechModel === undefined
+        ? (existing?.speech_model ?? null)
+        : (normalizeAssistantModel(input.speechModel) ?? null);
+    const allowedModels =
+      input.allowedModels === undefined
+        ? storedAllowedModels(existing?.allowed_models)
+        : normalizeAllowedModels(input.allowedModels);
+    const allowedModelsJson =
+      allowedModels == null ? null : JSON.stringify(allowedModels);
+    if (
+      scope === "agency" &&
+      ciphertext === null &&
+      model === null &&
+      transcriptionModel === null &&
+      transcriptionEndpoint === null &&
+      summaryModel === null &&
+      imageGenerationModel === null &&
+      speechModel === null &&
+      allowedModelsJson === null
+    ) {
+      await this.clearAgencyOverride(agencyId!);
+      return;
+    }
+    await this.database
+      .prepare(
+        `INSERT INTO assistant_openrouter_settings (
+          id, scope, agency_id, api_key_ciphertext, api_key_iv, model, transcription_model, transcription_endpoint, summary_model, image_generation_model, speech_model, allowed_models, updated_at, updated_by
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+          api_key_ciphertext = excluded.api_key_ciphertext,
+          api_key_iv = excluded.api_key_iv,
+          model = excluded.model,
+          transcription_model = excluded.transcription_model,
+          transcription_endpoint = excluded.transcription_endpoint,
+          summary_model = excluded.summary_model,
+          image_generation_model = excluded.image_generation_model,
+          speech_model = excluded.speech_model,
+          allowed_models = excluded.allowed_models,
+          updated_at = excluded.updated_at,
+          updated_by = excluded.updated_by`,
+      )
+      .bind(
+        id,
+        scope,
+        agencyId ?? null,
+        ciphertext,
+        iv,
+        model ?? null,
+        transcriptionModel,
+        transcriptionEndpoint,
+        summaryModel,
+        imageGenerationModel,
+        speechModel,
+        allowedModelsJson,
+        this.now().toISOString(),
+        input.actorId,
+      )
+      .run();
+  }
+
+  private async decryptKey(row: AssistantSettingRow): Promise<string> {
+    if (!row.api_key_ciphertext || !row.api_key_iv || !this.encryption) {
+      throw new AssistantConfigurationUnavailableError();
+    }
+    return this.encryption.decrypt(
+      row.scope,
+      row.agency_id ?? undefined,
+      row.api_key_ciphertext,
+      row.api_key_iv,
+    );
+  }
+}
+
+export function openRouterModelCatalog(
+  fetcher: typeof fetch = globalThis.fetch.bind(globalThis),
+): AssistantModelCatalog {
+  return {
+    async list(configuration, options = {}) {
+      const catalogDeadline = Date.now() + 20_000;
+      const headers: Record<string, string> = {};
+      if (configuration.apiKey) {
+        headers.authorization = `Bearer ${configuration.apiKey}`;
+      }
+      const request = async (
+        url: string,
+        timeoutMs = 12_000,
+      ): Promise<{ response: Response; decoded: unknown }> => {
+        const controller = new AbortController();
+        const remainingMs = Math.max(1, catalogDeadline - Date.now());
+        const timer = setTimeout(
+          () => controller.abort(),
+          Math.min(timeoutMs, remainingMs),
+        );
+        try {
+          const response = await fetcher(url, {
+            ...(Object.keys(headers).length ? { headers } : {}),
+            signal: controller.signal,
+          });
+          const decoded = response.ok
+            ? await response.json().catch(() => undefined)
+            : undefined;
+          return { response, decoded };
+        } finally {
+          clearTimeout(timer);
+        }
+      };
+      const { response, decoded } = await request(
+        configuration.apiKey
+          ? "https://openrouter.ai/api/v1/models/user?output_modalities=text,transcription,image,speech&sort=most-popular"
+          : "https://openrouter.ai/api/v1/models?output_modalities=text,transcription,image,speech&sort=most-popular",
+      );
+      if (!response.ok) throw new Error("OpenRouter models request failed");
+      if (
+        typeof decoded !== "object" ||
+        decoded === null ||
+        !("data" in decoded) ||
+        !Array.isArray(decoded.data)
+      ) {
+        throw new Error("OpenRouter model response is invalid");
+      }
+      const models = new Map<string, AssistantModel>();
+      const parsedModels = decoded.data.flatMap(
+        (candidate): AssistantModel[] => {
+          if (
+            typeof candidate !== "object" ||
+            candidate === null ||
+            !("id" in candidate) ||
+            typeof candidate.id !== "string"
+          ) {
+            return [];
+          }
+          try {
+            const id = normalizeAssistantModel(candidate.id);
+            if (!id) return [];
+            const name =
+              "name" in candidate && typeof candidate.name === "string"
+                ? candidate.name.slice(0, 240)
+                : id;
+            const pricing =
+              "pricing" in candidate &&
+              typeof candidate.pricing === "object" &&
+              candidate.pricing !== null
+                ? candidate.pricing
+                : undefined;
+            const pricePerMillion = (value: unknown): number | null => {
+              if (
+                typeof value !== "number" &&
+                (typeof value !== "string" || value.trim() === "")
+              ) {
+                return null;
+              }
+              const perToken =
+                typeof value === "string" || typeof value === "number"
+                  ? Number(value)
+                  : NaN;
+              const perMillion = perToken * 1_000_000;
+              return Number.isFinite(perMillion) && perMillion >= 0
+                ? perMillion
+                : null;
+            };
+            const contextLength =
+              "context_length" in candidate &&
+              typeof candidate.context_length === "number" &&
+              Number.isSafeInteger(candidate.context_length) &&
+              candidate.context_length > 0
+                ? candidate.context_length
+                : null;
+            const architecture =
+              "architecture" in candidate &&
+              typeof candidate.architecture === "object" &&
+              candidate.architecture !== null
+                ? (candidate.architecture as Record<string, unknown>)
+                : undefined;
+
+            const inputModalities = Array.isArray(
+              architecture?.input_modalities,
+            )
+              ? (architecture.input_modalities as string[])
+              : typeof architecture?.modality === "string"
+                ? (architecture.modality as string).split("->")[0].split("+")
+                : [];
+
+            const outputModalities = Array.isArray(
+              architecture?.output_modalities,
+            )
+              ? (architecture.output_modalities as string[])
+              : typeof architecture?.modality === "string"
+                ? ((architecture.modality as string)
+                    .split("->")
+                    .at(-1)
+                    ?.split("+") ?? [])
+                : [];
+
+            const supportedParams = Array.isArray(
+              (candidate as Record<string, unknown>).supported_parameters,
+            )
+              ? ((candidate as Record<string, unknown>)
+                  .supported_parameters as string[])
+              : [];
+
+            const modalities: AssistantModelModalities = {
+              text: outputModalities.includes("text"),
+              image: inputModalities.includes("image"),
+              audio: inputModalities.includes("audio"),
+              file:
+                inputModalities.includes("file") ||
+                inputModalities.includes("image"),
+              imageOutput: false,
+              speechOutput: outputModalities.includes("speech"),
+            };
+            const speechPricing = parseSpeechGenerationPricing(
+              id,
+              outputModalities.includes("speech"),
+              architecture?.tokenizer,
+              pricing,
+            );
+            const usesNonTokenSpeechMetering =
+              outputModalities.includes("speech") &&
+              !isTokenMeteredSpeech(id, architecture?.tokenizer);
+            const supportsTools = supportedParams.includes("tools");
+            const transcriptionEndpoint = outputModalities.includes(
+              "transcription",
+            )
+              ? "audio/transcriptions"
+              : inputModalities.includes("audio") &&
+                  outputModalities.includes("text")
+                ? "chat/completions"
+                : undefined;
+
+            return [
+              {
+                id,
+                name,
+                contextLength,
+                inputPricePerMillion: usesNonTokenSpeechMetering
+                  ? null
+                  : pricePerMillion(
+                      pricing && "prompt" in pricing
+                        ? pricing.prompt
+                        : undefined,
+                    ),
+                outputPricePerMillion: usesNonTokenSpeechMetering
+                  ? null
+                  : pricePerMillion(
+                      pricing && "completion" in pricing
+                        ? pricing.completion
+                        : undefined,
+                    ),
+                modalities,
+                supportsTools,
+                ...(speechPricing
+                  ? { generationPricing: { speech: speechPricing } }
+                  : {}),
+                ...(transcriptionEndpoint ? { transcriptionEndpoint } : {}),
+              },
+            ];
+          } catch {
+            return [];
+          }
+        },
+      );
+      for (const model of parsedModels) models.set(model.id, model);
+      if (options.includeGenerationPricing === false) {
+        return [...models.values()];
+      }
+
+      const imageCatalog = await request(
+        "https://openrouter.ai/api/v1/images/models",
+      ).catch(() => undefined);
+      const imageDecoded: unknown = imageCatalog?.response.ok
+        ? imageCatalog.decoded
+        : undefined;
+      const imageCandidates =
+        typeof imageDecoded === "object" &&
+        imageDecoded !== null &&
+        "data" in imageDecoded &&
+        Array.isArray(imageDecoded.data)
+          ? imageDecoded.data
+          : [];
+      const imageModels = imageCandidates.flatMap((candidate) => {
+        if (
+          typeof candidate !== "object" ||
+          candidate === null ||
+          !("id" in candidate) ||
+          typeof candidate.id !== "string"
+        ) {
+          return [];
+        }
+        try {
+          const id = normalizeAssistantModel(candidate.id);
+          if (!id) return [];
+          const name =
+            "name" in candidate && typeof candidate.name === "string"
+              ? candidate.name.slice(0, 240)
+              : id;
+          return [
+            { id, name, isEditOnly: hasRequiredImageReferences(candidate) },
+          ];
+        } catch {
+          return [];
+        }
+      });
+      const endpointResults = new Map<
+        string,
+        {
+          pricing?: AssistantModelGenerationPricing["image"];
+          isEditOnly: boolean;
+        }
+      >();
+      for (let index = 0; index < imageModels.length; index += 8) {
+        await Promise.all(
+          imageModels
+            .slice(index, index + 8)
+            .map(async ({ id, isEditOnly }) => {
+              if (isEditOnly) {
+                endpointResults.set(id, { isEditOnly: true });
+                return;
+              }
+              const path = id
+                .split("/")
+                .map((segment) => encodeURIComponent(segment))
+                .join("/");
+              const endpointResult = await request(
+                `https://openrouter.ai/api/v1/images/models/${path}/endpoints`,
+                8_000,
+              ).catch(() => undefined);
+              if (!endpointResult?.response.ok) return;
+              const endpointDecoded = endpointResult.decoded;
+              const endpoints =
+                typeof endpointDecoded === "object" &&
+                endpointDecoded !== null &&
+                "endpoints" in endpointDecoded &&
+                Array.isArray(endpointDecoded.endpoints)
+                  ? endpointDecoded.endpoints
+                  : [];
+              if (endpoints.length === 0) return;
+              const usable = endpoints.filter(
+                (endpoint) => !hasRequiredImageReferences(endpoint),
+              );
+              if (!usable.length) {
+                endpointResults.set(id, { isEditOnly: true });
+                return;
+              }
+              const rates = usable.flatMap((endpoint) => {
+                if (
+                  typeof endpoint !== "object" ||
+                  endpoint === null ||
+                  !("pricing" in endpoint) ||
+                  !Array.isArray(endpoint.pricing)
+                ) {
+                  return [];
+                }
+                const providerSlug =
+                  "provider_slug" in endpoint &&
+                  typeof endpoint.provider_slug === "string"
+                    ? endpoint.provider_slug.slice(0, 160)
+                    : undefined;
+                return (endpoint.pricing as unknown[]).flatMap(
+                  (price: unknown) => {
+                    if (
+                      typeof price !== "object" ||
+                      price === null ||
+                      !("billable" in price) ||
+                      price.billable !== "output_image" ||
+                      !("unit" in price) ||
+                      !isAssistantImagePriceUnit(price.unit) ||
+                      !("cost_usd" in price) ||
+                      (typeof price.cost_usd !== "number" &&
+                        (typeof price.cost_usd !== "string" ||
+                          price.cost_usd.trim() === ""))
+                    ) {
+                      return [];
+                    }
+                    const amount = Number(price.cost_usd);
+                    if (!Number.isFinite(amount) || amount < 0) return [];
+                    const variant =
+                      "variant" in price && typeof price.variant === "string"
+                        ? price.variant.slice(0, 120)
+                        : undefined;
+                    const tiered = "tier" in price && price.tier != null;
+                    return [
+                      {
+                        price: amount,
+                        unit: price.unit,
+                        ...(variant ? { variant } : {}),
+                        ...(providerSlug ? { providerSlug } : {}),
+                        ...(tiered ? { tiered: true } : {}),
+                      },
+                    ];
+                  },
+                );
+              });
+              const untiered = rates.filter((rate) => !("tiered" in rate));
+              const selectionPool = untiered;
+              const preferredUnit = (
+                ["image", "megapixel", "token"] as const
+              ).find((unit) =>
+                selectionPool.some((rate) => rate.unit === unit),
+              );
+              const chosen = selectionPool
+                .filter((rate) => rate.unit === preferredUnit)
+                .sort((left, right) => left.price - right.price)[0];
+              endpointResults.set(id, {
+                isEditOnly: false,
+                ...(chosen
+                  ? {
+                      pricing: {
+                        price: chosen.price,
+                        unit: chosen.unit,
+                        ...(chosen.variant ? { variant: chosen.variant } : {}),
+                        ...(chosen.providerSlug
+                          ? { providerSlug: chosen.providerSlug }
+                          : {}),
+                      },
+                    }
+                  : {}),
+              });
+            }),
+        );
+      }
+      for (const candidate of imageModels) {
+        const endpoint = endpointResults.get(candidate.id);
+        const previous = models.get(candidate.id);
+        if (candidate.isEditOnly || endpoint?.isEditOnly) {
+          if (previous) {
+            models.set(candidate.id, {
+              ...previous,
+              modalities: {
+                text: previous.modalities?.text ?? false,
+                image: previous.modalities?.image ?? false,
+                audio: previous.modalities?.audio ?? false,
+                file: previous.modalities?.file ?? false,
+                imageOutput: false,
+                speechOutput: previous.modalities?.speechOutput ?? false,
+              },
+            });
+          }
+          continue;
+        }
+        models.set(candidate.id, {
+          id: candidate.id,
+          name: previous?.name ?? candidate.name,
+          contextLength: previous?.contextLength ?? null,
+          inputPricePerMillion: previous?.inputPricePerMillion ?? null,
+          outputPricePerMillion: previous?.outputPricePerMillion ?? null,
+          modalities: {
+            text: previous?.modalities?.text ?? false,
+            image: previous?.modalities?.image ?? false,
+            audio: previous?.modalities?.audio ?? false,
+            file: previous?.modalities?.file ?? false,
+            imageOutput: true,
+            speechOutput: previous?.modalities?.speechOutput ?? false,
+          },
+          supportsTools: previous?.supportsTools ?? false,
+          ...(previous?.transcriptionEndpoint
+            ? { transcriptionEndpoint: previous.transcriptionEndpoint }
+            : {}),
+          ...(previous?.generationPricing?.speech
+            ? {
+                generationPricing: {
+                  speech: previous.generationPricing.speech,
+                },
+              }
+            : {}),
+          ...(endpoint?.pricing
+            ? {
+                generationPricing: {
+                  ...(previous?.generationPricing?.speech
+                    ? { speech: previous.generationPricing.speech }
+                    : {}),
+                  image: endpoint.pricing,
+                },
+              }
+            : {}),
+        });
+      }
+      return [...models.values()];
+    },
+  };
+}
+
+function parseSpeechGenerationPricing(
+  modelId: string,
+  outputsSpeech: boolean,
+  tokenizer: unknown,
+  pricing: unknown,
+): AssistantModelGenerationPricing["speech"] | undefined {
+  if (!outputsSpeech || typeof pricing !== "object" || pricing === null) {
+    return undefined;
+  }
+  const value = (key: "prompt" | "completion") => {
+    const raw = (pricing as Record<string, unknown>)[key];
+    if (
+      typeof raw !== "number" &&
+      (typeof raw !== "string" || raw.trim() === "")
+    ) {
+      return undefined;
+    }
+    const amount =
+      typeof raw === "string" || typeof raw === "number" ? Number(raw) : NaN;
+    return Number.isFinite(amount) && amount >= 0 ? amount : undefined;
+  };
+  const prompt = value("prompt");
+  const completion = value("completion");
+  const tokenMetered = isTokenMeteredSpeech(modelId, tokenizer);
+  const speech: NonNullable<AssistantModelGenerationPricing["speech"]> = {};
+  if (prompt !== undefined) {
+    speech.prompt = {
+      price: prompt,
+      unit: tokenMetered ? "token" : "character",
+    };
+  }
+  if (
+    completion !== undefined &&
+    (tokenMetered || completion > 0 || /seed/i.test(modelId))
+  ) {
+    speech.completion = {
+      price: completion,
+      unit: tokenMetered ? "token" : "second",
+    };
+  }
+  return Object.keys(speech).length ? speech : undefined;
+}
+
+function isTokenMeteredSpeech(modelId: string, tokenizer: unknown): boolean {
+  return (
+    (typeof tokenizer === "string" && /gemini/i.test(tokenizer)) ||
+    /gemini/i.test(modelId)
+  );
+}
+
+function isAssistantImagePriceUnit(
+  value: unknown,
+): value is AssistantImagePriceUnit {
+  return value === "image" || value === "megapixel" || value === "token";
+}
+
+function hasRequiredImageReferences(value: unknown): boolean {
+  if (
+    typeof value !== "object" ||
+    value === null ||
+    !("supported_parameters" in value)
+  ) {
+    return false;
+  }
+  const parameters = value.supported_parameters;
+  if (
+    typeof parameters !== "object" ||
+    parameters === null ||
+    !("input_references" in parameters)
+  ) {
+    return false;
+  }
+  const references = parameters.input_references;
+  return (
+    typeof references === "object" &&
+    references !== null &&
+    "min" in references &&
+    typeof references.min === "number" &&
+    references.min > 0
+  );
+}

@@ -1,0 +1,38 @@
+{
+  "name": "@savia/insurance-workbench",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./editor": "./src/editor.tsx",
+    "./data": "./src/data.ts",
+    "./schema": "./src/schema.ts",
+    "./financial": "./src/financial.ts",
+    "./types": "./src/types.ts",
+    "./case-config": "./src/case-config.tsx",
+    "./attachments": "./src/attachments.tsx",
+    "./integrations": "./src/integrations.tsx",
+    "./workbench.css": "./src/workbench.css"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@savia/plugin-ui": "workspace:*",
+    "@savia/studio-shared": "workspace:*",
+    "react": "^19.2.8"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.3",
+    "@types/react": "^19.2.18",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.11",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/jest-dom": "^6.9.1",
+    "jsdom": "^28.1.0",
+    "react-dom": "^19.2.8",
+    "@types/react-dom": "^19.2.3"
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "format": "savia.store",
+  "formatVersion": 1,
+  "actions": [
+    {
+      "id": "eco",
+      "kind": "http",
+      "connector": "demo",
+      "request": {
+        "method": "POST",
+        "url": "https://{{connection.baseUrl}}/eco",
+        "headers": {
+          "Authorization": "Bearer {{connection.apiKey}}",
+          "content-type": "application/json"
+        },
+        "body": { "mensaje": "{{input.mensaje}}" }
+      }
+    }
+  ],
+  "connectors": [
+    {
+      "id": "demo",
+      "label": "API demo",
+      "secretFields": ["apiKey"],
+      "configSchema": {
+        "type": "object",
+        "required": ["baseUrl", "apiKey"],
+        "properties": {
+          "baseUrl": { "type": "string" },
+          "apiKey": { "type": "string" }
+        }
+      },
+      "allowedHosts": ["api.ejemplo.test"]
+    }
+  ]
+}

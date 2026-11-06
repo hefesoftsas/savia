@@ -1,0 +1,234 @@
+import { afterEach, expect, it, vi } from "vitest";
+import { subscribeOnlineStatus } from "../offline/connectivity-status";
+import {
+  isModuleLoadError,
+  prepareAppReload,
+  PUBLIC_VISITOR_ROUTE_DENYLIST,
+} from "./deployment-recovery";
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
+it("allows updates when Savia responds despite the browser offline hint", async () => {
+  const worker = new Worker();
+  worker.state = "activated";
+  const update = vi.fn().mockResolvedValue(undefined);
+  environment({ update, waiting: worker });
+  vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+  vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null)));
+  const unsubscribe = subscribeOnlineStatus(() => {});
+  try {
+    await Promise.resolve();
+    await expect(prepareAppReload()).resolves.toBeUndefined();
+    expect(update).toHaveBeenCalledOnce();
+  } finally {
+    unsubscribe();
+    vi.unstubAllGlobals();
+  }
+});
+it("verifies recovery connectivity when the application has been unmounted", async () => {
+  const worker = new Worker();
+  worker.state = "activated";
+  const update = vi.fn().mockResolvedValue(undefined);
+  environment({ update, waiting: worker });
+  vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+  vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
+  const fetcher = vi.fn().mockResolvedValue(new Response(null));
+  vi.stubGlobal("fetch", fetcher);
+  try {
+    await expect(prepareAppReload()).resolves.toBeUndefined();
+    expect(fetcher).toHaveBeenCalledOnce();
+    expect(update).toHaveBeenCalledOnce();
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});
+class Worker extends EventTarget {
+  state: ServiceWorkerState = "installing";
+  postMessage = vi.fn();
+  transition(state: ServiceWorkerState) {
+    this.state = state;
+    this.dispatchEvent(new Event("statechange"));
+  }
+}
+function environment(registration: unknown) {
+  vi.spyOn(navigator, "onLine", "get").mockReturnValue(true);
+  Object.defineProperty(navigator, "serviceWorker", {
+    configurable: true,
+    value: { register: vi.fn().mockResolvedValue(registration) },
+  });
+}
+it("recognizes obsolete module and stylesheet loads without swallowing ordinary application errors", () => {
+  expect(
+    isModuleLoadError(
+      new TypeError(
+        "Failed to fetch dynamically imported module: /assets/old.js",
+      ),
+    ),
+  ).toBe(true);
+  expect(
+    isModuleLoadError(new TypeError("Importing a module script failed.")),
+  ).toBe(true);
+  expect(
+    isModuleLoadError(new Error("Unable to preload CSS for /assets/old.css")),
+  ).toBe(true);
+  expect(isModuleLoadError(new Error("Failed to fetch"))).toBe(false);
+  expect(isModuleLoadError(new Error("Permission denied"))).toBe(false);
+});
+it.each([
+  "/public/bookings",
+  "/public/bookings/token",
+  "/public/quotes",
+  "/public/quotes/0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+])("keeps public route %s out of the app-shell fallback", (path) => {
+  expect(
+    PUBLIC_VISITOR_ROUTE_DENYLIST.some((pattern) => pattern.test(path)),
+  ).toBe(true);
+});
+it("waits for the replacement worker to activate before allowing reload", async () => {
+  const worker = new Worker();
+  const update = vi.fn().mockResolvedValue(undefined);
+  environment({ update, installing: worker, waiting: null, active: null });
+  let ready = false;
+  const pending = prepareAppReload().then(() => {
+    ready = true;
+  });
+  await vi.waitFor(() => expect(update).toHaveBeenCalledOnce());
+  expect(ready).toBe(false);
+  worker.transition("installed");
+  expect(worker.postMessage).toHaveBeenCalledWith({ type: "SKIP_WAITING" });
+  worker.transition("activating");
+  expect(ready).toBe(false);
+  worker.transition("activated");
+  await pending;
+  expect(ready).toBe(true);
+});
+it("does not reload after update failure, redundant installation or offline requests", async () => {
+  environment({
+    update: vi.fn().mockRejectedValue(new Error("Update unavailable")),
+    unregister: vi.fn(),
+  });
+  await expect(prepareAppReload()).rejects.toThrow("Update unavailable");
+  const worker = new Worker();
+  const unregister = vi.fn().mockResolvedValue(true);
+  environment({
+    update: vi.fn().mockResolvedValue(undefined),
+    installing: worker,
+    unregister,
+  });
+  const pending = prepareAppReload();
+  await vi.waitFor(() =>
+    expect(navigator.serviceWorker.register).toHaveBeenCalled(),
+  );
+  await Promise.resolve();
+  await Promise.resolve();
+  worker.transition("redundant");
+  // Redundant install drops worker control and lets the caller reload from
+  // the network instead of stranding the user on the timeout screen.
+  await pending;
+  expect(unregister).toHaveBeenCalledOnce();
+  vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockRejectedValue(new TypeError("Network unavailable")),
+  );
+  await expect(prepareAppReload()).rejects.toThrow(/conexión/);
+});
+it("drops a stalled worker and reloads from network instead of stranding on timeout", async () => {
+  vi.useFakeTimers();
+  try {
+    const unregister = vi.fn().mockResolvedValue(true);
+    environment({
+      update: vi.fn().mockResolvedValue(undefined),
+      installing: new Worker(),
+      unregister,
+    });
+    const pending = prepareAppReload();
+    await vi.advanceTimersByTimeAsync(30_000);
+    await pending;
+    expect(unregister).toHaveBeenCalledOnce();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+it("keeps update failures retryable without unregistering", async () => {
+  vi.useFakeTimers();
+  try {
+    const unregister = vi.fn();
+    environment({
+      update: vi.fn().mockRejectedValue(new Error("Update unavailable")),
+      unregister,
+    });
+    const pending = prepareAppReload();
+    const assertion = expect(pending).rejects.toThrow("Update unavailable");
+    await vi.advanceTimersByTimeAsync(30_000);
+    await assertion;
+    expect(unregister).not.toHaveBeenCalled();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it("removes an unchanged active shell before reloading a failed module", async () => {
+  const active = new Worker();
+  active.transition("activated");
+  const unregister = vi.fn().mockResolvedValue(true);
+  environment({
+    update: vi.fn().mockResolvedValue(undefined),
+    installing: null,
+    waiting: null,
+    active,
+    unregister,
+  });
+  await prepareAppReload();
+  expect(unregister).toHaveBeenCalledOnce();
+});
+
+it("keeps recovery retryable when removing a stalled worker also hangs", async () => {
+  vi.useFakeTimers();
+  try {
+    environment({
+      update: vi.fn().mockResolvedValue(undefined),
+      installing: new Worker(),
+      unregister: vi.fn(() => new Promise(() => {})),
+    });
+    const assertion = expect(prepareAppReload()).rejects.toThrow(/reintenta/i);
+    await vi.advanceTimersByTimeAsync(35_000);
+    await assertion;
+    expect(vi.getTimerCount()).toBe(0);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it("does not reload the broken shell when unregister fails", async () => {
+  const worker = new Worker();
+  worker.transition("redundant");
+  environment({
+    update: vi.fn().mockResolvedValue(undefined),
+    installing: worker,
+    unregister: vi.fn().mockRejectedValue(new Error("Removal failed")),
+  });
+  await expect(prepareAppReload()).rejects.toThrow(/reintenta/i);
+});
+
+it.each([
+  "/public/forms/0123456789abcdef0123456789abcdef",
+  "/public/bookings/0123456789abcdefghijkl",
+  "/public/quotes/0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+  "/register",
+  "/public/pages",
+  "/public/pages/fixture",
+  "/public/pages/fixture/child",
+])("does not register the private worker while recovering %s", async (path) => {
+  environment({ update: vi.fn() });
+  const original = window.location.href;
+  window.history.replaceState(null, "", path);
+  try {
+    await prepareAppReload();
+    expect(navigator.serviceWorker.register).not.toHaveBeenCalled();
+  } finally {
+    window.history.replaceState(null, "", original);
+  }
+});

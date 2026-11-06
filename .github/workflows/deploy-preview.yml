@@ -1,0 +1,580 @@
+name: Deploy Savia preview
+
+on:
+  workflow_run:
+    workflows: [Savia CI]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: savia-preview
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    name: Plan Preview release
+    if: >-
+      ${{ github.event_name == 'workflow_run' &&
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.event == 'push' &&
+        github.event.workflow_run.head_branch == 'main' &&
+        github.event.workflow_run.head_repository.full_name == github.repository }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    outputs:
+      kind: ${{ steps.plan.outputs.kind }}
+      plugins: ${{ steps.plan.outputs.plugins }}
+      base: ${{ steps.plan.outputs.base }}
+      office_runtime_changed: ${{ steps.plan.outputs.office_runtime_changed }}
+      store_plugins_changed: ${{ steps.plan.outputs.store_plugins_changed }}
+    steps:
+      - name: Check out tested source and history
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+
+      - name: Reject superseded release plans
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$(git ls-remote --exit-code origin refs/heads/main | cut -f1)"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Compare with the last successfully published ancestor
+        id: plan
+        run: node scripts/preview-release-plan.mjs
+        env:
+          APPROVED_SHA: ${{ github.event.workflow_run.head_sha }}
+          GITHUB_TOKEN: ${{ github.token }}
+
+  deploy:
+    needs: plan
+    if: >-
+      ${{ always() && needs.plan.result == 'success' && needs.plan.outputs.kind == 'platform' &&
+        github.event_name == 'workflow_run' &&
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.event == 'push' &&
+        github.event.workflow_run.head_branch == 'main' &&
+        github.event.workflow_run.head_repository.full_name == github.repository }}
+    name: Deploy preview
+    timeout-minutes: 40
+    runs-on: ubuntu-24.04
+    environment:
+      name: preview
+      url: ${{ steps.infrastructure.outputs.public-origin }}
+    env:
+      PNPM_CONFIG_STRICT_DEP_BUILDS: "false"
+    steps:
+      - name: Check out source
+        if: ${{ success() && !cancelled() }}
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+
+      - name: Reject superseded deployments
+        if: ${{ success() && !cancelled() }}
+        shell: bash
+        run: |
+          approved_sha="$(git rev-parse HEAD)"
+          current_sha="$(git ls-remote --exit-code origin refs/heads/main | cut -f1)"
+          if [ "$approved_sha" != "$current_sha" ]; then
+            echo "::error::This commit has been superseded on main; refusing an outdated deployment."
+            exit 1
+          fi
+
+      - name: Set up pnpm
+        if: ${{ success() && !cancelled() }}
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.24.0
+
+      - name: Set up Node.js
+        if: ${{ success() && !cancelled() }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        if: ${{ success() && !cancelled() }}
+        run: pnpm install --frozen-lockfile
+
+      - name: Load infrastructure stack outputs
+        if: ${{ success() && !cancelled() }}
+        id: infrastructure
+        uses: ./.github/actions/pulumi-infrastructure
+        with:
+          stack: preview
+        env:
+          PULUMI_BACKEND_URL: ${{ secrets.PULUMI_BACKEND_URL }}
+          PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_STATE_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_STATE_SECRET_ACCESS_KEY }}
+          NANGO_JIRA_INTEGRATION_ID: ${{ vars.NANGO_JIRA_INTEGRATION_ID }}
+          NANGO_GITHUB_INTEGRATION_ID: ${{ vars.NANGO_GITHUB_INTEGRATION_ID }}
+          NANGO_ZOOM_INTEGRATION_ID: ${{ vars.NANGO_ZOOM_INTEGRATION_ID }}
+          NANGO_SLACK_INTEGRATION_ID: ${{ vars.NANGO_SLACK_INTEGRATION_ID }}
+          NANGO_MICROSOFT_TEAMS_INTEGRATION_ID: ${{ vars.NANGO_MICROSOFT_TEAMS_INTEGRATION_ID }}
+          OPENROUTER_MODEL: ${{ vars.OPENROUTER_MODEL }}
+
+      - name: Validate planned Flows settings and stable keys before mutation
+        if: ${{ success() && !cancelled() }}
+        run: node infra/pulumi/flows-preflight.mjs
+        env:
+          SAVIA_FLOWS_BRIDGE_SECRET: ${{ secrets.SAVIA_FLOWS_BRIDGE_SECRET }}
+          SAVIA_FLOWS_JWT_SECRET: ${{ secrets.SAVIA_FLOWS_JWT_SECRET }}
+          SAVIA_FLOWS_SECRET_MASTER_KEY: ${{ secrets.SAVIA_FLOWS_SECRET_MASTER_KEY }}
+          SAVIA_FLOWS_FORM_SIGNING_KEY: ${{ secrets.SAVIA_FLOWS_FORM_SIGNING_KEY }}
+          SAVIA_FLOWS_BACKUP_KEY: ${{ secrets.SAVIA_FLOWS_BACKUP_KEY }}
+          PULUMI_BACKEND_URL: ${{ secrets.PULUMI_BACKEND_URL }}
+          PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_STATE_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_STATE_SECRET_ACCESS_KEY }}
+
+      - name: Verify isolated preview resources before any mutation
+        if: ${{ success() && !cancelled() }}
+        run: node scripts/verify-preview-resources.mjs
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          SAVIA_AUTH_D1_ID: ${{ env.SAVIA_AUTH_D1_ID }}
+          SAVIA_DOMAIN_D1_ID: ${{ env.SAVIA_DOMAIN_D1_ID }}
+          SAVIA_DOCUMENTS_BUCKET: ${{ env.SAVIA_DOCUMENTS_BUCKET }}
+
+      - name: Find exact same-run Preview release artifact
+        if: ${{ success() && !cancelled() }}
+        id: find_retry_release
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          APPROVED_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          node --input-type=module <<'NODE'
+          import { appendFile } from 'node:fs/promises';
+          const { GITHUB_TOKEN, GITHUB_REPOSITORY, GITHUB_RUN_ID, APPROVED_SHA, GITHUB_OUTPUT } = process.env;
+          if (!GITHUB_OUTPUT || !/^\d+$/.test(GITHUB_RUN_ID ?? '') || !/^[a-f0-9]{40}$/.test(APPROVED_SHA ?? '')) throw new Error('Invalid retry identity');
+          const expectedName = `preview-runtime-release-${GITHUB_RUN_ID}`;
+          const matches = [];
+          for (let page = 1; ; page++) {
+            const response = await fetch(`https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/artifacts?per_page=100&page=${page}`, {
+              headers: { Authorization: `Bearer ${GITHUB_TOKEN}`, Accept: 'application/vnd.github+json' },
+            });
+            if (!response.ok) throw new Error('Cannot inspect same-run retry artifacts');
+            const body = await response.json();
+            for (const artifact of body.artifacts ?? []) {
+              if (artifact.name !== expectedName || artifact.expired) continue;
+              const run = artifact.workflow_run;
+              if (String(run?.id) !== GITHUB_RUN_ID || run?.head_sha !== APPROVED_SHA || run?.head_branch !== 'main') {
+                throw new Error('Retry artifact provenance does not match the approved Preview run');
+              }
+              matches.push(artifact.id);
+            }
+            if ((body.artifacts ?? []).length < 100) break;
+          }
+          if (matches.length > 1) throw new Error('Ambiguous same-run Preview release artifacts');
+          if (matches.length === 1) {
+            await appendFile(GITHUB_OUTPUT, `found=true\nartifact_id=${matches[0]}\n`);
+          } else {
+            await appendFile(GITHUB_OUTPUT, 'found=false\n');
+          }
+          NODE
+
+      - name: Download exact same-run Preview release artifact
+        if: ${{ success() && !cancelled() && steps.find_retry_release.outputs.found == 'true' }}
+        uses: actions/download-artifact@v4
+        with:
+          artifact-ids: ${{ steps.find_retry_release.outputs.artifact_id }}
+          path: ${{ runner.temp }}/preview-runtime-custody/retry-input
+          merge-multiple: true
+
+      - name: Restore encrypted Preview release artifact
+        if: ${{ success() && !cancelled() }}
+        id: restore_release
+        env:
+          SAVIA_BACKUP_KEY: ${{ secrets.SAVIA_FLOWS_BACKUP_KEY }}
+          APPROVED_SHA: ${{ github.event.workflow_run.head_sha }}
+          NANGO_JIRA_INTEGRATION_ID: ${{ vars.NANGO_JIRA_INTEGRATION_ID }}
+          NANGO_GITHUB_INTEGRATION_ID: ${{ vars.NANGO_GITHUB_INTEGRATION_ID }}
+          NANGO_ZOOM_INTEGRATION_ID: ${{ vars.NANGO_ZOOM_INTEGRATION_ID }}
+          NANGO_SLACK_INTEGRATION_ID: ${{ vars.NANGO_SLACK_INTEGRATION_ID }}
+          NANGO_MICROSOFT_TEAMS_INTEGRATION_ID: ${{ vars.NANGO_MICROSOFT_TEAMS_INTEGRATION_ID }}
+          OPENROUTER_MODEL: ${{ vars.OPENROUTER_MODEL }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/preview-runtime-custody/retry-input/release.tar.gz.enc"
+          provenance="$RUNNER_TEMP/preview-runtime-custody/retry-input/provenance.json.enc"
+          if [ "${{ steps.find_retry_release.outputs.found }}" != true ]; then
+            echo "restored=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ ! -f "$archive" ] || [ ! -f "$provenance" ]; then
+            echo "::error::Same-run Preview release artifact is incomplete."
+            exit 1
+          fi
+          if [ -n "$(find "$RUNNER_TEMP/preview-runtime-custody/retry-input" -mindepth 1 -maxdepth 1 ! -type f -print -quit)" ] || [ "$(find "$RUNNER_TEMP/preview-runtime-custody/retry-input" -mindepth 1 -maxdepth 1 -type f | wc -l | tr -d ' ')" != 2 ]; then
+            echo "::error::Same-run Preview release artifact has unexpected or ambiguous files."
+            exit 1
+          fi
+          if [ -L "$archive" ] || [ -L "$provenance" ]; then
+            echo "::error::Same-run Preview release artifact contains a link."
+            exit 1
+          fi
+          result="$(node infra/pulumi/runtime-artifact-custody.mjs restore \
+            --archive "$archive" \
+            --provenance "$provenance" \
+            --destination "$RUNNER_TEMP/savia-release" \
+            --run-id "$GITHUB_RUN_ID" \
+            --sha "$APPROVED_SHA" \
+            --environment preview \
+            --account-id "$CLOUDFLARE_ACCOUNT_ID")"
+          restored="$(node -e 'const value = JSON.parse(process.argv[1]).restored; if (typeof value !== "boolean") process.exit(1); process.stdout.write(String(value));' "$result")"
+          echo "restored=$restored" >> "$GITHUB_OUTPUT"
+
+      - name: Prepare one immutable runtime release
+        if: ${{ success() && !cancelled() && steps.restore_release.outputs.restored != 'true' }}
+        id: prepare_release
+        run: node infra/pulumi/prepare-release.mjs --environment preview --out "$RUNNER_TEMP/savia-release"
+        env:
+          SAVIA_PREVIEW_RELEASE_BASE: ${{ needs.plan.outputs.base }}
+          PULUMI_BACKEND_URL: ${{ secrets.PULUMI_BACKEND_URL }}
+          PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_STATE_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_STATE_SECRET_ACCESS_KEY }}
+          NANGO_JIRA_INTEGRATION_ID: ${{ vars.NANGO_JIRA_INTEGRATION_ID }}
+          NANGO_GITHUB_INTEGRATION_ID: ${{ vars.NANGO_GITHUB_INTEGRATION_ID }}
+          NANGO_ZOOM_INTEGRATION_ID: ${{ vars.NANGO_ZOOM_INTEGRATION_ID }}
+          NANGO_SLACK_INTEGRATION_ID: ${{ vars.NANGO_SLACK_INTEGRATION_ID }}
+          NANGO_MICROSOFT_TEAMS_INTEGRATION_ID: ${{ vars.NANGO_MICROSOFT_TEAMS_INTEGRATION_ID }}
+          OPENROUTER_MODEL: ${{ vars.OPENROUTER_MODEL }}
+          NODE_OPTIONS: "--max-old-space-size=1536"
+
+      - name: Encrypt immutable Preview release artifact
+        if: ${{ success() && !cancelled() && steps.restore_release.outputs.restored != 'true' }}
+        env:
+          SAVIA_BACKUP_KEY: ${{ secrets.SAVIA_FLOWS_BACKUP_KEY }}
+          APPROVED_SHA: ${{ github.event.workflow_run.head_sha }}
+          NANGO_JIRA_INTEGRATION_ID: ${{ vars.NANGO_JIRA_INTEGRATION_ID }}
+          NANGO_GITHUB_INTEGRATION_ID: ${{ vars.NANGO_GITHUB_INTEGRATION_ID }}
+          NANGO_ZOOM_INTEGRATION_ID: ${{ vars.NANGO_ZOOM_INTEGRATION_ID }}
+          NANGO_SLACK_INTEGRATION_ID: ${{ vars.NANGO_SLACK_INTEGRATION_ID }}
+          NANGO_MICROSOFT_TEAMS_INTEGRATION_ID: ${{ vars.NANGO_MICROSOFT_TEAMS_INTEGRATION_ID }}
+          OPENROUTER_MODEL: ${{ vars.OPENROUTER_MODEL }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          mkdir -m 700 -p "$RUNNER_TEMP/preview-runtime-custody/retained"
+          node infra/pulumi/runtime-artifact-custody.mjs retain \
+            --artifact "$RUNNER_TEMP/savia-release" \
+            --archive "$RUNNER_TEMP/preview-runtime-custody/retained/release.tar.gz.enc" \
+            --provenance "$RUNNER_TEMP/preview-runtime-custody/retained/provenance.json.enc" \
+            --run-id "$GITHUB_RUN_ID" \
+            --sha "$APPROVED_SHA" \
+            --environment preview \
+            --account-id "$CLOUDFLARE_ACCOUNT_ID"
+
+      - name: Retain immutable Preview release for same-run retry
+        if: ${{ success() && !cancelled() && steps.restore_release.outputs.restored != 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: preview-runtime-release-${{ github.run_id }}
+          path: ${{ runner.temp }}/preview-runtime-custody/retained/*.enc
+          retention-days: 7
+          if-no-files-found: error
+          overwrite: true
+
+      - name: Review the saved managed runtime plan
+        if: ${{ success() && !cancelled() }}
+        id: runtime_plan
+        run: node infra/pulumi/environment.mjs plan --environment preview --artifact "$RUNNER_TEMP/savia-release" --plan "$RUNNER_TEMP/savia-release-plan.json"
+        env:
+          PULUMI_BACKEND_URL: ${{ secrets.PULUMI_BACKEND_URL }}
+          PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_STATE_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_STATE_SECRET_ACCESS_KEY }}
+          NANGO_JIRA_INTEGRATION_ID: ${{ vars.NANGO_JIRA_INTEGRATION_ID }}
+          NANGO_GITHUB_INTEGRATION_ID: ${{ vars.NANGO_GITHUB_INTEGRATION_ID }}
+          NANGO_ZOOM_INTEGRATION_ID: ${{ vars.NANGO_ZOOM_INTEGRATION_ID }}
+          NANGO_SLACK_INTEGRATION_ID: ${{ vars.NANGO_SLACK_INTEGRATION_ID }}
+          NANGO_MICROSOFT_TEAMS_INTEGRATION_ID: ${{ vars.NANGO_MICROSOFT_TEAMS_INTEGRATION_ID }}
+          OPENROUTER_MODEL: ${{ vars.OPENROUTER_MODEL }}
+          SAVIA_DEPLOY_ENVIRONMENT: preview
+          SAVIA_FLOWS_BRIDGE_SECRET: ${{ secrets.SAVIA_FLOWS_BRIDGE_SECRET }}
+          SAVIA_FLOWS_JWT_SECRET: ${{ secrets.SAVIA_FLOWS_JWT_SECRET }}
+          SAVIA_FLOWS_SECRET_MASTER_KEY: ${{ secrets.SAVIA_FLOWS_SECRET_MASTER_KEY }}
+          SAVIA_FLOWS_FORM_SIGNING_KEY: ${{ secrets.SAVIA_FLOWS_FORM_SIGNING_KEY }}
+          BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
+          SAVIA_MCP_SHARED_SECRET: ${{ secrets.SAVIA_MCP_SHARED_SECRET }}
+          SAVIA_REQUEST_ENCRYPTION_KEY: ${{ secrets.SAVIA_REQUEST_ENCRYPTION_KEY }}
+          EXTENSION_CONNECTIONS_ENCRYPTION_KEY: ${{ secrets.EXTENSION_CONNECTIONS_ENCRYPTION_KEY }}
+          ASSISTANT_SETTINGS_ENCRYPTION_KEY: ${{ secrets.ASSISTANT_SETTINGS_ENCRYPTION_KEY }}
+          CRM_INTEGRATION_KEY: ${{ secrets.CRM_INTEGRATION_KEY }}
+          PLUGIN_REGISTRY_TENANTS: ${{ secrets.PLUGIN_REGISTRY_TENANTS }}
+          NANGO_API_KEY: ${{ secrets.NANGO_API_KEY }}
+          NANGO_FALLBACK_API_KEY: ${{ secrets.NANGO_FALLBACK_API_KEY }}
+          NANGO_JIRA_REPORTING_CONNECTION_ID: ${{ secrets.NANGO_JIRA_REPORTING_CONNECTION_ID }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          WHATSAPP_META_APP_SECRET: ${{ secrets.WHATSAPP_META_APP_SECRET }}
+          WHATSAPP_WEBHOOK_VERIFY_TOKEN: ${{ secrets.WHATSAPP_WEBHOOK_VERIFY_TOKEN }}
+          SQL_BRIDGE_URL: ${{ secrets.SQL_BRIDGE_URL }}
+          SQL_BRIDGE_SECRET: ${{ secrets.SQL_BRIDGE_SECRET }}
+          SAVIA_CHATGPT_CLIENT_ID: ${{ secrets.SAVIA_CHATGPT_CLIENT_ID }}
+          SAVIA_CHATGPT_CLIENT_SECRET: ${{ secrets.SAVIA_CHATGPT_CLIENT_SECRET }}
+          SAVIA_CHATGPT_TOKEN_AUTH_METHOD: ${{ vars.SAVIA_CHATGPT_TOKEN_AUTH_METHOD }}
+          SAVIA_GOOGLE_CLIENT_ID: ${{ secrets.SAVIA_GOOGLE_CLIENT_ID }}
+          SAVIA_GOOGLE_CLIENT_SECRET: ${{ secrets.SAVIA_GOOGLE_CLIENT_SECRET }}
+          SAVIA_MICROSOFT_CLIENT_ID: ${{ secrets.SAVIA_MICROSOFT_CLIENT_ID }}
+          SAVIA_MICROSOFT_CLIENT_SECRET: ${{ secrets.SAVIA_MICROSOFT_CLIENT_SECRET }}
+          SAVIA_BACKUP_CONTROL_SECRET: ${{ secrets.SAVIA_BACKUP_CONTROL_SECRET }}
+          SAVIA_BACKUP_KEY: ${{ secrets.SAVIA_BACKUP_KEY }}
+          SAVIA_FLOWS_BACKUP_KEY: ${{ secrets.SAVIA_FLOWS_BACKUP_KEY }}
+          SAVIA_RUNTIME_OPERATION_DIRECTORY: ${{ runner.temp }}/savia-runtime
+
+      - name: Apply the exact managed runtime plan
+        id: managed_runtime
+        if: ${{ always() && !failure() && steps.runtime_plan.outcome == 'success' }}
+        run: node infra/pulumi/environment.mjs apply --environment preview --artifact "$RUNNER_TEMP/savia-release" --plan "$RUNNER_TEMP/savia-release-plan.json" --apply
+        env:
+          PULUMI_BACKEND_URL: ${{ secrets.PULUMI_BACKEND_URL }}
+          PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_STATE_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_STATE_SECRET_ACCESS_KEY }}
+          NANGO_JIRA_INTEGRATION_ID: ${{ vars.NANGO_JIRA_INTEGRATION_ID }}
+          NANGO_GITHUB_INTEGRATION_ID: ${{ vars.NANGO_GITHUB_INTEGRATION_ID }}
+          NANGO_ZOOM_INTEGRATION_ID: ${{ vars.NANGO_ZOOM_INTEGRATION_ID }}
+          NANGO_SLACK_INTEGRATION_ID: ${{ vars.NANGO_SLACK_INTEGRATION_ID }}
+          NANGO_MICROSOFT_TEAMS_INTEGRATION_ID: ${{ vars.NANGO_MICROSOFT_TEAMS_INTEGRATION_ID }}
+          OPENROUTER_MODEL: ${{ vars.OPENROUTER_MODEL }}
+          SAVIA_BACKUP_R2_FORCE_API: "true"
+          SAVIA_DEPLOY_ENVIRONMENT: preview
+          SAVIA_FLOWS_BRIDGE_SECRET: ${{ secrets.SAVIA_FLOWS_BRIDGE_SECRET }}
+          SAVIA_FLOWS_JWT_SECRET: ${{ secrets.SAVIA_FLOWS_JWT_SECRET }}
+          SAVIA_FLOWS_SECRET_MASTER_KEY: ${{ secrets.SAVIA_FLOWS_SECRET_MASTER_KEY }}
+          SAVIA_FLOWS_FORM_SIGNING_KEY: ${{ secrets.SAVIA_FLOWS_FORM_SIGNING_KEY }}
+          BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
+          SAVIA_MCP_SHARED_SECRET: ${{ secrets.SAVIA_MCP_SHARED_SECRET }}
+          SAVIA_REQUEST_ENCRYPTION_KEY: ${{ secrets.SAVIA_REQUEST_ENCRYPTION_KEY }}
+          EXTENSION_CONNECTIONS_ENCRYPTION_KEY: ${{ secrets.EXTENSION_CONNECTIONS_ENCRYPTION_KEY }}
+          ASSISTANT_SETTINGS_ENCRYPTION_KEY: ${{ secrets.ASSISTANT_SETTINGS_ENCRYPTION_KEY }}
+          CRM_INTEGRATION_KEY: ${{ secrets.CRM_INTEGRATION_KEY }}
+          PLUGIN_REGISTRY_TENANTS: ${{ secrets.PLUGIN_REGISTRY_TENANTS }}
+          NANGO_API_KEY: ${{ secrets.NANGO_API_KEY }}
+          NANGO_FALLBACK_API_KEY: ${{ secrets.NANGO_FALLBACK_API_KEY }}
+          NANGO_JIRA_REPORTING_CONNECTION_ID: ${{ secrets.NANGO_JIRA_REPORTING_CONNECTION_ID }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          WHATSAPP_META_APP_SECRET: ${{ secrets.WHATSAPP_META_APP_SECRET }}
+          WHATSAPP_WEBHOOK_VERIFY_TOKEN: ${{ secrets.WHATSAPP_WEBHOOK_VERIFY_TOKEN }}
+          SQL_BRIDGE_URL: ${{ secrets.SQL_BRIDGE_URL }}
+          SQL_BRIDGE_SECRET: ${{ secrets.SQL_BRIDGE_SECRET }}
+          SAVIA_CHATGPT_CLIENT_ID: ${{ secrets.SAVIA_CHATGPT_CLIENT_ID }}
+          SAVIA_CHATGPT_CLIENT_SECRET: ${{ secrets.SAVIA_CHATGPT_CLIENT_SECRET }}
+          SAVIA_CHATGPT_TOKEN_AUTH_METHOD: ${{ vars.SAVIA_CHATGPT_TOKEN_AUTH_METHOD }}
+          SAVIA_GOOGLE_CLIENT_ID: ${{ secrets.SAVIA_GOOGLE_CLIENT_ID }}
+          SAVIA_GOOGLE_CLIENT_SECRET: ${{ secrets.SAVIA_GOOGLE_CLIENT_SECRET }}
+          SAVIA_MICROSOFT_CLIENT_ID: ${{ secrets.SAVIA_MICROSOFT_CLIENT_ID }}
+          SAVIA_MICROSOFT_CLIENT_SECRET: ${{ secrets.SAVIA_MICROSOFT_CLIENT_SECRET }}
+          SAVIA_BACKUP_CONTROL_SECRET: ${{ secrets.SAVIA_BACKUP_CONTROL_SECRET }}
+          SAVIA_BACKUP_KEY: ${{ secrets.SAVIA_BACKUP_KEY }}
+          SAVIA_FLOWS_BACKUP_KEY: ${{ secrets.SAVIA_FLOWS_BACKUP_KEY }}
+          SAVIA_RUNTIME_OPERATION_DIRECTORY: ${{ runner.temp }}/savia-runtime
+
+      - name: Publish sanitized runtime operation timings
+        continue-on-error: true
+        if: ${{ always() }}
+        run: node infra/pulumi/runtime-timing.mjs summary
+        env:
+          SAVIA_RUNTIME_OPERATION_DIRECTORY: ${{ runner.temp }}/savia-runtime
+
+      - name: Encrypt private command diagnostics
+        if: ${{ always() }}
+        env:
+          SAVIA_BACKUP_KEY: ${{ secrets.SAVIA_FLOWS_BACKUP_KEY }}
+        run: |
+          if [ -d "$RUNNER_TEMP/savia-runtime/command-errors" ]; then
+            umask 077
+            tar -czf "$RUNNER_TEMP/preview-command-diagnostics.tar.gz" -C "$RUNNER_TEMP/savia-runtime" command-errors
+            node scripts/encrypt-flows-backup.mjs --action encrypt --input "$RUNNER_TEMP/preview-command-diagnostics.tar.gz" --output "$RUNNER_TEMP/preview-command-diagnostics.enc"
+            rm -f "$RUNNER_TEMP/preview-command-diagnostics.tar.gz"
+          fi
+
+      - name: Retain encrypted command diagnostics
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: preview-command-diagnostics
+          path: ${{ runner.temp }}/preview-command-diagnostics.enc
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Retain encrypted managed recovery archive
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: preview-runtime-recovery
+          path: ${{ runner.temp }}/savia-runtime/recovery/flows-release-backup.enc
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Prepare Office runtime assets
+        if: ${{ success() && !cancelled() && needs.plan.outputs.office_runtime_changed == 'true' }}
+        run: node scripts/prepare-office-runtime.mjs
+
+      - name: Package Office runtime assets
+        if: ${{ success() && !cancelled() && needs.plan.outputs.office_runtime_changed == 'true' }}
+        run: node scripts/package-office-runtime.mjs
+
+      - name: Upload Office runtime assets to preview R2
+        if: ${{ success() && !cancelled() && needs.plan.outputs.office_runtime_changed == 'true' }}
+        run: node scripts/upload-office-runtime.mjs
+        env:
+          SAVIA_DEPLOY_ENVIRONMENT: preview
+          SAVIA_DOCUMENTS_BUCKET: ${{ env.SAVIA_DOCUMENTS_BUCKET }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+      - name: Deploy release plugin ZIPs to all workspaces
+        if: ${{ success() && !cancelled() && needs.plan.outputs.store_plugins_changed == 'true' }}
+        run: node scripts/deploy-store-plugins.mjs
+        env:
+          SAVIA_DEPLOY_ENVIRONMENT: preview
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_DATABASE_ID: ${{ env.SAVIA_DOMAIN_D1_ID }}
+
+      - name: Record the deployed and verified commit
+        if: ${{ success() && !cancelled() }}
+        env:
+          DEPLOYED_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          node --input-type=module <<'NODE'
+          import { writeFileSync } from 'node:fs';
+          import { execFileSync } from 'node:child_process';
+          const sha = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+          if (sha !== process.env.DEPLOYED_SHA) throw new Error('Deployed commit does not match tested commit');
+          writeFileSync(process.env.RUNNER_TEMP + '/preview-release.json', JSON.stringify({ sha, repository: process.env.GITHUB_REPOSITORY, environment: 'preview' }));
+          NODE
+
+      - name: Publish promotion evidence
+        if: ${{ success() && !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: preview-release
+          path: ${{ runner.temp }}/preview-release.json
+          retention-days: 30
+
+  plugins:
+    name: Publish changed Preview plugins
+    needs: plan
+    if: needs.plan.outputs.kind == 'plugin'
+    timeout-minutes: 10
+    runs-on: ubuntu-24.04
+    environment:
+      name: preview
+      url: https://savia-preview.hefesoft.com
+    env:
+      PNPM_CONFIG_STRICT_DEP_BUILDS: "false"
+    steps:
+      - name: Check out tested source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.24.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Load existing infrastructure outputs without applying changes
+        uses: ./.github/actions/pulumi-infrastructure
+        with:
+          stack: preview
+        env:
+          PULUMI_BACKEND_URL: ${{ secrets.PULUMI_BACKEND_URL }}
+          PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_STATE_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_STATE_SECRET_ACCESS_KEY }}
+
+      - name: Verify isolated preview resources before plugin mutation
+        run: node scripts/verify-preview-resources.mjs
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+      - name: Reject superseded plugin publication
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$(git ls-remote --exit-code origin refs/heads/main | cut -f1)"
+
+      - name: Write the exact approved plugin plan
+        env:
+          APPROVED_SHA: ${{ github.event.workflow_run.head_sha }}
+          DEPLOYED_BASE: ${{ needs.plan.outputs.base }}
+          CHANGED_PLUGINS: ${{ needs.plan.outputs.plugins }}
+        run: |
+          node --input-type=module <<'NODE'
+          import { writeFileSync } from 'node:fs';
+          writeFileSync(process.env.RUNNER_TEMP + '/preview-plugin-plan.json', JSON.stringify({ kind: 'plugin', head: process.env.APPROVED_SHA, base: process.env.DEPLOYED_BASE, plugins: JSON.parse(process.env.CHANGED_PLUGINS) }));
+          NODE
+
+      - name: Publish exact plugin versions with a recovery checkpoint
+        run: node scripts/publish-preview-plugins.mjs --plan "$RUNNER_TEMP/preview-plugin-plan.json" --recovery "$RUNNER_TEMP/preview-plugin-recovery.json"
+        env:
+          SAVIA_DEPLOY_ENVIRONMENT: preview
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_DATABASE_ID: ${{ env.SAVIA_DOMAIN_D1_ID }}
+
+      - name: Preserve the plugin recovery checkpoint
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: preview-plugin-recovery
+          path: ${{ runner.temp }}/preview-plugin-recovery.json
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Record verified plugin publication
+        env:
+          APPROVED_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          node --input-type=module <<'NODE'
+          import { writeFileSync } from 'node:fs';
+          writeFileSync(process.env.RUNNER_TEMP + '/preview-release.json', JSON.stringify({ sha: process.env.APPROVED_SHA, repository: process.env.GITHUB_REPOSITORY, environment: 'preview', kind: 'plugin' }));
+          NODE
+
+      - name: Publish plugin promotion evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: preview-release
+          path: ${{ runner.temp }}/preview-release.json
+          retention-days: 30

@@ -1,0 +1,98 @@
+import type { NodeType, Parameter, ParameterType } from "@savia/flows-types";
+
+// Re-export NodeType for convenience
+export type { NodeType };
+
+// Node Types
+export type NodeExecutionState =
+  | "idle"
+  | "executing"
+  | "completed"
+  | "error"
+  | "skipped"
+  | "pending";
+
+// Define InputOutputType using ParameterType
+export type InputOutputType = ParameterType["type"];
+
+// Parameter type with an id field for React Flow usage
+export type WorkflowParameter = { id: string } & Parameter;
+
+export interface WorkflowNodeType extends Record<string, unknown> {
+  name: string;
+  inputs: WorkflowParameter[];
+  outputs: WorkflowParameter[];
+  error?: string | null;
+  executionState: NodeExecutionState;
+  nodeType?: string;
+  functionCalling?: boolean;
+  asTool?: boolean;
+  icon?: string;
+  /**
+   * Editor- / runtime-internal flags that survive save/load alongside
+   * inputs/outputs. Used for non-user-facing state that needs to round-trip
+   * through the wire format without polluting the parameter list.
+   */
+  metadata?: Record<string, string>;
+}
+
+// Edge Types
+export interface WorkflowEdgeType extends Record<string, unknown> {
+  isValid?: boolean;
+  isActive?: boolean;
+  sourceType?: string;
+  targetType?: string;
+}
+
+// Canvas Types
+export type ConnectionValidationState = "default" | "valid" | "invalid";
+
+// Component Props Types
+export type WorkflowExecutionStatus =
+  | "idle"
+  | "submitted"
+  | "executing"
+  | "completed"
+  | "error"
+  | "cancelled"
+  | "paused"
+  | "exhausted";
+
+/**
+ * Update payload for a single node's execution state.
+ *
+ * Applied in batches — a running workflow reports every node on each progress
+ * frame, and rewriting the node array once per node made that quadratic.
+ */
+export interface NodeExecutionUpdate {
+  nodeId: string;
+  state?: NodeExecutionState;
+  outputs?: Record<string, unknown>;
+  error?: string;
+}
+
+// Simplified local execution type to use in the workflow builder
+export interface WorkflowNodeExecution {
+  nodeId: string;
+  status: NodeExecutionState;
+  outputs?: Record<string, unknown> | null;
+  error?: string;
+  pendingEvent?: { type: string; timeout?: string };
+}
+
+export interface WorkflowExecution {
+  id?: string;
+  status: WorkflowExecutionStatus;
+  nodeExecutions: WorkflowNodeExecution[];
+  error?: string;
+}
+
+// Dialog Form Parameter Type
+export interface DialogFormParameter {
+  nodeId: string;
+  nameForForm: string;
+  label: string;
+  nodeName: string;
+  isRequired: boolean;
+  type: string;
+}

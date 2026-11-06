@@ -1,0 +1,703 @@
+{
+  "method": "Production files; HTML JS/CSS plus static ESM closure and Vite preload assets for selected startup roots. Authenticated startup adds the private application and My Day, including lazy entry CSS. Compression measured per file; excludes API, images, idle prefetch and service-worker population. Not a network timing or Web Vitals measurement.",
+  "installers": {
+    "files": 0,
+    "bytes": 0
+  },
+  "originals": {
+    "files": 10358,
+    "bytes": 92547762
+  },
+  "published": {
+    "files": 23426,
+    "bytes": 140419557
+  },
+  "sidecars": {
+    "files": 13068,
+    "bytes": 47871795
+  },
+  "boot": {
+    "requests": 14,
+    "bytes": 11687495,
+    "gzipBytes": 3342459,
+    "brotliBytes": 3058952,
+    "assets": [
+      {
+        "name": "assets/dnd-vendor-BxJst0s4.js",
+        "bytes": 11175,
+        "gzipBytes": 4246,
+        "brotliBytes": 4077
+      },
+      {
+        "name": "assets/icons-CGWjXgev.js",
+        "bytes": 1434,
+        "gzipBytes": 807,
+        "brotliBytes": 743
+      },
+      {
+        "name": "assets/main-DPv58QQ9.js",
+        "bytes": 134016,
+        "gzipBytes": 40359,
+        "brotliBytes": 37825
+      },
+      {
+        "name": "assets/main-DjY_XJYz.css",
+        "bytes": 179686,
+        "gzipBytes": 27293,
+        "brotliBytes": 24240
+      },
+      {
+        "name": "assets/modulepreload-polyfill-Czpn1I53.js",
+        "bytes": 1196,
+        "gzipBytes": 676,
+        "brotliBytes": 598
+      },
+      {
+        "name": "assets/modulepreload-polyfill-D2tmey1R.js",
+        "bytes": 1443,
+        "gzipBytes": 774,
+        "brotliBytes": 708
+      },
+      {
+        "name": "assets/query-vendor-bhJGmZ2u.js",
+        "bytes": 28718,
+        "gzipBytes": 8843,
+        "brotliBytes": 8641
+      },
+      {
+        "name": "assets/react-vendor-CfgVyewH.css",
+        "bytes": 20826,
+        "gzipBytes": 3369,
+        "brotliBytes": 3163
+      },
+      {
+        "name": "assets/react-vendor-DvvKjI4z.js",
+        "bytes": 1969127,
+        "gzipBytes": 589777,
+        "brotliBytes": 545865
+      },
+      {
+        "name": "assets/ui-vendor-DXORMoRL.js",
+        "bytes": 1548347,
+        "gzipBytes": 471645,
+        "brotliBytes": 424824
+      },
+      {
+        "name": "assets/utils-DgKOxa0w.js",
+        "bytes": 140,
+        "gzipBytes": 129,
+        "brotliBytes": 104
+      },
+      {
+        "name": "assets/vendor-BTYT1hen.css",
+        "bytes": 192412,
+        "gzipBytes": 33630,
+        "brotliBytes": 29126
+      },
+      {
+        "name": "assets/vendor-CoqnJYSW.js",
+        "bytes": 7598731,
+        "gzipBytes": 2160703,
+        "brotliBytes": 1978859
+      },
+      {
+        "name": "assets/x-BfwEHg7V.js",
+        "bytes": 244,
+        "gzipBytes": 208,
+        "brotliBytes": 179
+      }
+    ]
+  },
+  "authenticatedMyDay": {
+    "requests": 87,
+    "bytes": 13249219,
+    "gzipBytes": 3766385,
+    "brotliBytes": 3440277,
+    "assets": [
+      {
+        "name": "assets/access-CI5GxVuX.js",
+        "bytes": 19600,
+        "gzipBytes": 5874,
+        "brotliBytes": 5661
+      },
+      {
+        "name": "assets/api-J9zdqZK8.js",
+        "bytes": 4003,
+        "gzipBytes": 1727,
+        "brotliBytes": 1614
+      },
+      {
+        "name": "assets/api-client-Bxe1S8wk.js",
+        "bytes": 2719,
+        "gzipBytes": 1101,
+        "brotliBytes": 995
+      },
+      {
+        "name": "assets/app-CF4MU65s.css",
+        "bytes": 23325,
+        "gzipBytes": 4774,
+        "brotliBytes": 4520
+      },
+      {
+        "name": "assets/app-wxq1PbQC.js",
+        "bytes": 798560,
+        "gzipBytes": 192190,
+        "brotliBytes": 162909
+      },
+      {
+        "name": "assets/appearance-cache-CBjhhGHQ.js",
+        "bytes": 2322,
+        "gzipBytes": 1061,
+        "brotliBytes": 989
+      },
+      {
+        "name": "assets/assistant-context-BJQJTr6t.js",
+        "bytes": 471,
+        "gzipBytes": 307,
+        "brotliBytes": 255
+      },
+      {
+        "name": "assets/automation-CGpJDKk1.js",
+        "bytes": 124306,
+        "gzipBytes": 33414,
+        "brotliBytes": 31728
+      },
+      {
+        "name": "assets/booking-messages-B-jewUTO.js",
+        "bytes": 36054,
+        "gzipBytes": 9971,
+        "brotliBytes": 9653
+      },
+      {
+        "name": "assets/boxes-ClEf9svc.js",
+        "bytes": 941,
+        "gzipBytes": 461,
+        "brotliBytes": 429
+      },
+      {
+        "name": "assets/calendar-BkkJ8nE2.js",
+        "bytes": 345,
+        "gzipBytes": 258,
+        "brotliBytes": 223
+      },
+      {
+        "name": "assets/calendar-check-CV8OWo1C.js",
+        "bytes": 393,
+        "gzipBytes": 280,
+        "brotliBytes": 245
+      },
+      {
+        "name": "assets/calendar-range-pun7inPf.js",
+        "bytes": 503,
+        "gzipBytes": 309,
+        "brotliBytes": 272
+      },
+      {
+        "name": "assets/check-AiRjTNDD.js",
+        "bytes": 214,
+        "gzipBytes": 197,
+        "brotliBytes": 163
+      },
+      {
+        "name": "assets/chevron-down-CES7pRbl.js",
+        "bytes": 218,
+        "gzipBytes": 197,
+        "brotliBytes": 166
+      },
+      {
+        "name": "assets/chevron-up-CfE9O9Fm.js",
+        "bytes": 218,
+        "gzipBytes": 198,
+        "brotliBytes": 167
+      },
+      {
+        "name": "assets/circle-alert-s9VQwgpp.js",
+        "bytes": 340,
+        "gzipBytes": 242,
+        "brotliBytes": 215
+      },
+      {
+        "name": "assets/circle-m0rcysBb.js",
+        "bytes": 220,
+        "gzipBytes": 189,
+        "brotliBytes": 161
+      },
+      {
+        "name": "assets/circle-plus-ZC6pkIqB.js",
+        "bytes": 297,
+        "gzipBytes": 233,
+        "brotliBytes": 203
+      },
+      {
+        "name": "assets/collection-options-BNtrEhua.js",
+        "bytes": 271,
+        "gzipBytes": 192,
+        "brotliBytes": 166
+      },
+      {
+        "name": "assets/custom-plugin-frame-Cw8IY4pB.js",
+        "bytes": 15072,
+        "gzipBytes": 5461,
+        "brotliBytes": 5261
+      },
+      {
+        "name": "assets/data-qTOZ-Lmk.js",
+        "bytes": 2371,
+        "gzipBytes": 995,
+        "brotliBytes": 910
+      },
+      {
+        "name": "assets/dnd-vendor-BxJst0s4.js",
+        "bytes": 11175,
+        "gzipBytes": 4246,
+        "brotliBytes": 4077
+      },
+      {
+        "name": "assets/ellipsis-GAGE6UYv.js",
+        "bytes": 316,
+        "gzipBytes": 218,
+        "brotliBytes": 194
+      },
+      {
+        "name": "assets/extension-package-BSmkiFDr.js",
+        "bytes": 4666,
+        "gzipBytes": 1668,
+        "brotliBytes": 1576
+      },
+      {
+        "name": "assets/external-link-CB-dlmLt.js",
+        "bytes": 341,
+        "gzipBytes": 259,
+        "brotliBytes": 222
+      },
+      {
+        "name": "assets/files-CCVdlS-U.js",
+        "bytes": 445,
+        "gzipBytes": 285,
+        "brotliBytes": 254
+      },
+      {
+        "name": "assets/google-calendar-BfBRRJqF.js",
+        "bytes": 5085,
+        "gzipBytes": 2396,
+        "brotliBytes": 2286
+      },
+      {
+        "name": "assets/google-drive-CzvKCTY8.js",
+        "bytes": 2066,
+        "gzipBytes": 1066,
+        "brotliBytes": 1014
+      },
+      {
+        "name": "assets/google-meet-ClLFrtEf.js",
+        "bytes": 3218,
+        "gzipBytes": 1524,
+        "brotliBytes": 1456
+      },
+      {
+        "name": "assets/icons-CGWjXgev.js",
+        "bytes": 1434,
+        "gzipBytes": 807,
+        "brotliBytes": 743
+      },
+      {
+        "name": "assets/input-Dl-ArOY6.js",
+        "bytes": 948,
+        "gzipBytes": 517,
+        "brotliBytes": 461
+      },
+      {
+        "name": "assets/jitsi--2G5BxmI.js",
+        "bytes": 11466,
+        "gzipBytes": 3249,
+        "brotliBytes": 3100
+      },
+      {
+        "name": "assets/key-round-DysqHBFW.js",
+        "bytes": 445,
+        "gzipBytes": 312,
+        "brotliBytes": 284
+      },
+      {
+        "name": "assets/layout-grid-Deu2XR0v.js",
+        "bytes": 436,
+        "gzipBytes": 252,
+        "brotliBytes": 213
+      },
+      {
+        "name": "assets/loader-circle-D3tbd86E.js",
+        "bytes": 234,
+        "gzipBytes": 211,
+        "brotliBytes": 182
+      },
+      {
+        "name": "assets/mail-plus-BAJ7Qnm4.js",
+        "bytes": 404,
+        "gzipBytes": 293,
+        "brotliBytes": 262
+      },
+      {
+        "name": "assets/main-DPv58QQ9.js",
+        "bytes": 134016,
+        "gzipBytes": 40359,
+        "brotliBytes": 37825
+      },
+      {
+        "name": "assets/main-DjY_XJYz.css",
+        "bytes": 179686,
+        "gzipBytes": 27293,
+        "brotliBytes": 24240
+      },
+      {
+        "name": "assets/meeting-link-actions-CrVLT4S9.js",
+        "bytes": 2679,
+        "gzipBytes": 1119,
+        "brotliBytes": 1064
+      },
+      {
+        "name": "assets/messages-UFvF0UHH.js",
+        "bytes": 17137,
+        "gzipBytes": 5819,
+        "brotliBytes": 5647
+      },
+      {
+        "name": "assets/metadata-Bu5cxulo.js",
+        "bytes": 37385,
+        "gzipBytes": 12268,
+        "brotliBytes": 11867
+      },
+      {
+        "name": "assets/microsoft-onedrive-BcSshrNV.js",
+        "bytes": 7433,
+        "gzipBytes": 1983,
+        "brotliBytes": 1836
+      },
+      {
+        "name": "assets/microsoft-outlook-Dhv2OWSC.js",
+        "bytes": 11084,
+        "gzipBytes": 2965,
+        "brotliBytes": 2794
+      },
+      {
+        "name": "assets/microsoft-teams-CL4vzZ1o.js",
+        "bytes": 6467,
+        "gzipBytes": 1625,
+        "brotliBytes": 1521
+      },
+      {
+        "name": "assets/modulepreload-polyfill-Czpn1I53.js",
+        "bytes": 1196,
+        "gzipBytes": 676,
+        "brotliBytes": 598
+      },
+      {
+        "name": "assets/modulepreload-polyfill-D2tmey1R.js",
+        "bytes": 1443,
+        "gzipBytes": 774,
+        "brotliBytes": 708
+      },
+      {
+        "name": "assets/my-day-page-osspz9el.js",
+        "bytes": 180117,
+        "gzipBytes": 48105,
+        "brotliBytes": 43500
+      },
+      {
+        "name": "assets/office-api-BNAvUoHq.js",
+        "bytes": 1526,
+        "gzipBytes": 868,
+        "brotliBytes": 799
+      },
+      {
+        "name": "assets/page-skeletons-HBZAqCRV.js",
+        "bytes": 4516,
+        "gzipBytes": 1048,
+        "brotliBytes": 940
+      },
+      {
+        "name": "assets/panel-left-q50y_sWd.js",
+        "bytes": 277,
+        "gzipBytes": 235,
+        "brotliBytes": 202
+      },
+      {
+        "name": "assets/plugin-api-DIVKb4Lf.js",
+        "bytes": 2616,
+        "gzipBytes": 980,
+        "brotliBytes": 894
+      },
+      {
+        "name": "assets/plugin-field-lookups-B5rHMvx3.js",
+        "bytes": 1901,
+        "gzipBytes": 923,
+        "brotliBytes": 855
+      },
+      {
+        "name": "assets/plus-BK1vV-ml.js",
+        "bytes": 243,
+        "gzipBytes": 206,
+        "brotliBytes": 178
+      },
+      {
+        "name": "assets/query-keys-D-o508r2.js",
+        "bytes": 94,
+        "gzipBytes": 105,
+        "brotliBytes": 86
+      },
+      {
+        "name": "assets/query-policy-CWJ6pjmm.js",
+        "bytes": 408,
+        "gzipBytes": 291,
+        "brotliBytes": 254
+      },
+      {
+        "name": "assets/query-vendor-bhJGmZ2u.js",
+        "bytes": 28718,
+        "gzipBytes": 8843,
+        "brotliBytes": 8641
+      },
+      {
+        "name": "assets/react-vendor-CfgVyewH.css",
+        "bytes": 20826,
+        "gzipBytes": 3369,
+        "brotliBytes": 3163
+      },
+      {
+        "name": "assets/react-vendor-DvvKjI4z.js",
+        "bytes": 1969127,
+        "gzipBytes": 589777,
+        "brotliBytes": 545865
+      },
+      {
+        "name": "assets/read-refresh-status-B8pLr89-.js",
+        "bytes": 1461,
+        "gzipBytes": 744,
+        "brotliBytes": 710
+      },
+      {
+        "name": "assets/read-state-DsIWyTXL.js",
+        "bytes": 103,
+        "gzipBytes": 109,
+        "brotliBytes": 87
+      },
+      {
+        "name": "assets/refresh-cw-DSw6BfiY.js",
+        "bytes": 411,
+        "gzipBytes": 281,
+        "brotliBytes": 247
+      },
+      {
+        "name": "assets/request-page-Bz7nYH0G.js",
+        "bytes": 135891,
+        "gzipBytes": 47308,
+        "brotliBytes": 45884
+      },
+      {
+        "name": "assets/request-timeout-funPB9zE.js",
+        "bytes": 674,
+        "gzipBytes": 438,
+        "brotliBytes": 403
+      },
+      {
+        "name": "assets/rotate-ccw-bfG1lUz2.js",
+        "bytes": 290,
+        "gzipBytes": 243,
+        "brotliBytes": 209
+      },
+      {
+        "name": "assets/runtime-h_bekEdO.js",
+        "bytes": 82,
+        "gzipBytes": 92,
+        "brotliBytes": 72
+      },
+      {
+        "name": "assets/save-DMwuUgQq.js",
+        "bytes": 645,
+        "gzipBytes": 365,
+        "brotliBytes": 334
+      },
+      {
+        "name": "assets/session-scope-Dne3y4je.js",
+        "bytes": 585,
+        "gzipBytes": 332,
+        "brotliBytes": 282
+      },
+      {
+        "name": "assets/settings-2-B2n3tqNp.js",
+        "bytes": 342,
+        "gzipBytes": 254,
+        "brotliBytes": 219
+      },
+      {
+        "name": "assets/settings-Cf9pkr4p.js",
+        "bytes": 46893,
+        "gzipBytes": 12004,
+        "brotliBytes": 11673
+      },
+      {
+        "name": "assets/skeleton-B6eiS5Uc.js",
+        "bytes": 250,
+        "gzipBytes": 209,
+        "brotliBytes": 174
+      },
+      {
+        "name": "assets/src-CRnDURv3.js",
+        "bytes": 21311,
+        "gzipBytes": 3471,
+        "brotliBytes": 3225
+      },
+      {
+        "name": "assets/storage-provider-icon-CQLu3m7p.js",
+        "bytes": 606,
+        "gzipBytes": 381,
+        "brotliBytes": 324
+      },
+      {
+        "name": "assets/table-8RcivBl2.js",
+        "bytes": 1401,
+        "gzipBytes": 576,
+        "brotliBytes": 507
+      },
+      {
+        "name": "assets/table-properties-DdoFqoNj.js",
+        "bytes": 357,
+        "gzipBytes": 269,
+        "brotliBytes": 235
+      },
+      {
+        "name": "assets/table-skeleton-DQRM2lec.js",
+        "bytes": 1275,
+        "gzipBytes": 627,
+        "brotliBytes": 568
+      },
+      {
+        "name": "assets/tenant-branding-provider-oM1ykQXV.js",
+        "bytes": 2899,
+        "gzipBytes": 1371,
+        "brotliBytes": 1261
+      },
+      {
+        "name": "assets/tenant-host-gb_tjpC2.js",
+        "bytes": 1124,
+        "gzipBytes": 558,
+        "brotliBytes": 515
+      },
+      {
+        "name": "assets/tenant-workspaces-client-yhlmt4Te.js",
+        "bytes": 331,
+        "gzipBytes": 243,
+        "brotliBytes": 203
+      },
+      {
+        "name": "assets/ui-vendor-DXORMoRL.js",
+        "bytes": 1548347,
+        "gzipBytes": 471645,
+        "brotliBytes": 424824
+      },
+      {
+        "name": "assets/use-online-status-M1GZJLFe.js",
+        "bytes": 460,
+        "gzipBytes": 275,
+        "brotliBytes": 228
+      },
+      {
+        "name": "assets/use-realtime-mCszGmJW.js",
+        "bytes": 4050,
+        "gzipBytes": 1841,
+        "brotliBytes": 1702
+      },
+      {
+        "name": "assets/utils-DgKOxa0w.js",
+        "bytes": 140,
+        "gzipBytes": 129,
+        "brotliBytes": 104
+      },
+      {
+        "name": "assets/vendor-BTYT1hen.css",
+        "bytes": 192412,
+        "gzipBytes": 33630,
+        "brotliBytes": 29126
+      },
+      {
+        "name": "assets/vendor-CoqnJYSW.js",
+        "bytes": 7598731,
+        "gzipBytes": 2160703,
+        "brotliBytes": 1978859
+      },
+      {
+        "name": "assets/x-BfwEHg7V.js",
+        "bytes": 244,
+        "gzipBytes": 208,
+        "brotliBytes": 179
+      },
+      {
+        "name": "assets/zoom-DMJeoP0X.js",
+        "bytes": 3567,
+        "gzipBytes": 1514,
+        "brotliBytes": 1417
+      }
+    ]
+  },
+  "largest": [
+    {
+      "name": "assets/plugin-editor-vendor-nodQaK5w.js",
+      "bytes": 10443980
+    },
+    {
+      "name": "assets/vendor-CoqnJYSW.js",
+      "bytes": 7598731
+    },
+    {
+      "name": "assets/plugin-editor-typescript-worker-CmuVVp3S.js",
+      "bytes": 5924230
+    },
+    {
+      "name": "assets/ts.worker-KJ4wGYue.js",
+      "bytes": 5913941
+    },
+    {
+      "name": "flows-ui/assets/index-BsjhWuv6.js",
+      "bytes": 3499410
+    },
+    {
+      "name": "assets/extensionHost.worker-Jaa7RuH2.js",
+      "bytes": 2550178
+    },
+    {
+      "name": "assets/react-vendor-DvvKjI4z.js",
+      "bytes": 1969127
+    },
+    {
+      "name": "assets/ui-vendor-DXORMoRL.js",
+      "bytes": 1548347
+    },
+    {
+      "name": "flows-ui/demo/image1.jpg",
+      "bytes": 1269705
+    },
+    {
+      "name": "assets/plugin-project-workspace-CpZWuDPK.js",
+      "bytes": 1213239
+    },
+    {
+      "name": "assets/thesvg-lookup-icon-CXwub_1m.js",
+      "bytes": 1105742
+    },
+    {
+      "name": "flows-ui/demo/audio.mp3",
+      "bytes": 1082726
+    },
+    {
+      "name": "flows-ui/assets/model-viewer-FXu0v758.js",
+      "bytes": 1038491
+    },
+    {
+      "name": "assets/app-wxq1PbQC.js",
+      "bytes": 798560
+    },
+    {
+      "name": "flows-ui/dafthunk-light.png",
+      "bytes": 640910
+    }
+  ]
+}

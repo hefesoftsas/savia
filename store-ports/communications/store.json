@@ -1,0 +1,144 @@
+{
+  "format": "savia.store",
+  "formatVersion": 1,
+  "collections": [
+    {
+      "object": {
+        "name": "insurance_communications",
+        "label": "Comunicaciones",
+        "description": "Plantillas, envíos y seguimiento de entrega.",
+        "config": {
+          "version": 2,
+          "fields": {
+            "title": {
+              "type": "Textbox",
+              "label": "Nombre",
+              "labels": {},
+              "required": true,
+              "config": {
+                "maxLength": 200
+              }
+            },
+            "payload": {
+              "type": "Textarea",
+              "label": "Contenido",
+              "labels": {},
+              "config": {
+                "maxLength": 10000
+              }
+            },
+            "stage": {
+              "type": "Textbox",
+              "label": "Estado",
+              "labels": {},
+              "config": {
+                "maxLength": 200
+              }
+            }
+          },
+          "fieldOrder": [
+            "title",
+            "payload",
+            "stage"
+          ]
+        }
+      },
+      "requiredFields": {
+        "title": {
+          "types": [
+            "Textbox"
+          ],
+          "required": true
+        },
+        "payload": {
+          "types": [
+            "Textarea"
+          ]
+        },
+        "stage": {
+          "types": [
+            "Textbox"
+          ]
+        }
+      }
+    }
+  ],
+  "screens": [
+    {
+      "object": "insurance_communications",
+      "view": "records"
+    }
+  ],
+  "connectors": [
+    {
+      "id": "insurance.communications.gateway",
+      "label": "Conexión de integración",
+      "secretFields": [
+        "token"
+      ],
+      "configSchema": {
+        "type": "object",
+        "required": [
+          "endpoint",
+          "token"
+        ],
+        "properties": {
+          "endpoint": {
+            "type": "string"
+          },
+          "token": {
+            "type": "string"
+          }
+        }
+      },
+      "allowedHosts": [],
+      "allowConfiguredHost": true
+    }
+  ],
+  "actions": [
+    {
+      "id": "send",
+      "kind": "http",
+      "connector": "insurance.communications.gateway",
+      "request": {
+        "method": "POST",
+        "url": "{{connection.endpoint}}",
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer {{connection.token}}",
+          "Idempotency-Key": "{{tenant}}:{{extension}}:{{action}}:{{input.operationKey}}"
+        },
+        "body": {
+          "version": 1,
+          "extensionId": "{{extension}}",
+          "actionId": "{{action}}",
+          "tenantId": "{{tenant}}",
+          "principalId": "{{principal}}",
+          "payload": "{{input.payload}}"
+        }
+      }
+    },
+    {
+      "id": "status",
+      "kind": "http",
+      "connector": "insurance.communications.gateway",
+      "request": {
+        "method": "POST",
+        "url": "{{connection.endpoint}}",
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer {{connection.token}}",
+          "Idempotency-Key": "{{tenant}}:{{extension}}:{{action}}:{{input.operationKey}}"
+        },
+        "body": {
+          "version": 1,
+          "extensionId": "{{extension}}",
+          "actionId": "{{action}}",
+          "tenantId": "{{tenant}}",
+          "principalId": "{{principal}}",
+          "payload": "{{input.payload}}"
+        }
+      }
+    }
+  ]
+}

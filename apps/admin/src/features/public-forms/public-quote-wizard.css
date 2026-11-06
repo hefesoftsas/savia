@@ -1,0 +1,481 @@
+.public-quote {
+  margin-top: 2rem;
+}
+
+.public-quote-shell {
+  display: grid;
+  gap: 1.25rem;
+  max-width: 44rem;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.public-quote-heading {
+  display: grid;
+  justify-items: center;
+  gap: 0.625rem;
+  padding-block: 0.5rem 1rem;
+}
+.public-quote-heading .public-form-logo {
+  margin: 0 0 0.5rem;
+}
+.public-quote-heading .public-quote-eyebrow,
+.public-quote-heading .public-quote-title,
+.public-quote-heading .public-quote-products {
+  margin: 0;
+}
+.public-quote-notice .public-form-logo {
+  margin-inline: auto;
+}
+
+.public-quote-eyebrow {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--muted-foreground);
+}
+
+.public-quote-title {
+  font-size: clamp(1.65rem, 4vw, 2.2rem);
+  line-height: 1.2;
+  font-weight: 650;
+  text-wrap: balance;
+}
+
+.public-quote-products {
+  color: var(--muted-foreground);
+  font-size: 0.875rem;
+}
+
+.public-quote-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.public-quote-steps li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 0.875rem;
+  color: var(--muted-foreground);
+  background: var(--background);
+}
+
+.public-quote-steps li[data-active="true"] {
+  color: var(--foreground);
+  border-color: var(--primary);
+  font-weight: 600;
+}
+
+.public-quote-steps li[data-done="true"] {
+  color: var(--foreground);
+}
+
+.public-quote-step-index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 999px;
+  background: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.public-quote-steps li[data-active="true"] .public-quote-step-index {
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+
+.public-quote-form {
+  display: grid;
+  gap: 1.25rem;
+  text-align: left;
+}
+
+.public-quote-form fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+
+.public-quote-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.25rem;
+}
+
+.public-quote-plate {
+  display: flex;
+  gap: 0.5rem;
+  align-items: stretch;
+}
+
+.public-quote-plate > input {
+  flex: 1 1 auto;
+  min-width: 0;
+  text-transform: uppercase;
+}
+
+.public-quote-plate-button {
+  flex: 0 0 auto;
+  min-height: 2.75rem;
+  min-width: 2.75rem;
+  padding-inline: 0.75rem;
+}
+
+.public-quote-spinner {
+  display: inline-block;
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid var(--muted-foreground);
+  border-top-color: transparent;
+  border-radius: 999px;
+  animation: public-quote-spin 0.8s linear infinite;
+}
+
+@keyframes public-quote-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.public-quote-synced {
+  margin-left: 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--primary);
+}
+
+.public-quote-syncing {
+  margin-left: 0.5rem;
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+}
+
+.public-quote-actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.public-quote-actions > button {
+  min-height: 44px;
+  flex: 1 1 10rem;
+}
+
+.public-quote-currency {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.public-quote-currency > span {
+  color: var(--muted-foreground);
+  font-weight: 600;
+}
+
+.public-quote-currency > input {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.public-quote-notice {
+  display: grid;
+  gap: 1rem;
+  margin-top: 2rem;
+  line-height: 1.6;
+  text-align: center;
+}
+
+.public-quote-city {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: stretch;
+}
+
+.public-quote-city > input {
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+
+.public-quote-city > p,
+.public-quote-city > ul {
+  flex: 1 1 100%;
+}
+
+.public-quote-city-clear {
+  flex: 0 0 auto;
+  min-height: 2.75rem;
+  min-width: 2.75rem;
+  padding-inline: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--background);
+  color: var(--muted-foreground);
+  font-size: 1.125rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.public-quote-city-clear:hover,
+.public-quote-city-clear:focus-visible {
+  background: var(--muted);
+  color: var(--foreground);
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
+
+.public-quote-suggestions {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0.25rem;
+  position: absolute;
+  inset-inline: 0;
+  top: 100%;
+  z-index: 30;
+  max-height: 12rem;
+  overflow-y: auto;
+  background: var(--background);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  box-shadow: 0 0.5rem 1.5rem rgb(0 0 0 / 0.12);
+}
+
+.public-quote-suggestions button {
+  display: flex;
+  width: 100%;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  text-align: start;
+  padding: 0.625rem 0.75rem;
+  border: 0;
+  border-radius: 0.375rem;
+  background: transparent;
+  color: var(--foreground);
+  font-size: 0.9375rem;
+  line-height: 1.4;
+  cursor: pointer;
+}
+
+.public-quote-suggestions button:hover,
+.public-quote-suggestions button:focus-visible {
+  background: var(--muted);
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
+
+.public-quote-suggestions .public-quote-suggestion-code {
+  flex: 0 0 auto;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--muted-foreground);
+  font-variant-numeric: tabular-nums;
+}
+
+.public-quote-field-error {
+  margin: 0.375rem 0 0;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--destructive);
+}
+
+.public-quote-age {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 0.625rem;
+}
+
+.public-quote-age-label {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--muted-foreground);
+}
+
+.public-quote-age-label strong {
+  color: var(--foreground);
+}
+
+.public-quote-age-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+}
+
+.public-quote-age-chip {
+  min-height: 2rem;
+  min-width: 2.75rem;
+  padding: 0.25rem 0.625rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--background);
+  color: var(--foreground);
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.public-quote-age-chip:hover,
+.public-quote-age-chip:focus-visible {
+  background: var(--muted);
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
+
+.public-quote-age-chip[data-selected="true"] {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--primary-foreground);
+  font-weight: 700;
+}
+
+.public-quote-waiting {
+  display: grid;
+  gap: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  padding: 1.25rem;
+  background: var(--card, #ffffff);
+}
+
+.public-quote-waiting-head {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+}
+
+.public-quote-waiting-head p {
+  margin: 0 0 0.25rem;
+  line-height: 1.5;
+}
+
+.public-quote-spinner--md {
+  width: 1.5rem;
+  height: 1.5rem;
+  margin-top: 0.125rem;
+  flex: 0 0 auto;
+}
+
+.public-quote-progress {
+  height: 0.5rem;
+  border-radius: 999px;
+  background: var(--muted);
+  overflow: hidden;
+}
+
+.public-quote-progress-bar {
+  height: 100%;
+  width: 40%;
+  border-radius: 999px;
+  background: var(--primary);
+  animation: public-quote-slide 1.4s ease-in-out infinite alternate;
+}
+
+@keyframes public-quote-slide {
+  from {
+    margin-inline-start: -40%;
+  }
+  to {
+    margin-inline-start: 100%;
+  }
+}
+
+.public-quote-skeletons {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+}
+
+.public-quote-skeleton-card {
+  display: grid;
+  gap: 0.625rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  padding: 1.25rem;
+}
+
+.public-quote-skeleton {
+  border-radius: 0.375rem;
+  background: var(--muted);
+  animation: public-quote-pulse 1.6s ease-in-out infinite;
+}
+
+.public-quote-skeleton--title {
+  height: 1rem;
+  width: 55%;
+}
+
+.public-quote-skeleton--price {
+  height: 1.75rem;
+  width: 45%;
+}
+
+.public-quote-skeleton--line {
+  height: 0.75rem;
+  width: 80%;
+}
+
+@keyframes public-quote-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+@media (max-width: 640px) {
+  .public-quote-suggestions button {
+    min-height: 44px;
+  }
+
+  .public-quote-age-chip {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  .public-quote-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .public-quote-actions {
+    flex-direction: row;
+  }
+
+  .public-quote-actions > button {
+    height: auto;
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 44px;
+    font-size: 0.9375rem;
+    padding-inline: 0.5rem;
+  }
+
+  .public-quote-steps {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .public-quote * {
+    transition: none !important;
+    animation: none !important;
+  }
+}

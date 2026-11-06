@@ -1,0 +1,34 @@
+<!doctype html><meta charset="utf-8" /><title>
+  Pages · FlexSearch IndexedDB probe</title
+><style>
+  body {
+    font: 16px system-ui;
+    margin: 40px;
+    max-width: 950px;
+    background: #fafafa;
+  }
+  button {
+    padding: 12px;
+    margin: 5px;
+  }
+  pre {
+    white-space: pre-wrap;
+    background: white;
+    padding: 20px;
+  }
+  progress {
+    width: 100%;
+  }
+</style>
+<h1>Pages · FlexSearch + IndexedDB</h1>
+<p>
+  Throwaway probe · 1,000 synthetic fragments · textual search only · no
+  embeddings
+</p>
+<button id="build">Index 1,000 fragments</button
+><button id="reopen">Reopen without indexing</button
+><button id="update">Update fragment 42</button
+><button id="remove">Remove fragment 42</button
+><progress id="progress" max="100" value="0"></progress>
+<pre id="log">Ready</pre>
+<script type="module" src="/main.js"></script>

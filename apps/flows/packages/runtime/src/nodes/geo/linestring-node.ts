@@ -1,0 +1,57 @@
+import { lineString } from "@savia/flows-geo";
+import { ExecutableNode, type NodeContext } from "@savia/flows-runtime";
+import type { NodeExecution, NodeType } from "@savia/flows-types";
+
+export class LineStringNode extends ExecutableNode {
+  public static readonly nodeType: NodeType = {
+    id: "linestring",
+    name: "LineString",
+    type: "linestring",
+    description:
+      "Creates a LineString feature from an array of coordinate pairs",
+    tags: ["Geo", "GeoJSON", "LineString"],
+    icon: "route",
+    inlinable: true,
+    asTool: false,
+    inputs: [
+      {
+        name: "coordinates",
+        type: "json",
+        description:
+          "Array of coordinate pairs [[lon1, lat1], [lon2, lat2], ...]",
+        required: true,
+      },
+      {
+        name: "properties",
+        type: "json",
+        description: "Properties object for the feature",
+        required: false,
+      },
+    ],
+    outputs: [
+      {
+        name: "lineString",
+        type: "geojson",
+        description: "LineString feature",
+      },
+    ],
+  };
+
+  public async execute(context: NodeContext): Promise<NodeExecution> {
+    try {
+      const { coordinates, properties } = context.inputs;
+
+      // Delegate everything to Turf.js lineString function
+      const lineStringFeature = lineString(coordinates, properties);
+
+      return this.createSuccessResult({
+        lineString: lineStringFeature,
+      });
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      return this.createErrorResult(
+        `Error creating LineString: ${error.message}`
+      );
+    }
+  }
+}

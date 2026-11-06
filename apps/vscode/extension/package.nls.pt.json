@@ -1,0 +1,17 @@
+{
+  "command.connect": "Conectar ao Savia",
+  "command.disconnect": "Desconectar",
+  "command.refresh": "Atualizar plugins publicados",
+  "command.checkout": "Baixar a versão mais recente para editar",
+  "command.useVersionAsBase": "Usar esta versão como base",
+  "command.inspectVersion": "Ver fontes publicadas (somente leitura)",
+  "command.comparePublished": "Comparar com fontes publicadas",
+  "command.build": "Compilar plugin",
+  "command.publish": "Publicar uma nova versão",
+  "command.retrySharedPublication": "Tentar novamente a publicação na loja",
+  "command.recoverPublication": "Recuperar uma publicação pendente",
+  "command.updatePublicationBase": "Atualizar base de publicação (preservar arquivos)",
+  "command.openInSavia": "Abrir no Savia",
+  "view.plugins": "Plugins publicados",
+  "view.welcome": "[Conectar ao Savia](command:savia.connect) para explorar versões e trabalhar nas fontes."
+}

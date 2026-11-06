@@ -1,0 +1,505 @@
+import type { MyDayWidgetsLayout } from "@savia/studio-shared/my-day-widgets";
+
+export const sidebarNavigationSectionIds = [
+  "operation",
+  "productivity",
+  "administration",
+  "management",
+] as const;
+export const sidebarNavigationItemIds = [
+  "dashboard",
+  "studio",
+  "savia-flows",
+  "my-day",
+  "bookings",
+  "pages",
+  "office-suite",
+  "companion-recordings",
+  "integrations",
+  "provider-credentials",
+  "assistant-configuration",
+  "service-credentials",
+  "access-control",
+  "users",
+  "tenants",
+  "page-administrator",
+  "domain-sources",
+  "domain-operations",
+  "domain-history",
+  "domain-packages",
+  "plugin-studio",
+  "virtual-employees",
+  "tenant-branding",
+] as const;
+
+export type SidebarNavigationSection =
+  (typeof sidebarNavigationSectionIds)[number];
+export type StaticSidebarNavigationItemId =
+  (typeof sidebarNavigationItemIds)[number];
+export type SidebarNavigationItemId =
+  StaticSidebarNavigationItemId | `page:${string}:${string}`;
+
+/** Stored layouts may still carry pre-Studio or pre-consolidation item ids. */
+export const legacySidebarNavigationItemIds = [
+  "dynamic-crm",
+  "domain-workflows",
+  "domain-reports",
+  "domain-api",
+] as const;
+
+const consolidatedOperationsIds = new Set([
+  "domain-workflows",
+  "domain-reports",
+  "domain-api",
+]);
+
+export function migrateSidebarNavigationItemId(
+  itemId: string,
+): SidebarNavigationItemId {
+  if (itemId === "dynamic-crm") return "studio" as SidebarNavigationItemId;
+  if (consolidatedOperationsIds.has(itemId))
+    return "domain-operations" as SidebarNavigationItemId;
+  return itemId as SidebarNavigationItemId;
+}
+
+export type SidebarNavigationLayoutV1 = {
+  version: 1;
+  sections: Record<SidebarNavigationSection, SidebarNavigationItemId[]>;
+};
+
+export type SidebarNavigationBuiltinBlock = {
+  kind: "builtin";
+  id: SidebarNavigationSection;
+  items: SidebarNavigationItemId[];
+  collapsed: boolean;
+};
+
+export type SidebarNavigationCustomBlock = {
+  kind: "custom";
+  id: `custom:${string}`;
+  label: string;
+  items: SidebarNavigationItemId[];
+  collapsed: boolean;
+};
+
+type SidebarNavigationBlockInput =
+  | (Omit<SidebarNavigationBuiltinBlock, "collapsed"> & {
+      collapsed?: boolean;
+    })
+  | (Omit<SidebarNavigationCustomBlock, "collapsed"> & {
+      collapsed?: boolean;
+    });
+
+type SidebarNavigationLayoutInput = {
+  version: 2;
+  presetVersion?: 2;
+  blocks: SidebarNavigationBlockInput[];
+  hiddenItems?: SidebarNavigationItemId[];
+};
+
+export type SidebarNavigationBlock =
+  SidebarNavigationBuiltinBlock | SidebarNavigationCustomBlock;
+
+export type SidebarNavigationLayout = {
+  version: 2;
+  presetVersion?: 2;
+  blocks: SidebarNavigationBlock[];
+  hiddenItems?: SidebarNavigationItemId[];
+};
+
+export type UserPreferencesRepository = {
+  getSidebarNavigation(
+    principalId: string,
+  ): Promise<SidebarNavigationLayout | undefined>;
+  saveSidebarNavigation(
+    principalId: string,
+    layout: SidebarNavigationLayout,
+  ): Promise<SidebarNavigationLayout>;
+  getAppearance(
+    principalId: string,
+  ): Promise<AppearancePreferences | undefined>;
+  saveAppearance(
+    principalId: string,
+    settings: AppearancePreferences,
+  ): Promise<AppearancePreferences>;
+  getMyDayWidgets(principalId: string): Promise<MyDayWidgetsLayout | undefined>;
+  saveMyDayWidgets(
+    principalId: string,
+    layout: MyDayWidgetsLayout,
+  ): Promise<MyDayWidgetsLayout>;
+};
+
+export const appearanceColorThemeIds = [
+  "emerald",
+  "blue",
+  "indigo",
+  "violet",
+  "rose",
+  "teal",
+  "sky",
+  "orange",
+  "amber",
+  "neutral",
+  "stone",
+  "zinc",
+  "mauve",
+  "olive",
+  "mist",
+  "taupe",
+] as const;
+
+export type AppearanceColorTheme = (typeof appearanceColorThemeIds)[number];
+export type AppearanceThemeMode = "light" | "dark" | "system";
+
+export type AppearancePreferences = {
+  version: 1;
+  theme: AppearanceThemeMode;
+  colorTheme: AppearanceColorTheme;
+};
+
+export function defaultAppearancePreferences(): AppearancePreferences {
+  return { version: 1, theme: "light", colorTheme: "emerald" };
+}
+
+export class AppearancePreferencesError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "AppearancePreferencesError";
+  }
+}
+
+export function parseAppearancePreferences(
+  value: unknown,
+): AppearancePreferences {
+  if (!isRecord(value) || value.version !== 1) {
+    throw new AppearancePreferencesError("Appearance preferences are invalid");
+  }
+  if (
+    value.theme !== "light" &&
+    value.theme !== "dark" &&
+    value.theme !== "system"
+  ) {
+    throw new AppearancePreferencesError("Appearance theme mode is invalid");
+  }
+  if (
+    typeof value.colorTheme !== "string" ||
+    !(appearanceColorThemeIds as readonly string[]).includes(value.colorTheme)
+  ) {
+    throw new AppearancePreferencesError("Appearance color theme is invalid");
+  }
+  return {
+    version: 1,
+    theme: value.theme,
+    colorTheme: value.colorTheme as AppearanceColorTheme,
+  };
+}
+
+export class SidebarNavigationLayoutError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "SidebarNavigationLayoutError";
+  }
+}
+
+export function defaultSidebarNavigationLayout(): SidebarNavigationLayout {
+  return {
+    ...normalizeSidebarNavigationLayout({
+      version: 1,
+      sections: {
+        operation: [
+          "my-day",
+          "bookings",
+          "pages",
+          "office-suite",
+          "companion-recordings",
+          "dashboard",
+          "studio",
+        ],
+        productivity: [
+          "page-administrator",
+          "domain-sources",
+          "domain-operations",
+          "plugin-studio",
+          "provider-credentials",
+          "savia-flows",
+          "virtual-employees",
+          "integrations",
+          "domain-packages",
+        ],
+        administration: [
+          "users",
+          "access-control",
+          "service-credentials",
+          "tenant-branding",
+          "domain-history",
+        ],
+        management: ["tenants"],
+      },
+    }),
+    presetVersion: 2,
+  };
+}
+
+function dedupeMigratedItems(
+  items: SidebarNavigationItemId[],
+): SidebarNavigationItemId[] {
+  const seen = new Set<string>();
+  const result: SidebarNavigationItemId[] = [];
+  for (const item of items) {
+    if (seen.has(item)) continue;
+    seen.add(item);
+    result.push(item);
+  }
+  return result;
+}
+
+function parseItemId(
+  itemId: unknown,
+  seen: Set<string>,
+): SidebarNavigationItemId | null {
+  if (
+    typeof itemId !== "string" ||
+    (!(sidebarNavigationItemIds as readonly string[]).includes(itemId) &&
+      !(legacySidebarNavigationItemIds as readonly string[]).includes(itemId) &&
+      !/^page:[a-zA-Z0-9_%.-]{1,160}:[a-z][a-z0-9_]{0,47}$/.test(itemId))
+  ) {
+    throw new SidebarNavigationLayoutError(
+      "Sidebar navigation item is invalid",
+    );
+  }
+  const migrated = migrateSidebarNavigationItemId(itemId);
+  if (seen.has(migrated)) {
+    // Legacy consolidation (workflows/reports/api -> operations) may produce
+    // the same target from distinct stored ids, and old defaults stored the
+    // three ids in different sections. Keep the first occurrence instead of
+    // rejecting the whole layout; exact duplicates of other items still fail.
+    if (migrated === "domain-operations") {
+      return null;
+    }
+    throw new SidebarNavigationLayoutError(
+      "Sidebar navigation item is duplicated",
+    );
+  }
+  seen.add(migrated);
+  return migrated;
+}
+
+function parseBlockItems(
+  value: unknown,
+  seen: Set<string>,
+): SidebarNavigationItemId[] {
+  if (!Array.isArray(value)) {
+    throw new SidebarNavigationLayoutError(
+      "Sidebar navigation section is invalid",
+    );
+  }
+  const result: SidebarNavigationItemId[] = [];
+  for (const itemId of value) {
+    const parsed = parseItemId(itemId, seen);
+    if (parsed !== null) result.push(parsed);
+  }
+  return result;
+}
+
+export function normalizeSidebarNavigationLayout(
+  value:
+    | SidebarNavigationLayout
+    | SidebarNavigationLayoutV1
+    | SidebarNavigationLayoutInput,
+): SidebarNavigationLayout {
+  const hiddenItems =
+    "hiddenItems" in value && Array.isArray(value.hiddenItems)
+      ? dedupeMigratedItems(
+          value.hiddenItems.map((item) =>
+            typeof item === "string"
+              ? migrateSidebarNavigationItemId(item)
+              : item,
+          ),
+        )
+      : undefined;
+  if (value.version === 2) {
+    const seenAcrossBlocks = new Set<string>();
+    const blocks = value.blocks.map((block) => {
+      const migrated =
+        block.kind === "builtin"
+          ? {
+              kind: "builtin" as const,
+              id: block.id,
+              items: dedupeMigratedItems(
+                block.items.map(migrateSidebarNavigationItemId),
+              ),
+              collapsed: block.collapsed === true,
+            }
+          : {
+              kind: "custom" as const,
+              id: block.id,
+              label: block.label,
+              items: dedupeMigratedItems(
+                block.items.map(migrateSidebarNavigationItemId),
+              ),
+              collapsed: block.collapsed === true,
+            };
+      // Drop items already placed in an earlier block (legacy consolidation
+      // may have produced the same target in several sections).
+      const filtered = migrated.items.filter((item) => {
+        if (seenAcrossBlocks.has(item)) return false;
+        seenAcrossBlocks.add(item);
+        return true;
+      });
+      return { ...migrated, items: filtered };
+    });
+    return {
+      version: 2,
+      ...("presetVersion" in value && value.presetVersion === 2
+        ? { presetVersion: 2 as const }
+        : {}),
+      blocks,
+      ...(hiddenItems ? { hiddenItems } : {}),
+    };
+  }
+  const seenAcrossSections = new Set<string>();
+  return {
+    version: 2,
+    blocks: sidebarNavigationSectionIds.map((id) => {
+      const items = dedupeMigratedItems(
+        [...value.sections[id]].map(migrateSidebarNavigationItemId),
+      ).filter((item) => {
+        if (seenAcrossSections.has(item)) return false;
+        seenAcrossSections.add(item);
+        return true;
+      });
+      return {
+        kind: "builtin" as const,
+        id,
+        items,
+        collapsed: false,
+      };
+    }),
+    ...(hiddenItems ? { hiddenItems } : {}),
+  };
+}
+
+export function parseSidebarNavigationLayout(
+  value: unknown,
+): SidebarNavigationLayout {
+  if (!isRecord(value)) {
+    throw new SidebarNavigationLayoutError(
+      "Sidebar navigation layout is invalid",
+    );
+  }
+  if (value.version === 1 && isRecord(value.sections)) {
+    const seen = new Set<string>();
+    for (const section of sidebarNavigationSectionIds) {
+      parseBlockItems(value.sections[section], seen);
+    }
+    return normalizeSidebarNavigationLayout(value as SidebarNavigationLayoutV1);
+  }
+  if (value.version !== 2 || !Array.isArray(value.blocks)) {
+    throw new SidebarNavigationLayoutError(
+      "Sidebar navigation layout is invalid",
+    );
+  }
+
+  const seen = new Set<string>();
+  const blocks: SidebarNavigationBlock[] = value.blocks.map((block) => {
+    if (!isRecord(block) || typeof block.kind !== "string") {
+      throw new SidebarNavigationLayoutError(
+        "Sidebar navigation section is invalid",
+      );
+    }
+    const items = parseBlockItems(block.items, seen);
+    if (block.collapsed !== undefined && typeof block.collapsed !== "boolean") {
+      throw new SidebarNavigationLayoutError(
+        "Sidebar navigation section collapse state is invalid",
+      );
+    }
+    if (block.kind === "builtin") {
+      if (
+        typeof block.id !== "string" ||
+        !(sidebarNavigationSectionIds as readonly string[]).includes(block.id)
+      ) {
+        throw new SidebarNavigationLayoutError(
+          "Sidebar navigation section is invalid",
+        );
+      }
+      return {
+        kind: "builtin",
+        id: block.id as SidebarNavigationSection,
+        items,
+        collapsed: block.collapsed === true,
+      };
+    }
+    if (block.kind === "custom") {
+      if (
+        typeof block.id !== "string" ||
+        !/^custom:[a-z0-9_-]{1,48}$/.test(block.id) ||
+        typeof block.label !== "string" ||
+        block.label.trim().length === 0 ||
+        block.label.length > 40
+      ) {
+        throw new SidebarNavigationLayoutError(
+          "Sidebar navigation section is invalid",
+        );
+      }
+      return {
+        kind: "custom",
+        id: block.id as `custom:${string}`,
+        label: block.label.trim(),
+        items,
+        collapsed: block.collapsed === true,
+      };
+    }
+    throw new SidebarNavigationLayoutError(
+      "Sidebar navigation section is invalid",
+    );
+  });
+
+  for (const section of sidebarNavigationSectionIds) {
+    if (
+      !blocks.some((block) => block.kind === "builtin" && block.id === section)
+    ) {
+      throw new SidebarNavigationLayoutError(
+        "Sidebar navigation section is invalid",
+      );
+    }
+  }
+
+  let hiddenItems: SidebarNavigationItemId[] | undefined;
+  if (value.hiddenItems !== undefined) {
+    if (!Array.isArray(value.hiddenItems)) {
+      throw new SidebarNavigationLayoutError(
+        "Sidebar navigation hidden items are invalid",
+      );
+    }
+    const hiddenSeen = new Set<string>();
+    hiddenItems = [];
+    for (const item of value.hiddenItems) {
+      const parsed = parseItemId(item, hiddenSeen);
+      if (parsed !== null) hiddenItems.push(parsed);
+    }
+  }
+
+  return {
+    version: 2,
+    ...(value.presetVersion === 2 ? { presetVersion: 2 as const } : {}),
+    blocks,
+    ...(hiddenItems ? { hiddenItems } : {}),
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+// --- My Day widgets (schema lives in @savia/studio-shared/my-day-widgets) ---
+
+export type {
+  MyDayWidget,
+  MyDayWidgetConfig,
+  MyDayWidgetsLayout,
+} from "@savia/studio-shared/my-day-widgets";
+export {
+  defaultMyDayWidgets,
+  MyDayWidgetsError,
+  parseMyDayWidgets,
+} from "@savia/studio-shared/my-day-widgets";

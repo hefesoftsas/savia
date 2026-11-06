@@ -1,0 +1,62 @@
+import { centerMean } from "@savia/flows-geo";
+import { ExecutableNode, type NodeContext } from "@savia/flows-runtime";
+import type { NodeExecution, NodeType } from "@savia/flows-types";
+
+export class CenterMeanNode extends ExecutableNode {
+  public static readonly nodeType: NodeType = {
+    id: "center-mean",
+    name: "Center Mean",
+    type: "center-mean",
+    description:
+      "Takes a Feature or FeatureCollection and returns the mean center, using the mean of the vertices of each feature",
+    tags: ["Geo", "GeoJSON", "Measurement", "CenterMean"],
+    icon: "align-center",
+    documentation:
+      "This node calculates the mean center of a feature or feature collection by averaging all vertex coordinates.",
+    inlinable: true,
+    asTool: false,
+    inputs: [
+      {
+        name: "features",
+        type: "geojson",
+        description: "GeoJSON Feature or FeatureCollection",
+        required: true,
+      },
+      {
+        name: "options",
+        type: "json",
+        description: "Optional parameters for the center calculation",
+        required: false,
+      },
+    ],
+    outputs: [
+      {
+        name: "center",
+        type: "geojson",
+        description: "A Point feature at the mean center of the input features",
+      },
+    ],
+  };
+
+  public async execute(context: NodeContext): Promise<NodeExecution> {
+    try {
+      const { features, options } = context.inputs;
+
+      if (!features) {
+        return this.createErrorResult("Missing features input");
+      }
+
+      // Delegate everything to Turf.js centerMean function
+      const center = centerMean(features, options);
+
+      return this.createSuccessResult({
+        center,
+      });
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      return this.createErrorResult(
+        `Error calculating mean center: ${error.message}`
+      );
+    }
+  }
+}

@@ -1,0 +1,122 @@
+{
+  "format": "savia.store",
+  "formatVersion": 1,
+  "collections": [
+    {
+      "object": {
+        "name": "insurance_campaigns",
+        "label": "Campañas",
+        "description": "Segmentación y ejecución con consentimiento verificable.",
+        "config": {
+          "version": 2,
+          "fields": {
+            "title": {
+              "type": "Textbox",
+              "label": "Nombre",
+              "labels": {},
+              "required": true,
+              "config": {
+                "maxLength": 200
+              }
+            },
+            "payload": {
+              "type": "Textarea",
+              "label": "Contenido",
+              "labels": {},
+              "config": {
+                "maxLength": 10000
+              }
+            },
+            "stage": {
+              "type": "Textbox",
+              "label": "Estado",
+              "labels": {},
+              "config": {
+                "maxLength": 200
+              }
+            }
+          },
+          "fieldOrder": [
+            "title",
+            "payload",
+            "stage"
+          ]
+        }
+      },
+      "requiredFields": {
+        "title": {
+          "types": [
+            "Textbox"
+          ],
+          "required": true
+        },
+        "payload": {
+          "types": [
+            "Textarea"
+          ]
+        },
+        "stage": {
+          "types": [
+            "Textbox"
+          ]
+        }
+      }
+    }
+  ],
+  "screens": [
+    {
+      "object": "insurance_campaigns",
+      "view": "records"
+    }
+  ],
+  "connectors": [
+    {
+      "id": "insurance.campaigns.gateway",
+      "label": "Conexión de integración",
+      "secretFields": [
+        "token"
+      ],
+      "configSchema": {
+        "type": "object",
+        "required": [
+          "endpoint",
+          "token"
+        ],
+        "properties": {
+          "endpoint": {
+            "type": "string"
+          },
+          "token": {
+            "type": "string"
+          }
+        }
+      },
+      "allowedHosts": [],
+      "allowConfiguredHost": true
+    }
+  ],
+  "actions": [
+    {
+      "id": "send",
+      "kind": "http",
+      "connector": "insurance.campaigns.gateway",
+      "request": {
+        "method": "POST",
+        "url": "{{connection.endpoint}}",
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer {{connection.token}}",
+          "Idempotency-Key": "{{tenant}}:{{extension}}:{{action}}:{{input.operationKey}}"
+        },
+        "body": {
+          "version": 1,
+          "extensionId": "{{extension}}",
+          "actionId": "{{action}}",
+          "tenantId": "{{tenant}}",
+          "principalId": "{{principal}}",
+          "payload": "{{input.payload}}"
+        }
+      }
+    }
+  ]
+}

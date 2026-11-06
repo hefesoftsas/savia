@@ -1,0 +1,4 @@
+/downloads/*
+  Content-Type: application/octet-stream
+  Content-Disposition: attachment
+  Cache-Control: public, max-age=3600, must-revalidate

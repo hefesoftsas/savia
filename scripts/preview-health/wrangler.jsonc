@@ -1,0 +1,8 @@
+{
+  "name": "savia-preview-health-session",
+  "main": "worker.mjs",
+  "compatibility_date": "2026-09-01",
+  "workers_dev": false,
+  "preview_urls": false,
+  "services": [{ "binding": "PREVIEW", "service": "savia-preview" }],
+}

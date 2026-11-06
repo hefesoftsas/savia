@@ -1,0 +1,267 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-01T15:00:00Z",
+  "title": "Design System: Savia Companion",
+  "extensions": {
+    "colorMeta": {
+      "primary": {
+        "role": "primary",
+        "displayName": "Savia Emerald",
+        "canonical": "#176647",
+        "tonalRamp": [
+          "#092219",
+          "#103a2b",
+          "#15513b",
+          "#176647",
+          "#398565",
+          "#6ba48c",
+          "#a2c6b4",
+          "#e0eee7"
+        ]
+      },
+      "primary-hover": {
+        "role": "primary",
+        "displayName": "Deep Action Green",
+        "canonical": "#105438",
+        "tonalRamp": [
+          "#061c12",
+          "#0a3020",
+          "#0d432d",
+          "#105438",
+          "#33755a",
+          "#63967d",
+          "#9dbdaa",
+          "#dfebe4"
+        ]
+      },
+      "primary-wash": {
+        "role": "primary",
+        "displayName": "Pale Green Wash",
+        "canonical": "#eaf4ee",
+        "tonalRamp": [
+          "#10241a",
+          "#294234",
+          "#435f4e",
+          "#5d7b68",
+          "#779783",
+          "#92b29e",
+          "#bbd4c5",
+          "#eaf4ee"
+        ]
+      },
+      "recording": {
+        "role": "tertiary",
+        "displayName": "Recording Red",
+        "canonical": "#a53839",
+        "tonalRamp": [
+          "#2b0e0f",
+          "#481718",
+          "#652122",
+          "#822b2d",
+          "#a53839",
+          "#c45d5d",
+          "#dc9291",
+          "#f1d0cf"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "#202925",
+        "tonalRamp": [
+          "#101412",
+          "#252b27",
+          "#3b423e",
+          "#525a56",
+          "#69716d",
+          "#828985",
+          "#a4aaa6",
+          "#d5d9d6"
+        ]
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "Muted Green Gray",
+        "canonical": "#59665f",
+        "tonalRamp": [
+          "#171b19",
+          "#2c332f",
+          "#424a45",
+          "#59665f",
+          "#75817a",
+          "#929d96",
+          "#b3bcb6",
+          "#e1e5e2"
+        ]
+      },
+      "neutral-bg": {
+        "role": "neutral",
+        "displayName": "Mist Canvas",
+        "canonical": "#f6f8f7",
+        "tonalRamp": [
+          "#1b211e",
+          "#343b37",
+          "#4d5551",
+          "#68716c",
+          "#858d89",
+          "#a4aba7",
+          "#c6cbc8",
+          "#f6f8f7"
+        ]
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "Cool White",
+        "canonical": "#ffffff",
+        "tonalRamp": [
+          "#1c211e",
+          "#353b38",
+          "#505652",
+          "#6b716e",
+          "#878d89",
+          "#a5aaa7",
+          "#c7cbc9",
+          "#ffffff"
+        ]
+      },
+      "divider": {
+        "role": "neutral",
+        "displayName": "Divider Gray",
+        "canonical": "#e1e7e3",
+        "tonalRamp": [
+          "#171c19",
+          "#303732",
+          "#49514c",
+          "#636c66",
+          "#7f8782",
+          "#9ba39e",
+          "#bfc6c1",
+          "#e1e7e3"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Timer",
+        "purpose": "Prominent tabular elapsed time in the recording stage."
+      },
+      "body": {
+        "displayName": "System UI",
+        "purpose": "Compact helper text, controls, and status copy."
+      }
+    },
+    "shadows": [],
+    "motion": [
+      {
+        "name": "control-state",
+        "value": "120ms ease-out",
+        "purpose": "Primary button color and press response."
+      },
+      {
+        "name": "source-toggle",
+        "value": "140ms ease-out",
+        "purpose": "Toggle track color and thumb movement."
+      },
+      {
+        "name": "timer-progress",
+        "value": "250ms linear",
+        "purpose": "Reflect elapsed recording time on the duration track."
+      },
+      {
+        "name": "recording-indicator",
+        "value": "1.4s ease-in-out infinite",
+        "purpose": "Subtle pulse on the active recording indicator; disabled by reduced-motion preference."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "narrow-width",
+        "value": "360px",
+        "purpose": "Tighten horizontal shell and control gaps."
+      },
+      {
+        "name": "short-height",
+        "value": "500px",
+        "purpose": "Reduce recording-stage vertical space and timer size."
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Capture Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The full-width primary action changes among Start, Stop, and Upload as the capture state changes.",
+      "html": "<button class=\"ds-primary\">Start recording</button>",
+      "css": ".ds-primary { min-height: 44px; padding: 0 14px; border: 0; border-radius: 9px; background: #176647; color: #fff; font: 650 13px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; transition: background-color 120ms ease-out, transform 120ms ease-out; } .ds-primary:hover { background: #105438; } .ds-primary:focus-visible { outline: 3px solid #4d9874; outline-offset: 3px; } .ds-primary:active { transform: translateY(1px); } @media (prefers-reduced-motion: reduce) { .ds-primary { transition-duration: 0.01ms; } }"
+    },
+    {
+      "name": "Secondary Discard Button",
+      "kind": "button",
+      "description": "A quiet, bordered action for discarding the current local capture.",
+      "html": "<button class=\"ds-discard\">Discard</button>",
+      "css": ".ds-discard { min-height: 40px; padding: 0 10px; border: 1px solid #e1e7e3; border-radius: 8px; background: #fff; color: #4d5a52; font: 550 11px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; } .ds-discard:hover { background: #f5f8f6; color: #202925; } .ds-discard:focus-visible { outline: 3px solid #4d9874; outline-offset: 3px; }"
+    },
+    {
+      "name": "Audio Source Switch",
+      "kind": "custom",
+      "description": "An independently selectable audio source with a visible label and compact switch.",
+      "html": "<label class=\"ds-source\"><input type=\"checkbox\" checked><span class=\"ds-track\"><i></i></span><span>Microphone</span></label>",
+      "css": ".ds-source { display: inline-flex; min-height: 36px; align-items: center; gap: 7px; color: #36433b; font: 400 12px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; } .ds-source input { position: absolute; width: 1px; height: 1px; opacity: 0; } .ds-track { display: inline-flex; width: 30px; height: 18px; align-items: center; padding: 2px; border-radius: 999px; background: #adb8b1; transition: background-color 140ms ease-out; } .ds-track i { width: 14px; height: 14px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgb(0 0 0 / 18%); transition: transform 140ms ease-out; } .ds-source input:checked + .ds-track { background: #176647; } .ds-source input:checked + .ds-track i { transform: translateX(12px); } .ds-source input:focus-visible + .ds-track { outline: 3px solid #4d9874; outline-offset: 3px; } @media (prefers-reduced-motion: reduce) { .ds-track, .ds-track i { transition-duration: 0.01ms; } }"
+    },
+    {
+      "name": "Connection Settings Panel",
+      "kind": "card",
+      "refersTo": "settings-panel",
+      "description": "An inline, disclosed panel for connection origin and credential fields.",
+      "html": "<section class=\"ds-settings\"><strong>Connection settings</strong><label>Savia API URL<input placeholder=\"https://api.example.com\"></label></section>",
+      "css": ".ds-settings { padding: 13px 14px 14px; border: 1px solid #e1e7e3; border-radius: 12px; background: #fff; color: #202925; font: 400 12px/1.45 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; } .ds-settings strong { display: block; margin-bottom: 10px; font-size: 13px; font-weight: 650; } .ds-settings label { display: grid; gap: 4px; color: #35413a; font-size: 11px; font-weight: 600; } .ds-settings input { height: 34px; padding: 0 9px; border: 1px solid #ccd6d0; border-radius: 7px; background: #fff; color: #202925; font: 400 12px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; } .ds-settings input:focus-visible { outline: 3px solid #4d9874; outline-offset: 3px; }"
+    },
+    {
+      "name": "Recording Timer",
+      "kind": "custom",
+      "description": "The real elapsed capture timer and thin duration track anchor the recording stage.",
+      "html": "<div class=\"ds-stage\"><div class=\"ds-timer\">00:12<span> / 01:00</span></div><div class=\"ds-progress\"><i></i></div></div>",
+      "css": ".ds-stage { text-align: center; color: #18231d; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; } .ds-timer { font-size: clamp(56px, 18vw, 72px); font-weight: 450; font-variant-numeric: tabular-nums; letter-spacing: -0.03em; line-height: 1.05; } .ds-timer span { color: #87928c; font-size: 17px; font-weight: 450; letter-spacing: -0.015em; } .ds-progress { width: min(100%, 300px); height: 3px; overflow: hidden; margin: 12px auto 0; border-radius: 999px; background: #e7ece9; } .ds-progress i { display: block; width: 20%; height: 100%; border-radius: inherit; background: #176647; transform-origin: left; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "One capture, one handoff.",
+    "overview": "Savia Companion is a small desktop utility for recording a short sample and choosing when to upload it for review in Savia. Its quiet white surface keeps the capture state and large real timer central, with source selection and the current action grouped in a compact dock.\n\nThe interface uses familiar system typography, restrained green controls, and thin dividers. A red recording indicator and track make active capture easy to recognize. The compact window keeps connection settings out of the first view until requested, and the Savia/Hefesoft attribution remains visible in the capture footer.",
+    "keyCharacteristics": [
+      "Compact, single-purpose recorder with a clear Savia handoff.",
+      "Real timer and state-led Start, Stop, and Upload action.",
+      "Flat neutral surfaces with restrained green and state-specific red."
+    ],
+    "rules": [
+      {
+        "name": "The State Color Rule",
+        "body": "Green communicates an available or selected action; red is reserved for active recording and capture errors.",
+        "section": "colors"
+      },
+      {
+        "name": "The Timer First Rule",
+        "body": "Give elapsed time the strongest type scale, but keep the capture state and available action visible alongside it.",
+        "section": "typography"
+      },
+      {
+        "name": "The Flat Surface Rule",
+        "body": "Separate content with spacing, tone, and fine borders; do not add ambient shadows to the utility surface.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do make the current recording state, real timer, source selection, and next action easy to identify at a glance.",
+      "Do keep microphone and system audio selection independent.",
+      "Do retain a ready recording and its upload identity after an upload error so the user can retry.",
+      "Do keep consent, privacy copy, and attribution legible in the compact window.",
+      "Do preserve visible keyboard focus and reduced-motion support."
+    ],
+    "donts": [
+      "Don't place transcripts, summaries, recording history, or playback tools in this capture utility; Savia is the review surface.",
+      "Don't hide connection settings in the first view behind a large setup form.",
+      "Don't show invented waveform activity or decorate the timer with nonfunctional motion.",
+      "Don't upload captured audio before the user chooses Upload and provides the required consent."
+    ]
+  }
+}

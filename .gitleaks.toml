@@ -1,0 +1,95 @@
+title = "Savia public source secret scanning"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Synthetic avatar integration test key"
+condition = "AND"
+paths = ['''^apps/api/test/account-avatar-auth\.test\.ts$''']
+regexTarget = "secret"
+regexes = ['''^avatar-integration-test-secret-at-least-32-characters$''']
+
+[[allowlists]]
+description = "Synthetic CRM integration test key"
+condition = "AND"
+paths = ['''^apps/api/test/dynamic-crm\.test\.ts$''']
+regexTarget = "secret"
+regexes = ['''^integration-test-key-with-at-least-32-characters$''']
+
+[[allowlists]]
+description = "Literal YOUR_SECRET placeholder in workflow webhook examples"
+condition = "AND"
+paths = ['''^docs/workflows\.md$''', '''^apps/admin/src/features/(?:crm|studio)-engine/workflow-webhooks\.tsx$''']
+regexTarget = "secret"
+regexes = ['''^(?:Bearer )?YOUR_SECRET$''']
+
+[[allowlists]]
+description = "Booking design prose describing ineligible professionals"
+condition = "AND"
+paths = ['''^docs/superpowers/specs/2026-10-03-tenant-booking-design\.md$''']
+regexTarget = "secret"
+regexes = ['''^foreign/disabled$''']
+
+[[allowlists]]
+description = "Synthetic WhatsApp client test idempotency UUID"
+condition = "AND"
+paths = ['''^apps/admin/src/api/whatsapp-client\.test\.ts$''']
+regexTarget = "secret"
+regexes = ['''^123e4567-e89b-42d3-a456-426614174000$''']
+
+[[allowlists]]
+description = "WhatsApp plan prose describing navigation and default task controls"
+condition = "AND"
+paths = ['''^docs/superpowers/plans/2026-10-06-whatsapp-virtual-employee-channel\.md$''']
+regexTarget = "secret"
+regexes = ['''^navigation/default$''']
+
+[[allowlists]]
+description = "Literal API-key placeholder in imported Flows curl examples"
+condition = "AND"
+paths = ['''^apps/flows/app/src/components/workflow/api-snippets\.ts$''']
+regexTarget = "secret"
+regexes = ['''^(?:Bearer )?YOUR_API_KEY$''']
+
+[[allowlists]]
+description = "Literal webhook-secret placeholder in Flows examples and assertions"
+condition = "AND"
+paths = ['''^apps/flows/app/src/services/native-workflow-service(?:\.test)?\.ts$''']
+regexTarget = "secret"
+regexes = ['''^(?:Bearer )?YOUR_SECRET$''']
+
+[[allowlists]]
+description = "LinkedIn provider TypeScript annotation; not an OAuth client credential"
+condition = "AND"
+paths = ['''^apps/flows/app/src/integrations/providers/linkedin\.ts$''']
+regexTarget = "secret"
+regexes = ['''^ProviderConfig$''']
+
+[[allowlists]]
+description = "Synthetic form-token signing key in the imported runtime tests"
+condition = "AND"
+paths = ['''^apps/flows/packages/runtime/src/form-token\.test\.ts$''']
+regexTarget = "secret"
+regexes = ['''^test-signing-key-0123456789$''']
+
+[[allowlists]]
+description = "Literal invalid D1 UUID placeholder in production preflight tests"
+condition = "AND"
+paths = ['''^infra/pulumi/production-preflight\.test\.mjs$''']
+regexTarget = "secret"
+regexes = ['''^REPLACE_WITH_D1_ID$''']
+
+[[allowlists]]
+description = "Synthetic source revision in managed Auth readiness tests"
+condition = "AND"
+paths = ['''^apps/auth/test/request-initialization\.test\.ts$''']
+regexTarget = "secret"
+regexes = ['''^1123456789abcdef0123456789abcdef01234567$''']
+
+[[allowlists]]
+description = "Public Pulumi serialization signature and secret marker constants"
+condition = "AND"
+paths = ['''^scripts/verify-retired-vector-secrets\.mjs$''']
+regexTarget = "secret"
+regexes = ['''^(?:4dabf18193072939515e22adb298388d|1b47061264138c4ac30d75fd1eb44270)$''']

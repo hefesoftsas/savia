@@ -1,0 +1,7 @@
+{
+  "name": "@savia/branch-preview-infra",
+  "private": true,
+  "type": "module",
+  "version": "0.1.0",
+  "description": "Per-branch Savia preview D1 and R2 resources"
+}

@@ -1,0 +1,127 @@
+{
+  "baselineCommit": "66be3083dc6c5349e150de5c9631477942399896",
+  "nodeImplementationFiles": 526,
+  "nodeCategories": {
+    "3d": 21,
+    "agent": 9,
+    "anthropic": 8,
+    "array": 2,
+    "blob": 6,
+    "browser": 20,
+    "cloudflare": 2,
+    "csv": 4,
+    "database": 16,
+    "dataset": 6,
+    "date": 5,
+    "discord": 12,
+    "document": 2,
+    "email": 8,
+    "fetch": 1,
+    "form": 4,
+    "gemini": 14,
+    "geo": 93,
+    "github": 12,
+    "google": 7,
+    "google-calendar": 10,
+    "google-mail": 13,
+    "http": 5,
+    "image": 33,
+    "input": 18,
+    "instagram": 11,
+    "javascript": 1,
+    "json": 28,
+    "linkedin": 6,
+    "logic": 7,
+    "math": 14,
+    "openai": 5,
+    "output": 15,
+    "queue": 3,
+    "random": 4,
+    "reddit": 25,
+    "replicate": 1,
+    "sandbox": 9,
+    "scheduled": 1,
+    "slack": 3,
+    "tavily": 2,
+    "telegram": 5,
+    "text": 19,
+    "video": 6,
+    "whatsapp": 5,
+    "wikipedia": 2,
+    "wordpress": 11,
+    "x": 12
+  },
+  "runtimePolicy": "local-miniflare-only",
+  "externalServicesEnabled": false,
+  "groups": [
+    {
+      "id": "editor",
+      "source": "apps/app/src/pages/editor-page.tsx",
+      "status": "verified-local",
+      "limitations": [
+        "Native Chrome verified create/save/reload/run/history, desktop and 390x844 mobile layouts, navigation, properties overlay and themes through a synthetic local host fixture; full Admin login and pointer dragging were not visually verified."
+      ]
+    },
+    {
+      "id": "catalog",
+      "source": "apps/api/src/runtime/cloudflare-node-registry.ts",
+      "status": "verified-local",
+      "limitations": [
+        "365 configured local types, including six native Savia nodes; 526 unchanged imported implementations in 48 categories retained."
+      ]
+    },
+    {
+      "id": "runtime",
+      "source": "packages/runtime/src",
+      "status": "verified-local",
+      "limitations": []
+    },
+    {
+      "id": "templates",
+      "source": "apps/api/src/templates",
+      "status": "verified-local",
+      "limitations": [
+        "Provider-dependent templates require future explicitly authorized services."
+      ]
+    },
+    {
+      "id": "triggers",
+      "source": "apps/api/src/index.ts",
+      "status": "verified-local",
+      "limitations": [
+        "Local collection lifecycle, HTTP, form, queue and schedule traffic tested; email and messaging require explicitly authorized external transport."
+      ]
+    },
+    {
+      "id": "resources",
+      "source": "apps/api/src/routes",
+      "status": "verified-local",
+      "limitations": []
+    },
+    {
+      "id": "integrations",
+      "source": "apps/api/src/oauth",
+      "status": "preserved-disabled-local-edition",
+      "limitations": [
+        "No OAuth providers, paid APIs, cloud AI, browser rendering or external delivery activated."
+      ]
+    },
+    {
+      "id": "realtime",
+      "source": "apps/api/src/durable-objects/workflow-agent",
+      "status": "verified-local",
+      "limitations": []
+    },
+    {
+      "id": "savia-native-collections",
+      "source": "api/src/nodes/savia",
+      "status": "verified-local",
+      "limitations": [
+        "Local collections only; HTTP request/webhook native actions use an explicitly enabled Savia identity and current permissions. Linked sources, schema changes, notifications and file actions are subsequent increments. Native receipts protect retried writes; an unfinished Worker crash can replay imported arbitrary side effects."
+      ]
+    }
+  ],
+  "localCatalogNodeTypes": 365,
+  "templateDefinitions": 24,
+  "verificationRecord": "../../docs/verification/2026-10-12-savia-flows.md"
+}

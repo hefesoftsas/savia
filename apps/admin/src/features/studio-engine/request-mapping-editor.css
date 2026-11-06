@@ -1,0 +1,113 @@
+.request-connections {
+  display: grid;
+  gap: 24px;
+  min-width: 0;
+}
+.request-connections-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.request-connections-toolbar h4 {
+  font-weight: 600;
+  margin: 0;
+}
+.request-connections-heading,
+.request-connection-title,
+.request-responses-heading {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.request-connection-identity {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--border);
+}
+.request-connection-identity > div {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.request-connection-title {
+  min-width: 0;
+}
+.request-connection-identity code {
+  font-size: 12px;
+  color: var(--muted-foreground);
+  overflow-wrap: anywhere;
+}
+.request-mapping-row {
+  padding: 16px 0;
+  border-bottom: 1px solid var(--border);
+  min-width: 0;
+}
+.request-mapping-row > span {
+  overflow-wrap: anywhere;
+}
+.request-mapping-properties {
+  display: grid;
+  gap: 12px;
+}
+.request-mapping-property-list {
+  display: grid;
+  gap: 8px;
+}
+.request-mapping-property {
+  margin: 0;
+}
+.request-mapping-property-summary {
+  min-width: 0;
+}
+.request-mapping-property-name,
+.request-mapping-property-field {
+  overflow-wrap: anywhere;
+}
+.request-mapping-property-field {
+  flex: 0 1 42%;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  text-align: end;
+}
+.request-mapping-property .request-mapping-row {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.request-lookup-output-list {
+  display: grid;
+  gap: 8px;
+}
+.request-lookup-output-property {
+  margin: 0;
+}
+.request-lookup-output-path {
+  flex: 0 1 48%;
+  overflow-wrap: anywhere;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 500;
+  text-align: end;
+}
+.request-lookup-output-body {
+  display: grid;
+  gap: 12px;
+}
+.request-lookup-output-body .studio-control {
+  margin: 0;
+}
+.request-mapping-empty {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+.request-connections [role="tabpanel"] {
+  padding-top: 20px;
+  min-width: 0;
+}

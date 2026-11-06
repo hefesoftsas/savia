@@ -1,0 +1,73 @@
+import { rhumbDistance } from "@savia/flows-geo";
+import { ExecutableNode, type NodeContext } from "@savia/flows-runtime";
+import type { NodeExecution, NodeType } from "@savia/flows-types";
+
+export class RhumbDistanceNode extends ExecutableNode {
+  public static readonly nodeType: NodeType = {
+    id: "rhumb-distance",
+    name: "Rhumb Distance",
+    type: "rhumb-distance",
+    description:
+      "Calculates the rhumb line distance (constant bearing distance) between two points",
+    tags: ["Geo", "GeoJSON", "Measurement", "RhumbDistance"],
+    icon: "ruler",
+    documentation:
+      "This node calculates the rhumb line distance (constant bearing) between two points on Earth's surface.",
+    inlinable: true,
+    asTool: false,
+    inputs: [
+      {
+        name: "from",
+        type: "geojson",
+        description: "Starting point (Feature or Point geometry)",
+        required: true,
+      },
+      {
+        name: "to",
+        type: "geojson",
+        description: "Ending point (Feature or Point geometry)",
+        required: true,
+      },
+      {
+        name: "units",
+        type: "string",
+        description:
+          "Units for distance calculation (kilometers, miles, meters, degrees, radians)",
+        required: false,
+      },
+    ],
+    outputs: [
+      {
+        name: "distance",
+        type: "number",
+        description: "Rhumb line distance in specified units",
+      },
+    ],
+  };
+
+  public async execute(context: NodeContext): Promise<NodeExecution> {
+    try {
+      const { from, to, units } = context.inputs;
+
+      if (!from) {
+        return this.createErrorResult("Missing from point input");
+      }
+
+      if (!to) {
+        return this.createErrorResult("Missing to point input");
+      }
+
+      // Calculate the rhumb distance using Turf.js
+      const distance = rhumbDistance(from, to, units ? { units } : {});
+
+      return this.createSuccessResult({
+        distance: distance,
+      });
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      return this.createErrorResult(
+        `Error calculating rhumb distance: ${error.message}`
+      );
+    }
+  }
+}

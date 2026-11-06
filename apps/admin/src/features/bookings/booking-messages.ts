@@ -1,0 +1,919 @@
+import type { MessageCatalog } from "@/i18n/core";
+
+export const bookingMessages = {
+  Jitsi: ["Jitsi", "Jitsi", "Jitsi"],
+  "Join Jitsi": ["Unirse a Jitsi", "Join Jitsi", "Entrar no Jitsi"],
+  "Video meeting provider": [
+    "Proveedor de videollamada",
+    "Video meeting provider",
+    "Provedor da videochamada",
+  ],
+  "Automatic (Google Meet or Teams)": [
+    "Automático (Google Meet o Teams)",
+    "Automatic (Google Meet or Teams)",
+    "Automático (Google Meet ou Teams)",
+  ],
+  "New appointments include the meeting link in confirmations and reminders.": [
+    "Las nuevas citas incluyen el enlace de la reunión en confirmaciones y recordatorios.",
+    "New appointments include the meeting link in confirmations and reminders.",
+    "Os novos agendamentos incluem o link da reunião nas confirmações e nos lembretes.",
+  ],
+  "The tenant-wide Jitsi setting takes priority. This Zoom default applies when automatic is selected.":
+    [
+      "La configuración de Jitsi de la organización tiene prioridad. Este valor de Zoom se usa cuando está seleccionado el modo automático.",
+      "The tenant-wide Jitsi setting takes priority. This Zoom default applies when automatic is selected.",
+      "A configuração de Jitsi da organização tem prioridade. Este padrão do Zoom vale quando o modo automático está selecionado.",
+    ],
+  Zoom: ["Zoom", "Zoom", "Zoom"],
+  "Zoom needs reconnection": [
+    "Zoom necesita reconexión",
+    "Zoom needs reconnection",
+    "O Zoom precisa ser reconectado",
+  ],
+  "Join Zoom": ["Unirse a Zoom", "Join Zoom", "Entrar no Zoom"],
+  "Video call platform": [
+    "Plataforma de videollamada",
+    "Video call platform",
+    "Plataforma de videochamada",
+  ],
+  "Calendar default (Meet or Teams)": [
+    "Según el calendario (Meet o Teams)",
+    "Calendar default (Meet or Teams)",
+    "Conforme o calendário (Meet ou Teams)",
+  ],
+  "Use Zoom for appointments": [
+    "Usar Zoom para las citas",
+    "Use Zoom for appointments",
+    "Usar Zoom para agendamentos",
+  ],
+  "Connect Zoom first. Only you can authorize your Zoom account for appointments.":
+    [
+      "Conecta Zoom primero. Solo tú puedes autorizar tu cuenta de Zoom para las citas.",
+      "Connect Zoom first. Only you can authorize your Zoom account for appointments.",
+      "Conecte o Zoom primeiro. Só você pode autorizar sua conta do Zoom para agendamentos.",
+    ],
+  "Zoom authorized for appointments": [
+    "Zoom autorizado para las citas",
+    "Zoom authorized for appointments",
+    "Zoom autorizado para agendamentos",
+  ],
+
+  Appointments: ["Citas", "Appointments", "Agendamentos"],
+  "Manage appointments and your availability.": [
+    "Administra las citas y tu disponibilidad.",
+    "Manage appointments and your availability.",
+    "Gerencie os agendamentos e sua disponibilidade.",
+  ],
+  "Booking settings": [
+    "Configuración de citas",
+    "Booking settings",
+    "Configurações de agendamento",
+  ],
+  Availability: ["Disponibilidad", "Availability", "Disponibilidade"],
+  Reservations: ["Reservas", "Reservations", "Reservas"],
+  "Reservations for %{date}": [
+    "Reservas del %{date}",
+    "Reservations for %{date}",
+    "Reservas de %{date}",
+  ],
+  "Show upcoming reservations": [
+    "Ver próximas reservas",
+    "Show upcoming reservations",
+    "Ver próximas reservas",
+  ],
+  "Loading booking settings…": [
+    "Cargando configuración de citas…",
+    "Loading booking settings…",
+    "Carregando configurações de agendamento…",
+  ],
+  "Booking settings could not be loaded.": [
+    "No se pudo cargar la configuración de citas.",
+    "Booking settings could not be loaded.",
+    "Não foi possível carregar as configurações de agendamento.",
+  ],
+  Retry: ["Reintentar", "Retry", "Tentar novamente"],
+  "Save settings": [
+    "Guardar configuración",
+    "Save settings",
+    "Salvar configurações",
+  ],
+  "Booking settings saved.": [
+    "Se guardó la configuración de citas.",
+    "Booking settings saved.",
+    "Configurações de agendamento salvas.",
+  ],
+  "Booking settings changed elsewhere. Reload before saving again.": [
+    "La configuración cambió en otro lugar. Recárgala antes de guardar de nuevo.",
+    "Booking settings changed elsewhere. Reload before saving again.",
+    "As configurações mudaram em outro lugar. Recarregue antes de salvar novamente.",
+  ],
+  "Booking settings could not be saved. Check your connection and retry.": [
+    "No se pudo guardar la configuración. Revisa tu conexión e inténtalo de nuevo.",
+    "Booking settings could not be saved. Check your connection and retry.",
+    "Não foi possível salvar as configurações. Verifique sua conexão e tente novamente.",
+  ],
+  "Public title": ["Título público", "Public title", "Título público"],
+  "Booking settings could not be saved (HTTP %{status}): %{message}": [
+    "No se pudo guardar la configuración (HTTP %{status}): %{message}",
+    "Booking settings could not be saved (HTTP %{status}): %{message}",
+    "Não foi possível salvar a configuração (HTTP %{status}): %{message}",
+  ],
+  "Enable a service and an assigned professional before publishing.": [
+    "Antes de publicar, habilita las citas y un servicio con un profesional habilitado asignado.",
+    "Enable a service and an assigned professional before publishing.",
+    "Antes de publicar, habilite os agendamentos e um serviço com um profissional habilitado atribuído.",
+  ],
+  "Save enabled and published settings to open the public page.": [
+    "Activa Habilitado y Publicado y guarda la configuración para abrir la página pública.",
+    "Save enabled and published settings to open the public page.",
+    "Ative Habilitado e Publicado e salve a configuração para abrir a página pública.",
+  ],
+  "Use an IANA time zone.": [
+    "Usa una zona horaria IANA válida, por ejemplo America/Bogota.",
+    "Use an IANA time zone.",
+    "Use um fuso horário IANA válido, por exemplo America/Bogota.",
+  ],
+  "Professionals must be active Savia users of this tenant.": [
+    "Los profesionales deben ser usuarios activos de Savia en esta organización.",
+    "Professionals must be active Savia users of this tenant.",
+    "Os profissionais devem ser usuários ativos do Savia nesta organização.",
+  ],
+  "Services and professionals must be unique.": [
+    "No repitas servicios ni profesionales.",
+    "Services and professionals must be unique.",
+    "Não repita serviços nem profissionais.",
+  ],
+  "Select configured professionals.": [
+    "Asigna al servicio profesionales que hayas agregado en esta configuración.",
+    "Select configured professionals.",
+    "Atribua ao serviço profissionais adicionados nesta configuração.",
+  ],
+  "Use one exception per date.": [
+    "Configura una sola excepción por fecha.",
+    "Use one exception per date.",
+    "Configure apenas uma exceção por data.",
+  ],
+  "Availability periods cannot overlap.": [
+    "Los horarios de disponibilidad no pueden superponerse.",
+    "Availability periods cannot overlap.",
+    "Os horários de disponibilidade não podem se sobrepor.",
+  ],
+  Description: ["Descripción", "Description", "Descrição"],
+  "IANA time zone": [
+    "Zona horaria IANA",
+    "IANA time zone",
+    "Fuso horário IANA",
+  ],
+  Enabled: ["Habilitado", "Enabled", "Ativo"],
+  Published: ["Publicado", "Published", "Publicado"],
+  "Lead time (minutes)": [
+    "Anticipación mínima (minutos)",
+    "Lead time (minutes)",
+    "Antecedência mínima (minutos)",
+  ],
+  "Booking horizon (days)": [
+    "Anticipación máxima (días)",
+    "Booking horizon (days)",
+    "Horizonte de agendamento (dias)",
+  ],
+  "Cancellation cutoff (minutes)": [
+    "Límite de cancelación (minutos)",
+    "Cancellation cutoff (minutes)",
+    "Limite de cancelamento (minutos)",
+  ],
+  "Reminder (minutes before)": [
+    "Recordatorio (minutos antes)",
+    "Reminder (minutes before)",
+    "Lembrete (minutos antes)",
+  ],
+  Services: ["Servicios", "Services", "Serviços"],
+  "Add service": ["Añadir servicio", "Add service", "Adicionar serviço"],
+  "Service name": ["Nombre del servicio", "Service name", "Nome do serviço"],
+  "Service description": [
+    "Descripción del servicio",
+    "Service description",
+    "Descrição do serviço",
+  ],
+  "Duration (minutes)": [
+    "Duración (minutos)",
+    "Duration (minutes)",
+    "Duração (minutos)",
+  ],
+  "Buffer (minutes)": [
+    "Pausa posterior (minutos)",
+    "Buffer (minutes)",
+    "Intervalo (minutos)",
+  ],
+  Professionals: ["Profesionales", "Professionals", "Profissionais"],
+  Professional: ["Profesional", "Professional", "Profissional"],
+  "Booking with %{professional}": [
+    "Reserva con %{professional}",
+    "Booking with %{professional}",
+    "Agendamento com %{professional}",
+  ],
+  "Choose a service and professional to see availability.": [
+    "Elige un servicio y un profesional para ver la disponibilidad.",
+    "Choose a service and professional to see availability.",
+    "Escolha um serviço e um profissional para ver a disponibilidade.",
+  ],
+  "Booking links": [
+    "Enlaces de reserva",
+    "Booking links",
+    "Links de agendamento",
+  ],
+  "Create and manage links customers can use to book appointments.": [
+    "Crea y administra enlaces para que tus clientes reserven citas.",
+    "Create and manage links customers can use to book appointments.",
+    "Crie e gerencie links para que clientes agendem horários.",
+  ],
+  "Link expiry": ["Vencimiento del enlace", "Link expiry", "Validade do link"],
+  "24 hours": ["24 horas", "24 hours", "24 horas"],
+  "7 days": ["7 días", "7 days", "7 dias"],
+  "30 days (default)": [
+    "30 días (predeterminado)",
+    "30 days (default)",
+    "30 dias (padrão)",
+  ],
+  "No expiry": ["Sin vencimiento", "No expiry", "Sem validade"],
+  "Service (optional)": [
+    "Servicio (opcional)",
+    "Service (optional)",
+    "Serviço (opcional)",
+  ],
+  "Any eligible service": [
+    "Cualquier servicio disponible",
+    "Any eligible service",
+    "Qualquer serviço disponível",
+  ],
+  "New links default to 25 bookings per day. Set a link-specific limit below.":
+    [
+      "Los enlaces nuevos permiten hasta 25 reservas al día de forma predeterminada. Configura el límite del enlace abajo.",
+      "New links default to 25 bookings per day. Set a link-specific limit below.",
+      "Novos links permitem até 25 agendamentos por dia por padrão. Defina o limite do link abaixo.",
+    ],
+  "Daily booking limit": [
+    "Límite diario de reservas",
+    "Daily booking limit",
+    "Limite diário de agendamentos",
+  ],
+  "Personal link for %{name}": [
+    "Enlace personal de %{name}",
+    "Personal link for %{name}",
+    "Link pessoal de %{name}",
+  ],
+  "Create my booking link": [
+    "Crear mi enlace de reserva",
+    "Create my booking link",
+    "Criar meu link de agendamento",
+  ],
+  "Create team agenda link": [
+    "Crear enlace de agenda del equipo",
+    "Create team agenda link",
+    "Criar link da agenda da equipe",
+  ],
+  "Your booking profile is not set up yet. Ask an administrator to add you as an active professional before creating a personal link.":
+    [
+      "Tu perfil de reservas aún no está configurado. Pide a un administrador que te agregue como profesional activo antes de crear un enlace personal.",
+      "Your booking profile is not set up yet. Ask an administrator to add you as an active professional before creating a personal link.",
+      "Seu perfil de agendamento ainda não está configurado. Peça a um administrador para adicionar você como profissional ativo antes de criar um link pessoal.",
+    ],
+  "Team booking links are available to booking administrators.": [
+    "Los enlaces de agenda del equipo están disponibles para administradores de reservas.",
+    "Team booking links are available to booking administrators.",
+    "Os links da agenda da equipe estão disponíveis para administradores de agendamento.",
+  ],
+  "Booking link created.": [
+    "Se creó el enlace de reserva.",
+    "Booking link created.",
+    "O link de agendamento foi criado.",
+  ],
+  "Booking link revoked.": [
+    "Se revocó el enlace de reserva.",
+    "Booking link revoked.",
+    "O link de agendamento foi revogado.",
+  ],
+  "Booking links could not be updated. Check your connection and retry.": [
+    "No se pudieron actualizar los enlaces. Revisa tu conexión e inténtalo de nuevo.",
+    "Booking links could not be updated. Check your connection and retry.",
+    "Não foi possível atualizar os links. Verifique sua conexão e tente novamente.",
+  ],
+  "Loading booking links…": [
+    "Cargando enlaces de reserva…",
+    "Loading booking links…",
+    "Carregando links de agendamento…",
+  ],
+  "No booking links yet. Create a personal link to get started.": [
+    "Aún no hay enlaces de reserva. Crea un enlace personal para comenzar.",
+    "No booking links yet. Create a personal link to get started.",
+    "Ainda não há links de agendamento. Crie um link pessoal para começar.",
+  ],
+  "My booking link": [
+    "Mi enlace de reserva",
+    "My booking link",
+    "Meu link de agendamento",
+  ],
+  "Team agenda": ["Agenda del equipo", "Team agenda", "Agenda da equipe"],
+  "Expires %{date}": [
+    "Vence el %{date}",
+    "Expires %{date}",
+    "Expira em %{date}",
+  ],
+  "%{count} bookings per day": [
+    "%{count} reservas al día",
+    "%{count} bookings per day",
+    "%{count} agendamentos por dia",
+  ],
+  Revoked: ["Revocado", "Revoked", "Revogado"],
+  Expired: ["Vencido", "Expired", "Expirado"],
+  "Full link": ["Enlace completo", "Full link", "Link completo"],
+  "Short link": ["Enlace corto", "Short link", "Link curto"],
+  "Public link address": [
+    "Dirección del enlace público",
+    "Public link address",
+    "Endereço do link público",
+  ],
+  "Short link address": [
+    "Dirección del enlace corto",
+    "Short link address",
+    "Endereço do link curto",
+  ],
+  "Copy short link": [
+    "Copiar enlace corto",
+    "Copy short link",
+    "Copiar link curto",
+  ],
+  "Shorten URL": ["Acortar URL", "Shorten URL", "Encurtar URL"],
+  "Generating short link…": [
+    "Generando enlace corto…",
+    "Generating short link…",
+    "Gerando link curto…",
+  ],
+  "Short link not generated yet.": [
+    "El enlace corto aún no se ha generado.",
+    "Short link not generated yet.",
+    "O link curto ainda não foi gerado.",
+  ],
+  "Open link": ["Abrir enlace", "Open link", "Abrir link"],
+  "Delete link": ["Eliminar enlace", "Delete link", "Excluir link"],
+  "Delete this booking link?": [
+    "¿Eliminar este enlace de reserva?",
+    "Delete this booking link?",
+    "Excluir este link de agendamento?",
+  ],
+  "Existing appointments and their private management links will remain available.":
+    [
+      "Las citas existentes y sus enlaces privados de administración seguirán disponibles.",
+      "Existing appointments and their private management links will remain available.",
+      "Os agendamentos existentes e seus links privados de gerenciamento continuarão disponíveis.",
+    ],
+  "Cancel deletion": ["Cancelar", "Cancel deletion", "Cancelar"],
+  "Confirm deletion": [
+    "Confirmar eliminación",
+    "Confirm deletion",
+    "Confirmar exclusão",
+  ],
+  "Deleting…": ["Eliminando…", "Deleting…", "Excluindo…"],
+  "Booking link deleted.": [
+    "Se eliminó el enlace de reserva.",
+    "Booking link deleted.",
+    "O link de agendamento foi excluído.",
+  ],
+  "Copy link": ["Copiar enlace", "Copy link", "Copiar link"],
+  Share: ["Compartir", "Share", "Compartilhar"],
+  "Revoke link": ["Revocar enlace", "Revoke link", "Revogar link"],
+  "Revoking…": ["Revocando…", "Revoking…", "Revogando…"],
+  "QR code": ["Código QR", "QR code", "Código QR"],
+  "QR code for %{name}": [
+    "Código QR de %{name}",
+    "QR code for %{name}",
+    "Código QR de %{name}",
+  ],
+  "Revoking a booking link does not affect confirmed appointments or their private management links.":
+    [
+      "Revocar un enlace de reserva no afecta las citas confirmadas ni sus enlaces privados de administración.",
+      "Revoking a booking link does not affect confirmed appointments or their private management links.",
+      "Revogar um link de agendamento não afeta os agendamentos confirmados nem seus links privados de gerenciamento.",
+    ],
+  "Link copied.": ["Se copió el enlace.", "Link copied.", "Link copiado."],
+  "Booking link shared.": [
+    "Se compartió el enlace de reserva.",
+    "Booking link shared.",
+    "O link de agendamento foi compartilhado.",
+  ],
+  "Add professional": [
+    "Añadir profesional",
+    "Add professional",
+    "Adicionar profissional",
+  ],
+  "Select a Savia member": [
+    "Selecciona una persona de Savia",
+    "Select a Savia member",
+    "Selecione uma pessoa do Savia",
+  ],
+  "Public booking page": [
+    "Página pública de citas",
+    "Public booking page",
+    "Página pública de agendamento",
+  ],
+  "Open team booking page": [
+    "Abrir página de reservas del equipo",
+    "Open team booking page",
+    "Abrir página de agendamento da equipe",
+  ],
+  "Your availability": [
+    "Tu disponibilidad",
+    "Your availability",
+    "Sua disponibilidade",
+  ],
+  "Edit weekly hours and date-specific exceptions. Times use %{timeZone}.": [
+    "Edita el horario semanal y las excepciones por fecha. Las horas usan %{timeZone}.",
+    "Edit weekly hours and date-specific exceptions. Times use %{timeZone}.",
+    "Edite os horários semanais e exceções por data. Os horários usam %{timeZone}.",
+  ],
+  Day: ["Día", "Day", "Dia"],
+  Monday: ["Lunes", "Monday", "Segunda-feira"],
+  Tuesday: ["Martes", "Tuesday", "Terça-feira"],
+  Wednesday: ["Miércoles", "Wednesday", "Quarta-feira"],
+  Thursday: ["Jueves", "Thursday", "Quinta-feira"],
+  Friday: ["Viernes", "Friday", "Sexta-feira"],
+  Saturday: ["Sábado", "Saturday", "Sábado"],
+  Sunday: ["Domingo", "Sunday", "Domingo"],
+  Start: ["Inicio", "Start", "Início"],
+  End: ["Fin", "End", "Fim"],
+  "Monday start": [
+    "Inicio del lunes",
+    "Monday start",
+    "Início de segunda-feira",
+  ],
+  "Monday end": ["Fin del lunes", "Monday end", "Fim de segunda-feira"],
+  "Save availability": [
+    "Guardar disponibilidad",
+    "Save availability",
+    "Salvar disponibilidade",
+  ],
+  "Availability saved.": [
+    "Se guardó la disponibilidad.",
+    "Availability saved.",
+    "Disponibilidade salva.",
+  ],
+  "Availability could not be saved. Reload and retry.": [
+    "No se pudo guardar la disponibilidad. Recarga e inténtalo de nuevo.",
+    "Availability could not be saved. Reload and retry.",
+    "Não foi possível salvar a disponibilidade. Recarregue e tente novamente.",
+  ],
+  Exceptions: ["Excepciones", "Exceptions", "Exceções"],
+  "Add exception": ["Añadir excepción", "Add exception", "Adicionar exceção"],
+  "Exception date": ["Fecha de excepción", "Exception date", "Data da exceção"],
+  "Calendar connection": [
+    "Conexión de calendario",
+    "Calendar connection",
+    "Conexão do calendário",
+  ],
+  "My Day availability": [
+    "Disponibilidad de Mi día",
+    "My Day availability",
+    "Disponibilidade do My Day",
+  ],
+  "Grant access to busy times in your current Google or Outlook calendar and imported or subscribed calendars. Meeting details stay private.":
+    [
+      "Autoriza el acceso a los horarios ocupados de tu calendario actual de Google u Outlook y de los calendarios importados o suscritos. Los detalles de las reuniones son privados.",
+      "Grant access to busy times in your current Google or Outlook calendar and imported or subscribed calendars. Meeting details stay private.",
+      "Conceda acesso aos horários ocupados do seu calendário atual do Google ou Outlook e dos calendários importados ou assinados. Os detalhes das reuniões permanecem privados.",
+    ],
+  "My Day access is enabled. Calendar sources: %{count}.": [
+    "Acceso a Mi día habilitado. Fuentes de calendario: %{count}.",
+    "My Day access is enabled. Calendar sources: %{count}.",
+    "Acesso ao My Day ativado. Fontes de calendário: %{count}.",
+  ],
+  "My Day access is off.": [
+    "El acceso a Mi día está desactivado.",
+    "My Day access is off.",
+    "O acesso ao My Day está desativado.",
+  ],
+  "Use My Day to block busy times": [
+    "Usar Mi día para bloquear horarios ocupados",
+    "Use My Day to block busy times",
+    "Usar My Day para bloquear horários ocupados",
+  ],
+  "Update calendar access": [
+    "Actualizar acceso al calendario",
+    "Update calendar access",
+    "Atualizar acesso ao calendário",
+  ],
+  "Stop using My Day": [
+    "Dejar de usar Mi día",
+    "Stop using My Day",
+    "Parar de usar o My Day",
+  ],
+  "My Day availability access updated.": [
+    "Se actualizó el acceso de disponibilidad de Mi día.",
+    "My Day availability access updated.",
+    "O acesso à disponibilidade do My Day foi atualizado.",
+  ],
+  "My Day availability access stopped.": [
+    "Se detuvo el acceso de disponibilidad de Mi día.",
+    "My Day availability access stopped.",
+    "O acesso à disponibilidade do My Day foi interrompido.",
+  ],
+  "My Day availability could not be updated. Check your connection and retry.":
+    [
+      "No se pudo actualizar el acceso a la disponibilidad de Mi día. Revisa tu conexión e inténtalo de nuevo.",
+      "My Day availability could not be updated. Check your connection and retry.",
+      "Não foi possível atualizar o acesso à disponibilidade do My Day. Verifique sua conexão e tente novamente.",
+    ],
+  "Google Calendar connected": [
+    "Google Calendar conectado",
+    "Google Calendar connected",
+    "Google Calendar conectado",
+  ],
+  "Outlook Calendar connected": [
+    "Outlook Calendar conectado",
+    "Outlook Calendar connected",
+    "Outlook Calendar conectado",
+  ],
+  "Calendar not connected": [
+    "Calendario sin conectar",
+    "Calendar not connected",
+    "Calendário não conectado",
+  ],
+  "Choose a personal calendar to check availability and create events. Calendar access is optional and only granted by you.":
+    [
+      "Elige un calendario personal para consultar disponibilidad y crear eventos. El acceso es opcional y solo tú lo autorizas.",
+      "Choose a personal calendar to check availability and create events. Calendar access is optional and only granted by you.",
+      "Escolha um calendário pessoal para consultar disponibilidade e criar eventos. O acesso é opcional e só você autoriza.",
+    ],
+  "Choose calendar": [
+    "Elegir calendario",
+    "Choose calendar",
+    "Escolher calendário",
+  ],
+  "Reservations could not be loaded.": [
+    "No se pudieron cargar las reservas.",
+    "Reservations could not be loaded.",
+    "Não foi possível carregar as reservas.",
+  ],
+  "No reservations in this period.": [
+    "No hay reservas en este período.",
+    "No reservations in this period.",
+    "Não há reservas neste período.",
+  ],
+  Customer: ["Cliente", "Customer", "Cliente"],
+  "Appointment time": [
+    "Hora de la cita",
+    "Appointment time",
+    "Horário do agendamento",
+  ],
+  Status: ["Estado", "Status", "Status"],
+  Delivery: ["Entrega", "Delivery", "Entrega"],
+  Calendar: ["Calendario", "Calendar", "Calendário"],
+  "Join Google Meet": [
+    "Unirse a Google Meet",
+    "Join Google Meet",
+    "Entrar no Google Meet",
+  ],
+  "Join Teams": ["Unirse a Teams", "Join Teams", "Entrar no Teams"],
+  "Join video meeting": [
+    "Unirse a la videollamada",
+    "Join video meeting",
+    "Entrar na videochamada",
+  ],
+  "Generate video link": [
+    "Generar enlace de videollamada",
+    "Generate video link",
+    "Gerar link de videochamada",
+  ],
+  "Generating video link…": [
+    "Generando enlace de videollamada…",
+    "Generating video link…",
+    "Gerando link de videochamada…",
+  ],
+  "Connect an eligible Google Calendar or Outlook calendar to generate a video link.":
+    [
+      "Conecta un calendario de Google Calendar u Outlook compatible para generar un enlace de videollamada.",
+      "Connect an eligible Google Calendar or Outlook calendar to generate a video link.",
+      "Conecte um calendário compatível do Google Calendar ou Outlook para gerar um link de videochamada.",
+    ],
+  "Video meeting link request failed. Check the calendar connection and retry.":
+    [
+      "No se pudo solicitar el enlace de videollamada. Revisa la conexión del calendario e inténtalo de nuevo.",
+      "Video meeting link request failed. Check the calendar connection and retry.",
+      "Não foi possível solicitar o link da videochamada. Verifique a conexão do calendário e tente novamente.",
+    ],
+  "Video meeting link is being prepared. Refresh to check again.": [
+    "Se está preparando el enlace de videollamada. Actualiza para comprobarlo de nuevo.",
+    "Video meeting link is being prepared. Refresh to check again.",
+    "O link da videochamada está sendo preparado. Atualize para verificar novamente.",
+  ],
+  "Video meeting link is being prepared. Open appointment management to refresh the status.":
+    [
+      "Se está preparando el enlace de videollamada. Abre la administración de la cita para actualizar el estado.",
+      "Video meeting link is being prepared. Open appointment management to refresh the status.",
+      "O link da videochamada está sendo preparado. Abra o gerenciamento do agendamento para atualizar o status.",
+    ],
+  "Video meetings are not available for this appointment.": [
+    "Esta cita no admite videollamada.",
+    "Video meetings are not available for this appointment.",
+    "Este agendamento não oferece videochamada.",
+  ],
+  "The video meeting could not be created.": [
+    "No se pudo crear la videollamada.",
+    "The video meeting could not be created.",
+    "Não foi possível criar a videochamada.",
+  ],
+  "The video meeting link is unavailable.": [
+    "El enlace de videollamada no está disponible.",
+    "The video meeting link is unavailable.",
+    "O link da videochamada não está disponível.",
+  ],
+  "Refresh appointment": [
+    "Actualizar cita",
+    "Refresh appointment",
+    "Atualizar agendamento",
+  ],
+  "Refreshing appointment…": [
+    "Actualizando cita…",
+    "Refreshing appointment…",
+    "Atualizando agendamento…",
+  ],
+  "The appointment could not be refreshed. Try again.": [
+    "No se pudo actualizar la cita. Inténtalo de nuevo.",
+    "The appointment could not be refreshed. Try again.",
+    "Não foi possível atualizar o agendamento. Tente novamente.",
+  ],
+  "Cancel reservation": [
+    "Cancelar reserva",
+    "Cancel reservation",
+    "Cancelar reserva",
+  ],
+  "Confirm reservation cancellation with calendar": [
+    "¿Cancelar esta reserva? Se conservará en el historial como cancelada. Savia solicitará la cancelación del evento de %{calendar} y de la videollamada vinculada cuando el proveedor lo permita.",
+    "Cancel this reservation? It will remain in history as cancelled. Savia will request cancellation of its %{calendar} event and linked video meeting, where supported.",
+    "Cancelar esta reserva? Ela continuará no histórico como cancelada. Savia solicitará o cancelamento do evento do %{calendar} e da videochamada vinculada quando o provedor permitir.",
+  ],
+  "Confirm reservation cancellation without calendar": [
+    "¿Cancelar esta reserva? Se conservará en el historial como cancelada. Los enlaces de reunión dejarán de estar disponibles en Savia.",
+    "Cancel this reservation? It will remain in history as cancelled. Meeting links will no longer be available in Savia.",
+    "Cancelar esta reserva? Ela continuará no histórico como cancelada. Os links da reunião deixarão de estar disponíveis no Savia.",
+  ],
+  "Not requested": ["No solicitado", "Not requested", "Não solicitado"],
+  "Saved in %{calendar}": [
+    "Guardado en %{calendar}",
+    "Saved in %{calendar}",
+    "Salvo no %{calendar}",
+  ],
+  "Event saved in %{calendar}; synchronization pending": [
+    "Evento guardado en %{calendar}; sincronización pendiente",
+    "Event saved in %{calendar}; synchronization pending",
+    "Evento salvo no %{calendar}; sincronização pendente",
+  ],
+  "Event saved in %{calendar}; synchronization failed": [
+    "Evento guardado en %{calendar}; falló la sincronización",
+    "Event saved in %{calendar}; synchronization failed",
+    "Evento salvo no %{calendar}; falha na sincronização",
+  ],
+  "Saving to %{calendar}…": [
+    "Guardando en %{calendar}…",
+    "Saving to %{calendar}…",
+    "Salvando no %{calendar}…",
+  ],
+  "Could not save to %{calendar}": [
+    "No se pudo guardar en %{calendar}",
+    "Could not save to %{calendar}",
+    "Não foi possível salvar no %{calendar}",
+  ],
+  "No event saved to %{calendar}": [
+    "No se guardó ningún evento en %{calendar}",
+    "No event saved to %{calendar}",
+    "Nenhum evento foi salvo no %{calendar}",
+  ],
+  "Calendar sync skipped for %{calendar}": [
+    "Se omitió la sincronización con %{calendar}",
+    "Calendar sync skipped for %{calendar}",
+    "A sincronização com %{calendar} foi ignorada",
+  ],
+  "Calendar cancellation pending for %{calendar}": [
+    "Cancelación pendiente en %{calendar}",
+    "Calendar cancellation pending for %{calendar}",
+    "Cancelamento pendente no %{calendar}",
+  ],
+  "Could not cancel in %{calendar}": [
+    "No se pudo cancelar en %{calendar}",
+    "Could not cancel in %{calendar}",
+    "Não foi possível cancelar no %{calendar}",
+  ],
+  "Cancelled in %{calendar}": [
+    "Cancelada en %{calendar}",
+    "Cancelled in %{calendar}",
+    "Cancelada no %{calendar}",
+  ],
+  "Calendar cancellation processed for %{calendar}": [
+    "Se procesó la cancelación del calendario %{calendar}",
+    "Calendar cancellation processed for %{calendar}",
+    "O cancelamento do calendário %{calendar} foi processado",
+  ],
+  "Reservation cancelled.": [
+    "Se canceló la reserva.",
+    "Reservation cancelled.",
+    "Reserva cancelada.",
+  ],
+  "Reservation could not be cancelled. Refresh and retry.": [
+    "No se pudo cancelar la reserva. Actualiza e inténtalo de nuevo.",
+    "Reservation could not be cancelled. Refresh and retry.",
+    "Não foi possível cancelar a reserva. Atualize e tente novamente.",
+  ],
+  Confirmed: ["Confirmada", "Confirmed", "Confirmado"],
+  Cancelled: ["Cancelada", "Cancelled", "Cancelado"],
+  Service: ["Servicio", "Service", "Serviço"],
+  "Choose a service": [
+    "Elige un servicio",
+    "Choose a service",
+    "Escolha um serviço",
+  ],
+  "Choose a professional": [
+    "Elige un profesional",
+    "Choose a professional",
+    "Escolha um profissional",
+  ],
+  Date: ["Fecha", "Date", "Data"],
+  "Available time": ["Hora disponible", "Available time", "Horário disponível"],
+  "Booking time zone": [
+    "Zona horaria de la cita",
+    "Booking time zone",
+    "Fuso horário do agendamento",
+  ],
+  "Time zone": ["Zona horaria", "Time zone", "Fuso horário"],
+  "Previous month": ["Mes anterior", "Previous month", "Mês anterior"],
+  "Next month": ["Mes siguiente", "Next month", "Próximo mês"],
+  "Days with availability are enabled.": [
+    "Los días disponibles están habilitados.",
+    "Days with availability are enabled.",
+    "Os dias com disponibilidade estão ativos.",
+  ],
+  "Choose an available day": [
+    "Elige un día disponible",
+    "Choose an available day",
+    "Escolha um dia disponível",
+  ],
+  "No availability in this month.": [
+    "No hay disponibilidad este mes.",
+    "No availability in this month.",
+    "Não há disponibilidade neste mês.",
+  ],
+  "No more dates are available in this booking window.": [
+    "No hay más fechas disponibles dentro de este plazo.",
+    "No more dates are available in this booking window.",
+    "Não há mais datas disponíveis neste período de agendamento.",
+  ],
+  "Available times for %{date}": [
+    "Horarios disponibles para %{date}",
+    "Available times for %{date}",
+    "Horários disponíveis para %{date}",
+  ],
+  "Loading available times…": [
+    "Cargando horarios disponibles…",
+    "Loading available times…",
+    "Carregando horários disponíveis…",
+  ],
+  "Choose a time": ["Elige una hora", "Choose a time", "Escolha um horário"],
+  "No available times": [
+    "No hay horarios disponibles",
+    "No available times",
+    "Não há horários disponíveis",
+  ],
+  "Your name": ["Tu nombre", "Your name", "Seu nome"],
+  Email: ["Correo electrónico", "Email", "E-mail"],
+  "Book appointment": ["Reservar cita", "Book appointment", "Agendar horário"],
+  "Retry booking": [
+    "Reintentar reserva",
+    "Retry booking",
+    "Tentar agendamento novamente",
+  ],
+  "Appointment confirmed": [
+    "Cita confirmada",
+    "Appointment confirmed",
+    "Agendamento confirmado",
+  ],
+  "Manage or cancel this appointment": [
+    "Administrar o cancelar esta cita",
+    "Manage or cancel this appointment",
+    "Gerenciar ou cancelar este agendamento",
+  ],
+  "Your booking could not be confirmed. Retry with the same request.": [
+    "No se pudo confirmar la reserva. Inténtalo de nuevo con la misma solicitud.",
+    "Your booking could not be confirmed. Retry with the same request.",
+    "Não foi possível confirmar o agendamento. Tente novamente com a mesma solicitação.",
+  ],
+  "That time conflicts with another meeting or appointment. Choose another available time.":
+    [
+      "Ese horario coincide con otra reunión o cita. Elige otro horario disponible.",
+      "That time conflicts with another meeting or appointment. Choose another available time.",
+      "Esse horário conflita com outra reunião ou agendamento. Escolha outro horário disponível.",
+    ],
+  "That time is no longer available. Choose another available time.": [
+    "Ese horario ya no está disponible. Elige otro horario disponible.",
+    "That time is no longer available. Choose another available time.",
+    "Esse horário não está mais disponível. Escolha outro horário disponível.",
+  ],
+  "Available times could not be loaded. Choose another date and retry.": [
+    "No se pudieron cargar los horarios. Elige otra fecha e inténtalo de nuevo.",
+    "Available times could not be loaded. Choose another date and retry.",
+    "Não foi possível carregar os horários. Escolha outra data e tente novamente.",
+  ],
+  "Verification could not load. Check your connection and retry.": [
+    "No se pudo cargar la verificación. Revisa tu conexión e inténtalo de nuevo.",
+    "Verification could not load. Check your connection and retry.",
+    "Não foi possível carregar a verificação. Verifique sua conexão e tente novamente.",
+  ],
+  Reschedule: ["Cambiar horario", "Reschedule", "Remarcar"],
+  Cancel: ["Cerrar", "Cancel", "Fechar"],
+  "Save new time": [
+    "Guardar nuevo horario",
+    "Save new time",
+    "Salvar novo horário",
+  ],
+  "Book another appointment": [
+    "Reservar otra cita",
+    "Book another appointment",
+    "Agendar outro horário",
+  ],
+  "Appointments are available inside a tenant workspace.": [
+    "Las citas están disponibles dentro de una organización.",
+    "Appointments are available inside a tenant workspace.",
+    "Os agendamentos estão disponíveis dentro de uma organização.",
+  ],
+  "This booking link could not be loaded. Ask the booking owner for help.": [
+    "No se pudo cargar este enlace de reserva. Contacta a quien administra las citas.",
+    "This booking link could not be loaded. Ask the booking owner for help.",
+    "Não foi possível carregar este link de agendamento. Peça ajuda à pessoa responsável.",
+  ],
+  "This booking could not be cancelled. Refresh the page and retry.": [
+    "No se pudo cancelar la reserva. Actualiza la página e inténtalo de nuevo.",
+    "This booking could not be cancelled. Refresh the page and retry.",
+    "Não foi possível cancelar o agendamento. Atualize a página e tente novamente.",
+  ],
+  "This booking could not be rescheduled. Refresh the times and retry.": [
+    "No se pudo cambiar el horario. Actualiza los horarios e inténtalo de nuevo.",
+    "This booking could not be rescheduled. Refresh the times and retry.",
+    "Não foi possível remarcar. Atualize os horários e tente novamente.",
+  ],
+  "Choose a new time": [
+    "Elige un nuevo horario",
+    "Choose a new time",
+    "Escolha um novo horário",
+  ],
+  "Review your change": [
+    "Revisa el cambio",
+    "Review your change",
+    "Revise a alteração",
+  ],
+  "Current appointment": [
+    "Cita actual",
+    "Current appointment",
+    "Agendamento atual",
+  ],
+  "Updated appointment": [
+    "Cita actualizada",
+    "Updated appointment",
+    "Agendamento atualizado",
+  ],
+  "Your appointment has been updated.": [
+    "Tu cita se actualizó.",
+    "Your appointment has been updated.",
+    "Seu agendamento foi atualizado.",
+  ],
+  "Stop rescheduling": [
+    "Dejar de cambiar la cita",
+    "Stop rescheduling",
+    "Parar de remarcar",
+  ],
+  Continue: ["Continuar", "Continue", "Continuar"],
+  Back: ["Atrás", "Back", "Voltar"],
+  "Confirm reschedule": [
+    "Confirmar el cambio",
+    "Confirm reschedule",
+    "Confirmar alteração",
+  ],
+  "Saving…": ["Guardando…", "Saving…", "Salvando…"],
+  "To change this appointment, contact the booking business.": [
+    "Para cambiar esta cita, contacta al negocio que la reservó.",
+    "To change this appointment, contact the booking business.",
+    "Para alterar este agendamento, entre em contato com a empresa.",
+  ],
+  "Calendar needs reconnection": [
+    "Se debe volver a conectar el calendario",
+    "Calendar needs reconnection",
+    "É preciso reconectar o calendário",
+  ],
+  "Add period": ["Añadir horario", "Add period", "Adicionar período"],
+  "Remove period": ["Quitar horario", "Remove period", "Remover período"],
+  "Remove exception": [
+    "Quitar excepción",
+    "Remove exception",
+    "Remover exceção",
+  ],
+  "The cancellation and rescheduling window has closed.": [
+    "Ya venció el plazo para cancelar o cambiar la cita.",
+    "The cancellation and rescheduling window has closed.",
+    "O prazo para cancelar ou remarcar já terminou.",
+  ],
+} as const satisfies MessageCatalog;

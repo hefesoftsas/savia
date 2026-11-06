@@ -1,0 +1,42 @@
+/**
+ * Test-Specific Entry Point
+ *
+ * This entry point exports test-friendly versions of worker classes,
+ * avoiding dependency issues from loading the full worker in src/index.ts.
+ *
+ * Purpose:
+ * - Enables Cloudflare Workflows testing with introspectWorkflowInstance API
+ * - Avoids loading incompatible dependencies (e.g., geotiff with node:https)
+ * - Keeps test environment clean and fast
+ *
+ * Usage:
+ * - Referenced in vitest.config.ts as poolOptions.workers.main
+ * - Referenced in wrangler.test.jsonc as workflow class_name
+ * - Only used during test execution
+ * - Does NOT affect production builds
+ *
+ * Implementation:
+ * - Exports MockRuntime with injected mock dependencies:
+ *   - MockNodeRegistry (basic math nodes only, no geotiff)
+ *   - MockToolRegistry (simpler tool registry)
+ *   - MockMonitoringService (captures updates for verification)
+ *   - MockExecutionStore (in-memory storage)
+ * - Avoids importing CloudflareNodeRegistry and heavy dependencies
+ */
+
+// Export AgentRunner so agent nodes can run their tool loop in tests.
+export { AgentRunner } from "./durable-objects/agent-runner";
+// Export EmailAgentRunner so the email-agent flow can be exercised in tests.
+export { EmailAgentRunner } from "./durable-objects/email-agent-runner";
+// Export MailboxDO so the per-org mailbox can be exercised in tests.
+export { MailboxDO } from "./durable-objects/mailbox-do";
+// Export WorkflowAgent so both its protocols — the editor graph session and
+// the generation conversation — can be exercised in tests.
+export { WorkflowAgent } from "./durable-objects/workflow-agent";
+// Export mock runtime for workflow testing
+// Note: We export it as "Runtime" so wrangler config can reference it by that name
+export { MockRuntime as Runtime } from "./mocks/runtime";
+
+// Note: We intentionally do NOT import the full index.ts or CloudflareNodeRegistry
+// to avoid pulling in dependencies that require Node.js modules not available
+// in the Workers runtime (e.g., geotiff importing node:https).

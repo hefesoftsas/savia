@@ -1,0 +1,315 @@
+.public-form-page {
+  min-height: 100dvh;
+  background: var(--background);
+  color: var(--foreground);
+  padding: clamp(1.25rem, 5vw, 4rem) 1.25rem;
+}
+.public-form-shell {
+  max-width: 38rem;
+  margin: 0 auto;
+}
+.public-form-brand {
+  font-weight: 650;
+  font-size: 1.25rem;
+  padding-bottom: 1.25rem;
+  border-bottom: 1px solid var(--border);
+}
+.public-form-heading {
+  margin: 2.5rem 0 2rem;
+}
+.public-form-logo {
+  display: block;
+  max-width: 100%;
+  width: 10rem;
+  height: 5rem;
+  object-fit: contain;
+  margin-bottom: 1.25rem;
+  background: transparent;
+}
+.public-form-heading h1,
+.public-form-notice h1 {
+  font-size: clamp(1.65rem, 4vw, 2.2rem);
+  line-height: 1.2;
+  font-weight: 650;
+  text-wrap: balance;
+  overflow-wrap: anywhere;
+}
+.public-form-heading p {
+  margin-top: 0.75rem;
+  line-height: 1.6;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+.public-form-fields,
+.public-form-fields fieldset {
+  display: grid;
+  gap: 1.25rem;
+  min-width: 0;
+}
+.public-form-fields fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+.public-form-field {
+  display: grid;
+  gap: 0.5rem;
+  min-width: 0;
+}
+.public-form-field label {
+  font-size: 0.9375rem;
+  font-weight: 550;
+  overflow-wrap: anywhere;
+}
+.public-form-field input:not([type="checkbox"]),
+.public-form-field select {
+  min-height: 2.75rem;
+  font-size: 1rem;
+}
+.public-form-field select {
+  width: 100%;
+  border: 1px solid var(--input);
+  background: var(--background);
+  color: var(--foreground);
+  border-radius: 0.375rem;
+  padding: 0.5rem 0.75rem;
+}
+.public-form-field input[type="checkbox"] {
+  width: 1.125rem;
+  height: 1.125rem;
+  accent-color: var(--primary);
+  flex-shrink: 0;
+}
+.public-form-field select:focus-visible,
+.public-form-field input[type="checkbox"]:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 3px;
+}
+.public-form-fields > button {
+  min-height: 2.75rem;
+}
+.public-form-help,
+.public-form-footer {
+  color: var(--muted-foreground);
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+.public-form-footer {
+  margin-top: 3rem;
+  border-top: 1px solid var(--border);
+  padding-top: 1rem;
+}
+.public-form-notice {
+  display: grid;
+  gap: 1rem;
+  margin-top: 2rem;
+  line-height: 1.6;
+}
+.public-form-notice h2 {
+  font-size: 1.125rem;
+  font-weight: 650;
+}
+.public-form-error {
+  color: var(--destructive);
+  line-height: 1.5;
+}
+.public-form-reference {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.public-form-result {
+  display: grid;
+  gap: 0.75rem;
+}
+.public-form-result div {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 0.5rem;
+  overflow-wrap: anywhere;
+}
+.public-form-result dt {
+  color: var(--muted-foreground);
+}
+.public-link-qr {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  border: 1px dashed var(--border);
+  border-radius: 0.5rem;
+  background: #ffffff;
+  width: fit-content;
+  max-width: 100%;
+}
+.public-link-qr-code {
+  line-height: 0;
+  padding: 0.5rem;
+  background: #ffffff;
+  border-radius: 0.375rem;
+}
+.public-link-qr-code svg {
+  width: 10rem;
+  height: 10rem;
+  max-width: 100%;
+}
+.public-link-qr .public-link-actions {
+  flex-direction: column;
+  align-items: stretch;
+}
+.public-link-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+@media (max-width: 640px) {
+  .public-form-page button {
+    height: auto;
+    min-height: 44px;
+  }
+}
+@media (max-width: 640px) {
+  .public-link-manager button {
+    height: auto;
+    min-height: 44px;
+  }
+  .public-link-manager button[aria-label] {
+    min-width: 44px;
+  }
+}
+@media (max-width: 480px) {
+  .public-link-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .public-link-actions > button {
+    min-height: 44px;
+    width: 100%;
+    height: auto;
+  }
+  .public-link-qr {
+    width: 100%;
+  }
+  .public-link-qr-code {
+    width: 100%;
+  }
+  .public-link-qr-code svg {
+    width: 100%;
+    height: auto;
+  }
+}
+/* Savia emerald identity for the whole public experience. */
+.public-form-page {
+  --primary: oklch(0.508 0.118 165.612);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.979 0.021 166.113);
+  --secondary-foreground: oklch(0.262 0.051 172.552);
+  --muted: oklch(0.979 0.021 166.113);
+  --muted-foreground: oklch(0.378 0.077 168.94);
+  --accent: oklch(0.95 0.052 163.051);
+  --accent-foreground: oklch(0.262 0.051 172.552);
+  --ring: oklch(0.696 0.17 162.48);
+}
+.dark .public-form-page {
+  --primary: oklch(0.845 0.143 164.978);
+  --primary-foreground: oklch(0.262 0.051 172.552);
+  --secondary: oklch(0.378 0.077 168.94);
+  --secondary-foreground: oklch(0.95 0.052 163.051);
+  --muted: oklch(0.378 0.077 168.94);
+  --muted-foreground: oklch(0.845 0.143 164.978);
+  --accent: oklch(0.432 0.095 166.913);
+  --accent-foreground: oklch(0.95 0.052 163.051);
+  --ring: oklch(0.765 0.177 163.223);
+}
+@media print {
+  .public-form-brand,
+  .public-form-footer,
+  .public-quote-actions,
+  .public-quote-notice-actions,
+  .insurance-comparator__filter-bar,
+  .insurance-comparator__selection-bar,
+  .insurance-comparator__btn,
+  .insurance-batch-disclosure {
+    display: none !important;
+  }
+  .public-form-page {
+    padding: 0;
+  }
+  .insurance-card,
+  .insurance-comparison {
+    break-inside: avoid;
+    box-shadow: none;
+  }
+}
+.public-quote-notice-actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.public-quote-notice-actions > button {
+  min-height: 2.75rem;
+}
+
+/* Brand tokens for the shared insurance comparator (same names as the
+   embedded workbench so one component renders identically). */
+.public-quote-embedded {
+  --iq-success: #059669;
+  --iq-success-strong: #10b981;
+  --iq-cta: #e11d48;
+  --iq-cta-hover: #be123c;
+  --iq-on-cta: #ffffff;
+  --iq-brand-sura: #004f9e;
+  --iq-plate-liberty: #f8fafc;
+  --iq-plate-equidad: #f6fbf3;
+  --iq-plate-mapfre: #fff8f8;
+  --iq-plate-previsora: #f4faf7;
+  --iq-plate-neutral: #ffffff;
+}
+
+.insurance-provider-logo {
+  align-items: center;
+  background: var(--background);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  display: flex;
+  flex: 0 0 auto;
+  height: 40px;
+  justify-content: center;
+  overflow: hidden;
+  padding: 5px 7px;
+  width: 82px;
+}
+.insurance-provider-logo__image {
+  display: block;
+  height: 100%;
+  object-fit: contain;
+  width: 100%;
+}
+.insurance-provider-logo--fallback {
+  background: color-mix(in oklab, var(--primary) 10%, var(--background));
+  color: var(--primary);
+}
+.insurance-provider-logo__fallback {
+  font-size: 0.6875rem;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+}
+.insurance-provider-logo--compact {
+  border-radius: 6px;
+  height: 26px;
+  padding: 3px 5px;
+  width: 50px;
+}
+.insurance-provider-logo--compact .insurance-provider-logo__image {
+  height: 100%;
+  width: 100%;
+}
+@media (max-width: 360px) {
+  .public-form-page {
+    padding-inline: 0.5rem;
+  }
+}

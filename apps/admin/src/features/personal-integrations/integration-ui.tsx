@@ -1,0 +1,278 @@
+import type { ElementType, ReactNode } from "react";
+import { CheckCircle2, Info, LoaderCircle, Plug } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { HelpTooltip } from "@/components/ui/help-tooltip";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
+import { useMessages } from "@/i18n/core";
+import { personalIntegrationsMessages } from "@/i18n/locales/integrations";
+import "./personal-integrations.css";
+
+export function IntegrationsPageShell({ children }: { children: ReactNode }) {
+  return (
+    <main className="integrations-page mx-auto w-full max-w-6xl px-4 sm:px-6 pb-10">
+      {children}
+    </main>
+  );
+}
+
+export function IntegrationsPageHeader({
+  title,
+  description,
+}: {
+  title: string;
+  description?: string;
+}) {
+  const t = useMessages(personalIntegrationsMessages);
+  return (
+    <header className="integrations-page__header">
+      {description ? (
+        <div className="flex items-center gap-2">
+          <h1 className="integrations-page__title">{title}</h1>
+          <IntegrationHelpTooltip
+            label={t("Ayuda sobre %{v1}", { v1: title.toLowerCase() })}
+          >
+            {description}
+          </IntegrationHelpTooltip>
+        </div>
+      ) : (
+        <h1 className="integrations-page__title">{title}</h1>
+      )}
+    </header>
+  );
+}
+
+export function IntegrationHelpTooltip({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          className="flex size-5 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground max-sm:size-11"
+          aria-label={label}
+        >
+          <Info className="size-3.5" aria-hidden="true" />
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="top" sideOffset={6} className="max-w-xs">
+        {children}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+export function IntegrationGroup({
+  title,
+  headingId,
+  description,
+  help,
+  children,
+}: {
+  title: string;
+  headingId?: string;
+  description?: string;
+  help?: string;
+  children: ReactNode;
+}) {
+  return (
+    <section
+      aria-labelledby={headingId}
+      className="integrations-group overflow-hidden rounded-xl border bg-card"
+    >
+      <div className="integrations-group__header border-b px-5 py-3.5">
+        <div className="flex items-center justify-between gap-3">
+          <h2
+            className="integrations-group__title text-sm font-semibold"
+            id={headingId}
+          >
+            {title}
+          </h2>
+          {help ? (
+            <div className="-my-2.5">
+              <HelpTooltip label={`Ayuda: ${title}`}>{help}</HelpTooltip>
+            </div>
+          ) : null}
+        </div>
+        {description ? (
+          <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
+            {description}
+          </p>
+        ) : null}
+      </div>
+      <ul className="integrations-group__list">{children}</ul>
+    </section>
+  );
+}
+
+export function IntegrationProviderIcon({
+  Icon,
+  displayName,
+}: {
+  Icon: ElementType;
+  displayName: string;
+}) {
+  const t = useMessages(personalIntegrationsMessages);
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          aria-label={t("Logo de %{value}", { value: displayName })}
+          className="integrations-row__icon flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-foreground"
+          role="img"
+        >
+          <Icon aria-hidden="true" className="size-5" />
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side="top" sideOffset={6}>
+        {displayName}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+export type IntegrationStatusTone = "success" | "warning" | "neutral";
+
+export function IntegrationProviderRow({
+  name,
+  hint,
+  statusLabel,
+  statusTone = "neutral",
+  showStatus = false,
+  actionLabel,
+  actionVariant = "default",
+  busy = false,
+  disabled = false,
+  muted = false,
+  onAction,
+  secondaryAction,
+  icon,
+}: {
+  name: string;
+  hint: string;
+  statusLabel?: string;
+  statusTone?: IntegrationStatusTone;
+  showStatus?: boolean;
+  actionLabel: string;
+  actionVariant?: "default" | "outline";
+  busy?: boolean;
+  disabled?: boolean;
+  muted?: boolean;
+  secondaryAction?: ReactNode;
+  onAction?: () => void;
+  icon: ReactNode;
+}) {
+  return (
+    <li
+      className={[
+        "integrations-row",
+        muted ? "integrations-row--muted" : "",
+        disabled ? "integrations-row--static" : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
+    >
+      <div className="integrations-row__identity flex min-w-0 flex-1 items-center gap-2.5">
+        {icon}
+        <div className="min-w-0">
+          <p className="integrations-row__name truncate text-sm font-medium leading-5">
+            {name}
+          </p>
+          {hint ? (
+            <p className="integrations-row__hint whitespace-normal text-xs leading-5 text-muted-foreground">
+              {hint}
+            </p>
+          ) : null}
+        </div>
+      </div>
+      <div className="integrations-row__actions flex items-center gap-2 shrink-0">
+        {showStatus && statusLabel ? (
+          <Badge
+            className={cn(
+              "integrations-row__status shrink-0 font-medium",
+              statusTone === "success" &&
+                "border-emerald-500/30 bg-emerald-500/15 text-emerald-700 hover:bg-emerald-500/20 dark:border-emerald-500/40 dark:bg-emerald-500/20 dark:text-emerald-300",
+              statusTone === "warning" &&
+                "border-amber-500/30 bg-amber-500/15 text-amber-700 hover:bg-amber-500/20 dark:border-amber-500/40 dark:bg-amber-500/20 dark:text-amber-300",
+            )}
+            variant={statusTone === "success" ? "outline" : "secondary"}
+          >
+            {statusTone === "success" ? (
+              <CheckCircle2 className="mr-1 size-3.5 text-emerald-600 dark:text-emerald-400" />
+            ) : null}
+            {statusLabel}
+          </Badge>
+        ) : null}
+        {secondaryAction}
+        <Button
+          className="integrations-row__action shrink-0 max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
+          title={actionLabel}
+          size="sm"
+          variant={actionVariant}
+          disabled={busy || disabled}
+          onClick={onAction}
+        >
+          {busy ? (
+            <LoaderCircle className="animate-spin" aria-hidden="true" />
+          ) : (
+            <Plug className="size-4 sm:hidden" aria-hidden="true" />
+          )}
+          <span className="sr-only sm:not-sr-only">{actionLabel}</span>
+        </Button>
+      </div>
+    </li>
+  );
+}
+
+export function IntegrationGroupEmpty({ message }: { message: string }) {
+  return <li className="px-5 py-8 text-sm text-muted-foreground">{message}</li>;
+}
+
+export function IntegrationGroupsSkeleton({ groups = 2 }: { groups?: number }) {
+  const t = useMessages(personalIntegrationsMessages);
+  return (
+    <div
+      className="integrations-groups space-y-4"
+      role="status"
+      aria-label={t("Cargando integraciones…")}
+    >
+      <span className="sr-only">{t("Cargando integraciones…")}</span>
+      {Array.from({ length: groups }, (_, index) => (
+        <div
+          key={index}
+          className="integrations-group overflow-hidden rounded-xl border bg-card shadow-xs"
+        >
+          <div className="border-b px-5 py-3.5">
+            <Skeleton className="h-4 w-24" />
+          </div>
+          <div className="space-y-0">
+            {Array.from({ length: 3 }, (_, row) => (
+              <div
+                key={row}
+                className="flex items-center gap-3 border-t px-5 py-4 first:border-t-0"
+              >
+                <Skeleton className="size-8 shrink-0 rounded-md" />
+                <div className="flex-1 space-y-2">
+                  <Skeleton className="h-4 w-32" />
+                  <Skeleton className="h-3 w-48" />
+                </div>
+                <Skeleton className="h-8 w-24 shrink-0 rounded-md" />
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}

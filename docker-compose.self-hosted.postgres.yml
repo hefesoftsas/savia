@@ -1,0 +1,25 @@
+# Use --env-file infra/secrets/self-hosted.env with this override.
+services:
+  postgres:
+    image: postgres:17-bookworm@sha256:639ab7ceb90e13123085b741fb31ef493fba25463002f6da665352e7b534b652
+    environment:
+      POSTGRES_DB: savia
+      POSTGRES_USER: savia
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Generate PostgreSQL configuration and pass --env-file}
+    volumes:
+      - postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U savia -d savia"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+    stop_grace_period: 60s
+  savia:
+    environment:
+      SAVIA_DATABASE_DRIVER: postgres
+    depends_on:
+      postgres:
+        condition: service_healthy
+volumes:
+  postgres:

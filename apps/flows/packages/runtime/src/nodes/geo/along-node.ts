@@ -1,0 +1,88 @@
+import type { Units } from "@savia/flows-geo";
+import { along } from "@savia/flows-geo";
+import { ExecutableNode, type NodeContext } from "@savia/flows-runtime";
+import type { NodeExecution, NodeType } from "@savia/flows-types";
+import { isUnits, UNITS_LIST } from "./geo-input";
+
+export class AlongNode extends ExecutableNode {
+  public static readonly nodeType: NodeType = {
+    id: "along",
+    name: "Along",
+    type: "along",
+    description:
+      "Takes a LineString and returns a Point at a specified distance along the line",
+    tags: ["Geo", "GeoJSON", "Geometry", "Along"],
+    icon: "map-pin",
+    documentation:
+      "This node finds a point at a specified distance along a LineString geometry.",
+    inlinable: true,
+    asTool: false,
+    inputs: [
+      {
+        name: "line",
+        type: "geojson",
+        description: "The LineString to measure along",
+        required: true,
+      },
+      {
+        name: "distance",
+        type: "number",
+        description: "Distance along the line",
+        required: true,
+      },
+      {
+        name: "units",
+        type: "string",
+        description: "Units for the distance measurement (default: kilometers)",
+        required: false,
+      },
+    ],
+    outputs: [
+      {
+        name: "point",
+        type: "geojson",
+        description: "Point at the specified distance along the line",
+      },
+    ],
+  };
+
+  public async execute(context: NodeContext): Promise<NodeExecution> {
+    try {
+      const { line, distance, units } = context.inputs;
+
+      if (!line) {
+        return this.createErrorResult("Missing line input");
+      }
+
+      if (distance === undefined || distance === null) {
+        return this.createErrorResult("Missing distance input");
+      }
+
+      if (typeof distance !== "number" || !Number.isFinite(distance)) {
+        return this.createErrorResult("Distance must be a valid number");
+      }
+
+      // Prepare options for along calculation
+      const options: { units?: Units } = {};
+
+      if (units !== undefined && units !== null) {
+        if (!isUnits(units)) {
+          return this.createErrorResult(`Units must be one of: ${UNITS_LIST}`);
+        }
+        options.units = units;
+      }
+
+      // Delegate to Turf.js along function
+      const pointAlong = along(line, distance, options);
+
+      return this.createSuccessResult({
+        point: pointAlong,
+      });
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      return this.createErrorResult(
+        `Error calculating point along line: ${error.message}`
+      );
+    }
+  }
+}

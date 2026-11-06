@@ -1,0 +1,21 @@
+name: Savia infrastructure
+description: Read existing environment outputs and render manifests for an immutable Pulumi runtime release
+inputs:
+  stack:
+    description: preview or production
+    required: true
+outputs:
+  public-origin:
+    description: Canonical public origin from the imported stack
+    value: ${{ steps.render.outputs.SAVIA_PUBLIC_ORIGIN }}
+runs:
+  using: composite
+  steps:
+    - uses: ./.github/actions/install-pulumi
+
+    - name: Render Workers from imported stack outputs
+      id: render
+      shell: bash
+      env:
+        SAVIA_INFRA_STACK: ${{ inputs.stack }}
+      run: node infra/pulumi/render-from-outputs.mjs --stack "$SAVIA_INFRA_STACK"

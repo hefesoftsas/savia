@@ -1,0 +1,1012 @@
+import { isReadAccessDenied } from "@/queries/read-state";
+import { ReadRefreshStatus } from "@/components/admin/read-refresh-status";
+import { useRealtimeRefresh } from "@/realtime/use-realtime-refresh";
+import { useMessages } from "@/i18n/core";
+import { settingsMessages } from "@/i18n/locales/settings";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type ComponentProps,
+  type CSSProperties,
+  type FormEvent,
+} from "react";
+import { parseTenantSlugFromHostname } from "@savia/tenant-host";
+import { TenantAccessUrl } from "./tenant-access-url";
+import {
+  Building2,
+  LoaderCircle,
+  LogIn,
+  Plus,
+  RefreshCw,
+  RotateCcw,
+  Save,
+  Trash2,
+  type LucideIcon,
+} from "lucide-react";
+import { Link } from "react-router-dom";
+import {
+  brandingForeground,
+  parseTenantBranding,
+  type TenantBranding,
+} from "@savia/tenant-host/branding";
+import type { AppServices } from "@/app-services";
+import { ApiClientError } from "@/api/api-client";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
+import { useTenantBranding } from "./tenant-branding-provider";
+import "./tenant-branding.css";
+import { LottiePreview } from "./lottie-preview";
+import { loginAnimationMessages } from "./login-animation-messages";
+import { TenantApiKeysPanel } from "@/features/tenant-api-keys/tenant-api-keys";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { settingsTabMessages } from "./settings-tab-messages";
+
+type Tenant = {
+  id: number;
+  name: string;
+  idSlug?: string | null;
+  kind?: string;
+  isActive?: boolean | number;
+};
+type Asset = "logo" | "cover" | "login-animation";
+
+function BrandingActionButton({
+  children,
+  icon: Icon,
+  spinning = false,
+  className,
+  ...props
+}: Omit<ComponentProps<typeof Button>, "children" | "asChild"> & {
+  children: string;
+  icon: LucideIcon;
+  spinning?: boolean;
+}) {
+  return (
+    <Button
+      title={children}
+      className={cn(
+        "max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0",
+        className,
+      )}
+      {...props}
+    >
+      <Icon
+        aria-hidden="true"
+        className={spinning ? "motion-safe:animate-spin" : undefined}
+      />
+      <span className="sr-only sm:not-sr-only">{children}</span>
+    </Button>
+  );
+}
+
+function isLoginAnimationData(value: unknown): boolean {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const animation = value as Record<string, unknown>;
+  return (
+    typeof animation.v === "string" &&
+    /^\d/.test(animation.v) &&
+    typeof animation.fr === "number" &&
+    typeof animation.ip === "number" &&
+    typeof animation.op === "number" &&
+    Array.isArray(animation.layers)
+  );
+}
+function message(error: unknown): keyof typeof settingsMessages {
+  if (error instanceof ApiClientError && error.status === 403)
+    return "No tienes permisos para modificar la marca de esta organización.";
+  if (
+    error instanceof ApiClientError &&
+    [400, 413, 415, 422].includes(error.status)
+  )
+    return "Revisa los datos, las imágenes y la animación. Se permiten PNG, JPEG o WEBP y Lottie JSON de hasta 2 MB.";
+  return "No se pudo completar la operación. Revisa tu conexión y vuelve a intentarlo.";
+}
+export function TenantBrandingPage({ services }: { services: AppServices }) {
+  const t = useMessages(settingsMessages);
+  const [tenants, setTenants] = useState<Tenant[]>([]);
+  const [selected, setSelected] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [errorStatus, setErrorStatus] = useState(0);
+  const [canCreateOrganization, setCanCreateOrganization] = useState(false);
+  const [attempt, setAttempt] = useState(0);
+  const dedicated = !!parseTenantSlugFromHostname(window.location.hostname);
+  useEffect(() => {
+    const controller = new AbortController();
+    setLoading(true);
+    setError("");
+    setErrorStatus(0);
+    setSelected("");
+    setTenants([]);
+    setCanCreateOrganization(false);
+    void (async () => {
+      try {
+        if (dedicated) {
+          const response = await services.apiClient.get<{
+            data: {
+              id: unknown;
+              name: unknown;
+              kind: unknown;
+              slug?: string | null;
+            };
+          }>("/v1/tenants/current", { signal: controller.signal });
+          if (controller.signal.aborted) return;
+          const current = response?.data;
+          const valid =
+            current &&
+            Number.isSafeInteger(current.id) &&
+            (current.id as number) > 0 &&
+            current.kind !== "platform" &&
+            typeof current.name === "string"
+              ? [
+                  {
+                    id: current.id as number,
+                    name: current.name as string,
+                    kind: current.kind as string,
+                    idSlug: current.slug,
+                    isActive: true as const,
+                  },
+                ]
+              : [];
+          setTenants(valid);
+          setSelected(valid[0] ? String(valid[0].id) : "");
+        } else {
+          const response = await services.apiClient.get<{
+            data: Tenant | Tenant[];
+          }>("/v1/tenants", { signal: controller.signal });
+          if (controller.signal.aborted) return;
+          const list = Array.isArray(response.data)
+            ? response.data
+            : [response.data];
+          // The tenant list endpoint exposes the internal platform tenant only
+          // to platform administrators. Use that server-filtered result to offer
+          // the create action only to people who can actually use it.
+          const canCreateOrganization = list.some(
+            (tenant) => tenant?.kind === "platform",
+          );
+          const valid = list.filter(
+            (tenant) =>
+              tenant &&
+              Number.isSafeInteger(tenant.id) &&
+              tenant.id > 0 &&
+              tenant.kind !== "platform" &&
+              tenant.isActive !== false &&
+              tenant.isActive !== 0 &&
+              typeof tenant.name === "string",
+          );
+          setTenants(valid);
+          setCanCreateOrganization(canCreateOrganization);
+          setSelected(valid[0] ? String(valid[0].id) : "");
+        }
+      } catch (cause) {
+        if (!controller.signal.aborted) {
+          setError(message(cause));
+          setErrorStatus(cause instanceof ApiClientError ? cause.status : 0);
+        }
+      } finally {
+        if (!controller.signal.aborted) setLoading(false);
+      }
+    })();
+    return () => controller.abort();
+  }, [services.apiClient, dedicated, attempt]);
+  return (
+    <main className="tenant-branding-page" lang="es">
+      <header className="tenant-branding-heading">
+        <h1>{t("Marca de tu organización")}</h1>
+        <p>
+          {t(
+            "Personaliza la identidad y la pantalla de acceso de tu equipo. Revisa la vista previa y guarda cuando esté lista.",
+          )}
+        </p>
+      </header>
+      {loading ? (
+        <p role="status">{t("Cargando organizaciones…")}</p>
+      ) : error ? (
+        <div role="alert">
+          <p>
+            {errorStatus === 401
+              ? t("Tu sesión expiró. Inicia sesión de nuevo para continuar.")
+              : error in settingsMessages
+                ? t(error as keyof typeof settingsMessages)
+                : error}
+          </p>
+          <div className="tenant-branding-actions">
+            {errorStatus === 401 ? (
+              <BrandingActionButton
+                icon={LogIn}
+                type="button"
+                variant="secondary"
+                onClick={() => void services.authSession.login()}
+              >
+                {t("Iniciar sesión de nuevo")}
+              </BrandingActionButton>
+            ) : null}
+            <BrandingActionButton
+              icon={RefreshCw}
+              type="button"
+              variant="secondary"
+              onClick={() => setAttempt((value) => value + 1)}
+            >
+              {t("Volver a cargar")}
+            </BrandingActionButton>
+          </div>
+        </div>
+      ) : tenants.length ? (
+        <>
+          {dedicated || tenants.length === 1 ? (
+            <p className="tenant-branding-agency">{tenants[0].name}</p>
+          ) : (
+            <div className="tenant-branding-selector">
+              <label htmlFor="branding-tenant">{t("Organización")}</label>
+              <select
+                id="branding-tenant"
+                value={selected}
+                onChange={(event) => setSelected(event.target.value)}
+              >
+                {tenants.map((tenant) => (
+                  <option key={tenant.id} value={tenant.id}>
+                    {tenant.name}
+                  </option>
+                ))}
+              </select>
+              <p>
+                {t(
+                  "Cambiar de organización descarta los cambios que no hayas guardado.",
+                )}
+              </p>
+            </div>
+          )}
+          {selected && (
+            <BrandingEditor
+              key={selected}
+              tenantId={selected}
+              slug={
+                tenants.find((tenant) => String(tenant.id) === selected)?.idSlug
+              }
+              services={services}
+            />
+          )}
+        </>
+      ) : (
+        <section className="tenant-branding-empty" role="status">
+          <div className="tenant-branding-empty-icon" aria-hidden="true">
+            <Building2 />
+          </div>
+          <div className="tenant-branding-empty-copy">
+            <h2>
+              {canCreateOrganization
+                ? t("Aún no hay organizaciones comerciales")
+                : t("No tienes organizaciones asignadas")}
+            </h2>
+            <p>
+              {canCreateOrganization
+                ? t(
+                    "Crea una organización para personalizar su identidad y su pantalla de acceso. Cuando exista, podrás elegirla aquí.",
+                  )
+                : t(
+                    "Pide a un administrador de plataforma que te agregue a una organización para poder editar su marca.",
+                  )}
+            </p>
+            {canCreateOrganization && (
+              <Button
+                asChild
+                className="tenant-branding-empty-action max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0"
+              >
+                <Link to="/tenants/create" title={t("Crear organización")}>
+                  <Plus aria-hidden="true" />
+                  <span className="sr-only sm:not-sr-only">
+                    {t("Crear organización")}
+                  </span>
+                </Link>
+              </Button>
+            )}
+          </div>
+        </section>
+      )}
+    </main>
+  );
+}
+function BrandingEditor({
+  tenantId,
+  slug,
+  services,
+}: {
+  tenantId: string;
+  slug?: string | null;
+  services: AppServices;
+}) {
+  const t = useMessages(settingsMessages);
+  const tabT = useMessages(settingsTabMessages);
+  const { refetch } = useTenantBranding();
+  const animationT = useMessages(loginAnimationMessages);
+  const [saved, setSaved] = useState<TenantBranding>();
+  const [draft, setDraft] = useState<TenantBranding>();
+  const [canManage, setCanManage] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [pending, setPending] = useState<"save" | Asset>();
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [conflict, setConflict] = useState(false);
+  const [reload, setReload] = useState(0);
+  const [previews, setPreviews] = useState<
+    Partial<Record<"logo" | "cover", string>>
+  >({});
+  const [animationName, setAnimationName] = useState("");
+  const [animationPreview, setAnimationPreview] = useState<unknown>();
+  const [activeTab, setActiveTab] = useState("identity");
+  const [visitedApiKeys, setVisitedApiKeys] = useState(false);
+  const objectUrls = useRef<Partial<Record<Asset, string>>>({});
+  const alive = useRef(true);
+  const busy = useRef(false);
+  const uploadRequest = useRef<AbortController | null>(null);
+  const loadedScope = useRef<
+    | {
+        apiClient: AppServices["apiClient"];
+        path: string;
+      }
+    | undefined
+  >(undefined);
+  const editRevision = useRef(0);
+  const [refreshError, setRefreshError] = useState("");
+  const path = `/v1/tenants/${encodeURIComponent(tenantId)}/branding`;
+  function clearPreviews() {
+    for (const url of Object.values(objectUrls.current))
+      URL.revokeObjectURL(url);
+    objectUrls.current = {};
+    setPreviews({});
+    setAnimationName("");
+    setAnimationPreview(undefined);
+  }
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+      uploadRequest.current?.abort();
+      for (const url of Object.values(objectUrls.current))
+        URL.revokeObjectURL(url);
+      objectUrls.current = {};
+    };
+  }, []);
+  useEffect(() => {
+    const controller = new AbortController();
+    const startedRevision = editRevision.current;
+    const sameScope =
+      loadedScope.current?.apiClient === services.apiClient &&
+      loadedScope.current?.path === path;
+    setLoading(true);
+    setRefreshError("");
+    if (!sameScope) {
+      loadedScope.current = undefined;
+      setError("");
+      setNotice("");
+      setConflict(false);
+      setDraft(undefined);
+      setSaved(undefined);
+      setCanManage(false);
+      clearPreviews();
+    }
+    void services.apiClient
+      .get<{ data: unknown; canManage: boolean }>(path, {
+        signal: controller.signal,
+      })
+      .then((response) => {
+        if (controller.signal.aborted) return;
+        const value = parseTenantBranding(response.data);
+        if (!value) throw new Error("Invalid branding");
+        loadedScope.current = { apiClient: services.apiClient, path };
+        const editedDuringRead =
+          sameScope && editRevision.current !== startedRevision;
+        setConflict(editedDuringRead);
+        if (!editedDuringRead) {
+          clearPreviews();
+          setDraft(value);
+        }
+        setSaved(value);
+        setCanManage(response.canManage === true);
+      })
+      .catch((cause) => {
+        if (!controller.signal.aborted) {
+          if (isReadAccessDenied(cause)) {
+            loadedScope.current = undefined;
+            setDraft(undefined);
+            setSaved(undefined);
+            setCanManage(false);
+            setError(message(cause));
+          } else if (sameScope) setRefreshError(message(cause));
+          else setError(message(cause));
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+    return () => controller.abort();
+  }, [services.apiClient, path, reload]);
+  function edit<Key extends keyof TenantBranding>(
+    key: Key,
+    value: TenantBranding[Key],
+  ) {
+    editRevision.current += 1;
+    setDraft((current) => (current ? { ...current, [key]: value } : current));
+    setNotice("");
+  }
+  const dirty = !!draft && JSON.stringify(draft) !== JSON.stringify(saved);
+  const remoteBranding = useRealtimeRefresh({
+    topics: ["settings"],
+    tenantId: Number(tenantId),
+    enabled: Number.isSafeInteger(Number(tenantId)),
+    blocked: dirty || Boolean(pending),
+    refresh: () => {
+      setReload((value) => value + 1);
+      void refetch({ reload: true });
+    },
+  });
+  useEffect(() => {
+    if (remoteBranding.changed) setConflict(true);
+  }, [remoteBranding.changed]);
+  async function save(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!draft || !canManage || !dirty || busy.current || conflict) return;
+    if (
+      !parseTenantBranding(draft) ||
+      !draft.displayName.trim() ||
+      !draft.loginTitle.trim()
+    ) {
+      setError(
+        "Revisa los textos, los colores, las imágenes y la animación antes de guardar.",
+      );
+      return;
+    }
+    busy.current = true;
+    setPending("save");
+    setError("");
+    setNotice("");
+    try {
+      const response = await services.apiClient.put<{ data: unknown }>(
+        path,
+        draft,
+      );
+      if (!alive.current) return;
+      const value = parseTenantBranding(response.data);
+      if (!value) throw new Error("Invalid branding");
+      setSaved(value);
+      setDraft(value);
+      clearPreviews();
+      setNotice("Marca guardada.");
+      void refetch({ reload: true });
+    } catch (cause) {
+      if (alive.current) {
+        if (cause instanceof ApiClientError && cause.status === 409) {
+          setConflict(true);
+          setError(
+            "La marca fue actualizada por otra persona. Conservamos tus cambios. Cargar la versión guardada reemplazará esta edición.",
+          );
+        } else setError(message(cause));
+      }
+    } finally {
+      busy.current = false;
+      if (alive.current) setPending(undefined);
+    }
+  }
+  async function upload(kind: Asset, event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file || !draft || !canManage || busy.current) return;
+    let animationData: unknown;
+    if (kind === "login-animation") {
+      const looksJson =
+        file.type === "application/json" ||
+        file.type === "" ||
+        /\.json$/i.test(file.name);
+      if (!looksJson || file.size > 2 * 1024 * 1024 || file.size === 0) {
+        setError("Usa un archivo Lottie JSON válido de hasta 2 MB.");
+        return;
+      }
+      try {
+        animationData = JSON.parse(await file.text());
+        if (!isLoginAnimationData(animationData)) throw 0;
+      } catch {
+        setError("Usa un archivo Lottie JSON válido de hasta 2 MB.");
+        return;
+      }
+    } else if (
+      !["image/png", "image/jpeg", "image/webp"].includes(file.type) ||
+      file.size > 2 * 1024 * 1024 ||
+      file.size === 0
+    ) {
+      setError("Usa una imagen PNG, JPEG o WEBP de hasta 2 MB.");
+      return;
+    }
+    busy.current = true;
+    setPending(kind);
+    setError("");
+    setNotice("");
+    const controller = new AbortController();
+    uploadRequest.current = controller;
+    const body = new FormData();
+    body.append("file", file);
+    try {
+      const response = await services.apiClient.requestResponse(
+        `${path}/assets/${kind}`,
+        { method: "POST", body, signal: controller.signal },
+      );
+      if (!response.ok)
+        throw new ApiClientError(
+          response.status,
+          "upload_failed",
+          "Upload failed",
+        );
+      const result = (await response.json()) as { data?: { url?: unknown } };
+      if (!alive.current || controller.signal.aborted) return;
+      const url = result.data?.url;
+      const urlKey =
+        kind === "login-animation" ? "loginAnimationUrl" : `${kind}Url`;
+      if (
+        typeof url !== "string" ||
+        !url.startsWith(`/api/public/tenant-branding/assets/${tenantId}/`) ||
+        !parseTenantBranding({ ...draft, [urlKey]: url })
+      )
+        throw new Error("Invalid asset URL");
+      if (kind === "login-animation") {
+        setAnimationName(file.name);
+        setAnimationPreview(animationData);
+        edit("loginAnimationUrl", url);
+        setNotice(
+          "Animación lista en la vista previa. Guarda los cambios para publicarla.",
+        );
+      } else {
+        const preview = URL.createObjectURL(file);
+        if (objectUrls.current[kind])
+          URL.revokeObjectURL(objectUrls.current[kind]!);
+        objectUrls.current[kind] = preview;
+        setPreviews((previous) => ({ ...previous, [kind]: preview }));
+        edit(`${kind}Url`, url);
+        setNotice(
+          "Imagen lista en la vista previa. Guarda los cambios para publicarla.",
+        );
+      }
+    } catch (cause) {
+      if (alive.current && !controller.signal.aborted) setError(message(cause));
+    } finally {
+      busy.current = false;
+      if (alive.current) setPending(undefined);
+    }
+  }
+  function removeImage(kind: Asset) {
+    if (kind === "login-animation") {
+      setAnimationName("");
+      setAnimationPreview(undefined);
+      edit("loginAnimationUrl", null);
+      return;
+    }
+    if (objectUrls.current[kind])
+      URL.revokeObjectURL(objectUrls.current[kind]!);
+    delete objectUrls.current[kind];
+    setPreviews((previous) => ({ ...previous, [kind]: undefined }));
+    edit(`${kind}Url`, null);
+  }
+  if (
+    (loading && !draft) ||
+    (loadedScope.current &&
+      (loadedScope.current.apiClient !== services.apiClient ||
+        loadedScope.current.path !== path))
+  )
+    return (
+      <>
+        <TenantAccessUrl slug={slug} />
+        <p role="status">{t("Cargando marca…")}</p>
+      </>
+    );
+  if (!draft)
+    return (
+      <>
+        <TenantAccessUrl slug={slug} />
+        <div role="alert">
+          <p>
+            {error in settingsMessages
+              ? t(error as keyof typeof settingsMessages)
+              : error}
+          </p>
+          <BrandingActionButton
+            icon={RefreshCw}
+            variant="outline"
+            onClick={() => setReload((value) => value + 1)}
+          >
+            {t("Volver a cargar")}
+          </BrandingActionButton>
+        </div>
+      </>
+    );
+  const disabled = !canManage || !!pending;
+  const previewStyle = {
+    "--brand-preview-primary": draft.primaryColor,
+    "--brand-preview-foreground": brandingForeground(draft.primaryColor),
+    "--brand-preview-accent": draft.accentColor,
+    "--brand-preview-accent-foreground": brandingForeground(draft.accentColor),
+  } as CSSProperties;
+  return (
+    <div className="tenant-branding-layout" data-active-tab={activeTab}>
+      <ReadRefreshStatus
+        refreshing={loading}
+        error={refreshError}
+        onRetry={
+          dirty || pending ? undefined : () => setReload((value) => value + 1)
+        }
+      />
+      <Tabs
+        className="tenant-branding-tabs"
+        defaultValue="identity"
+        onValueChange={(value) => {
+          setActiveTab(value);
+          if (value === "api-keys") setVisitedApiKeys(true);
+        }}
+      >
+        <div className="tenant-branding-tabs-scroll">
+          <TabsList
+            variant="line"
+            aria-label={tabT("Secciones de configuración")}
+          >
+            <TabsTrigger value="identity">{tabT("Identidad")}</TabsTrigger>
+            <TabsTrigger value="login">
+              {tabT("Pantalla de acceso")}
+            </TabsTrigger>
+            {canManage && (
+              <TabsTrigger value="api-keys">{tabT("Claves API")}</TabsTrigger>
+            )}
+          </TabsList>
+        </div>
+        <form
+          className="tenant-branding-editor"
+          onSubmit={save}
+          aria-busy={!!pending}
+          hidden={activeTab === "api-keys"}
+        >
+          {!canManage && (
+            <p className="tenant-branding-note">
+              {t(
+                "Puedes consultar la marca. Solo los administradores de esta organización pueden modificarla.",
+              )}
+            </p>
+          )}
+          <TabsContent
+            value="identity"
+            forceMount
+            className="tenant-branding-tab-panel"
+          >
+            <fieldset disabled={disabled}>
+              <legend>{t("Identidad")}</legend>
+              <div className="tenant-branding-field">
+                <label htmlFor="branding-name">{t("Nombre visible")}</label>
+                <Input
+                  id="branding-name"
+                  value={draft.displayName}
+                  maxLength={120}
+                  required={activeTab === "identity"}
+                  onChange={(event) => edit("displayName", event.target.value)}
+                />
+              </div>
+              <div className="tenant-branding-colors">
+                <div className="tenant-branding-field">
+                  <label htmlFor="branding-primary">
+                    {t("Color principal")}
+                  </label>
+                  <div className="tenant-branding-color">
+                    <input
+                      id="branding-primary"
+                      type="color"
+                      value={draft.primaryColor}
+                      onChange={(event) =>
+                        edit("primaryColor", event.target.value)
+                      }
+                    />
+                    <span>{draft.primaryColor}</span>
+                  </div>
+                </div>
+                <div className="tenant-branding-field">
+                  <label htmlFor="branding-accent">
+                    {t("Color de acento")}
+                  </label>
+                  <div className="tenant-branding-color">
+                    <input
+                      id="branding-accent"
+                      type="color"
+                      value={draft.accentColor}
+                      onChange={(event) =>
+                        edit("accentColor", event.target.value)
+                      }
+                    />
+                    <span>{draft.accentColor}</span>
+                  </div>
+                </div>
+              </div>
+              <div className="tenant-branding-field">
+                <label htmlFor="branding-logo">{t("Subir logo")}</label>
+                <Input
+                  id="branding-logo"
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  onChange={(event) => void upload("logo", event)}
+                />
+                {pending === "logo" && (
+                  <p role="status">{t("Subiendo imagen…")}</p>
+                )}
+                {draft.logoUrl && (
+                  <BrandingActionButton
+                    icon={Trash2}
+                    variant="ghost"
+                    type="button"
+                    onClick={() => removeImage("logo")}
+                  >
+                    {t("Quitar logo")}
+                  </BrandingActionButton>
+                )}
+              </div>
+            </fieldset>
+          </TabsContent>
+          <TabsContent
+            value="login"
+            forceMount
+            className="tenant-branding-tab-panel"
+          >
+            <fieldset disabled={disabled}>
+              <legend>{t("Pantalla de acceso")}</legend>
+              <div className="tenant-branding-field">
+                <label htmlFor="branding-title">{t("Título de acceso")}</label>
+                <Input
+                  id="branding-title"
+                  value={draft.loginTitle}
+                  maxLength={120}
+                  required={activeTab === "login"}
+                  onChange={(event) => edit("loginTitle", event.target.value)}
+                />
+              </div>
+              <div className="tenant-branding-field">
+                <label htmlFor="branding-description">
+                  {t("Mensaje de bienvenida")}
+                </label>
+                <textarea
+                  id="branding-description"
+                  value={draft.loginDescription}
+                  maxLength={600}
+                  rows={3}
+                  onChange={(event) =>
+                    edit("loginDescription", event.target.value)
+                  }
+                />
+              </div>
+            </fieldset>
+            <TenantAccessUrl slug={slug} />
+            <fieldset disabled={disabled}>
+              <legend>{t("Animación de acceso")}</legend>
+              <p className="tenant-branding-help">
+                {t(
+                  "Archivo Lottie JSON de hasta 2 MB. Reemplaza la animación de Savia y tiene prioridad sobre la portada. Sin animación se muestra la de Savia.",
+                )}
+              </p>
+              <p className="tenant-branding-help">
+                <a
+                  href="https://lottiefiles.com/free-animations/dog"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  {animationT("Buscar animaciones gratuitas en LottieFiles")}
+                </a>
+              </p>
+              <div className="tenant-branding-field tenant-branding-repeat">
+                <Switch
+                  id="branding-login-animation-repeat"
+                  checked={draft.loginAnimationRepeat}
+                  onCheckedChange={(checked) =>
+                    edit("loginAnimationRepeat", checked)
+                  }
+                />
+                <label htmlFor="branding-login-animation-repeat">
+                  {animationT("Repetir animación")}
+                </label>
+              </div>
+              <div className="tenant-branding-field">
+                <label htmlFor="branding-login-animation">
+                  {t("Subir animación Lottie")}
+                </label>
+                <Input
+                  id="branding-login-animation"
+                  type="file"
+                  accept="application/json,.json"
+                  onChange={(event) => void upload("login-animation", event)}
+                />
+                {pending === "login-animation" && (
+                  <p role="status">{t("Subiendo animación…")}</p>
+                )}
+                {draft.loginAnimationUrl && (
+                  <p className="tenant-branding-help" role="status">
+                    {animationName
+                      ? t("Animación seleccionada: %{name}.", {
+                          name: animationName,
+                        })
+                      : t("Animación personalizada activa.")}
+                  </p>
+                )}
+                {draft.loginAnimationUrl && (
+                  <BrandingActionButton
+                    icon={RotateCcw}
+                    variant="ghost"
+                    type="button"
+                    onClick={() => removeImage("login-animation")}
+                  >
+                    {t("Restaurar animación por defecto")}
+                  </BrandingActionButton>
+                )}
+              </div>
+            </fieldset>
+            <fieldset disabled={disabled}>
+              <legend>{t("Imágenes")}</legend>
+              <p className="tenant-branding-help">
+                {t(
+                  "PNG, JPEG o WEBP de hasta 2 MB. El logo se ajusta sin recortes; la portada puede recortarse para llenar el espacio.",
+                )}
+              </p>
+              <div className="tenant-branding-field">
+                <label htmlFor="branding-cover">{t("Subir portada")}</label>
+                <Input
+                  id="branding-cover"
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  onChange={(event) => void upload("cover", event)}
+                />
+                {pending === "cover" && (
+                  <p role="status">{t("Subiendo imagen…")}</p>
+                )}
+                {draft.coverUrl && (
+                  <BrandingActionButton
+                    icon={Trash2}
+                    variant="ghost"
+                    type="button"
+                    onClick={() => removeImage("cover")}
+                  >
+                    {t("Quitar portada")}
+                  </BrandingActionButton>
+                )}
+              </div>
+            </fieldset>
+          </TabsContent>
+          {error && (
+            <div role="alert" className="tenant-branding-error">
+              <p>
+                {error in settingsMessages
+                  ? t(error as keyof typeof settingsMessages)
+                  : error}
+              </p>
+              {conflict && (
+                <BrandingActionButton
+                  icon={RefreshCw}
+                  type="button"
+                  variant="outline"
+                  onClick={() => setReload((value) => value + 1)}
+                >
+                  {t("Cargar versión guardada")}
+                </BrandingActionButton>
+              )}
+            </div>
+          )}
+          {notice && (
+            <p role="status">
+              {notice in settingsMessages
+                ? t(notice as keyof typeof settingsMessages)
+                : notice}
+            </p>
+          )}
+          <div className="tenant-branding-actions">
+            <BrandingActionButton
+              icon={pending === "save" ? LoaderCircle : Save}
+              spinning={pending === "save"}
+              type="submit"
+              disabled={disabled || !dirty || conflict}
+            >
+              {pending === "save" ? t("Guardando…") : t("Guardar cambios")}
+            </BrandingActionButton>
+            <BrandingActionButton
+              icon={RotateCcw}
+              variant="outline"
+              type="button"
+              disabled={disabled || !dirty}
+              onClick={() => {
+                setDraft(saved);
+                clearPreviews();
+                setNotice("");
+                if (!conflict) setError("");
+              }}
+            >
+              {t("Descartar cambios")}
+            </BrandingActionButton>
+          </div>
+          {dirty && (
+            <p className="tenant-branding-help" role="status">
+              {t("Cambios sin guardar. La vista previa solo se muestra aquí.")}
+            </p>
+          )}
+        </form>
+        {canManage && visitedApiKeys && (
+          <TabsContent
+            value="api-keys"
+            forceMount
+            className="tenant-branding-api-keys"
+          >
+            <TenantApiKeysPanel
+              key={tenantId}
+              api={services.apiClient}
+              tenantId={Number(tenantId)}
+            />
+          </TabsContent>
+        )}
+      </Tabs>
+      <aside
+        className="tenant-branding-preview"
+        aria-label={t("Vista previa de marca")}
+        style={previewStyle}
+        hidden={activeTab === "api-keys"}
+      >
+        <div className="tenant-branding-preview-label">
+          {t("Vista previa · acceso")}
+        </div>
+        <div className="tenant-branding-preview-content">
+          {draft.loginAnimationUrl ? (
+            animationPreview ? (
+              <LottiePreview
+                data={animationPreview}
+                name={animationName}
+                repeat={draft.loginAnimationRepeat}
+              />
+            ) : (
+              <p className="tenant-branding-preview-animation" role="status">
+                {t("Se mostrará tu animación Lottie en lugar de la portada.")}
+              </p>
+            )
+          ) : (
+            (previews.cover ?? draft.coverUrl) && (
+              <img
+                className="tenant-branding-cover"
+                src={previews.cover ?? draft.coverUrl!}
+                alt={t("Portada de la organización")}
+              />
+            )
+          )}
+          <div className="tenant-branding-preview-form">
+            <div className="tenant-branding-preview-identity">
+              {(previews.logo ?? draft.logoUrl) && (
+                <img
+                  className="tenant-branding-logo"
+                  src={previews.logo ?? draft.logoUrl!}
+                  alt={`Logo de ${draft.displayName}`}
+                />
+              )}
+              <strong>{draft.displayName}</strong>
+            </div>
+            <h2>{draft.loginTitle}</h2>
+            <p>{draft.loginDescription}</p>
+            <div className="tenant-branding-preview-input">
+              {t("Correo electrónico")}
+            </div>
+            <div className="tenant-branding-preview-button" aria-hidden="true">
+              {t("Continuar")}
+            </div>
+            <p className="tenant-branding-preview-caption">
+              {t("Vista previa, sin inicio de sesión.")}
+            </p>
+          </div>
+        </div>
+        <div className="tenant-branding-preview-label">
+          {t("Vista previa · aplicación")}
+        </div>
+        <div className="tenant-branding-preview-nav">
+          <span className="tenant-branding-preview-selected">
+            {t("Inicio")}
+          </span>
+          <span>{t("Mi organización")}</span>
+        </div>
+      </aside>
+    </div>
+  );
+}

@@ -1,0 +1,94 @@
+import React from "react";
+import { buttonVariants } from "@/components/ui/button";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { Plus } from "lucide-react";
+import {
+  LinkBase,
+  useCreatePath,
+  useGetResourceLabel,
+  useResourceContext,
+  useResourceTranslation,
+} from "ra-core";
+
+export type CreateButtonProps = {
+  label?: string;
+  resource?: string;
+  iconOnly?: boolean;
+  variant?: "default" | "outline";
+};
+
+/**
+ * A button that navigates to the create page for a resource.
+ *
+ * Automatically uses the current resource unless overridden.
+ *
+ * @see {@link https://marmelab.com/shadcn-admin-kit/docs/createbutton/ CreateButton documentation}
+ *
+ * @example
+ * import { CreateButton, List, ExportButton } from '@/components/admin';
+ *
+ * const PostList = () => (
+ *   <List
+ *     actions={<>
+ *       <CreateButton />
+ *       <ExportButton />
+ *     </>}
+ *   >
+ *     ...
+ *   </List>
+ * );
+ */
+export const CreateButton = (props: CreateButtonProps) => {
+  const { label: labelProp, iconOnly = false, variant = "outline" } = props;
+  const resource = useResourceContext(props);
+  const createPath = useCreatePath();
+  const getResourceLabel = useGetResourceLabel();
+  const href = createPath({
+    resource,
+    type: "create",
+  });
+  const label = useResourceTranslation({
+    resourceI18nKey: resource
+      ? `resources.${resource}.action.create`
+      : undefined,
+    baseI18nKey: "ra.action.create",
+    options: {
+      name: resource ? getResourceLabel(resource, 1) : undefined,
+    },
+    userText: labelProp,
+  });
+  const button = (
+    <LinkBase
+      className={buttonVariants({
+        variant,
+        size: iconOnly ? "icon" : "default",
+        className: "max-sm:size-11 max-sm:p-0 max-sm:has-[>svg]:px-0",
+      })}
+      to={href}
+      onClick={stopPropagation}
+      aria-label={typeof label === "string" ? label : undefined}
+      title={typeof label === "string" ? label : undefined}
+    >
+      <Plus aria-hidden="true" />
+      {!iconOnly ? (
+        <span className="sr-only sm:not-sr-only">{label}</span>
+      ) : null}
+    </LinkBase>
+  );
+
+  if (!iconOnly || typeof label !== "string") return button;
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{button}</TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
+  );
+};
+
+// useful to prevent click bubbling in a datagrid with rowClick
+const stopPropagation = (e: React.MouseEvent) => e.stopPropagation();

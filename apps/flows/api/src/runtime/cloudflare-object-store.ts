@@ -1,0 +1,341 @@
+import type { ObjectMetadata, ObjectStore } from "@savia/flows-runtime";
+import type { ObjectReference } from "@savia/flows-types";
+import { AwsClient } from "aws4fetch";
+import { v7 as uuid } from "uuid";
+
+import { assertObjectWithinLimit } from "../services/resource-limits";
+
+/**
+ * Map common MIME types to file extensions.
+ * Used by writeAndPresign so presigned URLs have a recognizable extension,
+ * which some external APIs (e.g. Replicate) require for format validation.
+ */
+const MIME_TO_EXT: Record<string, string> = {
+  "image/jpeg": ".jpg",
+  "image/png": ".png",
+  "image/webp": ".webp",
+  "image/gif": ".gif",
+  "image/svg+xml": ".svg",
+  "image/bmp": ".bmp",
+  "image/tiff": ".tiff",
+  "audio/mpeg": ".mp3",
+  "audio/wav": ".wav",
+  "audio/ogg": ".ogg",
+  "audio/flac": ".flac",
+  "audio/aac": ".aac",
+  "audio/mp4": ".m4a",
+  "video/mp4": ".mp4",
+  "video/webm": ".webm",
+  "video/quicktime": ".mov",
+  "application/pdf": ".pdf",
+};
+
+export type { ObjectMetadata, ObjectStore };
+
+export interface PresignedUrlConfig {
+  accountId: string;
+  bucketName: string;
+  accessKeyId: string;
+  secretAccessKey: string;
+}
+
+/**
+ * Build PresignedUrlConfig from environment variables, if all required values are present.
+ */
+export function buildPresignedUrlConfig(env: {
+  CLOUDFLARE_ACCOUNT_ID?: string;
+  R2_ACCESS_KEY_ID?: string;
+  R2_SECRET_ACCESS_KEY?: string;
+  R2_BUCKET_NAME?: string;
+}): PresignedUrlConfig | undefined {
+  if (
+    !env.CLOUDFLARE_ACCOUNT_ID ||
+    !env.R2_ACCESS_KEY_ID ||
+    !env.R2_SECRET_ACCESS_KEY ||
+    !env.R2_BUCKET_NAME
+  ) {
+    return undefined;
+  }
+  return {
+    accountId: env.CLOUDFLARE_ACCOUNT_ID,
+    bucketName: env.R2_BUCKET_NAME,
+    accessKeyId: env.R2_ACCESS_KEY_ID,
+    secretAccessKey: env.R2_SECRET_ACCESS_KEY,
+  };
+}
+
+/**
+ * R2-backed implementation of ObjectStore.
+ * Manages R2 storage for objects, workflows, and executions.
+ * Uses helper methods to eliminate duplication in logging and error handling.
+ */
+export class CloudflareObjectStore implements ObjectStore {
+  constructor(
+    private bucket: R2Bucket,
+    private presignedUrlConfig?: PresignedUrlConfig,
+  ) {}
+
+  async writeObject(
+    data: Uint8Array,
+    mimeType: string,
+    organizationId: string,
+    executionId?: string,
+    filename?: string,
+  ): Promise<ObjectReference> {
+    const id = uuid();
+    return this.writeObjectWithId(
+      id,
+      data,
+      mimeType,
+      organizationId,
+      executionId,
+      filename,
+    );
+  }
+
+  async writeObjectWithId(
+    id: string,
+    data: Uint8Array,
+    mimeType: string,
+    organizationId: string,
+    executionId?: string,
+    filename?: string,
+  ): Promise<ObjectReference> {
+    assertObjectWithinLimit(data.byteLength);
+    const customMetadata: Record<string, string> = {
+      id,
+      createdAt: new Date().toISOString(),
+      organizationId,
+    };
+    if (executionId) {
+      customMetadata.executionId = executionId;
+    }
+    if (filename) {
+      customMetadata.filename = filename;
+    }
+
+    await this.writeToR2(`objects/${id}/object.data`, data, {
+      httpMetadata: {
+        contentType: mimeType,
+        cacheControl: "public, max-age=31536000",
+      },
+      customMetadata,
+    });
+
+    const result: ObjectReference = { id, mimeType };
+    if (filename) {
+      result.filename = filename;
+    }
+    return result;
+  }
+
+  async readObject(reference: ObjectReference): Promise<{
+    data: Uint8Array;
+    metadata: Record<string, string> | undefined;
+  } | null> {
+    const object = await this.readFromR2(`objects/${reference.id}/object.data`);
+
+    if (!object) return null;
+
+    if (Number.isFinite(object.size)) {
+      assertObjectWithinLimit(object.size, "Stored object");
+    }
+
+    const arrayBuffer = await object.arrayBuffer();
+    assertObjectWithinLimit(arrayBuffer.byteLength, "Stored object");
+    return {
+      data: new Uint8Array(arrayBuffer),
+      metadata: object.customMetadata,
+    };
+  }
+
+  async deleteObject(reference: ObjectReference): Promise<void> {
+    await this.deleteFromR2(`objects/${reference.id}/object.data`);
+  }
+
+  /**
+   * Generate a presigned URL for downloading an object.
+   * Requires presignedUrlConfig to be set via the constructor.
+   *
+   * @param reference - The object reference
+   * @param expiresInSeconds - URL expiration time (default: 3600, max: 604800 = 7 days)
+   * @returns Presigned URL string
+   */
+  async getPresignedUrl(
+    reference: ObjectReference,
+    expiresInSeconds: number = 3600,
+  ): Promise<string> {
+    return this.presignR2Url(
+      `objects/${reference.id}/object.data`,
+      "GET",
+      expiresInSeconds,
+    );
+  }
+
+  /**
+   * Sign an R2 object key for direct GET (download) or PUT (upload) access.
+   * Throws when presigning isn't configured.
+   */
+  private async presignR2Url(
+    key: string,
+    method: "GET" | "PUT",
+    expiresInSeconds: number,
+  ): Promise<string> {
+    if (!this.presignedUrlConfig) {
+      throw new Error(
+        "Presigned URL configuration not set. Pass PresignedUrlConfig to the ObjectStore constructor.",
+      );
+    }
+
+    const { accountId, bucketName, accessKeyId, secretAccessKey } =
+      this.presignedUrlConfig;
+    const client = new AwsClient({ accessKeyId, secretAccessKey });
+    const url = new URL(
+      `https://${bucketName}.${accountId}.r2.cloudflarestorage.com/${key}`,
+    );
+    url.searchParams.set("X-Amz-Expires", String(expiresInSeconds));
+    const signed = await client.sign(new Request(url, { method }), {
+      aws: { signQuery: true },
+    });
+    return signed.url;
+  }
+
+  /**
+   * Write data to R2 and return a presigned download URL in one step.
+   * Uses a file-extension-aware key so the presigned URL has a recognizable
+   * extension (e.g. `.jpg`), which some external APIs require for format validation.
+   */
+  async writeAndPresign(
+    data: Uint8Array,
+    mimeType: string,
+    organizationId: string,
+    expiresInSeconds: number = 3600,
+  ): Promise<string> {
+    if (!this.presignedUrlConfig) {
+      throw new Error(
+        "Presigned URL configuration not set. Pass PresignedUrlConfig to the ObjectStore constructor.",
+      );
+    }
+
+    assertObjectWithinLimit(data.byteLength);
+
+    const id = uuid();
+    const ext = MIME_TO_EXT[mimeType] ?? "";
+    const key = `objects/${id}/object${ext}`;
+
+    await this.writeToR2(key, data, {
+      httpMetadata: {
+        contentType: mimeType,
+        cacheControl: "public, max-age=31536000",
+      },
+      customMetadata: {
+        id,
+        createdAt: new Date().toISOString(),
+        organizationId,
+      },
+    });
+
+    return this.presignR2Url(key, "GET", expiresInSeconds);
+  }
+
+  /**
+   * Reserve an object id and presign a PUT URL for it without writing any
+   * bytes. The PUT target is the canonical object key, so once an external
+   * service uploads to the URL the produced file is retrievable via
+   * `readObject(reference)`. Used for provider upload-destination flows
+   * (e.g. Cloudflare Gateway video models needing `output.upload_url`).
+   */
+  async presignUpload(
+    mimeType: string,
+    _organizationId: string,
+    expiresInSeconds: number = 3600,
+  ): Promise<{ uploadUrl: string; reference: ObjectReference }> {
+    const id = uuid();
+    // Sign the canonical key so readObject(reference) resolves the upload.
+    const uploadUrl = await this.presignR2Url(
+      `objects/${id}/object.data`,
+      "PUT",
+      expiresInSeconds,
+    );
+    return { uploadUrl, reference: { id, mimeType } };
+  }
+
+  async listObjects(organizationId: string): Promise<ObjectMetadata[]> {
+    const objects = await this.listFromR2("objects/");
+
+    return objects.objects
+      .filter((obj) => obj.customMetadata?.organizationId === organizationId)
+      .map((obj) => {
+        const id = obj.key.split("/")[1];
+        return {
+          id,
+          mimeType: obj.httpMetadata?.contentType || "application/octet-stream",
+          size: obj.size,
+          createdAt: obj.customMetadata?.createdAt
+            ? new Date(obj.customMetadata.createdAt)
+            : new Date(),
+          organizationId,
+          executionId: obj.customMetadata?.executionId,
+        };
+      });
+  }
+
+  private async writeToR2(
+    key: string,
+    data: string | ArrayBuffer | Uint8Array,
+    options: R2PutOptions,
+  ): Promise<void> {
+    try {
+      if (!this.bucket) {
+        throw new Error("R2 bucket is not initialized");
+      }
+
+      await this.bucket.put(key, data, options);
+    } catch (error) {
+      console.error(`ObjectStore: Failed to write ${key}:`, error);
+      throw error;
+    }
+  }
+
+  private async readFromR2(key: string): Promise<R2ObjectBody | null> {
+    try {
+      if (!this.bucket) {
+        throw new Error("R2 bucket is not initialized");
+      }
+
+      return await this.bucket.get(key);
+    } catch (error) {
+      console.error(`ObjectStore: Failed to read ${key}:`, error);
+      throw error;
+    }
+  }
+
+  private async deleteFromR2(key: string): Promise<void> {
+    try {
+      if (!this.bucket) {
+        throw new Error("R2 bucket is not initialized");
+      }
+
+      await this.bucket.delete(key);
+    } catch (error) {
+      console.error(`ObjectStore: Failed to delete ${key}:`, error);
+      throw error;
+    }
+  }
+
+  private async listFromR2(prefix: string): Promise<R2Objects> {
+    try {
+      if (!this.bucket) {
+        throw new Error("R2 bucket is not initialized");
+      }
+
+      return await this.bucket.list({ prefix });
+    } catch (error) {
+      console.error(
+        `ObjectStore: Failed to list with prefix ${prefix}:`,
+        error,
+      );
+      throw error;
+    }
+  }
+}

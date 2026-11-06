@@ -1,0 +1,911 @@
+import Building2 from "lucide-react/icons/building-2";
+import Mail from "lucide-react/icons/mail";
+import User from "lucide-react/icons/user";
+import React from "react";
+import type { RouteObject, RouterState } from "react-router";
+import { Navigate } from "react-router";
+
+import { AdminProtectedRoute } from "./components/admin-protected-route";
+import { HeadSeo } from "./components/head-seo";
+import { AdminLayout } from "./components/layouts/admin-layout";
+import { AppLayout } from "./components/layouts/app-layout";
+import { OrgLayout } from "./components/org-layout";
+import { OrgRedirect } from "./components/org-redirect";
+import { ProtectedRoute } from "./components/protected-route";
+import { AdminDashboardPage } from "./pages/admin/admin-dashboard-page";
+import { AdminDatabasesPage } from "./pages/admin/admin-databases-page";
+import { AdminDatasetsPage } from "./pages/admin/admin-datasets-page";
+
+import { AdminEmailsPage } from "./pages/admin/admin-emails-page";
+import { AdminExecutionDetailPage } from "./pages/admin/admin-execution-detail-page";
+import { AdminExecutionsPage } from "./pages/admin/admin-executions-page";
+import { AdminGenerationsPage } from "./pages/admin/admin-generations-page";
+import { AdminOrganizationDetailPage } from "./pages/admin/admin-organization-detail-page";
+import { AdminOrganizationsPage } from "./pages/admin/admin-organizations-page";
+import { AdminQueuesPage } from "./pages/admin/admin-queues-page";
+import { AdminStuckUsersPage } from "./pages/admin/admin-stuck-users-page";
+import { AdminSupportPage } from "./pages/admin/admin-support-page";
+import { AdminUserDetailPage } from "./pages/admin/admin-user-detail-page";
+import { AdminUsersPage } from "./pages/admin/admin-users-page";
+import { AdminWorkflowDetailPage } from "./pages/admin/admin-workflow-detail-page";
+import { AdminWorkflowsPage } from "./pages/admin/admin-workflows-page";
+import { ApiKeysPage } from "./pages/api-keys-page";
+import { BillingPage } from "./pages/billing-page";
+import { BotDiscordDetailPage } from "./pages/bot-discord-detail-page";
+import { BotSlackDetailPage } from "./pages/bot-slack-detail-page";
+import { BotTelegramDetailPage } from "./pages/bot-telegram-detail-page";
+import { BotWhatsAppDetailPage } from "./pages/bot-whatsapp-detail-page";
+import { BotsPage } from "./pages/bots-page";
+import { DashboardPage } from "./pages/dashboard-page";
+import { DatabaseConsolePage } from "./pages/database-console-page";
+import { DatabaseExplorerPage } from "./pages/database-explorer-page";
+import { DatabasesPage } from "./pages/databases-page";
+import { DatasetDetailPage } from "./pages/dataset-detail-page";
+import { DatasetsPage } from "./pages/datasets-page";
+
+import { EditorPage } from "./pages/editor-page";
+import { EmailInboxPage } from "./pages/email-inbox-page";
+import { EmailsPage } from "./pages/emails-page";
+import { ExecutionDetailPage } from "./pages/execution-detail-page";
+import { ExecutionsPage } from "./pages/executions-page";
+import { FeedbackFormPage } from "./pages/feedback-form-page";
+import { FeedbackPage } from "./pages/feedback-page";
+import { FormPage } from "./pages/form-page";
+import { FormTriggerPage } from "./pages/form-trigger-page";
+import { IntegrationsPage } from "./pages/integrations-page";
+import { InvitationsPage } from "./pages/invitations-page";
+import { MembersPage } from "./pages/members-page";
+import { NotFoundPage } from "./pages/not-found-page";
+import { OrganizationsPage } from "./pages/organizations-page";
+import { PlaygroundExecutePage } from "./pages/playground-execute-page";
+import { PlaygroundPage } from "./pages/playground-page";
+import { ProfilePage } from "./pages/profile-page";
+import { QueuesPage } from "./pages/queues-page";
+import { SchemasPage } from "./pages/schemas-page";
+import { SecretsPage } from "./pages/secrets-page";
+import { TemplateDetailPage } from "./pages/template-detail-page";
+import { TemplatePreviewPage } from "./pages/template-preview-page";
+import { TemplateTryPage } from "./pages/template-try-page";
+import { TemplatesPage } from "./pages/templates-page";
+import { WorkflowsPage } from "./pages/workflows-page";
+import { NativeWorkflowEditorPage } from "./features/native-flows/native-workflow-editor-page";
+import { LocalModeNotice } from "./components/local-mode-notice";
+
+export interface RouteHandle {
+  head?:
+    | React.ReactElement
+    | ((
+        params: Readonly<Record<string, string | undefined>>,
+        context: {
+          url: URL;
+          location: RouterState["location"];
+        },
+      ) => React.ReactElement);
+}
+
+export type AppRouteObject = RouteObject & {
+  handle?: RouteHandle;
+};
+
+const settingsSidebarItems = [
+  {
+    items: [
+      {
+        title: "Profile",
+        url: "/settings/profile",
+        icon: User,
+      },
+      {
+        title: "Organizations",
+        url: "/settings/organizations",
+        icon: Building2,
+      },
+      {
+        title: "Invitations",
+        url: "/settings/invitations",
+        icon: Mail,
+      },
+    ],
+  },
+];
+
+const footerItems = [];
+
+export const routes: AppRouteObject[] = (
+  [
+    {
+      path: "/",
+      element: <OrgRedirect to="/org/:organizationId/dashboard" />,
+    },
+    {
+      path: "/login",
+      element: (
+        <AppLayout>
+          <main className="mx-auto max-w-xl p-8">
+            <h1 className="text-xl font-semibold">Savia session required</h1>
+            <p className="mt-2 text-muted-foreground">
+              Sign in to Savia in the parent workspace, then reopen Savia Flows.
+            </p>
+          </main>
+        </AppLayout>
+      ),
+    },
+    {
+      path: "/settings",
+      element: <Navigate to="/settings/profile" replace />,
+    },
+    {
+      path: "/settings/profile",
+      element: (
+        <AppLayout
+          sidebar={{
+            title: "Settings",
+            groups: settingsSidebarItems,
+            footerItems: footerItems,
+          }}
+        >
+          <ProtectedRoute>
+            <ProfilePage />
+          </ProtectedRoute>
+        </AppLayout>
+      ),
+      handle: { head: <HeadSeo title="Profile - Settings - Savia Flows" /> },
+    },
+    // Admin routes
+    {
+      path: "/admin",
+      element: (
+        <AdminLayout>
+          <AdminProtectedRoute>
+            <AdminDashboardPage />
+          </AdminProtectedRoute>
+        </AdminLayout>
+      ),
+      handle: { head: <HeadSeo title="Admin Dashboard - Savia Flows" /> },
+    },
+    {
+      path: "/admin/users",
+      element: (
+        <AdminLayout>
+          <AdminProtectedRoute>
+            <AdminUsersPage />
+          </AdminProtectedRoute>
+        </AdminLayout>
+      ),
+      handle: { head: <HeadSeo title="Users - Admin - Savia Flows" /> },
+    },
+    {
+      path: "/admin/onboarding",
+      element: (
+        <AdminLayout>
+          <AdminProtectedRoute>
+            <AdminStuckUsersPage />
+          </AdminProtectedRoute>
+        </AdminLayout>
+      ),
+      handle: {
+        head: <HeadSeo title="Stuck in Funnel - Admin - Savia Flows" />,
+      },
+    },
+    {
+      path: "/admin/users/:userId",
+      element: (
+        <AdminLayout>
+          <AdminProtectedRoute>
+            <AdminUserDetailPage />
+          </AdminProtectedRoute>
+        </AdminLayout>
+      ),
+      handle: { head: <HeadSeo title="User Details - Admin - Savia Flows" /> },
+    },
+    {
+      path: "/admin/organizations",
+      element: (
+        <AdminLayout>
+          <AdminProtectedRoute>
+            <AdminOrganizationsPage />
+          </AdminProtectedRoute>
+        </AdminLayout>
+      ),
+      handle: { head: <HeadSeo title="Organizations - Admin - Savia Flows" /> },
+    },
+    {
+      path: "/admin/organizations/:organizationId",
+      element: (
+        <AdminLayout>
+          <AdminProtectedRoute>
+            <AdminOrganizationDetailPage />
+          </AdminProtectedRoute>
+        </AdminLayout>
+      ),
+      handle: {
+        head: <HeadSeo title="Organization Details - Admin - Savia Flows" />,
+      },
+    },
+    {
+      path: "/admin/workflows",
+      element: (
+        <AdminLayout>
+          <AdminProtectedRoute>
+            <AdminWorkflowsPage />
+          </AdminProtectedRoute>
+        </AdminLayout>
+      ),
+      handle: { head: <HeadSeo title="Workflows - Admin - Savia Flows" /> },
+    },
+    {
+      path: "/admin/workflows/:workflowId",
+      element: (
+        <AdminLayout>
+          <AdminProtectedRoute>
+            <AdminWorkflowDetailPage />
+          </AdminProtectedRoute>
+        </AdminLayout>
+      ),
+      handle: {
+        head: <HeadSeo title="Workflow Details - Admin - Savia Flows" />,
+      },
+    },
+
+    {
+      path: "/admin/executions",
+      element: (
+        <AdminLayout>
+          <AdminProtectedRoute>
+            <AdminExecutionsPage />
+          </AdminProtectedRoute>
+        </AdminLayout>
+      ),
+      handle: { head: <HeadSeo title="Executions - Admin - Savia Flows" /> },
+    },
+    {
+      path: "/admin/generations",
+      element: (
+        <AdminLayout>
+          <AdminProtectedRoute>
+            <AdminGenerationsPage />
+          </AdminProtectedRoute>
+        </AdminLayout>
+      ),
+      handle: { head: <HeadSeo title="Generations - Admin - Savia Flows" /> },
+    },
+    {
+      path: "/admin/executions/:executionId",
+      element: (
+        <AdminLayout>
+          <AdminProtectedRoute>
+            <AdminExecutionDetailPage />
+          </AdminProtectedRoute>
+        </AdminLayout>
+      ),
+      handle: {
+        head: <HeadSeo title="Execution Details - Admin - Savia Flows" />,
+      },
+    },
+    {
+      path: "/admin/emails",
+      element: (
+        <AdminLayout>
+          <AdminProtectedRoute>
+            <AdminEmailsPage />
+          </AdminProtectedRoute>
+        </AdminLayout>
+      ),
+      handle: { head: <HeadSeo title="Emails - Admin - Savia Flows" /> },
+    },
+    {
+      path: "/admin/support",
+      element: (
+        <AdminLayout>
+          <AdminProtectedRoute>
+            <AdminSupportPage />
+          </AdminProtectedRoute>
+        </AdminLayout>
+      ),
+      handle: { head: <HeadSeo title="Support - Admin - Savia Flows" /> },
+    },
+    {
+      path: "/admin/queues",
+      element: (
+        <AdminLayout>
+          <AdminProtectedRoute>
+            <AdminQueuesPage />
+          </AdminProtectedRoute>
+        </AdminLayout>
+      ),
+      handle: { head: <HeadSeo title="Queues - Admin - Savia Flows" /> },
+    },
+    {
+      path: "/admin/datasets",
+      element: (
+        <AdminLayout>
+          <AdminProtectedRoute>
+            <AdminDatasetsPage />
+          </AdminProtectedRoute>
+        </AdminLayout>
+      ),
+      handle: { head: <HeadSeo title="Datasets - Admin - Savia Flows" /> },
+    },
+    {
+      path: "/admin/databases",
+      element: (
+        <AdminLayout>
+          <AdminProtectedRoute>
+            <AdminDatabasesPage />
+          </AdminProtectedRoute>
+        </AdminLayout>
+      ),
+      handle: { head: <HeadSeo title="Databases - Admin - Savia Flows" /> },
+    },
+    {
+      path: "/org",
+      element: <OrgRedirect to="/org/:organizationId/dashboard" />,
+    },
+    {
+      path: "/settings/organizations",
+      element: (
+        <AppLayout
+          sidebar={{
+            title: "Settings",
+            groups: settingsSidebarItems,
+            footerItems: footerItems,
+          }}
+        >
+          <ProtectedRoute>
+            <OrganizationsPage />
+          </ProtectedRoute>
+        </AppLayout>
+      ),
+      handle: { head: <HeadSeo title="Organizations - Savia Flows" /> },
+    },
+    {
+      path: "/settings/invitations",
+      element: (
+        <AppLayout
+          sidebar={{
+            title: "Settings",
+            groups: settingsSidebarItems,
+            footerItems: footerItems,
+          }}
+        >
+          <ProtectedRoute>
+            <InvitationsPage />
+          </ProtectedRoute>
+        </AppLayout>
+      ),
+      handle: { head: <HeadSeo title="Invitations - Savia Flows" /> },
+    },
+    {
+      path: "/org/:organizationId/dashboard",
+      element: (
+        <OrgLayout title="Dashboard">
+          <ProtectedRoute>
+            <DashboardPage />
+          </ProtectedRoute>
+        </OrgLayout>
+      ),
+      handle: { head: <HeadSeo title="Dashboard - Savia Flows" /> },
+    },
+    {
+      path: "/workflows",
+      element: <OrgRedirect to="/org/:organizationId/workflows" />,
+    },
+    {
+      path: "/org/:organizationId/workflows",
+      element: (
+        <OrgLayout title="Workflows">
+          <ProtectedRoute>
+            <WorkflowsPage />
+          </ProtectedRoute>
+        </OrgLayout>
+      ),
+      handle: { head: <HeadSeo title="Workflows - Workflows - Savia Flows" /> },
+    },
+    {
+      path: "/org/:organizationId/native-flows/:id",
+      element: (
+        <OrgLayout title="Workflows">
+          <ProtectedRoute>
+            <NativeWorkflowEditorPage />
+          </ProtectedRoute>
+        </OrgLayout>
+      ),
+      handle: {
+        head: <HeadSeo title="Savia workflow - Workflows - Savia Flows" />,
+      },
+    },
+    {
+      path: "/start",
+      element: <OrgRedirect to="/org/:organizationId/start" />,
+    },
+    {
+      // Not nested under /workflows: a workflow is not a thing the user has yet,
+      // and will not be until they choose to keep what this produces.
+      path: "/org/:organizationId/start",
+      element: (
+        <OrgLayout title="Start" focused>
+          <ProtectedRoute>
+            <LocalModeNotice feature="AI workflow generation" />
+          </ProtectedRoute>
+        </OrgLayout>
+      ),
+      handle: { head: <HeadSeo title="Start - Savia Flows" /> },
+    },
+    {
+      // The session id survives a reload: the server replays the brief, the
+      // result, or whatever the session is in the middle of.
+      path: "/org/:organizationId/start/:sessionId",
+      element: (
+        <OrgLayout title="Start" focused>
+          <ProtectedRoute>
+            <LocalModeNotice feature="AI workflow generation" />
+          </ProtectedRoute>
+        </OrgLayout>
+      ),
+      handle: { head: <HeadSeo title="Start - Savia Flows" /> },
+    },
+    {
+      path: "/templates",
+      element: <OrgRedirect to="/org/:organizationId/templates" />,
+    },
+    {
+      path: "/org/:organizationId/templates",
+      element: (
+        <OrgLayout title="Workflows">
+          <ProtectedRoute>
+            <TemplatesPage />
+          </ProtectedRoute>
+        </OrgLayout>
+      ),
+      handle: { head: <HeadSeo title="Templates - Workflows - Savia Flows" /> },
+    },
+    {
+      path: "/templates/:templateId",
+      element: <OrgRedirect to="/org/:organizationId/templates/:templateId" />,
+    },
+    {
+      path: "/org/:organizationId/templates/:templateId",
+      element: (
+        <OrgLayout title="Workflows">
+          <ProtectedRoute>
+            <TemplateDetailPage />
+          </ProtectedRoute>
+        </OrgLayout>
+      ),
+      handle: { head: <HeadSeo title="Template Details - Savia Flows" /> },
+    },
+    {
+      path: "/templates/:templateId/try",
+      element: (
+        <OrgRedirect to="/org/:organizationId/templates/:templateId/try" />
+      ),
+    },
+    {
+      path: "/org/:organizationId/templates/:templateId/try",
+      element: (
+        <OrgLayout title="Workflows">
+          <ProtectedRoute>
+            <TemplateTryPage />
+          </ProtectedRoute>
+        </OrgLayout>
+      ),
+      handle: { head: <HeadSeo title="Creating Workflow - Savia Flows" /> },
+    },
+    {
+      path: "/executions",
+      element: <OrgRedirect to="/org/:organizationId/executions" />,
+    },
+    {
+      path: "/org/:organizationId/executions",
+      element: (
+        <OrgLayout title="Workflows">
+          <ProtectedRoute>
+            <ExecutionsPage />
+          </ProtectedRoute>
+        </OrgLayout>
+      ),
+      handle: {
+        head: <HeadSeo title="Executions - Workflows - Savia Flows" />,
+      },
+    },
+    {
+      path: "/datasets",
+      element: <OrgRedirect to="/org/:organizationId/datasets" />,
+    },
+    {
+      path: "/org/:organizationId/datasets",
+      element: (
+        <OrgLayout title="Datasets">
+          <ProtectedRoute>
+            <DatasetsPage />
+          </ProtectedRoute>
+        </OrgLayout>
+      ),
+      handle: { head: <HeadSeo title="Datasets - Datasets - Savia Flows" /> },
+    },
+    {
+      path: "/feedback",
+      element: <OrgRedirect to="/org/:organizationId/feedback" />,
+    },
+    {
+      path: "/org/:organizationId/feedback",
+      element: (
+        <OrgLayout title="Feedback">
+          <ProtectedRoute>
+            <FeedbackPage />
+          </ProtectedRoute>
+        </OrgLayout>
+      ),
+      handle: { head: <HeadSeo title="Feedback - Savia Flows" /> },
+    },
+    {
+      path: "/api-keys",
+      element: <OrgRedirect to="/org/:organizationId/api-keys" />,
+    },
+    {
+      path: "/members",
+      element: <OrgRedirect to="/org/:organizationId/members" />,
+    },
+    {
+      path: "/org/:organizationId/api-keys",
+      element: (
+        <OrgLayout title="Settings">
+          <ProtectedRoute>
+            <ApiKeysPage />
+          </ProtectedRoute>
+        </OrgLayout>
+      ),
+      handle: { head: <HeadSeo title="API Keys - Settings - Savia Flows" /> },
+    },
+    {
+      path: "/billing",
+      element: <OrgRedirect to="/org/:organizationId/billing" />,
+    },
+    {
+      path: "/org/:organizationId/billing",
+      element: (
+        <OrgLayout title="Settings">
+          <ProtectedRoute>
+            <BillingPage />
+          </ProtectedRoute>
+        </OrgLayout>
+      ),
+      handle: { head: <HeadSeo title="Billing - Settings - Savia Flows" /> },
+    },
+    {
+      path: "/org/:organizationId/members",
+      element: (
+        <OrgLayout title="Organization Members">
+          <ProtectedRoute>
+            <MembersPage />
+          </ProtectedRoute>
+        </OrgLayout>
+      ),
+      handle: {
+        head: <HeadSeo title="Members - Organization - Savia Flows" />,
+      },
+    },
+    {
+      path: "/secrets",
+      element: <OrgRedirect to="/org/:organizationId/secrets" />,
+    },
+    {
+      path: "/org/:organizationId/secrets",
+      element: (
+        <OrgLayout title="Settings">
+          <ProtectedRoute>
+            <SecretsPage />
+          </ProtectedRoute>
+        </OrgLayout>
+      ),
+      handle: { head: <HeadSeo title="Secrets - Settings - Savia Flows" /> },
+    },
+    {
+      path: "/integrations",
+      element: <OrgRedirect to="/org/:organizationId/integrations" />,
+    },
+    {
+      path: "/org/:organizationId/integrations",
+      element: (
+        <OrgLayout title="Settings">
+          <ProtectedRoute>
+            <IntegrationsPage />
+          </ProtectedRoute>
+        </OrgLayout>
+      ),
+      handle: {
+        head: <HeadSeo title="Integrations - Settings - Savia Flows" />,
+      },
+    },
+    {
+      path: "/org/:organizationId/datasets/:datasetId",
+      element: (
+        <OrgLayout title="Datasets">
+          <ProtectedRoute>
+            <DatasetDetailPage />
+          </ProtectedRoute>
+        </OrgLayout>
+      ),
+      handle: {
+        head: <HeadSeo title="Dataset Details - Datasets - Savia Flows" />,
+      },
+    },
+    {
+      path: "/databases",
+      element: <OrgRedirect to="/org/:organizationId/databases" />,
+    },
+    {
+      path: "/org/:organizationId/databases",
+      element: (
+        <OrgLayout title="Databases">
+          <ProtectedRoute>
+            <DatabasesPage />
+          </ProtectedRoute>
+        </OrgLayout>
+      ),
+      handle: { head: <HeadSeo title="Databases - Databases - Savia Flows" /> },
+    },
+    {
+      path: "/org/:organizationId/databases/:id/console",
+      element: (
+        <OrgLayout title="Database Console">
+          <ProtectedRoute>
+            <DatabaseConsolePage />
+          </ProtectedRoute>
+        </OrgLayout>
+      ),
+      handle: { head: <HeadSeo title="Console - Database - Savia Flows" /> },
+    },
+    {
+      path: "/org/:organizationId/databases/:id/explorer",
+      element: (
+        <OrgLayout title="Database Explorer">
+          <ProtectedRoute>
+            <DatabaseExplorerPage />
+          </ProtectedRoute>
+        </OrgLayout>
+      ),
+      handle: { head: <HeadSeo title="Explorer - Database - Savia Flows" /> },
+    },
+    {
+      path: "/schemas",
+      element: <OrgRedirect to="/org/:organizationId/schemas" />,
+    },
+    {
+      path: "/org/:organizationId/schemas",
+      element: (
+        <OrgLayout title="Schemas">
+          <ProtectedRoute>
+            <SchemasPage />
+          </ProtectedRoute>
+        </OrgLayout>
+      ),
+      handle: { head: <HeadSeo title="Schemas - Savia Flows" /> },
+    },
+    {
+      path: "/queues",
+      element: <OrgRedirect to="/org/:organizationId/queues" />,
+    },
+    {
+      path: "/org/:organizationId/queues",
+      element: (
+        <OrgLayout title="Queues">
+          <ProtectedRoute>
+            <QueuesPage />
+          </ProtectedRoute>
+        </OrgLayout>
+      ),
+      handle: { head: <HeadSeo title="Queues - Queues - Savia Flows" /> },
+    },
+    {
+      path: "/emails",
+      element: <OrgRedirect to="/org/:organizationId/emails" />,
+    },
+    {
+      path: "/org/:organizationId/emails",
+      element: (
+        <OrgLayout title="Emails">
+          <ProtectedRoute>
+            <EmailsPage />
+          </ProtectedRoute>
+        </OrgLayout>
+      ),
+      handle: { head: <HeadSeo title="Emails - Emails - Savia Flows" /> },
+    },
+    {
+      path: "/org/:organizationId/emails/:emailId",
+      element: (
+        <OrgLayout title="Emails">
+          <ProtectedRoute>
+            <EmailInboxPage />
+          </ProtectedRoute>
+        </OrgLayout>
+      ),
+      handle: { head: <HeadSeo title="Inbox - Emails - Savia Flows" /> },
+    },
+    {
+      path: "/bots",
+      element: <OrgRedirect to="/org/:organizationId/bots" />,
+    },
+    {
+      path: "/discord-bots",
+      element: <OrgRedirect to="/org/:organizationId/bots" />,
+    },
+    {
+      path: "/org/:organizationId/discord-bots",
+      element: <OrgRedirect to="/org/:organizationId/bots" />,
+    },
+    {
+      path: "/telegram-bots",
+      element: <OrgRedirect to="/org/:organizationId/bots" />,
+    },
+    {
+      path: "/org/:organizationId/telegram-bots",
+      element: <OrgRedirect to="/org/:organizationId/bots" />,
+    },
+    {
+      path: "/org/:organizationId/bots",
+      element: (
+        <OrgLayout title="Bots">
+          <ProtectedRoute>
+            <BotsPage />
+          </ProtectedRoute>
+        </OrgLayout>
+      ),
+      handle: { head: <HeadSeo title="Bots - Savia Flows" /> },
+    },
+    {
+      path: "/org/:organizationId/bots/discord/:id",
+      element: (
+        <OrgLayout title="Bots">
+          <ProtectedRoute>
+            <BotDiscordDetailPage />
+          </ProtectedRoute>
+        </OrgLayout>
+      ),
+      handle: { head: <HeadSeo title="Bot Details - Savia Flows" /> },
+    },
+    {
+      path: "/org/:organizationId/bots/telegram/:id",
+      element: (
+        <OrgLayout title="Bots">
+          <ProtectedRoute>
+            <BotTelegramDetailPage />
+          </ProtectedRoute>
+        </OrgLayout>
+      ),
+      handle: { head: <HeadSeo title="Bot Details - Savia Flows" /> },
+    },
+    {
+      path: "/org/:organizationId/bots/slack/:id",
+      element: (
+        <OrgLayout title="Bots">
+          <ProtectedRoute>
+            <BotSlackDetailPage />
+          </ProtectedRoute>
+        </OrgLayout>
+      ),
+      handle: { head: <HeadSeo title="Bot Details - Savia Flows" /> },
+    },
+    {
+      path: "/org/:organizationId/bots/whatsapp/:id",
+      element: (
+        <OrgLayout title="Bots">
+          <ProtectedRoute>
+            <BotWhatsAppDetailPage />
+          </ProtectedRoute>
+        </OrgLayout>
+      ),
+      handle: { head: <HeadSeo title="Account Details - Savia Flows" /> },
+    },
+
+    {
+      path: "/org/:organizationId/executions/:executionId",
+      element: (
+        <OrgLayout title="Workflows">
+          <ProtectedRoute>
+            <ExecutionDetailPage />
+          </ProtectedRoute>
+        </OrgLayout>
+      ),
+      handle: {
+        head: <HeadSeo title="Execution Details - Workflows - Savia Flows" />,
+      },
+    },
+    {
+      path: "/playground",
+      element: <OrgRedirect to="/org/:organizationId/playground" />,
+    },
+    {
+      path: "/playground/:nodeType",
+      element: <OrgRedirect to="/org/:organizationId/playground/:nodeType" />,
+    },
+    {
+      path: "/org/:organizationId/playground",
+      element: (
+        <OrgLayout title="Workflows">
+          <ProtectedRoute>
+            <PlaygroundPage />
+          </ProtectedRoute>
+        </OrgLayout>
+      ),
+      handle: {
+        head: <HeadSeo title="Playground - Workflows - Savia Flows" />,
+      },
+    },
+    {
+      path: "/org/:organizationId/playground/:nodeType",
+      element: (
+        <OrgLayout title="Workflows">
+          <ProtectedRoute>
+            <PlaygroundExecutePage />
+          </ProtectedRoute>
+        </OrgLayout>
+      ),
+      handle: {
+        head: <HeadSeo title="Playground - Workflows - Savia Flows" />,
+      },
+    },
+    {
+      path: "/org/:organizationId/workflows/:id",
+      element: (
+        <OrgLayout title="Workflows">
+          <ProtectedRoute>
+            <EditorPage />
+          </ProtectedRoute>
+        </OrgLayout>
+      ),
+      handle: { head: <HeadSeo title="Edit Workflow - Savia Flows" /> },
+    },
+    {
+      path: "/form/:signedToken",
+      element: <FormPage />,
+      handle: {
+        head: <HeadSeo title="Form - Savia Flows" />,
+      },
+    },
+    {
+      path: "/forms/:workflowId",
+      element: <FormTriggerPage />,
+      handle: {
+        head: <HeadSeo title="Form - Savia Flows" />,
+      },
+    },
+    {
+      path: "/feedback/:signedToken",
+      element: <FeedbackFormPage />,
+      handle: {
+        head: <HeadSeo title="Feedback - Savia Flows" />,
+      },
+    },
+    {
+      path: "/embed/templates/:templateId",
+      element: <TemplatePreviewPage />,
+      handle: {
+        head: <HeadSeo title="Template Preview - Savia Flows" />,
+      },
+    },
+    {
+      path: "*",
+      element: (
+        <AppLayout>
+          <NotFoundPage />
+        </AppLayout>
+      ),
+      handle: { head: <HeadSeo title="Page Not Found - Savia Flows" /> },
+    },
+  ] as AppRouteObject[]
+).filter((route) => {
+  const path = route.path ?? "";
+  return !(
+    path === "/org" ||
+    path === "/settings" ||
+    path.startsWith("/settings/") ||
+    path === "/admin" ||
+    path.startsWith("/admin/") ||
+    path === "/billing" ||
+    path === "/members" ||
+    path === "/org/:organizationId/members" ||
+    path === "/org/:organizationId/billing"
+  );
+});

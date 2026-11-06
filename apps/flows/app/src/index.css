@@ -1,0 +1,722 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --font-sans: "Avenir Next", "Helvetica Neue", sans-serif;
+  --color-border: var(--savia-border, hsl(var(--border)));
+  --color-input: var(--savia-input, hsl(var(--input)));
+  --color-ring: var(--savia-ring, hsl(var(--ring)));
+  --color-background: var(--savia-background, hsl(var(--background)));
+  --color-foreground: var(--savia-foreground, hsl(var(--foreground)));
+
+  --color-primary: var(--savia-primary, hsl(var(--primary)));
+  --color-primary-foreground: var(
+    --savia-primary-foreground,
+    hsl(var(--primary-foreground))
+  );
+
+  --color-secondary: var(--savia-secondary, hsl(var(--secondary)));
+  --color-secondary-foreground: var(
+    --savia-secondary-foreground,
+    hsl(var(--secondary-foreground))
+  );
+
+  --color-destructive: var(--savia-destructive, hsl(var(--destructive)));
+  --color-destructive-foreground: var(
+    --savia-foreground,
+    hsl(var(--destructive-foreground))
+  );
+
+  --color-muted: var(--savia-muted, hsl(var(--muted)));
+  --color-muted-foreground: var(
+    --savia-muted-foreground,
+    hsl(var(--muted-foreground))
+  );
+
+  --color-accent: var(--savia-accent, hsl(var(--accent)));
+  --color-accent-foreground: var(
+    --savia-accent-foreground,
+    hsl(var(--accent-foreground))
+  );
+
+  --color-popover: var(--savia-popover, hsl(var(--popover)));
+  --color-popover-foreground: var(
+    --savia-popover-foreground,
+    hsl(var(--popover-foreground))
+  );
+
+  --color-card: var(--savia-card, hsl(var(--card)));
+  --color-card-foreground: var(
+    --savia-card-foreground,
+    hsl(var(--card-foreground))
+  );
+
+  --color-sidebar: var(--savia-sidebar, hsl(var(--sidebar-background)));
+  --color-sidebar-foreground: var(
+    --savia-sidebar-foreground,
+    hsl(var(--sidebar-foreground))
+  );
+  --color-sidebar-primary: var(
+    --savia-sidebar-primary,
+    hsl(var(--sidebar-primary))
+  );
+  --color-sidebar-primary-foreground: var(
+    --savia-sidebar-primary-foreground,
+    hsl(var(--sidebar-primary-foreground))
+  );
+  --color-sidebar-accent: var(
+    --savia-sidebar-accent,
+    hsl(var(--sidebar-accent))
+  );
+  --color-sidebar-accent-foreground: var(
+    --savia-sidebar-accent-foreground,
+    hsl(var(--sidebar-accent-foreground))
+  );
+  --color-sidebar-border: var(
+    --savia-sidebar-border,
+    hsl(var(--sidebar-border))
+  );
+  --color-sidebar-ring: var(--savia-sidebar-ring, hsl(var(--sidebar-ring)));
+
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 4px);
+
+  --animate-accordion-down: accordion-down 0.2s ease-out;
+  --animate-accordion-up: accordion-up 0.2s ease-out;
+  --animate-blink-1: blink-1 2.7s ease-out infinite;
+  --animate-blink-2: blink-2 2.7s ease-out infinite;
+
+  @keyframes accordion-down {
+    from {
+      height: 0;
+    }
+    to {
+      height: var(--radix-accordion-content-height);
+    }
+  }
+  @keyframes accordion-up {
+    from {
+      height: var(--radix-accordion-content-height);
+    }
+    to {
+      height: 0;
+    }
+  }
+  @keyframes blink-1 {
+    0% {
+      opacity: 1;
+    }
+    47% {
+      opacity: 1;
+    }
+    48% {
+      opacity: 0;
+    }
+    52% {
+      opacity: 0;
+    }
+    53% {
+      opacity: 1;
+    }
+    97% {
+      opacity: 1;
+    }
+    98% {
+      opacity: 0;
+    }
+    99.5% {
+      opacity: 0;
+    }
+    100% {
+      opacity: 1;
+    }
+  }
+  @keyframes blink-2 {
+    0% {
+      opacity: 0;
+    }
+    47% {
+      opacity: 0;
+    }
+    48% {
+      opacity: 1;
+    }
+    52% {
+      opacity: 1;
+    }
+    53% {
+      opacity: 0;
+    }
+    97% {
+      opacity: 0;
+    }
+    98% {
+      opacity: 1;
+    }
+    99.5% {
+      opacity: 1;
+    }
+    100% {
+      opacity: 0;
+    }
+  }
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+body {
+  margin: 0;
+  font-family: "Avenir Next", "Helvetica Neue", sans-serif;
+}
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+    --primary: 222.2 47.4% 11.2%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 0 0% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+    --muted: 0 0% 96.1%;
+    --muted-foreground: 0 0% 46.9%;
+    --accent: 0 0% 96.1%;
+    --accent-foreground: 0 0% 11.2%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 0 0% 91.4%;
+    --input: 0 0% 91.4%;
+    --ring: 222.2 84% 4.9%;
+    --radius: 0.5rem;
+    --chart-1: 12 76% 61%;
+    --chart-2: 173 58% 39%;
+    --chart-3: 197 37% 24%;
+    --chart-4: 43 74% 66%;
+    --chart-5: 0 84.2% 60.2%;
+    /*
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-primary: 240 5.9% 10%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 240 4.8% 95.9%;
+    --sidebar-accent-foreground: 240 5.9% 10%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+    */
+  }
+
+  .dark {
+    --background: 0 0% 16%;
+    --foreground: 0 0% 98%;
+    --card: 0 0% 4.9%;
+    --card-foreground: 210 40% 98%;
+    --popover: 0 0% 4.9%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 210 40% 98%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 0 0% 17%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 0 0% 27%;
+    --muted-foreground: 0 0% 65.1%;
+    --accent: 0 0% 27%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 62.8% 45.6%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 0 0% 27%;
+    --input: 0 0% 27%;
+    --ring: 212.7 26.8% 83.9%;
+    --chart-1: 220 70% 50%;
+    --chart-2: 160 60% 45%;
+    --chart-3: 30 80% 55%;
+    --chart-4: 280 65% 60%;
+    --chart-5: 0 70% 60%;
+    /*
+    --sidebar-background: 240 5.9% 10%;
+    --sidebar-foreground: 240 4.8% 95.9%;
+    --sidebar-primary: 224.3 76.3% 48%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 3.7% 15.9%;
+    --sidebar-accent-foreground: 240 4.8% 95.9%;
+    --sidebar-border: 240 3.7% 15.9%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+     */
+  }
+}
+
+@layer base {
+  * {
+    @apply border-[hsl(var(--border))];
+  }
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+  body {
+    @apply bg-neutral-100 dark:bg-neutral-900 text-foreground w-full h-full;
+    font-feature-settings:
+      "rlig" 1,
+      "calt" 1;
+  }
+}
+
+.imgDark {
+  display: none;
+}
+
+@media (prefers-color-scheme: dark) {
+  html {
+    color-scheme: dark;
+  }
+
+  .imgLight {
+    display: none;
+  }
+  .imgDark {
+    display: unset;
+  }
+}
+
+.react-flow__attribution {
+  @apply bg-muted! rounded-tl overflow-hidden ps-1.5! border-l border-t;
+}
+
+.react-flow__attribution a {
+  @apply text-muted-foreground!;
+}
+
+html.dark .shiki,
+html.dark .shiki span {
+  color: var(--shiki-dark) !important;
+  /* Optional, if you also want font styles */
+  font-style: var(--shiki-dark-font-style) !important;
+  font-weight: var(--shiki-dark-font-weight) !important;
+  text-decoration: var(--shiki-dark-text-decoration) !important;
+}
+
+/* Documentation content styles - only apply to elements without classes */
+.docs-content h1:not([class]) {
+  @apply scroll-m-20 text-4xl font-extrabold tracking-tight lg:text-5xl mb-8 mt-10 first:mt-0;
+}
+
+.docs-content h2:not([class]) {
+  @apply scroll-m-20 border-b pb-2 text-3xl font-semibold tracking-tight mt-10 mb-6 first:mt-0;
+}
+
+.docs-content h3:not([class]) {
+  @apply scroll-m-20 text-2xl font-semibold tracking-tight mt-8 mb-4;
+}
+
+.docs-content h4:not([class]) {
+  @apply scroll-m-20 text-xl font-semibold tracking-tight mt-6 mb-3;
+}
+
+.docs-content h5:not([class]) {
+  @apply scroll-m-20 text-lg font-semibold tracking-tight mt-4 mb-2 text-muted-foreground;
+}
+
+.docs-content h6:not([class]) {
+  @apply scroll-m-20 text-base font-semibold tracking-tight mt-4 mb-2 text-muted-foreground;
+}
+
+.docs-content p:not([class]) {
+  @apply leading-7 not-first:mt-6;
+}
+
+.docs-content ul:not([class]) {
+  @apply my-6 ml-6 list-disc [&>li]:mt-2;
+}
+
+.docs-content ol:not([class]) {
+  @apply my-6 ml-6 list-decimal [&>li]:mt-2;
+}
+
+.docs-content li:not([class]) {
+  @apply leading-7;
+}
+
+.docs-content a:not([class]) {
+  @apply font-medium text-primary underline underline-offset-4 hover:text-primary/80;
+}
+
+.docs-content code:not([class]):not(pre code) {
+  @apply relative rounded bg-muted px-[0.3rem] py-[0.2rem] font-mono text-sm font-semibold;
+}
+
+.docs-content blockquote:not([class]) {
+  @apply mt-6 border-l-2 pl-6 italic text-muted-foreground;
+}
+
+.docs-content table:not([class]) {
+  @apply w-full border-collapse border-spacing-0 my-6;
+}
+
+.docs-content thead:not([class]) {
+  @apply border-b;
+}
+
+.docs-content tr:not([class]) {
+  @apply border-b transition-colors hover:bg-muted/50;
+}
+
+.docs-content th:not([class]) {
+  @apply h-12 px-4 text-left align-middle font-medium;
+}
+
+.docs-content td:not([class]) {
+  @apply p-4 align-middle text-muted-foreground;
+}
+
+.docs-content img:not([class]) {
+  @apply rounded-lg border max-w-full h-auto my-6;
+}
+
+.docs-content hr:not([class]) {
+  @apply my-8 border-muted;
+}
+
+.docs-content strong:not([class]) {
+  @apply font-semibold;
+}
+
+.docs-content em:not([class]) {
+  @apply italic;
+}
+
+/* Markdown */
+.md h2 {
+  @apply text-xl font-semibold;
+  @apply mb-2 mt-5;
+}
+
+.md h3 {
+  @apply text-lg font-semibold;
+  @apply mb-1 mt-5;
+}
+
+.md p {
+  @apply mb-2;
+}
+
+.md a {
+  @apply underline;
+}
+
+.md ul {
+  @apply mb-3 list-disc pl-10;
+}
+
+.md ol {
+  @apply mb-3 list-decimal pl-6;
+  counter-reset: item;
+}
+
+.md ol li {
+  display: block;
+}
+
+.md ol li:before {
+  @apply me-2 text-muted-foreground;
+  content: counter(item) ". ";
+  counter-increment: item;
+}
+
+/* GLTF Canvas Container - Prevent ReactFlow interference */
+.gltf-canvas-container {
+  contain: layout style size;
+  transform: none !important;
+}
+
+.gltf-canvas-container canvas {
+  transform: none !important;
+  image-rendering: auto;
+  transition: none !important;
+  animation: none !important;
+  display: block !important;
+  position: relative !important;
+  z-index: 10 !important;
+  background: #000 !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+/* CodeMirror dark mode styling */
+html.dark .cm-editor {
+  --cm-bg: #1a1a1a;
+  --cm-text: #e0e0e0;
+  --cm-gutters-bg: #1a1a1a;
+  --cm-gutters-border: #333;
+  --cm-gutters-text: #999;
+  --cm-linenumber: #555;
+  background-color: #1a1a1a;
+  color: #e0e0e0;
+}
+
+html.dark .cm-gutters {
+  background-color: #1a1a1a !important;
+  border-right: 1px solid #333 !important;
+  color: #999 !important;
+}
+
+html.dark .cm-linenumber {
+  color: #555 !important;
+}
+
+html.dark .cm-scroller {
+  background-color: #1a1a1a;
+}
+
+html.dark .cm-content {
+  color: #e0e0e0;
+}
+
+/* React Flow attribution restyled as a small pill button */
+.react-flow__attribution {
+  margin: 6px !important;
+  padding: 2px 8px !important;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.85) !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  backdrop-filter: blur(4px);
+  font-size: 10px;
+  line-height: 1.4;
+  transition: background-color 0.15s ease;
+}
+
+.react-flow__attribution:hover {
+  background: rgba(255, 255, 255, 1) !important;
+}
+
+.react-flow__attribution a {
+  color: #666 !important;
+}
+
+html.dark .react-flow__attribution {
+  background: rgba(30, 30, 30, 0.7) !important;
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+html.dark .react-flow__attribution:hover {
+  background: rgba(30, 30, 30, 0.9) !important;
+}
+
+html.dark .react-flow__attribution a {
+  color: #bbb !important;
+}
+
+/* ── The readback arriving ──────────────────────────────────────────────────
+   The brief sentence cascades in word by word — the moment the request
+   visibly becomes something the model understood. Slots land last-in-place
+   with a pop and a ring flash that says "this part is yours to change".
+   Under reduced motion the sentence simply appears, whole. */
+@media (prefers-reduced-motion: no-preference) {
+  .brief-word {
+    display: inline-block;
+    animation: brief-word-in 0.5s cubic-bezier(0.2, 0.6, 0.2, 1) backwards;
+  }
+
+  @keyframes brief-word-in {
+    from {
+      opacity: 0;
+      transform: translateY(0.35em);
+      filter: blur(6px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+      filter: blur(0);
+    }
+  }
+
+  .brief-slot-land {
+    animation: brief-slot-land 0.6s cubic-bezier(0.2, 0.7, 0.3, 1.1) backwards;
+  }
+
+  @keyframes brief-slot-land {
+    0% {
+      opacity: 0;
+      transform: translateY(0.35em) scale(0.9);
+      box-shadow: 0 0 0 0 hsl(var(--primary) / 0);
+    }
+    55% {
+      opacity: 1;
+      transform: scale(1.05);
+      box-shadow: 0 0 0 6px hsl(var(--primary) / 0.15);
+    }
+    100% {
+      opacity: 1;
+      transform: none;
+      box-shadow: 0 0 0 0 hsl(var(--primary) / 0);
+    }
+  }
+}
+
+/* ── The model thinking, spelled in the user's own words ────────────────────
+   Worn by the brief flow while a build runs: the sentence and the live status
+   line carry the activity themselves instead of delegating it to a spinner.
+   Everything here is decoration over real text, so the whole block sits
+   behind the motion preference — under reduced motion each class is inert
+   and the words simply keep their normal color. */
+@media (prefers-reduced-motion: no-preference) {
+  /* A highlight band sweeping through muted text, reading left to right.
+     The theme is `@theme inline`, so no --color-* variables exist at
+     runtime — everything below reaches for the raw :root channels. */
+  .thinking-sweep {
+    background-image: linear-gradient(
+      100deg,
+      hsl(var(--muted-foreground)) 42%,
+      hsl(var(--foreground)) 50%,
+      hsl(var(--muted-foreground)) 58%
+    );
+    background-size: 250% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: thinking-sweep 2.4s linear infinite;
+  }
+
+  /* A brightening wipe, left to right — the proofreader's read-through. */
+  .thinking-fill {
+    background-image: linear-gradient(
+      90deg,
+      hsl(var(--foreground)) 45%,
+      hsl(var(--muted-foreground)) 55%
+    );
+    background-size: 300% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: thinking-fill 2.8s ease-in-out infinite;
+  }
+
+  /* Both travel by sliding an oversized gradient from right-aligned to
+     left-aligned; the off-screen margin gives a beat between passes. */
+  @keyframes thinking-sweep {
+    from {
+      background-position: 100% 0;
+    }
+    to {
+      background-position: 0% 0;
+    }
+  }
+
+  @keyframes thinking-fill {
+    from {
+      background-position: 100% 0;
+    }
+    to {
+      background-position: 0% 0;
+    }
+  }
+
+  /* Slots weighed one after another while the pieces are being chosen. */
+  .thinking-slot {
+    animation: thinking-slot 1.8s ease-in-out infinite;
+    animation-delay: calc(var(--slot-index, 0) * 350ms);
+  }
+
+  @keyframes thinking-slot {
+    0%,
+    100% {
+      background-color: hsl(var(--muted));
+    }
+    50% {
+      background-color: hsl(var(--primary) / 0.18);
+    }
+  }
+}
+
+/* ── The wire ───────────────────────────────────────────────────────────────
+   Build progress drawn as the thing being built: each finished phase solders
+   a node onto a vertical wire, the link draws down toward the live tip, and
+   the narration types itself beside it. Every part of it is the page's own
+   ink: the tip is foreground where the settled nodes are muted, which is how
+   the rest of the UI already tells now from done — no hue is spent saying it.
+   The tip stays solid under reduced motion; the soldering, drawing, pulsing,
+   and typing all sit behind the preference. */
+.wire-tip {
+  background: hsl(var(--foreground));
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .wire-tip {
+    animation: wire-tip 1.8s ease-in-out infinite;
+  }
+
+  /* A ring breathing out of the tip, in place of the old glow. */
+  @keyframes wire-tip {
+    0%,
+    100% {
+      transform: scale(0.9);
+      box-shadow: 0 0 0 0 hsl(var(--foreground) / 0.16);
+    }
+    50% {
+      transform: scale(1.1);
+      box-shadow: 0 0 0 4px hsl(var(--foreground) / 0.08);
+    }
+  }
+
+  /* The solder: a completed node lands with a pop and a cooling ring. */
+  .wire-node {
+    animation: wire-node 0.5s cubic-bezier(0.2, 0.7, 0.3, 1.1) backwards;
+  }
+
+  @keyframes wire-node {
+    0% {
+      opacity: 0;
+      transform: scale(0.4);
+      box-shadow: 0 0 0 0 hsl(var(--muted-foreground) / 0.4);
+    }
+    45% {
+      opacity: 1;
+      transform: scale(1.3);
+      box-shadow: 0 0 0 5px hsl(var(--muted-foreground) / 0.15);
+    }
+    100% {
+      opacity: 1;
+      transform: scale(1);
+      box-shadow: 0 0 0 0 hsl(var(--muted-foreground) / 0);
+    }
+  }
+
+  /* The link draws downward once its node has landed. */
+  .wire-link {
+    transform-origin: top;
+    animation: wire-link 0.35s ease-out 120ms backwards;
+  }
+
+  @keyframes wire-link {
+    from {
+      transform: scaleY(0);
+    }
+    to {
+      transform: scaleY(1);
+    }
+  }
+
+  .wire-caret {
+    display: inline-block;
+    width: 2px;
+    height: 1em;
+    margin-left: 2px;
+    vertical-align: -0.1em;
+    border-radius: 1px;
+    background: hsl(var(--foreground));
+    animation: wire-caret 1.1s steps(2, start) infinite;
+  }
+
+  @keyframes wire-caret {
+    50% {
+      opacity: 0;
+    }
+  }
+}

@@ -1,0 +1,389 @@
+import { env } from "cloudflare:test";
+import { validateWorkflow } from "@savia/flows-runtime";
+import type { NodeType, Workflow } from "@savia/flows-types";
+import { describe, expect, it } from "vitest";
+
+import type { Bindings } from "../../../context";
+import { findStructuralProblems } from "../../../templates/template-test-utils";
+import type { GenerateCall } from "../llm";
+import {
+  createModelRouter,
+  parseModelOverride,
+  resolveTier,
+} from "../model-router";
+import { runGenerationPipeline } from "../pipeline";
+import type { CreateResourceFn } from "../resource-resolver";
+import type { TraceEntry } from "../trace";
+import { firstFailure, summarize } from "../trace";
+import { createWorkspace } from "../workspace";
+import type { GenerationCase } from "./benchmark-cases";
+import { BENCHMARK_CASES, COVERAGE_CASES } from "./benchmark-cases";
+import {
+  CONNECTED_PROVIDERS,
+  DEPLOYMENT_CATALOG,
+  ORG_RESOURCES,
+} from "./deployment";
+
+/**
+ * Quality gauge for the generator, measured against the 23 shipped templates.
+ *
+ * This makes real, billed model calls, which is why it lives in the integration
+ * tier and is not run by CI. It reports a pass rate rather than asserting
+ * 23/23 — the number is the thing to optimize, and it is also how the choice of
+ * model gets settled: run it on two tiers and compare rate against cost.
+ *
+ *   pnpm --filter '@savia/flows-api' benchmark:generate
+ *
+ * `EVAL_MODEL` swaps the synthesis tier for one run, as `provider:model`, which
+ * is what makes "run it on two tiers and compare rate against cost" a pair of
+ * commands rather than a pair of source edits:
+ *
+ *   EVAL_MODEL=anthropic:claude-opus-5 pnpm --filter '@savia/flows-api' benchmark:generate
+ *
+ * ## Last measured
+ *
+ * 2026-08-13, `anthropic:claude-sonnet-5`, one sample per case:
+ *
+ *   26/37 valid on first attempt      0.43 mean repairs
+ *   33/37 valid after repair          8/8 met every condition
+ *   32/37 correct trigger
+ *   prompt: median 40,418 chars, of which the catalog is 26,298
+ *   910,149 input tokens for the sweep
+ *
+ * Recorded because it was not, and a rate that lives only in a terminal gives
+ * the next sweep nothing to be compared against. Read it as a floor to notice
+ * movement from, not as a target: at one sample per case this cannot resolve a
+ * few points either way, and four of the five failures were the same
+ * empty-revision pathology rather than four independent faults.
+ *
+ * The prompt sizes are the number a change to `projection/` moves, and the
+ * catalog being 65% of the prompt is the first thing to look at if it grows.
+ */
+
+/**
+ * The template mirrors first, then the cases that cover what no template does.
+ * Order matters only for the printed report: a regression in the template set
+ * is the louder signal, so it reads first.
+ */
+const CASES: GenerationCase[] = [
+  ...BENCHMARK_CASES.map(({ templateId, prompt, expectTrigger }) => ({
+    id: templateId,
+    prompt,
+    expectTrigger,
+  })),
+  ...COVERAGE_CASES,
+];
+
+/**
+ * The one creator this harness supplies, because schemas are the one family
+ * the generator writes rather than finds. Withholding it would measure a
+ * tenant where no form can ever have a shape, so every form case would fail
+ * for a reason the model had no part in.
+ *
+ * Nothing is persisted: the id only has to be distinguishable from the
+ * pre-owned `bench-schema`, so a case can tell reuse from authorship.
+ */
+let benchSchemaCount = 0;
+const createBenchSchema: CreateResourceFn = async (type, spec) => {
+  if (type !== "schema") {
+    throw new Error(`the benchmark owns its ${type}s; nothing to create`);
+  }
+  return {
+    id: `bench-authored-${++benchSchemaCount}`,
+    name: spec.name,
+    ...(spec.fields ? { fields: spec.fields } : {}),
+  };
+};
+
+interface CaseResult {
+  id: string;
+  validFirstTry: boolean;
+  validAfterRepair: boolean;
+  triggerCorrect: boolean;
+  repairs: number;
+  error?: string;
+  /** The first stage that did not do its job, for a failure worth attributing. */
+  stage?: string;
+  /** Conditions beyond the trigger that the finished graph did not satisfy. */
+  unmet: string[];
+  /** Every stage, printed when a case fails. */
+  trace: TraceEntry[];
+  /** Tokens in across every draft round — the half the prompt drives. */
+  inputTokens: number;
+  /** System-prompt characters on the first draft, and the catalog's share. */
+  systemChars: number;
+  catalogChars: number;
+}
+
+/**
+ * Resource types the graph bound, read off parameter types rather than input
+ * names — the node that carries a `database` input is free to call it whatever
+ * it likes, and several do.
+ */
+function boundResourceTypes(workflow: Workflow): Set<string> {
+  const bound = new Set<string>();
+  for (const node of workflow.nodes) {
+    for (const input of node.inputs) {
+      if (
+        input.value !== undefined &&
+        input.value !== null &&
+        input.value !== ""
+      ) {
+        bound.add(input.type);
+      }
+    }
+  }
+  return bound;
+}
+
+/** The case's own conditions, checked against the graph that came out. */
+function unmetConditions(
+  workflow: Workflow,
+  testCase: GenerationCase
+): string[] {
+  const present = new Set(workflow.nodes.map((node) => node.type));
+  const unmet: string[] = [];
+
+  for (const requirement of testCase.requires ?? []) {
+    if (!requirement.anyOf.some((type) => present.has(type))) {
+      unmet.push(
+        `nothing can ${requirement.capability} (any of: ${requirement.anyOf.join(", ")})`
+      );
+    }
+  }
+
+  const bound = boundResourceTypes(workflow);
+  for (const resource of testCase.binds ?? []) {
+    if (!bound.has(resource)) unmet.push(`no ${resource} bound`);
+  }
+
+  return unmet;
+}
+
+/**
+ * Ambient, and deliberately not the deployment's placeholders: this is what
+ * the model router authenticates with, so it needs the real keys `.dev.vars`
+ * carries. The catalog is the opposite case and comes from `deployment.ts`.
+ */
+const bindings = env as unknown as Bindings;
+
+const CATALOG: NodeType[] = DEPLOYMENT_CATALOG;
+
+/** Delivered as a binding, since `process.env` does not cross into workerd. */
+interface BenchmarkEnv {
+  EVAL_MODEL?: string;
+}
+
+const OVERRIDES = parseModelOverride(
+  (env as unknown as BenchmarkEnv).EVAL_MODEL
+);
+const ROUTE = createModelRouter(bindings, OVERRIDES);
+
+/** What actually answered, which is not always what `config.ts` declares. */
+const SYNTHESIS = resolveTier("synthesis", OVERRIDES);
+
+console.log(
+  `[benchmark] synthesis=${SYNTHESIS.provider}:${SYNTHESIS.model}${
+    OVERRIDES ? " (overridden by EVAL_MODEL)" : ""
+  }`
+);
+
+async function runCase(
+  testCase: GenerationCase,
+  catalog: NodeType[]
+): Promise<CaseResult> {
+  let attempts = 0;
+
+  const result = await runGenerationPipeline({
+    prompt: testCase.prompt,
+    workspace: createWorkspace({
+      nodeTypes: catalog,
+      connectedProviders: CONNECTED_PROVIDERS,
+      orgResources: ORG_RESOURCES,
+    }),
+    createResource: createBenchSchema,
+    // Literally the function the Durable Object dispatches through, not a copy
+    // of it — same tier, same output ceiling, same constrained decoding. A
+    // benchmark that dispatches its own way measures a path that does not ship,
+    // and the copy this replaced had already drifted: it pinned the workflow
+    // schema unconditionally.
+    callLLM: (call: GenerateCall) => {
+      attempts++;
+      return ROUTE(call);
+    },
+    // Frames are the browser's channel; the trace is the pipeline's. This used
+    // to scrape both the first-attempt verdict and the final graph out of the
+    // UI stream, which is how a measurement harness came to depend on a
+    // rendering contract.
+    emit: () => {},
+    // Saving and running are out of scope here: this measures whether a valid
+    // graph comes out, not whether Workers AI is up.
+    save: async () => "benchmark-workflow",
+    run: async () =>
+      ({
+        id: "benchmark-execution",
+        workflowId: "benchmark-workflow",
+        status: "completed",
+        nodeExecutions: [],
+      }) as never,
+  });
+
+  const trace = result.trace;
+  const finalWorkflow: Workflow | undefined = result.workflow;
+
+  // The first attempt's verdict, read off the trace rather than off a frame.
+  const firstValidation = trace.find(
+    (entry) => entry.stage === "validate" && entry.attempt === 0
+  );
+
+  const validAfterRepair = result.outcome !== "failed";
+  const structural = finalWorkflow
+    ? findStructuralProblems(finalWorkflow.nodes, finalWorkflow.edges)
+    : ["no graph produced"];
+  const validationErrors = finalWorkflow
+    ? validateWorkflow(finalWorkflow, catalog)
+    : [];
+
+  const drafts = trace.filter(
+    (entry): entry is Extract<TraceEntry, { stage: "draft" }> =>
+      entry.stage === "draft"
+  );
+  const selection = trace.find(
+    (entry): entry is Extract<TraceEntry, { stage: "select" }> =>
+      entry.stage === "select"
+  );
+
+  return {
+    id: testCase.id,
+    // No graph is a failure of every condition at once, and reporting each one
+    // separately would triple-count a single failure in the aggregate.
+    unmet: finalWorkflow ? unmetConditions(finalWorkflow, testCase) : [],
+    validFirstTry: firstValidation?.ok === true,
+    validAfterRepair:
+      validAfterRepair &&
+      structural.length === 0 &&
+      validationErrors.length === 0,
+    triggerCorrect: finalWorkflow?.trigger === testCase.expectTrigger,
+    repairs: Math.max(0, attempts - 1),
+    error: structural[0] ?? validationErrors[0]?.message,
+    stage: firstFailure(trace)?.stage,
+    trace,
+    // What the prompt cost, read off the trace rather than recomputed: the
+    // draft entries carry the tokens the gateway actually billed.
+    inputTokens: drafts.reduce((sum, entry) => sum + entry.inputTokens, 0),
+    systemChars: drafts[0]?.systemChars ?? 0,
+    catalogChars: selection?.catalogChars ?? 0,
+  };
+}
+
+describe("workflow generator benchmark", () => {
+  const results: CaseResult[] = [];
+
+  for (const testCase of CASES) {
+    it(`generates a valid workflow for "${testCase.id}"`, async () => {
+      const result = await runCase(testCase, CATALOG);
+      results.push(result);
+
+      // The stages, when something went wrong. A per-case assertion message
+      // says what broke; this says where, which is the difference between a
+      // red suite and a diagnosis.
+      if (
+        !result.validAfterRepair ||
+        !result.triggerCorrect ||
+        result.unmet.length > 0
+      ) {
+        console.log(`\n[benchmark] ${testCase.id} stages:`);
+        for (const entry of result.trace) {
+          console.log(`  ${entry.ok ? " " : "!"} ${summarize(entry)}`);
+        }
+      }
+
+      // Per-case assertions stop regressions; the aggregate below is the
+      // number worth watching.
+      expect(
+        result.validAfterRepair,
+        `${testCase.id}: ${result.error ?? "unknown failure"}`
+      ).toBe(true);
+      expect(
+        result.triggerCorrect,
+        `${testCase.id}: expected trigger ${testCase.expectTrigger}`
+      ).toBe(true);
+      // Last, because a valid graph with the right trigger that still does not
+      // do the job is the failure the other two assertions cannot see.
+      expect(
+        result.unmet,
+        `${testCase.id}: ${result.unmet.join("; ")}`
+      ).toEqual([]);
+    }, 180_000);
+  }
+
+  it("reports the aggregate pass rate", () => {
+    const total = results.length;
+    if (total === 0) return;
+
+    const firstTry = results.filter((r) => r.validFirstTry).length;
+    const afterRepair = results.filter((r) => r.validAfterRepair).length;
+    const triggers = results.filter((r) => r.triggerCorrect).length;
+    const meanRepairs = results.reduce((sum, r) => sum + r.repairs, 0) / total;
+
+    // Counted over the cases that set conditions, not over all of them: a rate
+    // diluted by cases with nothing to check moves when cases are added and
+    // says nothing about the generator.
+    const conditioned = results.filter((r) =>
+      CASES.some(
+        (testCase) =>
+          testCase.id === r.id &&
+          ((testCase.requires?.length ?? 0) > 0 ||
+            (testCase.binds?.length ?? 0) > 0)
+      )
+    );
+    const satisfied = conditioned.filter((r) => r.unmet.length === 0).length;
+
+    /**
+     * Reported, never gated.
+     *
+     * Prompt size varies legitimately with how many types a request ranks, and
+     * at one sample per case a threshold on it would be a coin flip. The gate
+     * that catches a bloated projection is the offline per-type ratio in
+     * `prompts.test.ts`; this is the number that says what a sweep cost.
+     */
+    const median = (values: number[]): number => {
+      const sorted = [...values].sort((a, b) => a - b);
+      return sorted[Math.floor(sorted.length / 2)] ?? 0;
+    };
+    const totalInput = results.reduce((sum, r) => sum + r.inputTokens, 0);
+
+    console.log(
+      // The model that actually answered, not the one configured — a sweep
+      // whose report names the wrong model is worse than no report.
+      `\n[benchmark] model=${SYNTHESIS.provider}:${SYNTHESIS.model}\n` +
+        `  ${firstTry}/${total} valid on first attempt\n` +
+        `  ${afterRepair}/${total} valid after repair\n` +
+        `  ${triggers}/${total} correct trigger\n` +
+        `  ${satisfied}/${conditioned.length} met every condition\n` +
+        `  ${meanRepairs.toFixed(2)} mean repairs\n` +
+        `  prompt: median ${median(results.map((r) => r.systemChars))} chars, ` +
+        `catalog ${median(results.map((r) => r.catalogChars))} of them\n` +
+        `  ${totalInput} input tokens across ${total} cases\n`
+    );
+
+    for (const result of results.filter((r) => r.unmet.length > 0)) {
+      console.log(`  UNMET ${result.id}: ${result.unmet.join("; ")}`);
+    }
+
+    const byStage = new Map<string, number>();
+    for (const result of results.filter((r) => !r.validAfterRepair)) {
+      const stage = result.stage ?? "content";
+      byStage.set(stage, (byStage.get(stage) ?? 0) + 1);
+    }
+    for (const [stage, count] of [...byStage].sort((a, b) => b[1] - a[1])) {
+      console.log(`  broke at ${stage}: ${count}`);
+    }
+
+    for (const result of results.filter((r) => !r.validAfterRepair)) {
+      console.log(
+        `  FAILED ${result.id} [${result.stage ?? "content"}]: ${result.error}`
+      );
+    }
+  });
+});

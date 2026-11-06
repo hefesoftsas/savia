@@ -1,0 +1,34 @@
+name: Inspect Savia production backup gate
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Serialize with every production release and backup operation.
+concurrency:
+  group: savia-production
+  cancel-in-progress: false
+
+jobs:
+  inspect:
+    if: ${{ vars.PRODUCTION_OPERATIONS_ENABLED == 'true' && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    environment: production-backup
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # The coordinator's status endpoint may clear an already-expired lease.
+      # This diagnostic only reads permit state; it never changes or removes permits.
+      - name: Inspect outstanding writer permits
+        run: node scripts/inspect-production-backup-gate.mjs
+        env:
+          SAVIA_BACKUP_CONTROL_SECRET: ${{ secrets.SAVIA_BACKUP_CONTROL_SECRET }}

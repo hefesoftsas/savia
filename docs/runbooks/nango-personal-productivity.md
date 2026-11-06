@@ -1,0 +1,109 @@
+# Integraciones personales de Google y Microsoft mediante Nango
+
+For Slack and Microsoft Teams channel sharing, see
+[Slack and Teams sharing](../guides/slack-teams-sharing.md). Those providers use
+separate Nango integrations and do not inherit Outlook authorization.
+
+## Qué activa esta guía
+
+Esta integración es individual: cada principal de Savia conecta, consulta, reconecta y desconecta únicamente sus propias cuentas. Nunca se reutiliza una conexión CRM por agencia ni se exponen tokens OAuth al navegador, API pública, asistente o MCP.
+
+Las seis configuraciones de Nango son independientes:
+
+| Cuenta                | Variable de producción                   | Operaciones habilitadas                             |
+| --------------------- | ---------------------------------------- | --------------------------------------------------- |
+| Google Drive          | `NANGO_GOOGLE_DRIVE_INTEGRATION_ID`      | Buscar metadatos y guardar archivos de texto nuevos |
+| Gmail                 | `NANGO_GMAIL_INTEGRATION_ID`             | Buscar metadatos y enviar correo confirmado         |
+| Google Calendar       | `NANGO_GOOGLE_CALENDAR_INTEGRATION_ID`   | Consultar y crear eventos confirmados               |
+| Outlook               | `NANGO_OUTLOOK_INTEGRATION_ID`           | Buscar correo, enviar y crear eventos confirmados   |
+| OneDrive Personal     | `NANGO_ONEDRIVE_PERSONAL_INTEGRATION_ID` | Buscar metadatos y guardar archivos de texto nuevos |
+| OneDrive for Business | `NANGO_ONEDRIVE_BUSINESS_INTEGRATION_ID` | Buscar metadatos y guardar archivos de texto nuevos |
+
+También se necesitan `NANGO_BASE_URL`, `NANGO_CONNECT_URL` y `NANGO_API_KEY`. La API key necesita capacidad de Proxy en el entorno Nango; no se debe usar una key de usuario ni publicarla en Vite.
+
+### Reading connections during an environment transition
+
+`NANGO_API_KEY` remains the primary environment key for new connections and
+writes. An optional backend-only `NANGO_FALLBACK_API_KEY` can read existing
+personal connections left in another Nango environment during a transition.
+Configure it in the matching GitHub deployment environment and API Worker
+secret store; never expose it in Vite or shared Page content.
+
+The personal proxy tries the primary key first. It retries once with the
+fallback only after HTTP 400 with Nango's `unknown_connection` error or the
+exact `server_error` / `Failed to get connection` envelope. The retry preserves
+the connection ID, provider, path, headers and body. It is limited to GET reads,
+Jira's POST issue search and GitHub GraphQL query operations. Authentication
+failures, rate limits, upstream errors, network errors and writes do not retry.
+Connect, reconnect and delete operations continue using the primary key.
+
+The **My tickets** Pages block saves its summary in an encrypted backend cache,
+scoped to the viewer, filters and active connection identities. Reopening the
+page reads that snapshot; only an initial cache miss or an explicit **Refresh**
+contacts Jira and GitHub. Refresh failures preserve the last saved snapshot.
+Connection changes remove dependent snapshots. These results are never embedded
+in shared Page content or persisted by the browser. Other personal-integration
+search results remain transient.
+
+This is temporary read compatibility, not a connection migration. Keep both
+keys restricted to their existing environments and move remaining connections
+through the normal user authorization flow before removing the fallback.
+To disable it, clear `NANGO_FALLBACK_API_KEY` in the matching GitHub environment
+and deploy again. The secret uploader explicitly deletes the API Worker binding
+when the value is absent or blank; other Worker secrets remain unchanged.
+
+Para desarrollo local, agregue esas variables al archivo `infra/secrets/assistant-api.dev.env` y reinicie `pnpm dev`; el lanzador las pasa al Worker de la API. No se deben poner en `.env` del Admin.
+
+## Configuración en Nango y proveedores
+
+1. Cree una integración Nango distinta para cada fila, copie su **Unique Key** a la variable correspondiente y registre exactamente el callback que Nango muestra en la consola OAuth del proveedor.
+2. En Connect, deje permitido solo el Unique Key de la tarjeta seleccionada. Savia vuelve a limitarlo al crear la sesión, por lo que una tarjeta nunca puede autorizar otra integración.
+3. Configure scopes mínimos acordes a la función:
+   - Drive: `drive.file` para archivos creados/seleccionados por la app. Añada un alcance de metadata de Drive solo si se aprueba la búsqueda fuera de esos archivos.
+   - Gmail: `gmail.readonly` para búsqueda y `gmail.send` para envíos. Son permisos restringidos; complete verificación y, si aplica, la evaluación de seguridad de Google antes de abrir el uso público.
+   - Google Calendar: lectura y creación de eventos en el calendario primario.
+   - Microsoft Outlook: `Mail.Read`, `Mail.Send`, `Calendars.Read` y `Calendars.ReadWrite` delegados según lo activado.
+   - OneDrive: permisos delegados de lectura/escritura para el drive del usuario; use la configuración de consumidor para Personal y la de Microsoft Entra para Business.
+4. Mantenga separados los registros OAuth de Microsoft consumidor y Microsoft Entra. Ambos llegan a Graph, pero Nango conserva conexiones y consentimiento por proveedor.
+
+El Worker crea cada Connect session con `end_user_id`, `end_user_email` y `end_user_display_name`. Al terminar Connect, solo adopta la conexión si estas etiquetas y `provider_config_key` corresponden exactamente con el principal y tarjeta solicitados. Una conexión sin esas condiciones debe volver a autorizarse; nunca se reclama una conexión ajena.
+
+## Operación segura
+
+- **Lecturas:** el asistente puede buscar nombres de archivos, metadatos de mensajes y próximos eventos solo en una conexión activa del mismo usuario. No se copian resultados a D1.
+- **Mi día:** Google Calendar y Outlook se consultan de forma independiente. Si un proveedor no responde, los eventos del otro siguen visibles y Savia identifica qué calendario necesita sincronizarse de nuevo.
+- **Escrituras:** enviar correo, crear evento y guardar un archivo de texto nuevo generan primero una confirmación visible. La confirmación expira a los cinco minutos, está ligada al principal y solo puede ejecutarse una vez.
+- **Contenido sensible:** el cuerpo de correo o archivo de una confirmación se cifra con AES-GCM y queda ligado al principal y al id de acción. La auditoría persiste solamente proveedor, tipo, resultado, código seguro y fecha; no cuerpos, destinatarios, contenido ni tokens.
+- **Archivos:** Drive crea con multipart; OneDrive usa creación de archivo con `conflictBehavior=fail` y una precondición. Si existe un nombre igual, falla: no hay sobrescritura, edición, eliminación ni compartición.
+
+Si un proveedor devuelve un error de autorización o una conexión revocada, marque únicamente esa conexión como `reconnect_required`, muestre un error seguro y use **Reconectar** desde **Mis integraciones**. No copie respuestas completas ni cabeceras de Nango, Google o Microsoft en registros o mensajes.
+
+## Checklist antes de activar
+
+- [ ] Están configuradas las seis variables `NANGO_*_INTEGRATION_ID` necesarias para las tarjetas que se mostrarán.
+- [ ] `NANGO_API_KEY` tiene permiso de Proxy y sigue siendo exclusivamente secreto de Worker.
+- [ ] Cada callback OAuth coincide con el que muestra Nango.
+- [ ] Se probaron Connect, reconexión, desconexión, una búsqueda y una acción confirmada con cuentas de prueba separadas para Personal y Business.
+- [ ] La verificación de Google/Gmail y la política de datos están completas antes de permitir usuarios externos.
+
+## Saved record document delivery
+
+The [Documents and deliveries](../guides/document-delivery.md) flow extends Microsoft connections with folder browsing, binary create-only OneDrive copies, and Outlook file attachments. It uses a separate encrypted, five-minute, single-use review token scoped to the authenticated user, tenant, file, version and connection. The assistant text-file upload flow remains unchanged.
+
+## Connected Office creation
+
+The **Office suite** can create documents using the caller's connected Google
+Drive, OneDrive Personal or OneDrive for Business account. This direct form
+submission is the user's instruction to create the named document; it does not
+reuse the assistant's deferred-action confirmation flow. The API resolves the
+current caller-owned connection and stores a private document reference in D1.
+File contents stay with the provider. Google uses native Docs/Sheets/Slides MIME
+types; OneDrive uploads a validated blank DOCX/XLSX/PPTX package without replacing
+existing files or adding anonymous sharing permissions.
+
+Connected creation requires the same tenant Office availability policy as the
+local editor. Provider configuration and a connected account are required for
+creation options to appear. Existing links remain in Savia after disconnecting;
+opening them is governed by the provider's own permissions. The UI does not
+claim to synchronize edits back into R2. See [Office documents and editing](../office-editing.md)
+for the workflow, writable scopes and retry behavior.

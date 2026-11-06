@@ -1,0 +1,1079 @@
+import "./recording-sessions.css";
+import {
+  Suspense,
+  lazy,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { AudioLines, Download, Pencil, RefreshCw, Trash2 } from "lucide-react";
+import type { ApiClient } from "@/api/api-client";
+import { isReadAccessDenied } from "@/queries/read-state";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { useAppLocale, intlLocale, useMessages } from "@/i18n/core";
+import { companionMessages } from "@/i18n/locales/companion";
+import {
+  CompanionSessionsClient,
+  type RecordingSession,
+  type SessionChunk,
+} from "./sessions-client";
+const RecordingAssistant = lazy(() =>
+  import("../assistant/recording-assistant").then((module) => ({
+    default: module.RecordingAssistant,
+  })),
+);
+export const sessionTime = (seconds: number) =>
+  `${Math.floor(seconds / 3600)
+    .toString()
+    .padStart(2, "0")}:${Math.floor((seconds % 3600) / 60)
+    .toString()
+    .padStart(2, "0")}:${Math.floor(seconds % 60)
+    .toString()
+    .padStart(2, "0")}`;
+const active = (session: RecordingSession) =>
+  ["queued", "transcribing", "summarizing"].includes(session.job.status);
+export const TRANSCRIPT_LANGUAGES = [
+  { code: "es", name: "Español" },
+  { code: "en", name: "English" },
+  { code: "pt", name: "Português" },
+  { code: "fr", name: "Français" },
+  { code: "de", name: "Deutsch" },
+  { code: "it", name: "Italiano" },
+] as const;
+const languageName = (code: string) =>
+  TRANSCRIPT_LANGUAGES.find((item) => item.code === code)?.name ?? code;
+export function RecordingSessions({ api }: { api: ApiClient }) {
+  const client = useMemo(() => new CompanionSessionsClient(api), [api]);
+  const t = useMessages(companionMessages);
+  const locale = useAppLocale();
+  const formatDate = (value: string) => {
+    try {
+      return new Date(value).toLocaleString(intlLocale(locale), {
+        dateStyle: "medium",
+        timeStyle: "short",
+      });
+    } catch {
+      return value;
+    }
+  };
+  const [sessions, setSessions] = useState<RecordingSession[]>([]);
+  const [cursor, setCursor] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string | null>(null);
+  const [loadedListClient, setLoadedListClient] =
+    useState<CompanionSessionsClient | null>(null);
+  const [successfulListClient, setSuccessfulListClient] =
+    useState<CompanionSessionsClient | null>(null);
+  const [error, setError] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const generation = useRef(0);
+  const hasCurrentScope = loadedListClient === client;
+  const hasSuccessfulList = successfulListClient === client;
+  const handleDetailDenied = useCallback(() => {
+    setSelected(null);
+    setError(true);
+  }, []);
+  async function load(next?: string) {
+    const version = ++generation.current;
+    const hadCurrentScope = loadedListClient === client;
+    setLoading(true);
+    setError(false);
+    try {
+      const result = await client.list(next);
+      if (version !== generation.current) return;
+      setSuccessfulListClient(client);
+      setSessions((previous) =>
+        next
+          ? [
+              ...previous,
+              ...result.sessions.filter(
+                (item) => !previous.some((old) => old.id === item.id),
+              ),
+            ]
+          : result.sessions,
+      );
+      setCursor(result.cursor);
+      if (!next)
+        setSelected((current) =>
+          result.sessions.some((item) => item.id === current)
+            ? current
+            : (result.sessions[0]?.id ?? null),
+        );
+    } catch (error) {
+      if (version === generation.current) {
+        setError(true);
+        if (!hadCurrentScope || isReadAccessDenied(error)) {
+          setSessions([]);
+          setCursor(null);
+          setSelected(null);
+          setSuccessfulListClient(null);
+        }
+      }
+    } finally {
+      if (version === generation.current) {
+        setLoading(false);
+        setLoadedListClient(client);
+      }
+    }
+  }
+  useEffect(() => {
+    void load();
+    return () => {
+      generation.current++;
+    };
+  }, [client]);
+  const session = sessions.find((item) => item.id === selected);
+  return (
+    <div className="recording-session-container mx-auto max-w-6xl px-4 py-6 md:px-8">
+      <header className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">
+            {t("Recording sessions")}
+          </h1>
+          <p className="mt-1 max-w-prose text-sm text-muted-foreground">
+            {t(
+              "Up to one hour, with private audio and saved processing progress.",
+            )}
+          </p>
+        </div>
+        <Button
+          variant="outline"
+          disabled={loading || !hasCurrentScope}
+          onClick={() => void load()}
+        >
+          <RefreshCw className="size-4" aria-hidden="true" />
+          {t("Refresh")}
+        </Button>
+      </header>
+      {error && (
+        <p role="alert" className="mb-4 text-destructive">
+          {t("Unable to load recordings.")}
+        </p>
+      )}
+      {!hasCurrentScope || (loading && !sessions.length) ? (
+        <p role="status">{t("Loading recordings…")}</p>
+      ) : !hasSuccessfulList ? null : !sessions.length ? (
+        <div className="border-t py-12">
+          <AudioLines
+            className="mb-4 size-8 text-muted-foreground"
+            aria-hidden="true"
+          />
+          <h2 className="text-lg font-medium">
+            {t("No recording sessions yet")}
+          </h2>
+          <p className="mt-2 max-w-prose text-sm text-muted-foreground">
+            {t(
+              "Record in Companion desktop and choose Upload to Savia. Your session will appear here.",
+            )}
+          </p>
+        </div>
+      ) : (
+        <div className="recording-session-layout border-t pt-6">
+          <nav aria-label={t("Recording sessions")}>
+            <ul className="space-y-1">
+              {sessions.map((item) => (
+                <li key={item.id}>
+                  <button
+                    className={`w-full rounded-md px-3 py-3 text-left focus-visible:outline-2 focus-visible:outline-ring ${selected === item.id ? "bg-muted" : "hover:bg-muted/50"}`}
+                    aria-current={selected === item.id ? "true" : undefined}
+                    onClick={() => {
+                      setError(false);
+                      setSelected(item.id);
+                    }}
+                  >
+                    <span className="block break-words font-medium">
+                      {item.name}
+                    </span>
+                    <time
+                      className="mt-1 block text-sm text-muted-foreground"
+                      dateTime={item.createdAt}
+                    >
+                      {formatDate(item.createdAt)}
+                    </time>
+                    <span className="mt-1 block text-sm text-muted-foreground">
+                      {sessionTime(item.durationSeconds ?? 0)} ·{" "}
+                      {t(
+                        item.state === "uploading"
+                          ? "Upload incomplete"
+                          : "Ready to review",
+                      )}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+            {cursor && (
+              <Button
+                variant="ghost"
+                disabled={loading || !hasCurrentScope}
+                onClick={() => void load(cursor)}
+              >
+                {t("Load more")}
+              </Button>
+            )}
+          </nav>
+          {session && (
+            <SessionDetail
+              key={session.id}
+              initial={session}
+              client={client}
+              onReadDenied={handleDetailDenied}
+              onRenamed={(id, name) =>
+                setSessions((previous) =>
+                  previous.map((item) =>
+                    item.id === id ? { ...item, name } : item,
+                  ),
+                )
+              }
+              onDeleted={(id) => {
+                const remaining = sessions.filter((item) => item.id !== id);
+                setSessions(remaining);
+                setSelected((current) =>
+                  current === id ? (remaining[0]?.id ?? null) : current,
+                );
+              }}
+            />
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+function SessionDetail({
+  initial,
+  client,
+  onReadDenied,
+  onRenamed,
+  onDeleted,
+}: {
+  initial: RecordingSession;
+  client: CompanionSessionsClient;
+  onReadDenied: () => void;
+  onRenamed: (id: string, name: string) => void;
+  onDeleted: (id: string) => void;
+}) {
+  const t = useMessages(companionMessages);
+  const locale = useAppLocale();
+  const [session, setSession] = useState(initial);
+  const [busy, setBusy] = useState(false),
+    [error, setError] = useState(false),
+    [retry, setRetry] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [draftName, setDraftName] = useState(initial.name);
+  const [savingName, setSavingName] = useState(false);
+  const [renameError, setRenameError] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState(false);
+  const [language, setLanguage] = useState(initial.job.language ?? "auto");
+  const [retranscribeAck, setRetranscribeAck] = useState(false);
+  const inFlight = useRef(false),
+    mounted = useRef(true);
+  const nameRevision = useRef(0);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+  useEffect(() => {
+    const abort = new AbortController();
+    const revision = nameRevision.current;
+    setSession(initial);
+    setEditing(false);
+    setDraftName(initial.name);
+    setRenameError(false);
+    void client
+      .get(initial.id, abort.signal)
+      .then((next) => {
+        if (!abort.signal.aborted && revision === nameRevision.current)
+          setSession(next);
+      })
+      .catch((error) => {
+        if (!abort.signal.aborted) {
+          if (isReadAccessDenied(error)) onReadDenied();
+          else setError(true);
+        }
+      });
+    return () => abort.abort();
+  }, [initial, client, onReadDenied]);
+  useEffect(() => {
+    if (!editing) setDraftName(session.name);
+  }, [session.name, editing]);
+  const running = active(session);
+  const hasTranscript = Object.values(session.job.transcripts).some((item) =>
+    item.text.trim(),
+  );
+  const savedTranscripts = Object.keys(session.job.transcripts).length;
+  const currentJobLanguage = session.job.language ?? "auto";
+  const switchLanguage =
+    savedTranscripts > 0 && language !== currentJobLanguage;
+  useEffect(() => {
+    if (!running) return;
+    const abort = new AbortController();
+    let inFlight = false;
+    const refresh = async () => {
+      if (abort.signal.aborted || inFlight) return;
+      inFlight = true;
+      try {
+        const next = await client.get(initial.id, abort.signal);
+        if (!abort.signal.aborted) {
+          setSession(next);
+          setError(false);
+        }
+      } catch (error) {
+        if (!abort.signal.aborted) {
+          if (isReadAccessDenied(error)) {
+            onReadDenied();
+            return;
+          }
+          setError(true);
+        }
+      } finally {
+        inFlight = false;
+      }
+    };
+    const refreshVisible = () => {
+      if (document.visibilityState !== "hidden" && navigator.onLine)
+        void refresh();
+    };
+    // A row already active when opened gets one catch-up read. A status
+    // returned directly from the user's own process/cancel action is current
+    // and should not be immediately overwritten by a racing GET.
+    if (active(initial)) void refresh();
+    window.addEventListener("focus", refreshVisible);
+    window.addEventListener("online", refreshVisible);
+    document.addEventListener("visibilitychange", refreshVisible);
+    return () => {
+      abort.abort();
+      window.removeEventListener("focus", refreshVisible);
+      window.removeEventListener("online", refreshVisible);
+      document.removeEventListener("visibilitychange", refreshVisible);
+    };
+  }, [client, initial, onReadDenied, running]);
+  async function run(cancel: boolean) {
+    if (inFlight.current) return;
+    inFlight.current = true;
+    setBusy(true);
+    setError(false);
+    try {
+      const next = cancel
+        ? await client.cancel(session.id)
+        : await client.process(
+            session.id,
+            retry,
+            language,
+            switchLanguage && retranscribeAck,
+          );
+      if (mounted.current) {
+        setSession(next);
+      }
+    } catch {
+      if (mounted.current) setError(true);
+    } finally {
+      inFlight.current = false;
+      if (mounted.current) {
+        setBusy(false);
+        setRetry(false);
+        setRetranscribeAck(false);
+      }
+    }
+  }
+  const attention =
+    session.job.status === "needs_attention" ||
+    session.job.status === "cancelled";
+  const statusLabel = (
+    {
+      idle: "Not processed",
+      queued: "Queued",
+      transcribing: "Transcribing",
+      summarizing: "Preparing summary",
+      complete: "Complete",
+      needs_attention: "Needs attention",
+      cancelled: "Cancelled",
+      failed: "Needs attention",
+    } as const
+  )[session.job.status];
+  async function saveName() {
+    const trimmed = draftName.trim();
+    if (!trimmed || trimmed.length > 255 || savingName) return;
+    if (trimmed === session.name) {
+      setEditing(false);
+      return;
+    }
+    setSavingName(true);
+    setRenameError(false);
+    try {
+      const next = await client.rename(session.id, trimmed);
+      if (mounted.current) {
+        nameRevision.current++;
+        setSession(next);
+        setDraftName(next.name);
+        setEditing(false);
+        onRenamed(next.id, next.name);
+      }
+    } catch {
+      if (mounted.current) setRenameError(true);
+    } finally {
+      if (mounted.current) setSavingName(false);
+    }
+  }
+  async function remove() {
+    if (deleting) return;
+    setDeleting(true);
+    setDeleteError(false);
+    try {
+      await client.remove(session.id);
+      if (mounted.current) {
+        setDeleteOpen(false);
+        onDeleted(session.id);
+      }
+    } catch {
+      if (mounted.current) setDeleteError(true);
+    } finally {
+      if (mounted.current) setDeleting(false);
+    }
+  }
+  return (
+    <article className="min-w-0">
+      <div className="flex items-start justify-between gap-3">
+        {editing ? (
+          <div className="min-w-0 flex-1">
+            <label className="block text-sm font-medium">
+              {t("Session name")}
+              <input
+                className="mt-2 block w-full rounded-md border bg-background p-2 font-normal"
+                value={draftName}
+                maxLength={255}
+                autoFocus
+                disabled={savingName}
+                onChange={(event) => setDraftName(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") void saveName();
+                  if (event.key === "Escape") {
+                    setDraftName(session.name);
+                    setEditing(false);
+                    setRenameError(false);
+                  }
+                }}
+              />
+            </label>
+            {renameError && (
+              <p role="alert" className="mt-2 text-sm text-destructive">
+                {t("Unable to rename this session. Try again.")}
+              </p>
+            )}
+            <div className="mt-2 flex gap-2">
+              <Button
+                size="sm"
+                disabled={
+                  savingName ||
+                  !draftName.trim() ||
+                  draftName.trim().length > 255
+                }
+                onClick={() => void saveName()}
+              >
+                {t(savingName ? "Saving…" : "Save name")}
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={savingName}
+                onClick={() => {
+                  setDraftName(session.name);
+                  setEditing(false);
+                  setRenameError(false);
+                }}
+              >
+                {t("Cancel")}
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="min-w-0">
+              <h2 className="break-words text-xl font-semibold">
+                {session.name}
+              </h2>
+              <time
+                className="mt-1 block text-sm text-muted-foreground"
+                dateTime={session.createdAt}
+              >
+                {(() => {
+                  try {
+                    return new Date(session.createdAt).toLocaleString(
+                      intlLocale(locale),
+                      { dateStyle: "medium", timeStyle: "short" },
+                    );
+                  } catch {
+                    return session.createdAt;
+                  }
+                })()}
+              </time>
+            </div>
+            <div className="flex shrink-0 gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={busy || savingName}
+                onClick={() => {
+                  setDraftName(session.name);
+                  setRenameError(false);
+                  setEditing(true);
+                }}
+                aria-label={t("Rename session")}
+                title={t("Rename session")}
+              >
+                <Pencil className="size-4" aria-hidden="true" />
+                {t("Rename")}
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={busy || savingName || deleting}
+                onClick={() => {
+                  setDeleteError(false);
+                  setDeleteOpen(true);
+                }}
+                aria-label={t("Delete session")}
+                title={t("Delete session")}
+              >
+                <Trash2 className="size-4" aria-hidden="true" />
+                {t("Delete session")}
+              </Button>
+            </div>
+          </>
+        )}
+      </div>
+      <Dialog
+        open={deleteOpen}
+        onOpenChange={(open) => {
+          if (!deleting) setDeleteOpen(open);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t("Delete session")}</DialogTitle>
+            <DialogDescription>
+              {session.name}.{" "}
+              {t(
+                "This permanently deletes the session audio, transcript and summary saved in Savia.",
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          {deleteError && (
+            <p role="alert" className="text-sm text-destructive">
+              {t("Unable to delete this session. Try again.")}
+            </p>
+          )}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              disabled={deleting}
+              onClick={() => setDeleteOpen(false)}
+              autoFocus
+            >
+              {t("Cancel")}
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={deleting}
+              onClick={() => void remove()}
+            >
+              {t(deleting ? "Deleting…" : "Delete permanently")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <SessionPlayer key={session.id} session={session} client={client} />
+      <section className="mt-8 border-t pt-6">
+        <h3 className="text-lg font-medium">{t("Transcript and summary")}</h3>
+        <p className="mt-2 text-sm" role="status">
+          {t(statusLabel)}
+          {session.job.totalChunks > 0 &&
+            ` · ${session.job.completedChunks}/${session.job.totalChunks}`}
+          {savedTranscripts > 0 &&
+            ` · ${t("Transcript language")}: ${currentJobLanguage === "auto" ? t("Automatic") : languageName(currentJobLanguage)}`}
+        </p>
+        {running && (
+          <>
+            <progress
+              className="mt-3 h-2 w-full accent-primary"
+              aria-label={t("Transcribing")}
+              max={session.job.totalChunks || 1}
+              value={session.job.completedChunks}
+            />
+            <p className="mt-2 text-sm text-muted-foreground">
+              {t("You can close this page. Processing continues in Savia.")}
+            </p>
+            <Button
+              className="mt-4"
+              variant="outline"
+              disabled={busy}
+              onClick={() => void run(true)}
+            >
+              {t("Cancel processing")}
+            </Button>
+          </>
+        )}
+        {!running &&
+          session.state === "ready" &&
+          session.job.status !== "complete" && (
+            <div className="mt-4 space-y-4">
+              {attention && (
+                <p className="text-sm text-muted-foreground">
+                  {t(
+                    "Processing stopped. Saved results are preserved. A previous provider request may have incurred charges.",
+                  )}
+                </p>
+              )}
+              {attention && (
+                <label className="flex items-start gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    className="mt-1 size-4 accent-primary"
+                    checked={retry}
+                    onChange={(event) => setRetry(event.target.checked)}
+                    disabled={busy}
+                  />
+                  <span>
+                    {t("I accept that retrying may incur another charge.")}
+                  </span>
+                </label>
+              )}
+              <label className="block max-w-xs text-sm font-medium">
+                {t("Transcript language")}
+                <select
+                  className="mt-2 block w-full rounded-md border bg-background p-2 font-normal"
+                  value={language}
+                  onChange={(event) => setLanguage(event.target.value)}
+                  disabled={busy}
+                >
+                  <option value="auto">{t("Automatic")}</option>
+                  {TRANSCRIPT_LANGUAGES.map((item) => (
+                    <option key={item.code} value={item.code}>
+                      {item.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {switchLanguage && (
+                <>
+                  <p className="text-sm text-muted-foreground">
+                    {t(
+                      "Switching language replaces the saved transcript and summary. Provider usage may be billed again.",
+                    )}
+                  </p>
+                  <label className="flex items-start gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      className="mt-1 size-4 accent-primary"
+                      checked={retranscribeAck}
+                      onChange={(event) =>
+                        setRetranscribeAck(event.target.checked)
+                      }
+                      disabled={busy}
+                    />
+                    <span>
+                      {t("I understand saved results will be replaced.")}
+                    </span>
+                  </label>
+                </>
+              )}
+              <Button
+                disabled={
+                  busy ||
+                  (attention && !retry) ||
+                  (switchLanguage && !retranscribeAck)
+                }
+                onClick={() => void run(false)}
+              >
+                {t(
+                  busy
+                    ? "Starting processing…"
+                    : "Generate transcript and summary",
+                )}
+              </Button>
+            </div>
+          )}
+        {session.state === "uploading" && (
+          <p className="mt-3 text-sm text-muted-foreground">
+            {t(
+              "Finish uploading this session from Companion before processing.",
+            )}
+          </p>
+        )}
+        {error && (
+          <p role="alert" className="mt-4 text-sm text-destructive">
+            {t("Unable to update this session. Refresh and try again.")}
+          </p>
+        )}
+        <div className="recording-session-review">
+          <div className="min-w-0">
+            {session.job.summary && (
+              <div className="mt-6 max-w-prose space-y-5">
+                <p className="whitespace-pre-wrap leading-relaxed">
+                  {session.job.summary.summary}
+                </p>
+                {[
+                  [t("Decisions"), session.job.summary.decisions],
+                  [t("Open questions"), session.job.summary.openQuestions],
+                ].map(
+                  ([label, items]) =>
+                    (items as string[]).length > 0 && (
+                      <div key={label as string}>
+                        <h4 className="font-medium">{label as string}</h4>
+                        <ul className="mt-2 list-disc space-y-2 pl-5">
+                          {(items as string[]).map((item, index) => (
+                            <li key={index}>{item}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    ),
+                )}
+                {session.job.summary.actions.length > 0 && (
+                  <div>
+                    <h4 className="font-medium">{t("Action items")}</h4>
+                    <ul className="mt-2 list-disc space-y-2 pl-5">
+                      {session.job.summary.actions.map((item, index) => (
+                        <li key={index}>
+                          {item.description}
+                          {item.owner && ` — ${item.owner}`}
+                          {item.dueDate && ` · ${item.dueDate}`}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
+            {Object.keys(session.job.transcripts).length > 0 && (
+              <>
+                <details className="mt-6">
+                  <summary className="cursor-pointer font-medium">
+                    {t("Transcript")}
+                  </summary>
+                  <div className="mt-4 max-w-prose space-y-5">
+                    {session.chunks.map((chunk) => {
+                      const transcript =
+                        session.job.transcripts[
+                          `${chunk.source}:${chunk.sequence}`
+                        ];
+                      return (
+                        transcript && (
+                          <div key={`${chunk.source}:${chunk.sequence}`}>
+                            <p className="text-xs text-muted-foreground">
+                              {sessionTime(chunk.startSeconds)} ·{" "}
+                              {t(
+                                chunk.source === "microphone"
+                                  ? "Microphone"
+                                  : "System audio",
+                              )}
+                            </p>
+                            <p className="mt-1 whitespace-pre-wrap leading-relaxed">
+                              {transcript.text}
+                            </p>
+                          </div>
+                        )
+                      );
+                    })}
+                  </div>
+                </details>
+              </>
+            )}
+          </div>
+          {hasTranscript && (
+            <aside className="min-w-0 recording-session-chat">
+              <Suspense
+                fallback={
+                  <p role="status" className="text-sm text-muted-foreground">
+                    {t("Loading assistant…")}
+                  </p>
+                }
+              >
+                <RecordingAssistant
+                  context={{
+                    kind: "session",
+                    id: session.id,
+                    title: session.name,
+                  }}
+                />
+              </Suspense>
+            </aside>
+          )}
+        </div>
+      </section>
+    </article>
+  );
+}
+function SessionPlayer({
+  session,
+  client,
+}: {
+  session: RecordingSession;
+  client: CompanionSessionsClient;
+}) {
+  const t = useMessages(companionMessages);
+  const [combined, setCombined] = useState<string[] | null>(null);
+  const [combinedLoading, setCombinedLoading] = useState(false);
+  const [combinedFailed, setCombinedFailed] = useState(false);
+  const [combinedPlaybackFailed, setCombinedPlaybackFailed] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const [downloadFailed, setDownloadFailed] = useState(false);
+  const downloadAbort = useRef<AbortController | null>(null);
+  const combinedUrls = useRef<string[]>([]);
+  const masterRef = useRef<HTMLAudioElement>(null);
+  const slavesRef = useRef<Array<HTMLAudioElement | null>>([]);
+  useEffect(
+    () => () => {
+      downloadAbort.current?.abort();
+      for (const url of combinedUrls.current) URL.revokeObjectURL(url);
+      combinedUrls.current = [];
+    },
+    [],
+  );
+  useEffect(() => {
+    setCombined(null);
+    setCombinedFailed(false);
+    setDownloadFailed(false);
+  }, [session.id]);
+  if (!session.chunks.length) return null;
+  const sources = [...new Set(session.chunks.map((item) => item.source))];
+  const timelineStart = (source: SessionChunk["source"]) =>
+    Math.min(
+      ...session.chunks
+        .filter((item) => item.source === source)
+        .map((item) => item.startSeconds),
+    );
+  const timelineEnd = (source: SessionChunk["source"]) =>
+    Math.max(
+      ...session.chunks
+        .filter((item) => item.source === source)
+        .map((item) => item.startSeconds + item.durationSeconds),
+    );
+  // Longest timeline first so the visible master outlives every slave.
+  const orderedSources = [...sources].sort(
+    (a, b) => timelineEnd(b) - timelineEnd(a),
+  );
+  const fullEligible = (source: SessionChunk["source"]) => {
+    const items = session.chunks.filter((item) => item.source === source);
+    return (
+      items.length > 0 &&
+      items.every((item) => (item.format ?? "ogg") === "ogg")
+    );
+  };
+  const downloadOriginal = async () => {
+    const abort = new AbortController();
+    downloadAbort.current = abort;
+    setDownloading(true);
+    setDownloadFailed(false);
+    try {
+      const blob = await client.originalAudioZip(session, abort.signal);
+      if (abort.signal.aborted) return;
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `savia-${session.id}-original-audio.zip`;
+      document.body.appendChild(link);
+      try {
+        link.click();
+      } finally {
+        link.remove();
+        window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }
+    } catch {
+      if (!abort.signal.aborted) setDownloadFailed(true);
+    } finally {
+      if (!abort.signal.aborted) setDownloading(false);
+    }
+  };
+  const loadCombined = async () => {
+    setCombinedLoading(true);
+    setCombinedFailed(false);
+    setCombinedPlaybackFailed(false);
+    try {
+      const blobs = await Promise.all(
+        orderedSources.map((source) => client.fullAudio(session.id, source)),
+      );
+      const urls = blobs.map((blob) => URL.createObjectURL(blob));
+      for (const url of combinedUrls.current) URL.revokeObjectURL(url);
+      combinedUrls.current = urls;
+      slavesRef.current = [];
+      setCombined(urls);
+    } catch {
+      setCombinedFailed(true);
+    } finally {
+      setCombinedLoading(false);
+    }
+  };
+  /**
+   * Keep every slave source in lockstep with the visible master player.
+   * Chained full-audio files start at each source's first chunk, so a slave
+   * seeks to the same session time, not the same media time.
+   */
+  const failCombinedPlayback = () => {
+    setCombinedPlaybackFailed(true);
+    masterRef.current?.pause();
+    for (const slave of slavesRef.current) slave?.pause();
+  };
+  const syncSlaves = (forcePlay = false) => {
+    const master = masterRef.current;
+    if (!master) return;
+    const masterStart = timelineStart(orderedSources[0]);
+    orderedSources.slice(1).forEach((source, index) => {
+      const slave = slavesRef.current[index];
+      if (!slave) return;
+      const target = master.currentTime + (masterStart - timelineStart(source));
+      const clamped = Number.isFinite(slave.duration)
+        ? Math.min(Math.max(target, 0), slave.duration)
+        : Math.max(target, 0);
+      const previousTime = slave.currentTime;
+      const seeking = Math.abs(previousTime - clamped) > 0.15;
+      if (seeking) slave.currentTime = clamped;
+      slave.playbackRate = master.playbackRate;
+      slave.volume = master.volume;
+      slave.muted = master.muted;
+      const reachedEnd =
+        Number.isFinite(slave.duration) &&
+        slave.duration > 0 &&
+        clamped >= slave.duration;
+      const endedAtTarget =
+        slave.ended && (!seeking || clamped >= previousTime);
+      if (reachedEnd || endedAtTarget) {
+        if (!slave.paused) slave.pause();
+        return;
+      }
+      if (master.paused && !forcePlay) {
+        if (!slave.paused) slave.pause();
+      } else if (forcePlay || slave.paused) {
+        void slave.play().catch(failCombinedPlayback);
+      }
+    });
+  };
+  const startCombinedPlayback = () => {
+    const master = masterRef.current;
+    if (!master) return;
+    setCombinedPlaybackFailed(false);
+    // Start every source directly from this user gesture. Some browsers reject
+    // playback started later from the master's asynchronous play event.
+    syncSlaves(true);
+    void master.play().catch(failCombinedPlayback);
+  };
+  const pauseSlaves = () => {
+    for (const slave of slavesRef.current) slave?.pause();
+  };
+  const combinedReady = sources.length > 1 && sources.every(fullEligible);
+  return (
+    <div className="mt-5 space-y-3">
+      {combinedReady && (
+        <div className="space-y-2">
+          <p className="text-sm font-medium">{t("Combined call")}</p>
+          <p className="text-sm text-muted-foreground">
+            {t("Microphone and system audio, played together.")}
+          </p>
+          {combined ? (
+            <>
+              <audio
+                ref={masterRef}
+                className="w-full"
+                src={combined[0]}
+                controls
+                onPlay={() => syncSlaves()}
+                onPause={pauseSlaves}
+                onSeeked={() => syncSlaves()}
+                onTimeUpdate={() => syncSlaves()}
+                onRateChange={() => syncSlaves()}
+                onVolumeChange={() => syncSlaves()}
+                onEnded={pauseSlaves}
+              />
+              {combined.slice(1).map((url, index) => (
+                <audio
+                  key={index}
+                  ref={(element) => {
+                    slavesRef.current[index] = element;
+                  }}
+                  src={url}
+                  aria-hidden="true"
+                  tabIndex={-1}
+                  className="hidden"
+                  preload="auto"
+                />
+              ))}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={startCombinedPlayback}
+              >
+                {t("Start combined playback")}
+              </Button>
+              {combinedPlaybackFailed && (
+                <p className="text-sm" role="alert">
+                  {t(
+                    "One or more audio tracks could not start. Download the original audio to listen to it.",
+                  )}
+                </p>
+              )}
+            </>
+          ) : (
+            <Button
+              variant="outline"
+              disabled={combinedLoading}
+              onClick={() => void loadCombined()}
+            >
+              {t(
+                combinedLoading
+                  ? "Loading combined audio…"
+                  : "Play combined call",
+              )}
+            </Button>
+          )}
+          {combinedFailed && (
+            <p className="text-sm" role="alert">
+              {t("Audio unavailable")}{" "}
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => void loadCombined()}
+              >
+                {t("Retry audio")}
+              </Button>
+            </p>
+          )}
+        </div>
+      )}
+      <div className="space-y-2">
+        <Button
+          variant="outline"
+          disabled={downloading || session.state !== "ready"}
+          onClick={() => void downloadOriginal()}
+        >
+          <Download className="size-4" aria-hidden="true" />
+          {t(
+            downloading
+              ? "Preparing audio ZIP…"
+              : "Download original audio (ZIP)",
+          )}
+        </Button>
+        {downloading && (
+          <p role="status" className="text-sm text-muted-foreground">
+            {t("Preparing audio ZIP…")}
+          </p>
+        )}
+        {downloadFailed && (
+          <p role="alert" className="text-sm text-destructive">
+            {t("Unable to download original audio. Try again.")}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}

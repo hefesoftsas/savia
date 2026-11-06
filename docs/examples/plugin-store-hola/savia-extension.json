@@ -1,0 +1,18 @@
+{
+  "format": "savia.extension",
+  "formatVersion": 1,
+  "id": "custom.hola-plugin",
+  "version": "1.0.0",
+  "label": "Hola plugin",
+  "description": "Ejemplo mínimo del store: lista los registros de una colección.",
+  "labels": {
+    "en": "Hello plugin",
+    "pt": "Olá plugin"
+  },
+  "descriptions": {
+    "en": "Minimal store example: lists records from a collection.",
+    "pt": "Exemplo mínimo da loja: lista registros de uma coleção."
+  },
+  "requires": [],
+  "apiVersion": 1
+}

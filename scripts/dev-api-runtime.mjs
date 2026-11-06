@@ -1,0 +1,215 @@
+import { mkdir, readFile, writeFile, chmod } from "node:fs/promises";
+import { resolve, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+import { parseEnv } from "node:util";
+import { spawn } from "node:child_process";
+import { randomBytes } from "node:crypto";
+
+const repository = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+async function environmentFile(path) {
+  try {
+    return parseEnv(await readFile(path, "utf8"));
+  } catch (error) {
+    if (error.code === "ENOENT") return {};
+    throw error;
+  }
+}
+const permitted = (name) =>
+  /^(NANGO_|SAVIA_MCP_|ASSISTANT_)/.test(name) ||
+  [
+    "OPENROUTER_API_KEY",
+    "OPENROUTER_MODEL",
+    "COMPANION_ENABLED",
+    "COMPANION_STT_MODEL",
+    "STUDIO_INTEGRATION_KEY",
+    "CRM_INTEGRATION_KEY",
+    "EXTENSION_CONNECTIONS_ENCRYPTION_KEY",
+    "SAVIA_PUBLIC_ORIGIN",
+    "SAVIA_INTERNAL_BRIDGE_KEY",
+    "SAVIA_DISABLE_CAPTCHA",
+    "SAVIA_MOCK_QUOTES",
+    "PLUGIN_REGISTRY_TENANTS",
+    "SQL_BRIDGE_URL",
+    "SQL_BRIDGE_SECRET",
+    "SAVIA_FLOWS_BRIDGE_SECRET",
+    "SAVIA_FLOWS_LOCAL_ONLY",
+  ].includes(name);
+
+export async function prepareApiRuntime(
+  root = repository,
+  environment = process.env,
+) {
+  const secrets = resolve(
+    root,
+    environment.SAVIA_SECRETS_DIR ?? "infra/secrets",
+  );
+  const supplied = {
+    ...(await environmentFile(resolve(secrets, "assistant-api.dev.env"))),
+    ...(await environmentFile(resolve(secrets, "plugin-registry.dev.env"))),
+    ...(await environmentFile(resolve(secrets, "mcp.dev.env"))),
+    ...(await environmentFile(resolve(secrets, "connector-gateway.dev.env"))),
+    ...Object.fromEntries(
+      Object.entries(environment).filter(
+        ([name, value]) => permitted(name) && value,
+      ),
+    ),
+  };
+  const overrides = Object.fromEntries(
+    Object.entries(supplied).filter(([name]) => permitted(name)),
+  );
+  const coreSecrets = await environmentFile(
+    resolve(root, "apps/api/.dev.vars"),
+  );
+  const runtime = resolve(root, "apps/api/.wrangler/local-runtime");
+  await mkdir(runtime, { recursive: true, mode: 0o700 });
+  await chmod(runtime, 0o700);
+  const configs = [];
+  for (const [name, directory, vars] of [
+    ["core", "apps/api", { ...coreSecrets, ...overrides }],
+    [
+      "connectors",
+      "apps/connector-gateway",
+      Object.fromEntries(
+        Object.entries(overrides).filter(([name]) =>
+          ["EXTENSION_CONNECTIONS_ENCRYPTION_KEY"].includes(name),
+        ),
+      ),
+    ],
+  ]) {
+    const source = resolve(root, directory);
+    // Checked-in local configurations use JSON with optional trailing commas.
+    const config = JSON.parse(
+      (await readFile(resolve(source, "wrangler.jsonc"), "utf8")).replace(
+        /,\s*([}\]])/g,
+        "$1",
+      ),
+    );
+    delete config.$schema;
+    config.main = resolve(source, config.main);
+    for (const database of config.d1_databases ?? [])
+      if (database.migrations_dir)
+        database.migrations_dir = resolve(source, database.migrations_dir);
+    const target = resolve(runtime, name);
+    await mkdir(target, { recursive: true, mode: 0o700 });
+    const configuredIntegrationKey =
+      vars.STUDIO_INTEGRATION_KEY ||
+      vars.CRM_INTEGRATION_KEY ||
+      config.vars?.STUDIO_INTEGRATION_KEY ||
+      config.vars?.CRM_INTEGRATION_KEY;
+    if (name === "core" && !configuredIntegrationKey) {
+      const keyFile = resolve(runtime, "studio-integration-key");
+      try {
+        vars.STUDIO_INTEGRATION_KEY = await readFile(keyFile, "utf8");
+      } catch (error) {
+        if (error.code !== "ENOENT") throw error;
+        const generated = randomBytes(32).toString("hex");
+        try {
+          await writeFile(keyFile, generated, { flag: "wx", mode: 0o600 });
+          vars.STUDIO_INTEGRATION_KEY = generated;
+        } catch (writeError) {
+          if (writeError.code !== "EEXIST") throw writeError;
+          vars.STUDIO_INTEGRATION_KEY = await readFile(keyFile, "utf8");
+        }
+      }
+      await chmod(keyFile, 0o600);
+    }
+    if (name === "core") {
+      if (environment.SAVIA_FLOWS_ENABLED === "1") {
+        const flows = JSON.parse(
+          await readFile(
+            resolve(root, "apps/flows/.wrangler/local-secrets.json"),
+            "utf8",
+          ),
+        );
+        if (
+          typeof flows.bridgeSecret !== "string" ||
+          flows.bridgeSecret.length < 32
+        )
+          throw new Error("Local Savia Flows bridge secret is invalid.");
+        vars.SAVIA_FLOWS_BRIDGE_SECRET = flows.bridgeSecret;
+        vars.SAVIA_FLOWS_LOCAL_ONLY = "true";
+        config.services ??= [];
+        config.services.push({
+          binding: "SAVIA_FLOWS",
+          service: "savia-flows",
+        });
+      }
+      const devKeyFile = resolve(runtime, "plugin-development-key");
+      try {
+        await writeFile(devKeyFile, randomBytes(32).toString("hex"), {
+          flag: "wx",
+          mode: 0o600,
+        });
+      } catch (error) {
+        if (error.code !== "EEXIST") throw error;
+      }
+      await chmod(devKeyFile, 0o600);
+      vars.SAVIA_PLUGIN_DEV_KEY = await readFile(devKeyFile, "utf8");
+      config.main = resolve(root, "scripts/plugin-development/worker.ts");
+    }
+    const configFile = resolve(target, "wrangler.json");
+    const variablesFile = resolve(target, ".dev.vars");
+    await writeFile(configFile, JSON.stringify(config, null, 2), {
+      mode: 0o600,
+    });
+    await writeFile(
+      variablesFile,
+      Object.entries(vars)
+        .map(([key, value]) => {
+          const text = String(value);
+          const quote = ["'", '"', "`"].find(
+            (candidate) => !text.includes(candidate),
+          );
+          if (!quote)
+            throw new Error(`Cannot encode environment variable ${key}.`);
+          return `${key}=${quote}${text}${quote}`;
+        })
+        .join("\n"),
+      { mode: 0o600 },
+    );
+    await chmod(variablesFile, 0o600);
+    configs.push(configFile);
+  }
+  return configs;
+}
+
+if (
+  process.argv[1] &&
+  resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+) {
+  const configs = await prepareApiRuntime();
+  const child = spawn(
+    "pnpm",
+    [
+      "--filter",
+      "@savia/api",
+      "exec",
+      "wrangler",
+      "dev",
+      "--local",
+      "--ip",
+      process.env.SAVIA_DEV_HOST || "127.0.0.1",
+      "--port",
+      "8787",
+      "--inspector-port",
+      "9234",
+      "--persist-to",
+      ".wrangler/state",
+      ...configs.flatMap((config) => ["--config", config]),
+    ],
+    { cwd: repository, stdio: "inherit", detached: true },
+  );
+  for (const signal of ["SIGINT", "SIGTERM"])
+    process.on(signal, () => {
+      try {
+        process.kill(-child.pid, signal);
+      } catch {}
+    });
+  child.on("error", () => {
+    console.error("Could not start the local API runtime.");
+    process.exitCode = 1;
+  });
+  child.on("exit", (code) => {
+    process.exitCode = code ?? 0;
+  });
+}

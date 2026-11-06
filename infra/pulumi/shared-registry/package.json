@@ -1,0 +1,6 @@
+{
+  "name": "@savia/shared-registry-infra",
+  "private": true,
+  "type": "module",
+  "description": "Shared registry infrastructure; dependencies are locked in the parent infra/pulumi project"
+}

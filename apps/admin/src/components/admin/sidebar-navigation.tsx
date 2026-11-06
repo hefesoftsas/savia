@@ -1,0 +1,353 @@
+import { useOfficeAvailability } from "@/features/office-settings/office-availability";
+import type { AuthPermissions } from "@/auth/auth-session";
+import { useMemo } from "react";
+import {
+  useCanAccessResources,
+  useHasDashboard,
+  useResourceDefinitions,
+  useTranslate,
+  usePermissions,
+} from "ra-core";
+import { useLocation } from "react-router-dom";
+import type { LucideIcon } from "lucide-react";
+import {
+  Building2,
+  CalendarDays,
+  FileText,
+  AudioLines,
+  Workflow,
+  House,
+  Link2,
+  KeyRound,
+  ListTree,
+  Database,
+  History,
+  Package,
+  Bot,
+  Palette,
+  UsersRound,
+  Code2,
+} from "lucide-react";
+import {
+  sidebarNavigationItemIds,
+  type SidebarNavigationItemId,
+  type StaticSidebarNavigationItemId,
+  type SidebarNavigationLayout,
+  type SidebarNavigationSection,
+} from "@/api/user-preferences-client";
+import {
+  defaultSidebarNavigationLayout,
+  reconcileSidebarNavigation,
+} from "./sidebar-navigation-layout";
+
+export type {
+  SidebarNavigationItemId,
+  SidebarNavigationLayout,
+  SidebarNavigationSection,
+};
+
+export {
+  defaultSidebarNavigationLayout,
+  reconcileSidebarNavigation,
+} from "./sidebar-navigation-layout";
+
+export type SidebarNavigationItem = {
+  id: SidebarNavigationItemId;
+  label: string;
+  labelKey?: string;
+  route: string;
+  section: SidebarNavigationSection;
+  icon: LucideIcon | string;
+  active: boolean;
+  count?: number;
+  searchTerms?: string;
+};
+
+export const sidebarNavigationSections = [
+  { id: "operation", labelKey: "savia.sidebar.sections.operation" },
+  { id: "productivity", labelKey: "savia.sidebar.sections.productivity" },
+  { id: "administration", labelKey: "savia.sidebar.sections.administration" },
+  { id: "management", labelKey: "savia.sidebar.sections.management" },
+] as const satisfies ReadonlyArray<{
+  id: SidebarNavigationSection;
+  labelKey: string;
+}>;
+
+export const navigationDefinitions: Record<
+  StaticSidebarNavigationItemId,
+  Omit<SidebarNavigationItem, "active" | "label" | "labelKey"> & {
+    labelKey: string;
+  }
+> = {
+  "domain-sources": {
+    id: "domain-sources",
+    labelKey: "savia.sidebar.items.domain-sources",
+    route: "/studio?view=collection-sources",
+    section: "productivity",
+    icon: Database,
+  },
+  "domain-operations": {
+    id: "domain-operations",
+    labelKey: "savia.sidebar.items.domain-operations",
+    route: "/studio?view=operations",
+    section: "productivity",
+    icon: Workflow,
+  },
+  "domain-history": {
+    id: "domain-history",
+    labelKey: "savia.sidebar.items.domain-history",
+    route: "/studio?view=audit",
+    section: "administration",
+    icon: History,
+  },
+  "domain-packages": {
+    id: "domain-packages",
+    labelKey: "savia.sidebar.items.domain-packages",
+    route: "/studio?view=admin&tab=packages",
+    section: "productivity",
+    icon: Package,
+  },
+  "virtual-employees": {
+    id: "virtual-employees",
+    labelKey: "savia.sidebar.items.virtual-employees",
+    route: "/my-integrations?tab=virtual-employees",
+    section: "productivity",
+    icon: Bot,
+  },
+  "tenant-branding": {
+    id: "tenant-branding",
+    labelKey: "savia.sidebar.items.tenant-branding",
+    route: "/tenant-branding",
+    section: "administration",
+    icon: Palette,
+  },
+  "savia-flows": {
+    id: "savia-flows",
+    labelKey: "savia.sidebar.items.savia-flows",
+    route: "/savia-flows",
+    section: "productivity",
+    icon: Workflow,
+  },
+  "access-control": {
+    id: "access-control",
+    labelKey: "savia.sidebar.items.access-control",
+    route: "/roles",
+    section: "administration",
+    icon: KeyRound,
+  },
+  studio: {
+    id: "studio",
+    labelKey: "savia.sidebar.items.studio",
+    route: "/studio",
+    section: "operation",
+    icon: UsersRound,
+  },
+  dashboard: {
+    id: "dashboard",
+    labelKey: "savia.sidebar.items.dashboard",
+    route: "/",
+    section: "operation",
+    icon: House,
+  },
+  "office-suite": {
+    id: "office-suite",
+    labelKey: "savia.sidebar.items.office-suite",
+    route: "/office-suite",
+    section: "operation",
+    icon: FileText,
+  },
+  pages: {
+    id: "pages",
+    labelKey: "savia.sidebar.items.pages",
+    route: "/pages",
+    section: "operation",
+    icon: FileText,
+  },
+  "my-day": {
+    id: "my-day",
+    labelKey: "savia.sidebar.items.my-day",
+    route: "/my-day",
+    section: "operation",
+    icon: CalendarDays,
+  },
+  bookings: {
+    id: "bookings",
+    labelKey: "savia.sidebar.items.bookings",
+    route: "/bookings",
+    section: "operation",
+    icon: CalendarDays,
+  },
+  "companion-recordings": {
+    id: "companion-recordings",
+    labelKey: "savia.sidebar.items.companion-recordings",
+    route: "/companion-recordings",
+    section: "operation",
+    icon: AudioLines,
+  },
+  integrations: {
+    id: "integrations",
+    labelKey: "savia.sidebar.items.integrations",
+    route: "/my-integrations?tab=connections",
+    section: "productivity",
+    icon: Link2,
+  },
+  "provider-credentials": {
+    id: "provider-credentials",
+    labelKey: "savia.sidebar.items.provider-credentials",
+    route: "/savia-request",
+    section: "productivity",
+    icon: Workflow,
+  },
+  "service-credentials": {
+    id: "service-credentials",
+    labelKey: "savia.sidebar.items.service-credentials",
+    route: "/service-credentials",
+    section: "administration",
+    icon: KeyRound,
+  },
+  "assistant-configuration": {
+    id: "assistant-configuration",
+    labelKey: "savia.sidebar.items.assistant-configuration",
+    route: "/assistant-configuration",
+    section: "administration",
+    icon: KeyRound,
+  },
+  tenants: {
+    id: "tenants",
+    labelKey: "savia.sidebar.items.tenants",
+    route: "/tenants",
+    section: "management",
+    icon: Building2,
+  },
+  users: {
+    id: "users",
+    labelKey: "savia.sidebar.items.users",
+    route: "/users",
+    section: "administration",
+    icon: UsersRound,
+  },
+  "page-administrator": {
+    id: "page-administrator",
+    labelKey: "savia.sidebar.items.page-administrator",
+    route: "/studio",
+    section: "productivity",
+    icon: ListTree,
+  },
+  "plugin-studio": {
+    id: "plugin-studio",
+    labelKey: "savia.sidebar.items.plugin-studio",
+    route: "/plugin-studio",
+    section: "productivity",
+    icon: Code2,
+  },
+};
+
+const resourceNavigationIds = new Set<SidebarNavigationItemId>([
+  "users",
+  "tenants",
+]);
+
+export function useVisibleSidebarNavigation(): {
+  isLoading: boolean;
+  layout: SidebarNavigationLayout;
+  itemsById: Partial<Record<SidebarNavigationItemId, SidebarNavigationItem>>;
+} {
+  const office = useOfficeAvailability();
+  const resources = useResourceDefinitions();
+  const { permissions } = usePermissions<AuthPermissions>();
+  const hasDashboard = useHasDashboard();
+  const location = useLocation();
+  const translate = useTranslate();
+  const { canAccess, isPending } = useCanAccessResources({
+    action: "list",
+    resources: [
+      ...sidebarNavigationItemIds.filter((id) => id !== "plugin-studio"),
+      "savia-request",
+    ],
+  });
+
+  return useMemo(() => {
+    if (isPending || !canAccess) {
+      return {
+        isLoading: true,
+        layout: defaultSidebarNavigationLayout(),
+        itemsById: {},
+      };
+    }
+
+    const visibleItemIds = sidebarNavigationItemIds.filter((id) => {
+      if (id === "office-suite" && !office.enabled) return false;
+      if (
+        id.startsWith("domain-") ||
+        id === "assistant-configuration" ||
+        id === "page-administrator"
+      )
+        return false;
+      if (id === "tenant-branding")
+        return Boolean(
+          permissions?.canManageIdentity ||
+          permissions?.memberships?.some((member) =>
+            ["tenant_admin", "agency_admin"].includes(member.role),
+          ),
+        );
+      if (id === "virtual-employees") return Boolean(canAccess.integrations);
+      const permissionResource =
+        id === "provider-credentials"
+          ? "savia-request"
+          : id === "plugin-studio"
+            ? "studio"
+            : id;
+      if (id === "service-credentials")
+        return canAccess["studio"] || canAccess["savia-request"];
+      if (id !== "provider-credentials" && !canAccess[permissionResource])
+        return false;
+      if (id === "dashboard") return hasDashboard;
+      if (resourceNavigationIds.has(id)) return Boolean(resources[id]?.hasList);
+      return true;
+    });
+    const itemsById = Object.fromEntries(
+      visibleItemIds.map((id) => {
+        const definition = navigationDefinitions[id];
+        return [
+          id,
+          {
+            ...definition,
+            label: translate(definition.labelKey),
+            active:
+              definition.route === "/"
+                ? location.pathname === "/" || location.pathname === "/my-day"
+                : definition.route.startsWith("/my-integrations")
+                  ? location.pathname === "/my-integrations" &&
+                    (new URLSearchParams(location.search).get("tab") ===
+                    "virtual-employees"
+                      ? id === "virtual-employees"
+                      : id === "integrations")
+                  : definition.route.startsWith("/studio")
+                    ? location.pathname === "/studio" ||
+                      location.pathname === "/crm"
+                    : location.pathname.startsWith(definition.route),
+          },
+        ];
+      }),
+    ) as Partial<Record<SidebarNavigationItemId, SidebarNavigationItem>>;
+
+    return {
+      isLoading: false,
+      layout: reconcileSidebarNavigation(
+        defaultSidebarNavigationLayout(),
+        visibleItemIds,
+      ),
+      itemsById,
+    };
+  }, [
+    canAccess,
+    office.enabled,
+    hasDashboard,
+    isPending,
+    location.pathname,
+    location.search,
+    permissions,
+    resources,
+    translate,
+  ]);
+}

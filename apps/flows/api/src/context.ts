@@ -1,0 +1,140 @@
+import type { RuntimeParams } from "@savia/flows-runtime";
+import { JWTTokenPayload } from "@savia/flows-types";
+import type { FFmpegContainer } from "./containers/ffmpeg-container";
+import type { LanguageSandbox } from "./containers/language-sandbox";
+import type { AgentRunner } from "./durable-objects/agent-runner";
+import { DatabaseDO } from "./durable-objects/database-do";
+import type { EmailAgentRunner } from "./durable-objects/email-agent-runner";
+import type { MailboxDO } from "./durable-objects/mailbox-do";
+import type { WorkflowAgent } from "./durable-objects/workflow-agent";
+
+export interface Bindings {
+  CODE_EXECUTOR?: {
+    execute(
+      code: string,
+      dispatcher: {
+        call(name: string, argsJson: string): Promise<string>;
+      },
+      options?: { timeoutMs?: number },
+    ): Promise<{ result?: unknown; error?: string; logs?: string[] }>;
+  };
+  DB: D1Database;
+  KV: KVNamespace;
+  RATE_LIMIT_DEFAULT: RateLimit;
+  RATE_LIMIT_AUTH: RateLimit;
+  RATE_LIMIT_EXECUTE: RateLimit;
+  EXECUTE: Workflow<RuntimeParams>;
+  WORKFLOW_AGENT: DurableObjectNamespace<WorkflowAgent>;
+  DATABASE: DurableObjectNamespace<DatabaseDO>;
+  AGENT_RUNNER: DurableObjectNamespace<AgentRunner>;
+  EMAIL_AGENT_RUNNER: DurableObjectNamespace<EmailAgentRunner>;
+  MAILBOX: DurableObjectNamespace<MailboxDO>;
+  FFMPEG_CONTAINER?: DurableObjectNamespace<FFmpegContainer>;
+  DUCKDB_SANDBOX?: DurableObjectNamespace<any>;
+  SANDBOX?: DurableObjectNamespace<LanguageSandbox>;
+  WORKFLOW_QUEUE: Queue;
+  RESSOURCES: R2Bucket;
+  DATASETS: R2Bucket;
+  DATASETS_AUTORAG: string;
+  INBOXES: R2Bucket;
+  INBOXES_AUTORAG: string;
+  AI: Ai;
+  AI_SEARCH: AiSearchNamespace;
+  AI_OPTIONS: AiOptions;
+  BROWSER?: Fetcher;
+  EXECUTIONS: AnalyticsEngineDataset;
+  GENERATIONS: AnalyticsEngineDataset;
+  WEB_HOST: string;
+  WEBSITE_URL: string;
+  EMAIL_DOMAIN: string;
+  JWT_SECRET: string;
+  SAVIA_FLOWS_BRIDGE_SECRET?: string;
+  SAVIA_FLOWS_LOCAL_ONLY?: string;
+  SAVIA_FLOWS_EXTERNAL_SERVICES_ENABLED?: string;
+  SAVIA_FLOWS_MAINTENANCE?: string;
+  SAVIA_FLOWS_EXECUTION_ENABLED?: string;
+  SAVIA_FLOWS_POLICY_GENERATION?: string;
+  SAVIA_FLOWS_QUOTAS_ENABLED?: string;
+  SAVIA_FLOWS_MAX_DAILY_RUNS?: string;
+  SAVIA_FLOWS_MAX_MONTHLY_RUNS?: string;
+  SAVIA_FLOWS_MAX_CONCURRENT_RUNS?: string;
+  SAVIA_FLOWS_MAX_NODES_PER_RUN?: string;
+  SAVIA_FLOWS_MAX_STEPS_PER_RUN?: string;
+  SAVIA_HOST?: Fetcher;
+  CLOUDFLARE_ENV: string;
+  CLOUDFLARE_ACCOUNT_ID: string;
+  CLOUDFLARE_API_TOKEN: string;
+  CLOUDFLARE_AI_GATEWAY_ID?: string;
+  GITHUB_CLIENT_ID?: string;
+  GITHUB_CLIENT_SECRET?: string;
+  GOOGLE_CLIENT_ID?: string;
+  GOOGLE_CLIENT_SECRET?: string;
+  INTEGRATION_GOOGLE_MAIL_CLIENT_ID?: string;
+  INTEGRATION_GOOGLE_MAIL_CLIENT_SECRET?: string;
+  INTEGRATION_GOOGLE_CALENDAR_CLIENT_ID?: string;
+  INTEGRATION_GOOGLE_CALENDAR_CLIENT_SECRET?: string;
+  INTEGRATION_DISCORD_CLIENT_ID?: string;
+  INTEGRATION_DISCORD_CLIENT_SECRET?: string;
+  INTEGRATION_INSTAGRAM_CLIENT_ID?: string;
+  INTEGRATION_INSTAGRAM_CLIENT_SECRET?: string;
+  INTEGRATION_GITHUB_CLIENT_ID?: string;
+  INTEGRATION_GITHUB_CLIENT_SECRET?: string;
+  INTEGRATION_REDDIT_CLIENT_ID?: string;
+  INTEGRATION_REDDIT_CLIENT_SECRET?: string;
+  INTEGRATION_LINKEDIN_CLIENT_ID?: string;
+  INTEGRATION_LINKEDIN_CLIENT_SECRET?: string;
+  INTEGRATION_X_CLIENT_ID?: string;
+  INTEGRATION_X_CLIENT_SECRET?: string;
+  INTEGRATION_WORDPRESS_CLIENT_ID?: string;
+  INTEGRATION_WORDPRESS_CLIENT_SECRET?: string;
+  TWILIO_ACCOUNT_SID?: string;
+  TWILIO_AUTH_TOKEN?: string;
+  TWILIO_PHONE_NUMBER?: string;
+  SEND_EMAIL?: SendEmail;
+  SEND_EMAIL_FROM?: string;
+  SUPPORT_EMAIL_HANDLE?: string;
+  SUPPORT_EMAIL_FROM?: string;
+  HUGGINGFACE_API_KEY?: string;
+  REPLICATE_API_TOKEN?: string;
+  GOOGLE_API_KEY?: string;
+  TAVILY_API_KEY?: string;
+  R2_ACCESS_KEY_ID?: string;
+  R2_SECRET_ACCESS_KEY?: string;
+  R2_BUCKET_NAME?: string;
+  SECRET_MASTER_KEY: string;
+  FORM_SIGNING_KEY: string;
+  STRIPE_SECRET_KEY?: string;
+  STRIPE_WEBHOOK_SECRET?: string;
+  STRIPE_PRICE_ID_PRO?: string;
+  STRIPE_METER_ID?: string;
+  DISCORD_URL?: string;
+  GITHUB_URL?: string;
+}
+
+/**
+ * Minimal execution-context surface for helpers that only defer background
+ * work. Hono's `c.executionCtx` and the Workers runtime `ExecutionContext`
+ * are structurally different (workers-types v5 added a required `tracing`
+ * member Hono does not model), so depending on the narrow shape keeps both
+ * call paths assignable.
+ */
+export interface DeferredWorkContext {
+  waitUntil(promise: Promise<unknown>): void;
+}
+
+export interface Variables {
+  // JWT payload containing authenticated user data
+  jwtPayload?: JWTTokenPayload;
+  // Organization ID for the current request context
+  organizationId?: string;
+  // Set only after the Savia host bridge JWT has been verified.
+  saviaBridge?: boolean;
+  saviaBridgePlatformAdmin?: boolean;
+  saviaBridgeExpiresAt?: number;
+}
+
+// Type for Hono app context combining Env and Variables
+export type ApiContext = {
+  Bindings: Bindings;
+  Variables: Variables;
+};

@@ -1,0 +1,221 @@
+# Savia Companion validation application
+
+Owner: Savia platform maintainers. Reviewed: 2026-10-05.
+
+A Tauri desktop preview for manually recorded microphone/system audio,
+connected to Savia's opt-in OpenRouter processing adapter. Sessions are limited to
+one hour, with 30-second segments bounded to 8 MiB temporary PCM and 512 KiB compressed audio each. This is an implementation increment, not a
+qualified meeting recorder for long or confidential meetings.
+
+See the [implementation status](../../docs/companion/implementation-status.md),
+[epic backlog](../../docs/companion/epics.md),
+[architecture](../../docs/companion/architecture.md), and
+[validation protocol](../../docs/companion/validation.md).
+
+## Prerequisites
+
+Use the repository-pinned pnpm and Node.js 22 or later. Install the stable Rust
+build toolchain and the [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/)
+for your platform. macOS capture needs macOS 14.2+ and Xcode command-line tools
+with a SDK that includes CoreAudio process taps; Windows targets Windows 11 x64
+with the Microsoft C++ build tools. macOS signing/permission behavior and actual
+Windows capture still needs real-device qualification coverage.
+
+The validation machine used an isolated Rust installation under
+`artifacts/toolchain`; it is ignored and is not required on another developer's
+machine. No Rust installation or permission settings were changed globally.
+
+## Run and build
+
+From the monorepo root:
+
+```sh
+pnpm install
+pnpm --filter @savia/companion desktop:dev
+pnpm --filter @savia/companion desktop:build
+```
+
+`desktop:dev` runs Vite on **5181**, independently of Savia admin on 5173. The
+application only records after a user clicks New meeting. It always attempts
+microphone and system audio, with three bounded attempts per unavailable source;
+a source that starts stays running while its peer is retried. If only one starts,
+it records that source and shows which audio is available. Capture fails when
+neither source can start. Stop or pause/resume explicitly; recordings never
+resume automatically after restart.
+
+Each meeting has its own private native app-data directory. The meeting inbox
+survives closing the app, and a new recording preserves earlier meetings.
+Select a finished meeting to listen to its combined local preview. Use its
+pencil icon to edit a custom name inline; the check icon or Enter saves, while
+the close icon or Escape cancels. Names persist across launches. Use the upload
+and trash icons for individual upload and confirmed local deletion. The initial permission notice is shown
+until accepted and its acknowledgement is remembered in a private native file.
+Reset permission notice in Connection settings clears that acknowledgement.
+Acceptance does not upload any audio; each upload still requires its meeting
+button. Declining leaves local recording and preview available. Both tracks play on their
+stored timeline, including gaps; no API connection is required to preview.
+Uploaded meetings retain their local copy until explicit deletion. Deletion
+requires confirmation and is not guaranteed secure erasure. Device disk space
+limits the number of retained meetings; the app does not silently delete them.
+
+For browser layout preview and checks:
+
+```sh
+pnpm --filter @savia/companion dev
+pnpm --filter @savia/companion build
+pnpm --filter @savia/companion typecheck
+pnpm --filter @savia/companion test
+cargo test --manifest-path apps/companion/src-tauri/Cargo.toml
+```
+
+Browser preview cannot record audio. Native capture and HTTP forwarding use
+narrow host commands. There is no generic filesystem or HTTP plugin exposed to
+the renderer. A stopped, interrupted, or recovered capture can be previewed one
+source at a time from its native Ogg/Opus chunks. Preview assembles chunks in order, validates
+the stored segments, and is capped at 64 MiB per source. It runs on the device;
+it needs no Savia API key, connection, upload permission, provider call, or
+network transfer. Preview does not upload audio. Upload remains a separate action
+that requires explicit permission and consent. Explicitly uploaded audio persists
+in private backend R2 objects; browser storage is not used for meeting history,
+credentials, or settings.
+
+The interface supports Spanish, English, and Portuguese. It detects the current
+OS/WebView language at each launch and falls back to Spanish for other languages.
+A manual language choice in Connection settings applies only to the current
+window and is not saved. See the [desktop language guide](../../docs/companion/desktop-language.md).
+
+## Connect to Savia
+
+1. Run your existing Savia API/auth stack and migrations. Configure OpenRouter
+   through the existing encrypted assistant settings or deployment secret.
+2. Explicitly set `COMPANION_ENABLED=true` in the API environment. Optional
+   `COMPANION_STT_MODEL` selects the deployment audio-input model; the default is
+   `google/gemini-2.5-flash`. Platform and tenant administrators can override the
+   transcription and summary models in **Keys and services**. Audio is sent through
+   OpenRouter dedicated transcription or chat completions according to the selected
+   model. Whisper uses the dedicated transcription route. See [model configuration](../../docs/companion/model-configuration.md). Do not put provider keys in any frontend `VITE_*` variable.
+   For the native local stack, run `COMPANION_ENABLED=true pnpm dev` from the
+   monorepo root; restart an already-running stack to apply the flag. The local
+   launcher also reads these settings from `infra/secrets/assistant-api.dev.env`.
+3. Create a [personal API key](../../docs/guides/personal-api-keys.md) in **My account → API keys**, with recording read and upload permissions. Alternatively use a Savia OAuth access token for an **active tenant member or platform administrator**, scoped for
+   `savia.api.read` and `savia.api.write`, obtained through the existing supported
+   Savia OAuth flow. Paste it into the validation app's password field; it remains
+   in memory unless you check Remember on this device, which stores the origin
+   and token in the OS keychain (macOS Keychain, Windows Credential Manager)
+   and reconnects on launch. The app verifies the saved origin and token with a
+   fresh keychain read before closing Connection settings. A failed save keeps
+   settings open; a failed keychain read on launch opens settings with an error
+   instead of silently behaving like a first launch. Automatic reconnection
+   reads the saved credential without rewriting it. Forgetting removes it.
+   Built-in desktop OAuth sign-in is a later increment.
+
+   On macOS, if a remembered credential cannot be restored, open **Keychain
+   Access**, select the login keychain, and look for the **Savia Companion**
+   password with account **savia-api-credential**. Unlock the login keychain if
+   it is locked, and allow access when macOS asks for it. Launch the installed
+   app from a stable location such as `/Applications`, rather than a mounted
+   DMG. If the entry is absent, reconnect with Remember on this device checked
+   and check for a save error. Do not paste the credential into logs or support
+   messages. Apple documents [keychain access prompts](https://support.apple.com/guide/keychain-access/kyca1243/mac)
+   and [locked login keychains](https://support.apple.com/guide/keychain-access/kyca1242/mac).
+
+4. Enter the API origin (HTTPS, or local HTTP), then Check connection. Origins
+   must have no path, credentials, query or fragment. Native forwarding rejects
+   redirects to avoid disclosing the access token to another host.
+5. Enter the main Savia application origin in Connection settings (normally
+   `http://localhost:5173` locally). The compact 380 × 540 desktop window supports
+   capture, local meeting inbox, combined preview, and explicit upload; transcription and summaries
+   live in Savia.
+6. Stop capture, select a meeting in the local inbox, and use its single preview
+   player to listen to both available sources on this device. Record additional
+   meetings without uploading the previous one. To upload, connect to Savia,
+   accept the initial permission notice once, and choose the meeting’s own
+   Upload to Savia button. Sources
+   remain separate in backend storage; upload itself does not call OpenRouter.
+   Use Open in Savia to open the recording library.
+7. Sign in to the main Savia app with the same user account.
+   Open **Recordings** in the Work menu, or `/#/companion-recordings`. Select a
+   recording to listen or download its Ogg/Opus file. If your browser cannot
+   decode Ogg Opus, use the download link and a compatible player/browser.
+8. Confirm permission for remote processing, then choose Generate summary.
+   Savia transcribes the selected saved source and generates structured draft
+   notes: summary, decisions, actions and open questions. Expand Transcript to
+   review the source text. No tasks, emails or business records are created.
+
+The backend fails closed by default and requires an active tenant membership
+or platform administrator access. There is no general tenant cost/quota rollout yet. STT provider
+routing/retention must be reviewed separately; chat routing preferences must not
+be assumed to apply to audio. A controlled Spanish sample passed real OpenRouter
+STT and summary generation; see the [live-flow report](../../docs/companion/live-flow-smoke.md).
+Native system capture remains blocked in CoreAudio on the tested Mac.
+
+Platform administrators can choose separate transcription and summary models in
+**Keys and services → Platform credentials → Meeting recordings**. See the
+[model configuration guide](../../docs/companion/model-configuration.md).
+
+Notes persist privately in backend R2 beside their source audio. Reloading the
+page reads saved notes without contacting the provider. A successful transcript
+is retained if summary generation fails; a subsequent explicit request reuses it.
+Completed notes are cached. Requests for the same owner/recording sharing an R2
+binding are serialized within one Worker isolate. Cross-isolate duplicate paid
+requests and ambiguous provider outcomes still require durable coordination.
+A timeout or network failure can leave upstream billing uncertain: check provider
+usage before choosing to try again. The client does not automatically retry.
+
+The generated API at `/openapi.json` describes the `/v1/companion` routes. This
+README is a usage guide rather than a hand-maintained API reference.
+
+## Share desktop diagnostics
+
+After reproducing a connection, keychain, or capture failure, open Connection
+settings and choose **Export diagnostic log**. Share the generated
+`savia-companion-diagnostics-*.jsonl` file from Downloads. The export action stays
+available while another operation is busy. Nothing is uploaded automatically.
+Logs contain only fixed operation labels, timestamps, durations, platform
+metadata, and numeric native/HTTP status codes, excluding keys and recording
+content. Logs survive app restart and retain at most 512 KiB. See
+[diagnostic privacy and fallback locations](../../docs/companion/long-recording-next-phase.md#desktop-support-diagnostics).
+
+## Inspect a sample
+
+```sh
+pnpm --filter @savia/companion audio:inspect --help
+pnpm --filter @savia/companion audio:inspect /absolute/path/to/finalized-sample.wav
+```
+
+The dependency-free inspector accepts finalized mono/stereo PCM16 RIFF/WAVE up
+to 64 MiB and reports duration, sample rate, RMS, peak, exact-zero sample ratio
+and samples at the integer limits per channel. These metrics cannot prove audio
+intelligibility, permissions, absence of echo or speaker identity. The inspector
+is a bounded diagnostic, not the future streaming upload path.
+
+Keep real samples outside Git. Sources are not speakers. The desktop app keeps
+a private inbox of meetings until explicit deletion. Encryption at rest for the
+native spool and real-device qualification remain outstanding before production
+support claims. Secondary guidance is available through keyboard-accessible
+tooltips aligned with their labels; capture failures and the initial upload
+permission notice remain visible.
+
+## Licensing
+
+This project inherits Savia's [LICENSE](../../LICENSE) and [NOTICE](../../NOTICE).
+Third-party dependencies retain their licenses; see the native
+[dependency notes](THIRD_PARTY_NOTICES.md). No commercial Anarlog enterprise code
+has been imported. Keep required Savia attribution in distributed UI and artifacts.
+
+## Segmented recording sessions
+
+Desktop capture keeps devices open and encodes bounded 30-second Ogg/Opus segments
+for up to one hour. A private native spool preserves completed segments on close;
+the desktop app can preview both sources together before upload. Each meeting
+remains in the local inbox until explicitly deleted. Upload resumes missing immutable segments in an
+owner/workspace session. Savia provides durable playback and downloads, background
+processing, summary and evidence-grounded questions with separate provider consent.
+
+See [phase 2](../../docs/companion/long-recording-next-phase.md) for limits,
+recovery semantics and the distinction between synthetic and real-device validation.
+
+Meeting actions and local preview controls use consistent SVG icons with
+translated tooltips and accessible labels. A custom local name is sent when a
+meeting is first uploaded. Renaming a local copy after upload does not rename
+the already saved server session; edit that session in Savia when needed.

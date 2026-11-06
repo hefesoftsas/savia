@@ -1,0 +1,55 @@
+import type { IntegrationProvider } from "@savia/flows-types";
+
+import type { ProviderConfig } from "../types";
+import { discordProvider } from "./discord";
+import { githubProvider } from "./github";
+import { googleCalendarProvider } from "./google-calendar";
+import { googleMailProvider } from "./google-mail";
+import { instagramProvider } from "./instagram";
+import { linkedinProvider } from "./linkedin";
+import { redditProvider } from "./reddit";
+import { wordpressProvider } from "./wordpress";
+import { xProvider } from "./x";
+
+/**
+ * Registry of all integration providers
+ * Centralized configuration for all supported integrations
+ */
+export const PROVIDER_REGISTRY: Record<IntegrationProvider, ProviderConfig> = {
+  "google-mail": googleMailProvider,
+  "google-calendar": googleCalendarProvider,
+  discord: discordProvider,
+  instagram: instagramProvider,
+  reddit: redditProvider,
+  linkedin: linkedinProvider,
+  github: githubProvider,
+  x: xProvider,
+  wordpress: wordpressProvider,
+};
+
+/**
+ * Get provider configuration by ID
+ */
+export function getProvider(
+  providerId: IntegrationProvider
+): ProviderConfig | undefined {
+  return PROVIDER_REGISTRY[providerId];
+}
+
+/**
+ * Get only available providers based on backend configuration
+ */
+export function getAvailableProviders(
+  availableProviderIds: IntegrationProvider[]
+): ProviderConfig[] {
+  return availableProviderIds
+    .map((id) => PROVIDER_REGISTRY[id])
+    .filter((p): p is ProviderConfig => p !== undefined);
+}
+
+/**
+ * Get provider label by ID
+ */
+export function getProviderLabel(providerId: IntegrationProvider): string {
+  return PROVIDER_REGISTRY[providerId]?.name || providerId;
+}

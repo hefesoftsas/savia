@@ -1,0 +1,386 @@
+import {
+  type ActiveCrmConnection,
+  type CrmAuditEvent,
+  type CrmConnection,
+  type CrmConnectionCompletion,
+  type CrmConnectionStatus,
+  type CrmProviderId,
+  type CrmRepository,
+  crmConnectionStatuses,
+  CrmOrganizationConnectionExistsError,
+  CrmConnectionAlreadyAssignedError,
+  crmProviderIds,
+} from "./contracts";
+
+type CrmConnectionRow = {
+  id: string;
+  tenant_id?: number;
+  agency_id?: number;
+  created_by_principal_id: string;
+  provider: string;
+  nango_connection_id: string;
+  nango_integration_id: string;
+  status: string;
+  external_account_label: string | null;
+  external_account_id: string | null;
+  scopes: string;
+  last_validated_at: string | null;
+  disconnected_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+function parseScopes(value: string): string[] {
+  try {
+    const parsed: unknown = JSON.parse(value);
+    return Array.isArray(parsed)
+      ? parsed.filter((scope): scope is string => typeof scope === "string")
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function providerFromRow(value: string): CrmProviderId {
+  if (crmProviderIds.includes(value as CrmProviderId))
+    return value as CrmProviderId;
+  throw new Error("Stored CRM provider is invalid");
+}
+
+function statusFromRow(value: string): CrmConnectionStatus {
+  if (crmConnectionStatuses.includes(value as CrmConnectionStatus))
+    return value as CrmConnectionStatus;
+  throw new Error("Stored CRM connection status is invalid");
+}
+
+function connectionFromRow(row: CrmConnectionRow): ActiveCrmConnection {
+  const tenantId = row.tenant_id ?? row.agency_id ?? 0;
+  return {
+    id: row.id,
+    agencyId: tenantId,
+    tenantId,
+    provider: providerFromRow(row.provider),
+    status: statusFromRow(row.status),
+    externalAccountLabel: row.external_account_label,
+    externalAccountId: row.external_account_id,
+    scopes: parseScopes(row.scopes),
+    lastValidatedAt: row.last_validated_at,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    nangoConnectionId: row.nango_connection_id,
+    nangoIntegrationId: row.nango_integration_id,
+  };
+}
+
+function publicConnection(row: CrmConnectionRow): CrmConnection {
+  const {
+    nangoConnectionId: _nangoConnectionId,
+    nangoIntegrationId: _nangoIntegrationId,
+    externalAccountId: _externalAccountId,
+    ...connection
+  } = connectionFromRow(row);
+  return connection;
+}
+
+async function findActiveConnection(
+  db: D1Database,
+  agencyId: number,
+  provider: CrmProviderId,
+  principalId: string,
+): Promise<ActiveCrmConnection | undefined> {
+  const row = await db
+    .prepare(
+      `SELECT * FROM tenant_crm_connections
+       WHERE tenant_id = ? AND provider = ? AND created_by_principal_id = ? AND disconnected_at IS NULL
+       ORDER BY updated_at DESC LIMIT 1`,
+    )
+    .bind(agencyId, provider, principalId)
+    .first<CrmConnectionRow>();
+  return row ? connectionFromRow(row) : undefined;
+}
+
+async function findActiveConnectionForPrincipal(
+  db: D1Database,
+  provider: CrmProviderId,
+  principalId: string,
+): Promise<ActiveCrmConnection | undefined> {
+  const row = await db
+    .prepare(
+      `SELECT * FROM tenant_crm_connections
+       WHERE provider = ? AND created_by_principal_id = ? AND disconnected_at IS NULL
+       ORDER BY updated_at DESC LIMIT 1`,
+    )
+    .bind(provider, principalId)
+    .first<CrmConnectionRow>();
+  return row ? connectionFromRow(row) : undefined;
+}
+
+function dedupeConnectionsByProvider(
+  rows: CrmConnectionRow[],
+): CrmConnection[] {
+  const seen = new Set<string>();
+  const connections: CrmConnection[] = [];
+  for (const row of rows) {
+    if (seen.has(row.provider)) continue;
+    seen.add(row.provider);
+    connections.push(publicConnection(row));
+  }
+  return connections;
+}
+
+function organizationUniqueConflict(
+  error: unknown,
+): "organization" | "nango" | undefined {
+  const seen = new Set<unknown>();
+  let current = error;
+  while (current && typeof current === "object" && !seen.has(current)) {
+    seen.add(current);
+    const constraint = Reflect.get(current, "constraint");
+    const message = String(Reflect.get(current, "message") ?? "");
+    if (
+      constraint === "tenant_crm_connections_nango_active_unique" ||
+      message.includes("tenant_crm_connections_nango_active_unique") ||
+      message.includes(
+        "UNIQUE constraint failed: tenant_crm_connections.nango_integration_id, tenant_crm_connections.nango_connection_id",
+      )
+    )
+      return "nango";
+    if (
+      constraint === "tenant_crm_connections_organization_active_unique" ||
+      constraint === "tenant_crm_connections_active_unique" ||
+      message.includes("tenant_crm_connections_active_unique") ||
+      message.includes(
+        "UNIQUE constraint failed: tenant_crm_connections.created_by_principal_id, tenant_crm_connections.tenant_id, tenant_crm_connections.provider",
+      ) ||
+      message.includes("tenant_crm_connections_organization_active_unique") ||
+      message.includes(
+        "UNIQUE constraint failed: tenant_crm_connections.tenant_id",
+      )
+    )
+      return "organization";
+    current = Reflect.get(current, "cause");
+  }
+  return undefined;
+}
+
+export function createCrmRepository(db: D1Database): CrmRepository {
+  async function organizationPolicy(agencyId: number, principalId: string) {
+    const row = await db
+      .prepare(
+        `SELECT provider, created_by_principal_id FROM tenant_crm_connections
+      WHERE tenant_id = ? AND disconnected_at IS NULL LIMIT 1`,
+      )
+      .bind(agencyId)
+      .first<{ provider: string; created_by_principal_id: string }>();
+    return row
+      ? {
+          activeProvider: providerFromRow(row.provider),
+          ownedByCurrentUser: row.created_by_principal_id === principalId,
+        }
+      : { ownedByCurrentUser: false };
+  }
+  async function assertConnectionAvailable(
+    agencyId: number,
+    provider: CrmProviderId,
+    principalId: string,
+  ) {
+    const policy = await organizationPolicy(agencyId, principalId);
+    if (
+      policy.activeProvider &&
+      (!policy.ownedByCurrentUser || policy.activeProvider !== provider)
+    )
+      throw new CrmOrganizationConnectionExistsError();
+  }
+  return {
+    organizationPolicy,
+    assertConnectionAvailable,
+    async listConnections(agencyId, principalId) {
+      const rows = await db
+        .prepare(
+          `SELECT * FROM tenant_crm_connections
+           WHERE tenant_id = ? AND created_by_principal_id = ? AND disconnected_at IS NULL
+           ORDER BY created_at DESC`,
+        )
+        .bind(agencyId, principalId)
+        .all<CrmConnectionRow>();
+      return rows.results.map(publicConnection);
+    },
+
+    async listConnectionsForPrincipal(principalId) {
+      const rows = await db
+        .prepare(
+          `SELECT * FROM tenant_crm_connections
+           WHERE created_by_principal_id = ? AND disconnected_at IS NULL
+           ORDER BY provider ASC, updated_at DESC`,
+        )
+        .bind(principalId)
+        .all<CrmConnectionRow>();
+      return dedupeConnectionsByProvider(rows.results);
+    },
+
+    async findActiveConnection(agencyId, provider, principalId) {
+      return findActiveConnection(db, agencyId, provider, principalId);
+    },
+
+    async findActiveConnectionForPrincipal(provider, principalId) {
+      return findActiveConnectionForPrincipal(db, provider, principalId);
+    },
+
+    async resolveDefaultTenantId() {
+      const row = await db
+        .prepare(
+          `SELECT id FROM tenants
+           WHERE kind = 'commercial' AND is_active = 1
+           ORDER BY id ASC
+           LIMIT 1`,
+        )
+        .first<{ id: number }>();
+      return row?.id;
+    },
+
+    async saveConnection(completion) {
+      const now = new Date().toISOString();
+      await assertConnectionAvailable(
+        completion.agencyId,
+        completion.provider,
+        completion.actor.principal.id,
+      );
+      const current = await findActiveConnection(
+        db,
+        completion.agencyId,
+        completion.provider,
+        completion.actor.principal.id,
+      );
+      const agencyId = completion.agencyId;
+      const connectionId = current?.id ?? crypto.randomUUID();
+      const scopes = JSON.stringify(completion.scopes ?? []);
+      try {
+        if (current) {
+          const result = await db
+            .prepare(
+              `UPDATE tenant_crm_connections
+             SET nango_connection_id = ?, nango_integration_id = ?, status = ?,
+               external_account_label = ?, external_account_id = ?, scopes = ?, last_validated_at = ?,
+               updated_at = ?
+             WHERE id = ? AND created_by_principal_id = ? AND disconnected_at IS NULL`,
+            )
+            .bind(
+              completion.nangoConnectionId,
+              completion.nangoIntegrationId,
+              completion.status,
+              completion.externalAccountLabel ?? null,
+              completion.externalAccountId ?? null,
+              scopes,
+              completion.lastValidatedAt ?? null,
+              now,
+              connectionId,
+              completion.actor.principal.id,
+            )
+            .run();
+          if (result.meta.changes !== 1)
+            throw new CrmOrganizationConnectionExistsError();
+        } else {
+          await db
+            .prepare(
+              `INSERT INTO tenant_crm_connections (
+              id, tenant_id, created_by_principal_id, provider,
+              nango_connection_id, nango_integration_id, status,
+              external_account_label, external_account_id, scopes, last_validated_at, created_at,
+              updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            )
+            .bind(
+              connectionId,
+              agencyId,
+              completion.actor.principal.id,
+              completion.provider,
+              completion.nangoConnectionId,
+              completion.nangoIntegrationId,
+              completion.status,
+              completion.externalAccountLabel ?? null,
+              completion.externalAccountId ?? null,
+              scopes,
+              completion.lastValidatedAt ?? null,
+              now,
+              now,
+            )
+            .run();
+        }
+      } catch (error) {
+        const conflict = organizationUniqueConflict(error);
+        if (conflict === "nango") throw new CrmConnectionAlreadyAssignedError();
+        if (conflict === "organization")
+          throw new CrmOrganizationConnectionExistsError();
+        throw error;
+      }
+      const stored = await findActiveConnection(
+        db,
+        agencyId,
+        completion.provider,
+        completion.actor.principal.id,
+      );
+      if (!stored) throw new Error("The CRM connection was not stored");
+      return stored;
+    },
+
+    async markDisconnected(
+      agencyId,
+      provider,
+      principalId,
+      now = new Date().toISOString(),
+    ) {
+      const result = await db
+        .prepare(
+          `UPDATE tenant_crm_connections
+           SET status = 'disconnected', disconnected_at = ?, updated_at = ?
+           WHERE tenant_id = ? AND provider = ? AND created_by_principal_id = ? AND disconnected_at IS NULL`,
+        )
+        .bind(now, now, agencyId, provider, principalId)
+        .run();
+      return result.meta.changes === 1;
+    },
+
+    async markReconnectRequired(
+      connectionId,
+      principalId,
+      now = new Date().toISOString(),
+    ) {
+      const result = await db
+        .prepare(
+          `UPDATE tenant_crm_connections
+           SET status = 'reconnect_required', updated_at = ?
+           WHERE id = ? AND created_by_principal_id = ? AND disconnected_at IS NULL`,
+        )
+        .bind(now, connectionId, principalId)
+        .run();
+      return result.meta.changes === 1;
+    },
+
+    async appendAuditEvent(event: CrmAuditEvent) {
+      const tenantId = (event as any).tenantId ?? event.agencyId;
+      await db
+        .prepare(
+          `INSERT INTO tenant_crm_connection_audit_events (
+            id, connection_id, tenant_id, principal_id, provider, event_type,
+            outcome, error_code, created_at
+          ) SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?
+          WHERE EXISTS (SELECT 1 FROM tenant_crm_connections WHERE id = ? AND tenant_id = ? AND created_by_principal_id = ?)`,
+        )
+        .bind(
+          crypto.randomUUID(),
+          event.connectionId,
+          tenantId,
+          event.principalId,
+          event.provider,
+          event.eventType,
+          event.outcome,
+          event.errorCode ?? null,
+          new Date().toISOString(),
+          event.connectionId,
+          tenantId,
+          event.principalId,
+        )
+        .run();
+    },
+  };
+}

@@ -1,0 +1,11 @@
+# Offline related record saves
+
+The approved goal is a local-app experience: saving a parent and its related records finishes after one IndexedDB transaction, immediately displays the records, survives reopening, and synchronizes the same atomic bundle automatically on reconnection. Conflicts preserve all local data and require an explicit resolution.
+
+Reuse the existing scoped LocalDatabase/outbox and Web Locks coordinator. A bundle mutation contains the original request, resolved local relation definitions, and before/optimistic snapshots for every affected record. Add one fixed link snapshot store (one schema migration, independent of collection count). Cache complete link selections, overlay queued bundles, and commit records, selections, and queue entry together. Pulls protect every bundle member, not only its parent. All members must remain authorized local collections.
+
+The backend accepts optional clientId only for new bundle rows, preserving their UUIDs without confusing creates with edits. Receipt replay remains atomic and immutable; tenant/principal authorization and server validation are unchanged. A synchronization principal header must be validated on bundle requests.
+
+Only one queued operation may own a record at a time. Reject overlapping regular or bundle edits locally with an actionable message while preserving the form draft; independent forms may be queued concurrently. This deliberately avoids speculative rebasing or editing an in-flight request. After a definitive conflict, explicit keep-local resolution fetches current parent/child versions and complete links, then creates a new operation ID. Deleted records require explicit restoration rather than resurrection. Accept-server resolution replaces all affected records and links together. Network uncertainty never clears or mutates the original request identity.
+
+Limits remain one level, 10 groups, 100 related rows, local collections, no nested attachment uploads. Existing unsent mutations overlapping any bundle member must resolve before that form can be queued. Collection/principal revocation hides every affected replica and preserves inaccessible pending data for the matching authenticated scope. Non-workspace contexts retain online atomic saves.

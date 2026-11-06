@@ -1,0 +1,48 @@
+.form-html-field {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.form-html-content {
+  min-width: 0;
+  color: var(--foreground);
+  font-size: 14px;
+  line-height: 1.55;
+}
+.form-html-content :where(p, ul, ol, blockquote) {
+  margin: 0 0 0.75rem;
+}
+.form-html-content :where(p:last-child, ul:last-child, ol:last-child) {
+  margin-bottom: 0;
+}
+.form-html-content :where(a) {
+  color: var(--primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.form-html-content :where(button, .btn) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--background);
+  color: var(--foreground);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.form-html-content :where(button:hover, .btn:hover) {
+  background: var(--accent);
+}
+.form-html-error {
+  margin: 0;
+  color: var(--destructive);
+  font-size: 12px;
+  line-height: 1.45;
+}
+.form-html-empty {
+  margin: 0;
+}

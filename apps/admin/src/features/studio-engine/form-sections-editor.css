@@ -1,0 +1,175 @@
+.form-sections-editor {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.form-sections-editor legend {
+  padding: 0;
+  margin-bottom: 10px;
+  color: var(--foreground);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.form-sections-empty {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--muted) 42%, transparent);
+}
+
+.form-sections-empty p {
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.form-section-card .studio-rule {
+  margin-top: 10px;
+}
+
+.form-section-card .studio-rule legend {
+  font-size: 12px;
+}
+
+.form-sections-list {
+  display: grid;
+  gap: 10px;
+  padding: 0;
+  margin: 0 0 12px;
+  list-style: none;
+}
+
+.form-section-card {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--background);
+  transition:
+    border-color 160ms ease-out,
+    opacity 160ms ease-out,
+    box-shadow 160ms ease-out;
+}
+
+.form-section-card--dragging {
+  opacity: 0.45;
+}
+
+.form-section-card--drop-target {
+  border-color: var(--primary);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 22%, transparent);
+}
+
+.form-section-card-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.form-section-drag-handle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--muted-foreground);
+  cursor: grab;
+}
+
+.form-section-drag-handle:hover {
+  background: var(--muted);
+  color: var(--foreground);
+}
+
+.form-section-drag-handle:active {
+  cursor: grabbing;
+}
+
+.form-section-drag-handle:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.form-section-card-index {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.form-sections-drop-end {
+  display: grid;
+  place-items: center;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-lg);
+  color: var(--muted-foreground);
+  font-size: 12px;
+  list-style: none;
+}
+
+.form-sections-drop-end--active {
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 8%, transparent);
+  color: var(--foreground);
+}
+
+.form-section-card-count {
+  margin-left: auto;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+
+.form-section-card-remove {
+  color: var(--muted-foreground);
+}
+
+.form-section-card-remove:hover {
+  color: var(--destructive);
+}
+
+.section-layout-preview {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--card);
+}
+
+.section-layout-preview-title {
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+  color: var(--foreground);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.section-layout-preview-fields {
+  display: grid;
+  gap: 7px;
+}
+
+.section-layout-preview-fields span {
+  min-height: 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--background);
+}
+
+.section-layout-preview-fields span.is-placeholder {
+  border-style: dashed;
+  opacity: 0.55;
+}
