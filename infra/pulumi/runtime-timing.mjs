@@ -43,6 +43,13 @@ const COMMAND_LABELS = [
   "runtime-command",
   "wrangler-command",
   "gateway-verify",
+  "environment:inventory",
+  "environment:catalog",
+  "environment:export",
+  "environment:config",
+  "environment:preview",
+  "environment:apply",
+  "environment:other",
 ];
 const ALLOWED_LABELS = new Set([
   ...PHASES.map((phase) => `phase:${phase}`),
@@ -69,6 +76,25 @@ function validRow(row) {
 
 export function isAllowedRuntimeTimingLabel(label) {
   return typeof label === "string" && ALLOWED_LABELS.has(label);
+}
+
+export async function measureRuntimeOperation(directory, label, operation) {
+  if (!isAllowedRuntimeTimingLabel(label))
+    throw new TypeError("Invalid runtime timing label");
+  const started = performance.now();
+  let outcome = "failure";
+  try {
+    const result = await operation();
+    outcome = "success";
+    return result;
+  } finally {
+    await recordRuntimeTiming(
+      directory,
+      label,
+      performance.now() - started,
+      outcome,
+    );
+  }
 }
 
 export async function recordRuntimeTiming(

@@ -16,6 +16,235 @@ test("preview release refresh uses current provider credentials and limits concu
   assert.deepEqual(previewRefreshFlags("production", "release"), []);
   assert.deepEqual(previewRefreshFlags("preview", "retire"), []);
 });
+async function planReleaseFixture({
+  environment = "preview",
+  appliedConfiguration,
+  failSetAll = false,
+} = {}) {
+  const { createEnvironmentDependencies } =
+      await import("./environment-operations.mjs"),
+    { resolveEnvironment } = await import("./environments.mjs"),
+    { prepareRuntimeArtifact } = await import("./runtime-publisher.mjs"),
+    { mkdtemp, mkdir, writeFile, rm } = await import("node:fs/promises"),
+    { tmpdir } = await import("node:os"),
+    { join } = await import("node:path"),
+    { resolveInfraNames } = await import("./naming.mjs"),
+    directory = await mkdtemp(join(tmpdir(), "savia-config-batch-plan-")),
+    revision = "b".repeat(40),
+    accountId = "a".repeat(32),
+    source = join(directory, "source"),
+    artifactDirectory = join(directory, "artifact"),
+    stack = environment,
+    names = resolveInfraNames({
+      environment,
+      documentsBucket:
+        environment === "preview"
+          ? "savia-documents-preview"
+          : "savia-documents",
+      publicOrigin:
+        environment === "preview"
+          ? "https://savia-preview.hefesoft.com"
+          : "https://savia.hefesoft.com",
+    }),
+    worker = names.workers.api,
+    profile = { enabledWorkers: [worker], retentionWorkerNames: [] };
+  await mkdir(source);
+  await writeFile(join(source, "worker.mjs"), "export default {};");
+  const artifact = await prepareRuntimeArtifact({
+    environment,
+    release: {
+      directory: source,
+      configs: { "worker.json": { name: worker, main: "worker.mjs" } },
+    },
+    destination: artifactDirectory,
+  });
+  const outputs = {
+    cloudflareAccountId: accountId,
+    authD1Id: "auth-id",
+    domainD1Id: "domain-id",
+    documentsBucketName: names.bucket,
+    resolvedEnvironment: environment,
+    resolvedPublicOrigin: names.publicOrigin,
+    workerNames: names.workers,
+    databaseNames: names.databases,
+    deletionProtected: false,
+    flowsEnabled: false,
+    flowsResources: null,
+    flowsExecutionEnabled: false,
+    plannedFlowsResourceNames: names.flows,
+    tenantSubdomains: [],
+    vectorizeIndex: names.vectorizeIndex,
+  };
+  const commands = [];
+  let previewStarted = false;
+  const deps = createEnvironmentDependencies({
+    env: {
+      CLOUDFLARE_ACCOUNT_ID: accountId,
+      SAVIA_RUNTIME_OPERATION_DIRECTORY: join(directory, "timings"),
+    },
+    appliedConfiguration,
+    run: async (_binary, args) => {
+      commands.push(args);
+      if (failSetAll && args[0] === "config" && args[1] === "set-all")
+        throw new Error("set-all failed");
+      if (args[0] === "stack" && args[1] === "export")
+        return { stdout: JSON.stringify({ deployment: { resources: [] } }) };
+      if (args[0] === "preview") {
+        previewStarted = true;
+        await writeFile(args[args.indexOf("--save-plan") + 1], "saved plan");
+        return { stdout: JSON.stringify({ steps: [], changeSummary: {} }) };
+      }
+      if (args[0] === "git") return { stdout: revision };
+      return { stdout: "" };
+    },
+  });
+  const checkpoint = {
+    stateExport: {
+      deployment: {
+        resources: [
+          { type: "pulumi:pulumi:Stack", outputs },
+          ...(appliedConfiguration
+            ? [{ type: "pulumi-nodejs:dynamic/runtime:RuntimeRelease" }]
+            : []),
+        ],
+      },
+    },
+  };
+  return {
+    directory,
+    commands,
+    deps,
+    previewStarted: () => previewStarted,
+    plan: () =>
+      deps.planOperation({
+        descriptor: resolveEnvironment(environment),
+        manifest: {
+          version: 1,
+          accountId,
+          environment,
+          project: "savia-cloudflare",
+          stack,
+          profile,
+          resources: [],
+        },
+        manifestHash: "d".repeat(64),
+        operation: "release",
+        args: {
+          artifact: artifactDirectory,
+          plan: join(directory, "plan.json"),
+        },
+        context: {
+          checkpoints: [],
+          checkpoint,
+          backendUrl:
+            "https://savia-pulumi-state-preview.r2.cloudflarestorage.com",
+          management: {},
+          qualifiedStack: `organization/savia-cloudflare/${stack}`,
+        },
+      }),
+    cleanup: () => rm(directory, { recursive: true, force: true }),
+  };
+}
+test("environment CLI timings distinguish config, export and preview without public values", async () => {
+  const fixture = await planReleaseFixture();
+  const { readRuntimeTimings } = await import("./runtime-timing.mjs");
+  try {
+    await fixture.plan();
+    const rows = await readRuntimeTimings(`${fixture.directory}/timings`);
+    for (const label of [
+      "environment:config",
+      "environment:export",
+      "environment:preview",
+    ])
+      assert.equal(
+        rows.filter((row) => row.label === label && row.outcome === "success")
+          .length,
+        1,
+        label,
+      );
+    assert.doesNotMatch(
+      JSON.stringify(rows),
+      /artifactDirectory|accountId|stdout|args/,
+    );
+  } finally {
+    await fixture.cleanup();
+  }
+});
+test("Preview release batches public config and keeps only each key's final value", async () => {
+  const oldProfile = JSON.stringify({ enabledWorkers: ["old-worker"] }),
+    fixture = await planReleaseFixture({
+      appliedConfiguration: async () => ({
+        "savia-cloudflare:runtimeManaged": { value: "true" },
+        "savia-cloudflare:runtimeMode": { value: "old-mode" },
+        "savia-cloudflare:runtimeProfile": { value: oldProfile },
+        "savia-cloudflare:adoptionManifest": { value: "old-manifest" },
+        "savia-cloudflare:runtimeRetired": { value: "false" },
+        "savia-cloudflare:deleteRuntimeData": { value: "false" },
+        "savia-cloudflare:environmentDeleted": { value: "false" },
+        "savia-cloudflare:importRuntimeWorkers": { value: "false" },
+      }),
+    });
+  try {
+    await fixture.plan();
+    const batches = fixture.commands.filter(
+        (args) => args[0] === "config" && args[1] === "set-all",
+      ),
+      individualWrites = fixture.commands.filter(
+        (args) => args[0] === "config" && args[1] === "set",
+      );
+    assert.equal(batches.length, 1);
+    assert.equal(individualWrites.length, 0);
+    const payload = JSON.parse(batches[0][batches[0].indexOf("--json") + 1]);
+    assert.equal(
+      payload["savia-cloudflare:runtimeProfile"].value,
+      JSON.stringify({
+        enabledWorkers: ["savia-agencies-preview"],
+        retentionWorkerNames: [],
+      }),
+    );
+    assert.equal(payload["savia-cloudflare:runtimeProfile"].secret, false);
+    assert.ok(
+      Object.values(payload).every(
+        (item) => typeof item.value === "string" && item.secret === false,
+      ),
+    );
+    assert.ok(fixture.previewStarted());
+  } finally {
+    await fixture.cleanup();
+  }
+});
+test("Preview release stops before preview when batched config application fails", async () => {
+  const fixture = await planReleaseFixture({ failSetAll: true });
+  try {
+    await assert.rejects(fixture.plan(), /Environment command failed/);
+    assert.equal(fixture.previewStarted(), false);
+    assert.equal(
+      fixture.commands.filter((args) => args[0] === "preview").length,
+      0,
+    );
+  } finally {
+    await fixture.cleanup();
+  }
+});
+test("Production release continues to write config keys individually", async () => {
+  const fixture = await planReleaseFixture({ environment: "production" });
+  try {
+    await fixture.plan();
+    assert.equal(
+      fixture.commands.filter(
+        (args) => args[0] === "config" && args[1] === "set-all",
+      ).length,
+      0,
+    );
+    assert.ok(
+      fixture.commands.some(
+        (args) => args[0] === "config" && args[1] === "set",
+      ),
+    );
+  } finally {
+    await fixture.cleanup();
+  }
+});
 test("code-only release preserves the complete managed Worker profile", async () => {
   const { resolveReleaseWorkerProfile } =
     await import("./environment-operations.mjs");
@@ -150,6 +379,12 @@ test("release planning uses verified scope metadata and retains full ownership f
         run: async (_binary, args) => {
           if (args[0] === "config" && args[1] === "set")
             configWrites.push([args[2], args[3]]);
+          if (args[0] === "config" && args[1] === "set-all")
+            configWrites.push(
+              ...Object.entries(
+                JSON.parse(args[args.indexOf("--json") + 1]),
+              ).map(([key, item]) => [key, item.value]),
+            );
           if (args[0] === "stack" && args[1] === "export")
             return {
               stdout: JSON.stringify({ deployment: { resources: [] } }),

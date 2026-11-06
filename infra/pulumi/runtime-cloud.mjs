@@ -6,9 +6,16 @@ export function createRuntimeCloudClient(
     env = process.env,
     fetcher = globalThis.fetch,
     sleep = (ms) => new Promise((done) => setTimeout(done, ms)),
+    readConcurrency = inputs.environment === "preview" ? 4 : 1,
   } = {},
 ) {
   const { accountId, workers } = inputs;
+  if (
+    !Number.isInteger(readConcurrency) ||
+    readConcurrency < 1 ||
+    readConcurrency > 4
+  )
+    throw new Error("Runtime read concurrency must be between 1 and 4");
   if (
     !/^[a-f\d]{32}$/.test(accountId) ||
     (env.CLOUDFLARE_ACCOUNT_ID && env.CLOUDFLARE_ACCOUNT_ID !== accountId)
@@ -139,7 +146,10 @@ export function createRuntimeCloudClient(
         parentWorker: route.script,
       }));
   }
-  async function readSnapshot({ allowUndeployed = false } = {}) {
+  async function readSnapshot({
+    allowUndeployed = false,
+    includeDependencies = false,
+  } = {}) {
     const names = new Set(workers.map((w) => w.name));
     const namespaceIds = (await list("/workers/durable_objects/namespaces"))
       .filter((r) => names.has(r.script))
@@ -152,9 +162,22 @@ export function createRuntimeCloudClient(
       undeployedWorkerNames = [],
       maintenanceWorkerNames = [];
     const workerVersions = [],
-      attachments = [];
-    for (const worker of workers) {
-      const native = await api(`/workers/workers/${worker.cloudId}`);
+      attachments = [],
+      workerAttachments = [];
+    const workerDependencies = includeDependencies ? [] : undefined;
+    let nextWorker = 0,
+      failure;
+    const assertNoFailure = () => {
+      if (failure) throw failure;
+    };
+    const readWorker = async (worker) => {
+      const readApi = async (path, options) => {
+        assertNoFailure();
+        const result = await api(path, options);
+        assertNoFailure();
+        return result;
+      };
+      const native = await readApi(`/workers/workers/${worker.cloudId}`);
       if (native.id !== worker.cloudId || native.name !== worker.name)
         throw new Error("Cloudflare Worker identity mismatch");
       if (native.deployed_on === null) {
@@ -162,12 +185,16 @@ export function createRuntimeCloudClient(
           throw new Error(
             "Runtime identity is undeployed; bootstrap is required",
           );
-        workerVersions.push({ ...worker, versionId: null });
-        undeployedWorkerNames.push(worker.name);
-        continue;
+        return {
+          workerVersion: { ...worker, versionId: null },
+          undeployedWorkerName: worker.name,
+          workerDependencies: includeDependencies
+            ? { name: worker.name, dependencies: [] }
+            : undefined,
+        };
       }
       const path = `/workers/scripts/${worker.name}`;
-      const deployment = await api(`${path}/deployments`);
+      const deployment = await readApi(`${path}/deployments`);
       const versions = deployment.deployments?.[0]?.versions;
       if (
         !Array.isArray(versions) ||
@@ -175,23 +202,43 @@ export function createRuntimeCloudClient(
         versions[0].percentage !== 100
       )
         throw new Error("Runtime snapshot requires one fully deployed version");
-      workerVersions.push({ ...worker, versionId: versions[0].version_id });
+      const workerVersion = { ...worker, versionId: versions[0].version_id };
       // Settings can contain secrets and variables. Inspect them in memory only;
       // never spread the response into a return value or error message.
       // Read runtime flags and bindings from the serving version. The latest
       // uploaded script settings can belong to an unpublished or rolled-back
       // version and are not evidence of what currently receives traffic.
-      const version = await api(`${path}/versions/${versions[0].version_id}`);
+      const version = await readApi(
+        `${path}/versions/${versions[0].version_id}`,
+      );
       const bindings = version.resources?.bindings;
       if (!Array.isArray(bindings))
         throw new Error("Runtime serving version bindings are unavailable");
-      if (bindings.some((binding) => binding.type === "secret_text"))
-        secretWorkerNames.push(worker.name);
+      const secretWorkerName = bindings.some(
+        (binding) => binding.type === "secret_text",
+      )
+        ? worker.name
+        : undefined;
       const flags = Object.fromEntries(
         bindings
           .filter((binding) => binding.type === "plain_text")
           .map((binding) => [binding.name, binding.text]),
       );
+      const dependencies = includeDependencies
+        ? [
+            ...new Set(
+              bindings.flatMap((binding) =>
+                binding.type === "service"
+                  ? [binding.service]
+                  : binding.type === "durable_object_namespace" &&
+                      binding.script_name &&
+                      binding.script_name !== worker.name
+                    ? [binding.script_name]
+                    : [],
+              ),
+            ),
+          ].sort()
+        : undefined;
       let maintenance = [
         "SAVIA_RUNTIME_BOOTSTRAP",
         "SAVIA_RUNTIME_RETIRED",
@@ -211,7 +258,7 @@ export function createRuntimeCloudClient(
         if (!/^[a-f\d-]{36}$/.test(databaseId ?? ""))
           throw new Error("Flows policy database identity is unavailable");
         const query = async (sql) => {
-          const result = await api(`/d1/database/${databaseId}/query`, {
+          const result = await readApi(`/d1/database/${databaseId}/query`, {
             method: "POST",
             body: { sql },
           });
@@ -243,16 +290,49 @@ export function createRuntimeCloudClient(
           );
         }
       }
-      if (maintenance) maintenanceWorkerNames.push(worker.name);
-      const schedule = await api(`${path}/schedules`);
-      for (const row of schedule.schedules ?? [])
-        attachments.push({
+      const schedule = await readApi(`${path}/schedules`);
+      return {
+        workerVersion,
+        secretWorkerName,
+        workerDependencies: includeDependencies
+          ? { name: worker.name, dependencies }
+          : undefined,
+        maintenanceWorkerName: maintenance ? worker.name : undefined,
+        attachments: (schedule.schedules ?? []).map((row) => ({
           kind: "cron",
           name: row.cron,
           cloudId: `${worker.name}/${row.cron}`,
           parentWorker: worker.name,
-        });
-    }
+        })),
+      };
+    };
+    const concurrency = Math.min(readConcurrency, workers.length);
+    await Promise.all(
+      Array.from({ length: concurrency }, async () => {
+        while (!failure) {
+          const index = nextWorker++;
+          if (index >= workers.length) return;
+          try {
+            const result = await readWorker(workers[index]);
+            if (failure) return;
+            workerVersions[index] = result.workerVersion;
+            if (result.undeployedWorkerName)
+              undeployedWorkerNames[index] = result.undeployedWorkerName;
+            if (result.maintenanceWorkerName)
+              maintenanceWorkerNames[index] = result.maintenanceWorkerName;
+            if (result.secretWorkerName)
+              secretWorkerNames[index] = result.secretWorkerName;
+            if (includeDependencies)
+              workerDependencies[index] = result.workerDependencies;
+            workerAttachments[index] = result.attachments ?? [];
+          } catch (error) {
+            failure ??= error;
+          }
+        }
+      }),
+    );
+    if (failure) throw failure;
+    for (const rows of workerAttachments) attachments.push(...(rows ?? []));
     for (const row of await list("/workers/domains"))
       if (names.has(row.service))
         attachments.push({
@@ -291,9 +371,10 @@ export function createRuntimeCloudClient(
       workerVersions,
       namespaceIds,
       attachments,
-      secretWorkerNames,
-      undeployedWorkerNames,
-      maintenanceWorkerNames,
+      secretWorkerNames: secretWorkerNames.filter(Boolean),
+      undeployedWorkerNames: undeployedWorkerNames.filter(Boolean),
+      maintenanceWorkerNames: maintenanceWorkerNames.filter(Boolean),
+      ...(includeDependencies ? { workerDependencies } : {}),
     };
   }
   async function inspectReferences(manifest) {

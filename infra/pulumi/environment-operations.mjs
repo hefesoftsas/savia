@@ -42,6 +42,7 @@ import { emptyBucketForDestroy } from "./destroy.mjs";
 import { createRuntimeCloudClient } from "./runtime-cloud.mjs";
 import { execFileWithInput } from "./runtime-publisher-branch.mjs";
 import { runWithCommandDiagnostics } from "./command-diagnostics.mjs";
+import { measureRuntimeOperation } from "./runtime-timing.mjs";
 import {
   previewNames,
   slugifyBranch,
@@ -363,16 +364,36 @@ export function createEnvironmentDependencies({
   emptyBucket = emptyBucketForDestroy,
   makeClient = createRuntimeCloudClient,
 } = {}) {
-  const run = (binary, args, options) =>
-    runWithCommandDiagnostics({
-      execute,
-      executable: binary,
-      args,
-      options,
-      directory: env.SAVIA_RUNTIME_OPERATION_DIRECTORY,
-      operation: "environment-command",
-      publicError: `Environment command failed: ${String(binary).split(/[\\/]/).at(-1)} ${args[0] ?? "command"}`,
-    });
+  const run = (binary, args, options) => {
+    const label =
+      binary !== "pulumi"
+        ? "environment:other"
+        : args[0] === "config"
+          ? "environment:config"
+          : args[0] === "preview"
+            ? "environment:preview"
+            : args[0] === "up"
+              ? "environment:apply"
+              : args[0] === "stack" && args[1] === "export"
+                ? "environment:export"
+                : args[0] === "stack" && args[1] === "ls"
+                  ? "environment:catalog"
+                  : "environment:other";
+    return measureRuntimeOperation(
+      env.SAVIA_RUNTIME_OPERATION_DIRECTORY,
+      label,
+      () =>
+        runWithCommandDiagnostics({
+          execute,
+          executable: binary,
+          args,
+          options,
+          directory: env.SAVIA_RUNTIME_OPERATION_DIRECTORY,
+          operation: "environment-command",
+          publicError: `Environment command failed: ${String(binary).split(/[\\/]/).at(-1)} ${args[0] ?? "command"}`,
+        }),
+    );
+  };
   const accountId = assertAccountId(env.CLOUDFLARE_ACCOUNT_ID);
   let dataPromise,
     executionEnv = { ...env };
@@ -382,7 +403,11 @@ export function createEnvironmentDependencies({
   const data = () =>
     (dataPromise ??= (async () => {
       assertBackendConfigured(env);
-      const rows = await cloud({ accountId, env });
+      const rows = await measureRuntimeOperation(
+        env.SAVIA_RUNTIME_OPERATION_DIRECTORY,
+        "environment:inventory",
+        () => cloud({ accountId, env }),
+      );
       const backends = [
         ...new Set(
           rows
@@ -510,16 +535,26 @@ export function createEnvironmentDependencies({
       throw error;
     }
   };
-  const setConfig = async (descriptor, key, value) =>
-    command(descriptor, [
+  let activeConfigBatch;
+  const configValue = (value) =>
+    typeof value === "object" ? JSON.stringify(value) : String(value);
+  const setConfig = async (descriptor, key, value) => {
+    const qualifiedKey = `${descriptor.project}:${key}`,
+      serialized = configValue(value);
+    if (activeConfigBatch) {
+      activeConfigBatch.set(qualifiedKey, { value: serialized, secret: false });
+      return;
+    }
+    return command(descriptor, [
       "config",
       "set",
-      `${descriptor.project}:${key}`,
-      typeof value === "object" ? JSON.stringify(value) : String(value),
+      qualifiedKey,
+      serialized,
       "--stack",
       descriptor.stack,
       "--non-interactive",
     ]);
+  };
   const hydrateConfiguration = async (descriptor, ctx, operation) => {
     if (!ctx.checkpoint) return;
     const state = settledCheckpoint(ctx.checkpoint.stateExport);
@@ -862,8 +897,29 @@ export function createEnvironmentDependencies({
           release.artifactDirectory,
         ),
       };
-    await hydrateConfiguration(descriptor, ctx, operation);
-    await prepareConfig(operation, descriptor, manifest, ctx, release);
+    const batchPreviewRelease =
+      descriptor.environment === "preview" && operation === "release";
+    let configBatch;
+    if (batchPreviewRelease) {
+      configBatch = new Map();
+      activeConfigBatch = configBatch;
+    }
+    try {
+      await hydrateConfiguration(descriptor, ctx, operation);
+      await prepareConfig(operation, descriptor, manifest, ctx, release);
+    } finally {
+      if (batchPreviewRelease) activeConfigBatch = undefined;
+    }
+    if (configBatch?.size)
+      await command(descriptor, [
+        "config",
+        "set-all",
+        "--json",
+        JSON.stringify(Object.fromEntries(configBatch)),
+        "--stack",
+        descriptor.stack,
+        "--non-interactive",
+      ]);
     const directory = await mkdtemp(join(tmpdir(), "savia-environment-plan-")),
       planPath = resolve(args.plan ?? join(directory, "reviewed.json")),
       pulumiPlanPath = `${planPath}.pulumi.json`;

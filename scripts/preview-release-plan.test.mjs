@@ -487,6 +487,10 @@ test("workflow, tests, documentation, and known asset-only files do not require 
       "scripts/contract-check-gate.mjs",
       "scripts/preview-release-plan.mjs",
       "scripts/preview-component-evidence.mjs",
+      "infra/pulumi/environment-operations.mjs",
+      "infra/pulumi/environment-cloud.mjs",
+      "infra/pulumi/runtime-cloud.mjs",
+      "infra/pulumi/runtime-timing.mjs",
       "scripts/deploy-store-plugins.mjs",
       "scripts/plugin-deployment/worker.ts",
       "docs/guides/deploy.md",
@@ -501,6 +505,7 @@ test("workflow, tests, documentation, and known asset-only files do not require 
     true,
   );
   assert.equal(releaseRuntimeChanged(null), true);
+  assert.equal(releaseRuntimeChanged(["infra/pulumi/worker-config.mjs"]), true);
 });
 
 test("legacy Office success survives a later plugin failure but incomplete uploads do not", () => {

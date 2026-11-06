@@ -8,9 +8,11 @@ export async function listEnvironmentCloudResources({
   buckets = () => listR2Buckets({ accountId, token: env.CLOUDFLARE_API_TOKEN }),
 }) {
   assertAccountId(accountId);
+  const preview = env.SAVIA_DEPLOY_ENVIRONMENT === "preview",
+    readConcurrency = preview ? 4 : 1;
   const base = makeClient(
     { accountId, workers: [], environment: "inventory" },
-    { env },
+    { env, readConcurrency },
   );
   const [native, d1, r2, kv, queues, vectorize] = await Promise.all([
     base.list("/workers/workers"),
@@ -25,30 +27,56 @@ export async function listEnvironmentCloudResources({
     .map((row) => ({ name: row.name, cloudId: row.id }));
   const client = makeClient(
     { accountId, workers, environment: "inventory" },
-    { env },
+    { env, readConcurrency },
   );
   const [snapshot, routes] = await Promise.all([
-    client.readSnapshot({ allowUndeployed: true }),
+    client.readSnapshot({
+      allowUndeployed: true,
+      ...(preview ? { includeDependencies: true } : {}),
+    }),
     client.readRoutes(),
   ]);
+  const previewDependencies = new Map();
+  if (preview) {
+    if (
+      !Array.isArray(snapshot.workerDependencies) ||
+      snapshot.workerDependencies.length !== workers.length
+    )
+      throw new Error("Preview Worker dependencies are unavailable");
+    for (const row of snapshot.workerDependencies) {
+      if (
+        !workers.some((worker) => worker.name === row?.name) ||
+        previewDependencies.has(row.name) ||
+        !Array.isArray(row.dependencies) ||
+        row.dependencies.some((name) => typeof name !== "string") ||
+        new Set(row.dependencies).size !== row.dependencies.length
+      )
+        throw new Error("Preview Worker dependencies are invalid");
+      previewDependencies.set(row.name, row.dependencies);
+    }
+  }
   const rows = [];
   for (const worker of workers) {
-    const settings = snapshot.undeployedWorkerNames?.includes(worker.name)
-      ? { bindings: [] }
-      : await client.api(`/workers/scripts/${worker.name}/settings`);
-    const dependencies = [
-      ...new Set(
-        (settings.bindings ?? []).flatMap((binding) =>
-          binding.type === "service"
-            ? [binding.service]
-            : binding.type === "durable_object_namespace" &&
-                binding.script_name &&
-                binding.script_name !== worker.name
-              ? [binding.script_name]
-              : [],
+    let dependencies;
+    if (preview) dependencies = previewDependencies.get(worker.name);
+    else {
+      const settings = snapshot.undeployedWorkerNames?.includes(worker.name)
+        ? { bindings: [] }
+        : await client.api(`/workers/scripts/${worker.name}/settings`);
+      dependencies = [
+        ...new Set(
+          (settings.bindings ?? []).flatMap((binding) =>
+            binding.type === "service"
+              ? [binding.service]
+              : binding.type === "durable_object_namespace" &&
+                  binding.script_name &&
+                  binding.script_name !== worker.name
+                ? [binding.script_name]
+                : [],
+          ),
         ),
-      ),
-    ].sort();
+      ].sort();
+    }
     rows.push({
       kind: "worker",
       ...worker,

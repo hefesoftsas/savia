@@ -9,7 +9,46 @@ import {
   formatRuntimeTimingSummary,
   readRuntimeTimings,
   recordRuntimeTiming,
+  measureRuntimeOperation,
 } from "./runtime-timing.mjs";
+
+test("environment timing preserves results and failures without persisting command data", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "savia-environment-timing-"));
+  try {
+    const result = { stdout: "PRIVATE_OUTPUT_CANARY" };
+    assert.equal(
+      await measureRuntimeOperation(
+        directory,
+        "environment:config",
+        async () => result,
+      ),
+      result,
+    );
+    const failure = new Error("PRIVATE_ERROR_CANARY");
+    await assert.rejects(
+      measureRuntimeOperation(directory, "environment:inventory", async () => {
+        throw failure;
+      }),
+      (error) => error === failure,
+    );
+    const rows = await readRuntimeTimings(directory);
+    assert.deepEqual(
+      rows.map(({ label, outcome }) => ({ label, outcome })),
+      [
+        { label: "environment:config", outcome: "success" },
+        { label: "environment:inventory", outcome: "failure" },
+      ],
+    );
+    assert.doesNotMatch(JSON.stringify(rows), /PRIVATE|stdout|error/i);
+    assert(
+      rows.every(
+        (row) => Number.isSafeInteger(row.durationMs) && row.durationMs >= 0,
+      ),
+    );
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
 
 test("runtime timings persist only allowlisted labels, duration, and outcome", async () => {
   const directory = await mkdtemp(join(tmpdir(), "savia-runtime-timing-"));

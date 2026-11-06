@@ -273,3 +273,38 @@ required **Contract tests** check remains the final gate. It requires the suite
 and classification to succeed, plus each applicable plugin or runtime lane;
 failed, cancelled and unexpectedly skipped prerequisites cannot pass the gate.
 This changes scheduling, not the required validation coverage.
+
+## Bounded Preview infrastructure reads
+
+Preview snapshots read at most four independent Worker chains concurrently. Each
+chain still verifies the native identity, fully serving deployment, version
+bindings, execution policy and schedules in order. Results retain input order;
+a failure stops new reads and settles in-flight requests before returning an
+error. Production and other environments retain serial Worker reads.
+
+Preview account inventory reuses service and foreign Durable Object dependency
+names from those same serving-version bindings, avoiding a second script-settings
+request for every deployed Worker. It returns only validated dependency names;
+secrets and variable values stay inside the client. Every plan and apply still
+reads a fresh inventory and checkpoint catalog; nothing is cached across them.
+
+Preview release preparation batches its public managed configuration into one
+`pulumi config set-all --json` command after hydration and preparation. The final
+value of a repeated key wins, matching sequential writes. Applied configuration
+refresh, secret rejection, bootstrap-proof removal, unrelated config keys and
+production's individual writes are retained. A failed batch stops before preview.
+The pinned CLI was checked against individual writes in an isolated file backend,
+including empty values, JSON strings, newlines, equals signs and an existing
+unrelated encrypted secret.
+
+Sanitized timing summaries now separate environment inventory, configuration,
+stack catalog/export, Pulumi preview and apply. Only fixed labels, durations and
+outcomes are recorded. CLI arguments, credentials and subprocess output are never
+included. Inventory and command durations may be nested within workflow step
+measurements and must not be added to those parent step durations.
+
+The existing Pulumi `--refresh --run-program --parallel 1` policy, complete
+ownership checks, saved-plan digest and checkpoint fingerprint checks remain in
+force. Deployment-only inventory/configuration helpers can accompany a compatible
+Auth code update without forcing backups; Worker configuration and schema changes
+continue to select the full release path.

@@ -15,6 +15,12 @@ test("cloud snapshots verify native identity and exclude binding values", async 
       resources: {
         bindings: [
           { name: "SECRET", type: "secret_text", text: "DO_NOT_SERIALIZE" },
+          { type: "service", service: "savia-auth-preview" },
+          {
+            type: "durable_object_namespace",
+            script_name: "savia-request-preview",
+          },
+          { type: "durable_object_namespace", script_name: "savia-preview" },
         ],
       },
     },
@@ -43,9 +49,15 @@ test("cloud snapshots verify native identity and exclude binding values", async 
     },
     fetcher,
   });
-  const snapshot = await client.readSnapshot();
+  const snapshot = await client.readSnapshot({ includeDependencies: true });
   assert.equal(snapshot.workerVersions[0].versionId, "v1");
   assert.deepEqual(snapshot.secretWorkerNames, ["savia-preview"]);
+  assert.deepEqual(snapshot.workerDependencies, [
+    {
+      name: "savia-preview",
+      dependencies: ["savia-auth-preview", "savia-request-preview"],
+    },
+  ]);
   assert.equal(JSON.stringify(snapshot).includes("DO_NOT_SERIALIZE"), false);
   assert.equal(snapshot.attachments[0].kind, "cron");
   responses[`/workers/workers/${cloudId}`].name = "alien";
@@ -59,6 +71,336 @@ test("cloud snapshots verify native identity and exclude binding values", async 
         },
       }),
     /account/,
+  );
+});
+
+test("secret Worker names remain input-ordered when snapshot chains finish out of order", async () => {
+  const accountId = "a".repeat(32),
+    workers = Array.from({ length: 4 }, (_, index) => ({
+      name: `savia-secret-${index}`,
+      cloudId: String(index + 1).repeat(32),
+    })),
+    finishOrder = [];
+  const client = createRuntimeCloudClient(
+    { accountId, environment: "preview", workers },
+    {
+      env: { CLOUDFLARE_API_TOKEN: "credential" },
+      fetcher: async (url) => {
+        const parsed = new URL(url),
+          path = parsed.pathname.split(accountId)[1] ?? parsed.pathname,
+          worker = workers.find(
+            (row) => path.includes(row.cloudId) || path.includes(row.name),
+          );
+        if (worker && /^\/workers\/(workers|scripts)\//.test(path)) {
+          const index = workers.indexOf(worker);
+          await new Promise((resolve) =>
+            setTimeout(resolve, (workers.length - index) * 5),
+          );
+        }
+        let result = [];
+        if (
+          path === "/workers/durable_objects/namespaces" ||
+          path === "/workers/domains" ||
+          path === "/workflows" ||
+          path === "/queues"
+        )
+          result = [];
+        else if (path.startsWith("/workers/workers/"))
+          result = {
+            id: worker.cloudId,
+            name: worker.name,
+            deployed_on: "now",
+          };
+        else if (path.endsWith("/deployments"))
+          result = {
+            deployments: [
+              {
+                versions: [{ version_id: `v-${worker.name}`, percentage: 100 }],
+              },
+            ],
+          };
+        else if (path.includes("/versions/"))
+          result = {
+            resources: {
+              bindings: [
+                { type: "secret_text", name: "PRIVATE", text: "SECRET_CANARY" },
+              ],
+            },
+          };
+        else if (path.endsWith("/schedules")) {
+          finishOrder.push(worker.name);
+          result = { schedules: [] };
+        } else if (parsed.pathname.includes("/zones/"))
+          result = parsed.pathname.endsWith("/workers/routes")
+            ? []
+            : { account: { id: accountId }, name: "hefesoft.com" };
+        else assert.fail(`Unexpected API path ${path}`);
+        return Response.json({
+          success: true,
+          result,
+          result_info: { page: 1, total_pages: 1 },
+        });
+      },
+    },
+  );
+
+  const snapshot = await client.readSnapshot();
+  assert.deepEqual(finishOrder, workers.map((row) => row.name).reverse());
+  assert.deepEqual(
+    snapshot.secretWorkerNames,
+    workers.map((row) => row.name),
+  );
+  assert.equal(JSON.stringify(snapshot).includes("SECRET_CANARY"), false);
+});
+
+test("Preview snapshot worker chains are bounded and preserve input ordering", async () => {
+  const accountId = "a".repeat(32),
+    workers = Array.from({ length: 7 }, (_, index) => ({
+      name: `savia-worker-${index}`,
+      cloudId: String(index + 1).repeat(32),
+    }));
+  let activeWorkerCalls = 0,
+    maximumWorkerCalls = 0;
+  const client = createRuntimeCloudClient(
+    { accountId, environment: "preview", workers },
+    {
+      env: { CLOUDFLARE_API_TOKEN: "credential" },
+      fetcher: async (url) => {
+        const parsed = new URL(url),
+          path = parsed.pathname.split(accountId)[1] ?? parsed.pathname;
+        const workerCall = /^\/workers\/(workers|scripts)\//.test(path);
+        if (workerCall) {
+          activeWorkerCalls++;
+          maximumWorkerCalls = Math.max(maximumWorkerCalls, activeWorkerCalls);
+          await new Promise((resolve) => setTimeout(resolve, 3));
+          activeWorkerCalls--;
+        }
+        let result = [];
+        const identity = workers.find(
+          (worker) =>
+            path.includes(worker.cloudId) || path.includes(worker.name),
+        );
+        if (path === "/workers/durable_objects/namespaces") result = [];
+        else if (
+          path === "/workers/domains" ||
+          path === "/workflows" ||
+          path === "/queues"
+        )
+          result = [];
+        else if (path.startsWith("/workers/workers/"))
+          result = {
+            id: identity.cloudId,
+            name: identity.name,
+            deployed_on: "now",
+          };
+        else if (path.endsWith("/deployments"))
+          result = {
+            deployments: [
+              {
+                versions: [
+                  { version_id: `v-${identity.name}`, percentage: 100 },
+                ],
+              },
+            ],
+          };
+        else if (path.includes("/versions/"))
+          result = { resources: { bindings: [] } };
+        else if (path.endsWith("/schedules"))
+          result = { schedules: [{ cron: identity.name }] };
+        else if (parsed.pathname.includes("/zones/"))
+          result = parsed.pathname.endsWith("/workers/routes")
+            ? []
+            : { account: { id: accountId }, name: "hefesoft.com" };
+        else assert.fail(`Unexpected API path ${path}`);
+        return Response.json({
+          success: true,
+          result,
+          result_info: { page: 1, total_pages: 1 },
+        });
+      },
+    },
+  );
+
+  const snapshot = await client.readSnapshot();
+  assert.ok(maximumWorkerCalls > 1);
+  assert.ok(maximumWorkerCalls <= 4);
+  assert.deepEqual(
+    snapshot.workerVersions.map((row) => row.name),
+    workers.map((row) => row.name),
+  );
+  assert.deepEqual(
+    snapshot.attachments.map((row) => row.name),
+    workers.map((row) => row.name),
+  );
+});
+
+test("Preview snapshot stops launching workers after a failure and settles in-flight chains", async () => {
+  const accountId = "a".repeat(32),
+    workers = [
+      { name: "savia-first", cloudId: "1".repeat(32) },
+      { name: "savia-fails", cloudId: "2".repeat(32) },
+      { name: "savia-not-started", cloudId: "3".repeat(32) },
+    ];
+  const calls = [],
+    settled = new Set();
+  const client = createRuntimeCloudClient(
+    { accountId, environment: "preview", workers },
+    {
+      readConcurrency: 2,
+      env: { CLOUDFLARE_API_TOKEN: "credential" },
+      fetcher: async (url) => {
+        const path = new URL(url).pathname.split(accountId)[1];
+        calls.push(path);
+        if (path === `/workers/workers/${workers[0].cloudId}`) {
+          await new Promise((resolve) => setTimeout(resolve, 15));
+          settled.add(workers[0].name);
+          return Response.json({
+            success: true,
+            result: {
+              id: workers[0].cloudId,
+              name: workers[0].name,
+              deployed_on: "now",
+            },
+          });
+        }
+        if (path === `/workers/workers/${workers[1].cloudId}`) {
+          await new Promise((resolve) => setTimeout(resolve, 1));
+          settled.add(workers[1].name);
+          return Response.json({
+            success: true,
+            result: {
+              id: workers[1].cloudId,
+              name: "wrong-identity",
+              deployed_on: "now",
+            },
+          });
+        }
+        let result = [];
+        if (
+          path === "/workers/durable_objects/namespaces" ||
+          path === "/workers/domains" ||
+          path === "/workflows" ||
+          path === "/queues"
+        )
+          result = [];
+        else if (path === `/workers/scripts/${workers[0].name}/deployments`)
+          result = {
+            deployments: [
+              { versions: [{ version_id: "v-first", percentage: 100 }] },
+            ],
+          };
+        else if (
+          path === `/workers/scripts/${workers[0].name}/versions/v-first`
+        )
+          result = { resources: { bindings: [] } };
+        else if (path === `/workers/scripts/${workers[0].name}/schedules`)
+          result = { schedules: [] };
+        else if (path.startsWith("/workers/scripts/"))
+          result = {
+            schedules: [],
+            deployments: [],
+            resources: { bindings: [] },
+          };
+        else if (new URL(url).pathname.startsWith("/zones/"))
+          result = new URL(url).pathname.endsWith("/workers/routes")
+            ? []
+            : { account: { id: accountId }, name: "hefesoft.com" };
+        else assert.fail(`Unexpected API path ${path}`);
+        return Response.json({
+          success: true,
+          result,
+          result_info: { page: 1, total_pages: 1 },
+        });
+      },
+    },
+  );
+
+  await assert.rejects(client.readSnapshot(), /identity/);
+  assert.deepEqual(
+    [...settled].sort(),
+    [workers[0].name, workers[1].name].sort(),
+  );
+  assert.equal(calls.includes(`/workers/workers/${workers[2].cloudId}`), false);
+  assert.equal(
+    calls.includes(`/workers/scripts/${workers[0].name}/deployments`),
+    false,
+  );
+});
+
+test("runtime snapshot concurrency is validated and defaults to serial outside Preview", async () => {
+  const accountId = "a".repeat(32),
+    workers = [
+      { name: "savia-first", cloudId: "1".repeat(32) },
+      { name: "savia-second", cloudId: "2".repeat(32) },
+    ];
+  let active = 0,
+    maximum = 0;
+  const client = createRuntimeCloudClient(
+    { accountId, environment: "production", workers },
+    {
+      env: { CLOUDFLARE_API_TOKEN: "credential" },
+      fetcher: async (url) => {
+        const parsed = new URL(url),
+          path = parsed.pathname.split(accountId)[1] ?? parsed.pathname;
+        let result = [];
+        if (/^\/workers\/(workers|scripts)\//.test(path)) {
+          active++;
+          maximum = Math.max(maximum, active);
+          await new Promise((resolve) => setTimeout(resolve, 2));
+          active--;
+        }
+        if (
+          path === "/workers/durable_objects/namespaces" ||
+          path === "/workers/domains" ||
+          path === "/workflows" ||
+          path === "/queues"
+        )
+          result = [];
+        else if (path.startsWith("/workers/workers/")) {
+          const worker = workers.find(
+            (row) => row.cloudId === path.split("/").at(-1),
+          );
+          result = {
+            id: worker.cloudId,
+            name: worker.name,
+            deployed_on: "now",
+          };
+        } else if (path.endsWith("/deployments")) {
+          const name = path.split("/")[3];
+          result = {
+            deployments: [
+              { versions: [{ version_id: `v-${name}`, percentage: 100 }] },
+            ],
+          };
+        } else if (path.includes("/versions/"))
+          result = { resources: { bindings: [] } };
+        else if (path.endsWith("/schedules")) result = { schedules: [] };
+        else if (parsed.pathname.includes("/zones/"))
+          result = parsed.pathname.endsWith("/workers/routes")
+            ? []
+            : { account: { id: accountId }, name: "hefesoft.com" };
+        else assert.fail(`Unexpected API path ${path}`);
+        return Response.json({
+          success: true,
+          result,
+          result_info: { page: 1, total_pages: 1 },
+        });
+      },
+    },
+  );
+  await client.readSnapshot();
+  assert.equal(maximum, 1);
+  assert.equal(
+    Object.hasOwn(await client.readSnapshot(), "workerDependencies"),
+    false,
+  );
+  assert.throws(
+    () =>
+      createRuntimeCloudClient(
+        { accountId, workers },
+        { readConcurrency: 5, env: { CLOUDFLARE_API_TOKEN: "credential" } },
+      ),
+    /concurrency/,
   );
 });
 
@@ -401,9 +743,15 @@ test("explicit metadata inventory can observe an undeployed identity without que
       },
     },
   );
-  const snapshot = await client.readSnapshot({ allowUndeployed: true });
+  const snapshot = await client.readSnapshot({
+    allowUndeployed: true,
+    includeDependencies: true,
+  });
   assert.equal(snapshot.workerVersions[0].versionId, null);
   assert.deepEqual(snapshot.undeployedWorkerNames, ["savia-preview"]);
+  assert.deepEqual(snapshot.workerDependencies, [
+    { name: "savia-preview", dependencies: [] },
+  ]);
   assert.equal(
     calls.some((path) => path.startsWith("/workers/scripts/")),
     false,
