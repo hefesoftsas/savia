@@ -14,6 +14,104 @@ import { retireCloudRuntime } from "./runtime-retirement-cloud.mjs";
 import { resolveEnvironment } from "./environments.mjs";
 import { execFileWithInput } from "./runtime-publisher-branch.mjs";
 import { runWithCommandDiagnostics } from "./command-diagnostics.mjs";
+import { recordRuntimeTiming } from "./runtime-timing.mjs";
+
+const SCRIPT_TIMING_LABELS = new Map([
+  ["initialize-auth-deployment.mjs", "auth-init"],
+  ["apply-d1-migrations.mjs", "migrations"],
+  ["flows-maintenance.mjs", "backup:flows"],
+  ["production-backup.mjs", "backup:production"],
+  ["production-backup-r2.mjs", "backup:production-r2"],
+  ["backup.mjs", "backup:runtime"],
+]);
+
+const WORKER_ROLE_ALIASES = new Map([
+  ["agencies", "api"],
+  ["api", "api"],
+  ["auth", "auth"],
+  ["flows", "flows"],
+  ["mcp", "mcp"],
+  ["request", "request"],
+  ["preview", "gateway"],
+  ["gateway", "gateway"],
+  ["legacy", "legacy"],
+  ["connectors", "connectors"],
+  ["hook-executor", "hook-executor"],
+  ["plugin-editor", "plugin-editor"],
+  ["backup-coordinator", "backup-coordinator"],
+]);
+
+function workerRole(name, environment) {
+  if (typeof name !== "string" || !/^[a-z0-9][a-z0-9-]{1,62}$/.test(name))
+    return null;
+  let role = name.replace(/^savia-/, "");
+  const suffix = environment.startsWith("branch-")
+    ? `-preview-${environment.slice(7)}`
+    : environment === "preview"
+      ? "-preview"
+      : environment === "production"
+        ? ""
+        : `-${environment}`;
+  if (suffix && role.endsWith(suffix)) role = role.slice(0, -suffix.length);
+  return WORKER_ROLE_ALIASES.get(role) ?? null;
+}
+
+function runtimeCommandLabel(executable, args, inputs) {
+  const base = String(executable).split(/[\\/]/).at(-1);
+  if (base === "tar") return "backup:archive";
+  if (base === "node") {
+    for (const arg of Array.isArray(args) ? args : []) {
+      if (typeof arg !== "string") continue;
+      const known = SCRIPT_TIMING_LABELS.get(arg.split(/[\\/]/).at(-1));
+      if (known) return known;
+    }
+    return "runtime-command";
+  }
+  const values = Array.isArray(args) ? args : [];
+  if (values[0] === "d1" && values[1] === "migrations")
+    return "flows-migrations";
+  if (values[0] === "deploy") {
+    const configIndex = values.indexOf("--config");
+    const configPath = configIndex >= 0 ? values[configIndex + 1] : "";
+    const nameFlagIndex = values.indexOf("--name");
+    const commandName = nameFlagIndex >= 0 ? values[nameFlagIndex + 1] : "";
+    const worker = (inputs.workers ?? []).find(
+      (candidate) =>
+        candidate.name === commandName ||
+        (typeof configPath === "string" &&
+          configPath
+            .split(/[\\/]/)
+            .some(
+              (segment) =>
+                segment === candidate.name ||
+                segment.startsWith(`${candidate.name}.`),
+            )),
+    );
+    const role = worker && workerRole(worker.name, inputs.environment);
+    if (role) return `worker-deploy:${role}`;
+  }
+  if (values[0] === "deployments" && values[1] === "status")
+    return "gateway-verify";
+  return "wrangler-command";
+}
+
+async function timedCommand(directory, label, operation) {
+  const started = performance.now();
+  let outcome = "success";
+  try {
+    return await operation();
+  } catch (error) {
+    outcome = "failure";
+    throw error;
+  } finally {
+    await recordRuntimeTiming(
+      directory,
+      label,
+      Math.max(0, Math.round(performance.now() - started)),
+      outcome,
+    );
+  }
+}
 
 // This module is loaded at execution time. Configured clients, environments,
 // subprocesses and private recovery paths never enter a serialized provider.
@@ -30,30 +128,40 @@ export function createRuntimeOperations(
 ) {
   const environment = resolveEnvironment(inputs.environment);
   const run = (executable, args, options) =>
-      runWithCommandDiagnostics({
-        execute,
-        executable,
-        args,
-        options,
-        directory: env.SAVIA_RUNTIME_OPERATION_DIRECTORY,
-        operation: "runtime-helper",
-        publicError: `Runtime helper failed: ${String(executable).split(/[\\/]/).at(-1)}`,
-      }),
+      timedCommand(
+        env.SAVIA_RUNTIME_OPERATION_DIRECTORY,
+        runtimeCommandLabel(executable, args, inputs),
+        () =>
+          runWithCommandDiagnostics({
+            execute,
+            executable,
+            args,
+            options,
+            directory: env.SAVIA_RUNTIME_OPERATION_DIRECTORY,
+            operation: "runtime-helper",
+            publicError: `Runtime helper failed: ${String(executable).split(/[\\/]/).at(-1)}`,
+          }),
+      ),
     wranglerPath = join(root, "apps/api/node_modules/.bin/wrangler"),
     runWrangler = (args, options = {}) =>
-      runWithCommandDiagnostics({
-        execute: executeWrangler
-          ? () => executeWrangler(args, options)
-          : execute,
-        executable: wranglerPath,
-        args,
-        options: executeWrangler
-          ? options
-          : { ...options, env: options.env ?? env },
-        directory: env.SAVIA_RUNTIME_OPERATION_DIRECTORY,
-        operation: "wrangler",
-        publicError: "Runtime helper failed: wrangler",
-      });
+      timedCommand(
+        env.SAVIA_RUNTIME_OPERATION_DIRECTORY,
+        runtimeCommandLabel(wranglerPath, args, inputs),
+        () =>
+          runWithCommandDiagnostics({
+            execute: executeWrangler
+              ? () => executeWrangler(args, options)
+              : execute,
+            executable: wranglerPath,
+            args,
+            options: executeWrangler
+              ? options
+              : { ...options, env: options.env ?? env },
+            directory: env.SAVIA_RUNTIME_OPERATION_DIRECTORY,
+            operation: "wrangler",
+            publicError: "Runtime helper failed: wrangler",
+          }),
+      );
   let directory,
     publisher,
     bootstrap = { createdWorkers: [] };
@@ -93,7 +201,9 @@ export function createRuntimeOperations(
           ),
         ),
       );
-      assertRuntimeBindings(inputs, configs);
+      assertRuntimeBindings(inputs, configs, {
+        releaseSource: manifest.releaseSource,
+      });
       if (environment.kind === "application")
         publisher = await createStandardPublisher(inputs, {
           env,

@@ -10,7 +10,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { prepareRuntimeArtifact } from "./runtime-publisher.mjs";
 
-async function codeOnlyFixture({ targets, runtimeState = "active" }) {
+async function codeOnlyFixture({
+  targets,
+  artifactTargets = targets,
+  runtimeState = "active",
+}) {
   const root = await mkdtemp(join(tmpdir(), "savia-code-only-release-"));
   const source = join(root, "source");
   await mkdir(join(source, "migrations"), { recursive: true });
@@ -39,13 +43,16 @@ async function codeOnlyFixture({ targets, runtimeState = "active" }) {
     release: {
       directory: source,
       configs: Object.fromEntries(
-        names.map((name) => [
-          `${name}.json`,
-          {
-            name,
-            main: "worker.mjs",
-          },
-        ]),
+        artifactTargets.map((target) => {
+          const roleName = {
+            gateway: "savia-preview",
+            api: "savia-agencies-preview",
+            auth: "savia-auth-preview",
+            request: "savia-request-preview",
+            connectors: "savia-connectors-preview",
+          }[target];
+          return [`${roleName}.json`, { name: roleName, main: "worker.mjs" }];
+        }),
       ),
     },
     destination: join(root, "artifact"),
@@ -253,7 +260,7 @@ test("the concrete standard publisher uses existing helpers and never places sec
 
 test("code-only publication deploys only scoped preview Workers without stateful release steps", async () => {
   const fixture = await codeOnlyFixture({
-    targets: ["api", "auth", "gateway"],
+    targets: ["api", "auth"],
   });
   try {
     const calls = [];
@@ -279,7 +286,6 @@ test("code-only publication deploys only scoped preview Workers without stateful
       [
         join(fixture.inputs.artifactDirectory, "savia-auth-preview.json"),
         join(fixture.inputs.artifactDirectory, "savia-agencies-preview.json"),
-        join(fixture.inputs.artifactDirectory, "savia-preview.json"),
       ],
     );
     const authDeploy = calls.findIndex(
@@ -356,6 +362,30 @@ test("code-only preflight rejects a maintenance runtime before publication", asy
   }
 });
 
+test("code-only preflight rejects artifact targets outside the exact verified scope", async () => {
+  const fixture = await codeOnlyFixture({
+    targets: ["api"],
+    artifactTargets: ["api", "connectors"],
+  });
+  try {
+    const calls = [];
+    await assert.rejects(
+      createStandardPublisher(fixture.inputs, {
+        env: fixture.env,
+        root: fixture.root,
+        client: { readSnapshot: async () => ({ maintenanceWorkerNames: [] }) },
+        recoveryDirectory: join(fixture.root, "recovery"),
+        run: async (...args) => calls.push(args),
+        runWrangler: async (...args) => calls.push(args),
+      }),
+      /exact|scope/i,
+    );
+    assert.deepEqual(calls, []);
+  } finally {
+    await rm(fixture.root, { recursive: true, force: true });
+  }
+});
+
 test("code-only scopes fail closed on unknown, malformed, production, and paused scopes", () => {
   const revision = "b".repeat(40);
   const configs = { api: "/artifact/api.json" };
@@ -394,9 +424,9 @@ test("code-only scopes fail closed on unknown, malformed, production, and paused
         releaseSource: scoped(["gateway"]),
         environment: "preview",
         runtimeState: "active",
-        configs,
+        configs: { ...configs, gateway: "/artifact/gateway.json" },
       }),
-    /missing from the frozen artifact/,
+    /scope/,
   );
 });
 

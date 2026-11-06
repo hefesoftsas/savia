@@ -1,6 +1,25 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { assertRuntimeBindings } from "./runtime-bindings.mjs";
+import {
+  assertRuntimeBindings,
+  expectedPreviewCodeOnlyWorkers,
+} from "./runtime-bindings.mjs";
+
+test("gateway cannot enter the source-only lane even with well-formed metadata", () => {
+  assert.throws(
+    () =>
+      expectedPreviewCodeOnlyWorkers({
+        version: 1,
+        sourceRevision: "b".repeat(40),
+        codeOnly: {
+          base: "a".repeat(40),
+          head: "b".repeat(40),
+          targets: ["gateway"],
+        },
+      }),
+    /scope/,
+  );
+});
 const inputs = {
   accountId: "a".repeat(32),
   environment: "preview",
@@ -57,6 +76,56 @@ test("frozen bindings stay inside the selected environment and existing data ide
   assert.throws(
     () => assertRuntimeBindings(inputs, configs.slice(1)),
     /missing|profile/i,
+  );
+});
+
+test("verified Preview code scope allows exactly selected configs while checking bindings against full ownership", () => {
+  const partial = [configs[1]],
+    revision = "b".repeat(40),
+    verifiedScope = {
+      releaseSource: {
+        version: 1,
+        sourceRevision: revision,
+        codeOnly: {
+          base: "a".repeat(40),
+          head: revision,
+          targets: ["api"],
+        },
+      },
+    };
+  assert.equal(assertRuntimeBindings(inputs, partial, verifiedScope), true);
+  const wrongIdentity = structuredClone(partial);
+  wrongIdentity[0].d1_databases[0].database_id = "production-id";
+  assert.throws(
+    () =>
+      assertRuntimeBindings(inputs, wrongIdentity, {
+        ...verifiedScope,
+      }),
+    /identity/,
+  );
+  assert.throws(
+    () =>
+      assertRuntimeBindings(inputs, [...configs], {
+        ...verifiedScope,
+      }),
+    /scope|selected|extra/i,
+  );
+  assert.throws(
+    () => assertRuntimeBindings(inputs, partial),
+    /missing|profile/i,
+  );
+  assert.throws(
+    () =>
+      assertRuntimeBindings(inputs, partial, {
+        releaseSource: {
+          ...verifiedScope.releaseSource,
+          codeOnly: {
+            ...verifiedScope.releaseSource.codeOnly,
+            targets: ["unknown"],
+          },
+        },
+      }),
+    /scope/i,
   );
 });
 

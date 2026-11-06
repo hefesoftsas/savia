@@ -16,6 +16,191 @@ test("preview release refresh uses current provider credentials and limits concu
   assert.deepEqual(previewRefreshFlags("production", "release"), []);
   assert.deepEqual(previewRefreshFlags("preview", "retire"), []);
 });
+test("code-only release preserves the complete managed Worker profile", async () => {
+  const { resolveReleaseWorkerProfile } =
+    await import("./environment-operations.mjs");
+  const profile = {
+    enabledWorkers: [
+      "savia-preview",
+      "savia-agencies-preview",
+      "savia-auth-preview",
+      "savia-request-preview",
+      "savia-connectors-preview",
+    ],
+    retentionWorkerNames: ["savia-preview"],
+    flowsEnabled: true,
+  };
+  const revision = "b".repeat(40),
+    source = {
+      version: 1,
+      sourceRevision: revision,
+      codeOnly: {
+        base: "a".repeat(40),
+        head: revision,
+        targets: ["api"],
+      },
+    };
+  const result = resolveReleaseWorkerProfile(
+    profile,
+    ["savia-agencies-preview"],
+    source,
+    "preview",
+  );
+  assert.deepEqual(result, profile);
+  assert.notEqual(result.enabledWorkers.length, 1);
+  assert.throws(
+    () =>
+      resolveReleaseWorkerProfile(
+        profile,
+        ["savia-preview"],
+        source,
+        "preview",
+      ),
+    /exact|profile/i,
+  );
+  assert.throws(
+    () =>
+      resolveReleaseWorkerProfile(
+        { ...profile, enabledWorkers: ["savia-preview"] },
+        ["savia-agencies-preview"],
+        source,
+        "preview",
+      ),
+    /profile/i,
+  );
+});
+test("release planning uses verified scope metadata and retains full ownership for a partial artifact", async () => {
+  const { createEnvironmentDependencies } =
+    await import("./environment-operations.mjs");
+  const { resolveEnvironment } = await import("./environments.mjs");
+  const { prepareRuntimeArtifact } = await import("./runtime-publisher.mjs");
+  const { mkdtemp, mkdir, writeFile, rm } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const { resolveInfraNames } = await import("./naming.mjs");
+  const directory = await mkdtemp(join(tmpdir(), "savia-partial-plan-"));
+  try {
+    const accountId = "a".repeat(32),
+      revision = "b".repeat(40),
+      source = join(directory, "source"),
+      artifactDirectory = join(directory, "artifact"),
+      names = resolveInfraNames({
+        environment: "preview",
+        documentsBucket: "savia-documents-preview",
+        publicOrigin: "https://savia-preview.hefesoft.com",
+      });
+    await mkdir(source);
+    await writeFile(
+      join(source, "release-source.json"),
+      JSON.stringify({
+        version: 1,
+        sourceRevision: revision,
+        codeOnly: { base: "c".repeat(40), head: revision, targets: ["api"] },
+      }),
+    );
+    await writeFile(join(source, "worker.mjs"), "export default {};");
+    const artifact = await prepareRuntimeArtifact({
+      environment: "preview",
+      release: {
+        directory: source,
+        configs: {
+          "savia-agencies-preview.json": {
+            name: "savia-agencies-preview",
+            main: "worker.mjs",
+          },
+        },
+      },
+      destination: artifactDirectory,
+    });
+    const outputs = {
+      cloudflareAccountId: accountId,
+      authD1Id: "auth-id",
+      domainD1Id: "domain-id",
+      documentsBucketName: names.bucket,
+      resolvedEnvironment: "preview",
+      resolvedPublicOrigin: names.publicOrigin,
+      workerNames: names.workers,
+      databaseNames: names.databases,
+      deletionProtected: false,
+      flowsEnabled: false,
+      flowsResources: null,
+      flowsExecutionEnabled: false,
+      plannedFlowsResourceNames: names.flows,
+      tenantSubdomains: [],
+      vectorizeIndex: names.vectorizeIndex,
+    };
+    const configWrites = [],
+      profile = {
+        enabledWorkers: [
+          "savia-preview",
+          "savia-agencies-preview",
+          "savia-auth-preview",
+          "savia-mcp-preview",
+          "savia-request-preview",
+          "savia-connectors-preview",
+          "savia-hook-executor-preview",
+          "savia-backup-coordinator-preview",
+          "savia-plugin-editor-preview",
+        ],
+        retentionWorkerNames: ["savia-preview"],
+        flowsEnabled: false,
+      },
+      deps = createEnvironmentDependencies({
+        env: { CLOUDFLARE_ACCOUNT_ID: accountId },
+        run: async (_binary, args) => {
+          if (args[0] === "config" && args[1] === "set")
+            configWrites.push([args[2], args[3]]);
+          if (args[0] === "stack" && args[1] === "export")
+            return {
+              stdout: JSON.stringify({ deployment: { resources: [] } }),
+            };
+          if (args[0] === "preview") {
+            const file = args[args.indexOf("--save-plan") + 1];
+            await writeFile(file, "saved plan");
+            return { stdout: JSON.stringify({ steps: [], changeSummary: {} }) };
+          }
+          if (args[0] === "git") return { stdout: revision };
+          return { stdout: "" };
+        },
+      });
+    await deps.planOperation({
+      descriptor: resolveEnvironment("preview"),
+      manifest: {
+        version: 1,
+        accountId,
+        environment: "preview",
+        project: "savia-cloudflare",
+        stack: "preview",
+        profile,
+        resources: [],
+      },
+      manifestHash: "d".repeat(64),
+      operation: "release",
+      args: { artifact: artifactDirectory, plan: join(directory, "plan.json") },
+      context: {
+        checkpoints: [],
+        checkpoint: {
+          stateExport: {
+            deployment: {
+              resources: [{ type: "pulumi:pulumi:Stack", outputs }],
+            },
+          },
+        },
+        backendUrl:
+          "https://savia-pulumi-state-preview.r2.cloudflarestorage.com",
+        management: {},
+        qualifiedStack: "organization/savia-cloudflare/preview",
+      },
+    });
+    const savedProfile = configWrites.find(
+      ([key]) => key === "savia-cloudflare:runtimeProfile",
+    );
+    assert.ok(savedProfile);
+    assert.deepEqual(JSON.parse(savedProfile[1]), profile);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
 const plan = {
   accountId: "a".repeat(32),
   environment: "preview",

@@ -145,9 +145,14 @@ For coherent backup and failed-release recovery details, see
 
 Existing application source changes can publish only the affected API, Auth,
 Request or Connector Gateway Worker. Admin source uses the full lane because it
-can also feed the isolated plugin-editor bundle. The frozen artifact retains
-all configurations and resource identities; its digest also covers the exact
-base, head and selected targets in `release-source.json`. Planning uses the last
+can also feed the isolated plugin-editor bundle. Scope is resolved before build
+preparation: a verified source-only release bundles only the selected Workers
+and skips unrelated Admin and plugin-editor builds. The frozen artifact digest
+also covers the exact base, head and selected targets in `release-source.json`.
+The artifact's configurations must match those targets exactly. Pulumi retains
+the complete existing managed Worker inventory; an omitted unchanged Worker
+is not a deletion. Each selected binding is still checked against that full
+inventory and its reviewed data identities. Planning uses the last
 successful evidence-backed deployed ancestor, so a failed release cannot hide
 pending changes. Missing history, new/deleted files, schema statements, entrypoints,
 configuration, dependencies, migrations and unknown paths select the full release.
@@ -157,7 +162,26 @@ This preview-only path requires an active runtime. It skips write pauses, Flows
 snapshot/drain, data backups, migrations and secret publication. Auth publication
 still completes deployment initialization before dependent Workers. Existing
 health checks and Worker version recovery remain mandatory; code-only recovery
-never restores databases. Build preparation still freezes the complete artifact.
+never restores databases. Missing or inconsistent scope metadata fails closed;
+a partial artifact cannot be used as a full release. Entrypoint and schema
+changes still require the full lane, including Auth's `src/index.ts`.
+
+Full Preview publication overlaps at most two independent Worker deployments.
+Auth publication and initialization finish first. Hook Executor precedes Request
+and Flows, Request precedes Connectors, and the API follows its providers.
+The public gateway is published last. A failed publication waits for all
+in-flight sibling commands to settle before rollback begins. Production and
+unrecognized publication steps retain serial execution. Backup, migration,
+namespace preservation and health-check boundaries remain unchanged.
+
+The deployment's **Publish sanitized runtime operation timings** step reports each release
+phase and supported command with elapsed milliseconds and success/failure,
+including failed releases. Phase times include their nested commands and must
+not be added to command durations. Parallel command durations can overlap.
+Only fixed operation labels, durations and outcomes are published; command
+arguments, subprocess output, environment variables and error contents remain
+private. Records are best-effort and unavailable records do not block recovery.
+The summary runs only during a deployment; it adds no scheduled monitoring.
 
 Isolated Auth and API changes use their focused CI profiles. API changes also
 regenerate and typecheck Admin API clients to validate frontend consumers. Shared backup-gate

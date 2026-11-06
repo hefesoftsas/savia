@@ -12,6 +12,7 @@ import {
 import { encryptBackup } from "../../scripts/encrypt-flows-backup.mjs";
 import { buildSecretUploads } from "../../scripts/upload-cloudflare-secrets.mjs";
 import { verifyRuntimeArtifact, publishRuntime } from "./runtime-publisher.mjs";
+import { runStandardDeploy } from "./runtime-deploy-schedule.mjs";
 import {
   codeOnlyReleaseCommands,
   createCodeOnlyPublisher,
@@ -280,8 +281,6 @@ export async function createStandardPublisher(
     byName.set(config.name, path);
     configs[role] = path;
   }
-  if (byName.size !== inputs.workers.length)
-    throw new Error("Missing prepared standard Workers");
   const migrationDirectory = join(inputs.artifactDirectory, "migrations");
   if (!(await stat(migrationDirectory)).isDirectory())
     throw new Error("Frozen standard migrations are missing");
@@ -305,6 +304,11 @@ export async function createStandardPublisher(
     configs,
   });
   if (codeOnlyPlan) {
+    const selected = releaseSource.codeOnly.targets.slice().sort();
+    if (Object.keys(configs).sort().join("\n") !== selected.join("\n"))
+      throw new Error(
+        "Prepared standard Workers do not exactly match code scope",
+      );
     const snapshot = await client?.readSnapshot?.();
     if (
       !Array.isArray(snapshot?.maintenanceWorkerNames) ||
@@ -318,6 +322,8 @@ export async function createStandardPublisher(
       runWrangler,
     });
   }
+  if (byName.size !== inputs.workers.length)
+    throw new Error("Missing prepared standard Workers");
   const uploads = buildSecretUploads(inputs.environment, env);
   const backupKey = env.SAVIA_BACKUP_KEY ?? env.SAVIA_FLOWS_BACKUP_KEY;
   if (!/^[a-f\d]{64}$/i.test(backupKey ?? ""))
@@ -408,31 +414,36 @@ export async function createStandardPublisher(
   return {
     publish: async () => {
       await mkdir(recoveryDirectory, { recursive: true, mode: 0o700 });
-      return publishRuntime(inputs, {
-        quiesce: () => stage(plan.quiesce),
-        backup: () => stage(plan.backup),
-        migrate: () => stage(plan.migrate),
-        secrets: async () => {
-          for (const upload of uploads)
-            await runWrangler(
-              [
-                "versions",
-                "secret",
-                "bulk",
-                "--config",
-                byName.get(upload.worker),
-              ],
-              {
-                env,
-                cwd: inputs.artifactDirectory,
-                input: JSON.stringify(upload.secrets),
-              },
-            );
+      return publishRuntime(
+        inputs,
+        {
+          quiesce: () => stage(plan.quiesce),
+          backup: () => stage(plan.backup),
+          migrate: () => stage(plan.migrate),
+          secrets: async () => {
+            for (const upload of uploads)
+              await runWrangler(
+                [
+                  "versions",
+                  "secret",
+                  "bulk",
+                  "--config",
+                  byName.get(upload.worker),
+                ],
+                {
+                  env,
+                  cwd: inputs.artifactDirectory,
+                  input: JSON.stringify(upload.secrets),
+                },
+              );
+          },
+          deploy: () =>
+            runStandardDeploy(plan.deploy, execute, inputs.environment),
+          verify: () => stage(plan.verify),
+          resume: async () => {},
         },
-        deploy: () => stage(plan.deploy),
-        verify: () => stage(plan.verify),
-        resume: async () => {},
-      });
+        { timingDirectory: env.SAVIA_RUNTIME_OPERATION_DIRECTORY },
+      );
     },
     recover: async () => {
       if (captured) {

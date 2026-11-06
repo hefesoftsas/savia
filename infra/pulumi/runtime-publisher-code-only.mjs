@@ -6,7 +6,6 @@ export const CODE_ONLY_TARGETS = Object.freeze([
   "api",
   "request",
   "connectors",
-  "gateway",
 ]);
 
 const sha1 = (value) =>
@@ -108,15 +107,19 @@ export function createCodeOnlyPublisher(
   };
   return {
     publish: () =>
-      publishRuntime(inputs, {
-        quiesce: async () => {},
-        backup: async () => {},
-        migrate: async () => {},
-        secrets: async () => {},
-        deploy: () => stage(plan.deploy),
-        verify: () => stage(plan.verify),
-        resume: async () => {},
-      }),
+      publishRuntime(
+        inputs,
+        {
+          quiesce: async () => {},
+          backup: async () => {},
+          migrate: async () => {},
+          secrets: async () => {},
+          deploy: () => stage(plan.deploy),
+          verify: () => stage(plan.verify),
+          resume: async () => {},
+        },
+        { timingDirectory: env.SAVIA_RUNTIME_OPERATION_DIRECTORY },
+      ),
     recover: async () => {},
   };
 }

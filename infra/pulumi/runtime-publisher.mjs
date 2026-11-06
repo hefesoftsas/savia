@@ -8,6 +8,8 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { resolve, relative, join, isAbsolute, dirname, sep } from "node:path";
+import { recordRuntimeTiming } from "./runtime-timing.mjs";
+import { expectedPreviewCodeOnlyWorkers } from "./runtime-bindings.mjs";
 
 function outside(root, path) {
   const difference = relative(root, path);
@@ -173,6 +175,25 @@ export async function verifyRuntimeArtifact(inputs) {
     hash(configs) !== inputs.configDigest
   )
     throw new Error("Immutable artifact digest mismatch");
+  let releaseSource;
+  try {
+    releaseSource = JSON.parse(
+      await readFile(join(root, "release-source.json"), "utf8"),
+    );
+  } catch (cause) {
+    if (cause?.code !== "ENOENT")
+      throw new Error("Invalid release source metadata", { cause });
+  }
+  const selectedWorkers = expectedPreviewCodeOnlyWorkers(releaseSource);
+  if (selectedWorkers) {
+    if (inputs.environment !== "preview")
+      throw new Error("Verified code scope is only allowed in Preview");
+    const actualWorkers = configs.map(([, config]) => config.name).sort();
+    if (actualWorkers.join("\n") !== selectedWorkers.join("\n"))
+      throw new Error(
+        "Artifact Workers do not exactly match verified code scope",
+      );
+  }
   const declaredNamespaces = [];
   for (const [, config] of configs) {
     for (const migration of config.migrations ?? []) {
@@ -192,9 +213,17 @@ export async function verifyRuntimeArtifact(inputs) {
         });
     }
   }
-  return { ...manifest, declaredNamespaces };
+  return {
+    ...manifest,
+    releaseSource,
+    declaredNamespaces,
+  };
 }
-export async function publishRuntime(inputs, operations) {
+export async function publishRuntime(
+  inputs,
+  operations,
+  { timingDirectory } = {},
+) {
   for (const name of [
     "quiesce",
     "backup",
@@ -206,6 +235,20 @@ export async function publishRuntime(inputs, operations) {
   ]) {
     if (typeof operations[name] !== "function")
       throw new Error(`Missing release operation: ${name}`);
-    await operations[name](inputs);
+    const started = performance.now();
+    let outcome = "success";
+    try {
+      await operations[name](inputs);
+    } catch (error) {
+      outcome = "failure";
+      throw error;
+    } finally {
+      await recordRuntimeTiming(
+        timingDirectory,
+        `phase:${name}`,
+        Math.max(0, Math.round(performance.now() - started)),
+        outcome,
+      );
+    }
   }
 }

@@ -1,6 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
+import {
+  mkdtemp,
+  mkdir,
+  readFile,
+  readdir,
+  writeFile,
+  rm,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -34,6 +41,23 @@ test("prepared artifacts have stable digests independent of staging paths", asyn
     assert.equal(a.artifactDigest, b.artifactDigest);
     assert.equal(a.configDigest, b.configDigest);
     await verifyRuntimeArtifact(a);
+    const manifestPath = join(root, "b", "release-manifest.json");
+    const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+    manifest.releaseSource = {
+      version: 1,
+      sourceRevision: "b".repeat(40),
+      codeOnly: {
+        base: "a".repeat(40),
+        head: "b".repeat(40),
+        targets: ["auth"],
+      },
+    };
+    await writeFile(manifestPath, JSON.stringify(manifest));
+    assert.equal(
+      (await verifyRuntimeArtifact(b)).releaseSource,
+      undefined,
+      "only the digest-covered source file can supply release scope",
+    );
     await writeFile(join(root, "a", "worker.mjs"), "tampered");
     await assert.rejects(verifyRuntimeArtifact(a), /digest/);
     await assert.rejects(
@@ -78,6 +102,45 @@ test("publication preserves backup, quiescence and migration order", async () =>
   };
   await assert.rejects(publishRuntime({}, ops), /migration failed/);
   assert.deepEqual(calls, ["quiesce", "backup"]);
+});
+
+test("publication records successful and failed phase timings without changing error propagation", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "savia-runtime-phases-"));
+  try {
+    const ops = Object.fromEntries(
+      [
+        "quiesce",
+        "backup",
+        "migrate",
+        "secrets",
+        "deploy",
+        "verify",
+        "resume",
+      ].map((phase) => [phase, async () => {}]),
+    );
+    ops.migrate = async () => {
+      throw new Error("SENTINEL_SECRET:failed migration");
+    };
+    await assert.rejects(
+      publishRuntime({}, ops, { timingDirectory: directory }),
+      /SENTINEL_SECRET:failed migration/,
+    );
+    const [file] = await readdir(directory);
+    const content = await readFile(join(directory, file), "utf8");
+    const rows = content.trim().split("\n").map(JSON.parse);
+    assert.deepEqual(
+      rows.map(({ label, outcome }) => [label, outcome]),
+      [
+        ["phase:quiesce", "success"],
+        ["phase:backup", "success"],
+        ["phase:migrate", "failure"],
+      ],
+    );
+    assert.ok(rows.every((row) => Number.isSafeInteger(row.durationMs)));
+    assert.doesNotMatch(content, /SENTINEL_SECRET|failed migration/);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
 });
 
 test("immutable artifacts cannot publish code or assets outside the frozen directory", async () => {

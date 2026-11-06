@@ -36,6 +36,7 @@ import {
   assertRetirementPlan,
 } from "./environment-plan.mjs";
 import { verifyRuntimeArtifact } from "./runtime-publisher.mjs";
+import { expectedPreviewCodeOnlyWorkers } from "./runtime-bindings.mjs";
 import { planRuntimeRetirement } from "./runtime-retirement.mjs";
 import { emptyBucketForDestroy } from "./destroy.mjs";
 import { createRuntimeCloudClient } from "./runtime-cloud.mjs";
@@ -92,6 +93,34 @@ export function inventoryManifest(value) {
       .filter((key) => value[key] !== undefined)
       .map((key) => [key, value[key]]),
   );
+}
+export function resolveReleaseWorkerProfile(
+  profile,
+  workerNames,
+  releaseSource,
+  environment,
+) {
+  const names = workerNames.slice(),
+    selected = expectedPreviewCodeOnlyWorkers(releaseSource);
+  if (selected) {
+    if (
+      environment !== "preview" ||
+      names.sort().join("\n") !== selected.join("\n") ||
+      !Array.isArray(profile.enabledWorkers) ||
+      selected.some((name) => !profile.enabledWorkers.includes(name))
+    )
+      throw new Error(
+        "Preview code scope does not match the full managed Worker profile",
+      );
+    return profile;
+  }
+  return {
+    ...profile,
+    enabledWorkers: names.sort(),
+    retentionWorkerNames: (profile.retentionWorkerNames ?? []).filter((name) =>
+      names.includes(name),
+    ),
+  };
 }
 export function verifySavedEnvironmentPlan(plan, actual) {
   for (const key of [
@@ -628,8 +657,8 @@ export function createEnvironmentDependencies({
         await readFile(join(dir, "release-manifest.json"), "utf8"),
       );
     const inputs = { ...raw, artifactDirectory: dir, environment };
-    await verifyRuntimeArtifact(inputs);
-    return inputs;
+    const verified = await verifyRuntimeArtifact(inputs);
+    return { ...inputs, releaseSource: verified.releaseSource };
   };
   const initializeAdoption = async ({ descriptor, manifest, context: ctx }) => {
     if (!ctx.checkpoint) {
@@ -768,10 +797,15 @@ export function createEnvironmentDependencies({
             await readFile(join(release.artifactDirectory, file), "utf8"),
           ).name,
         );
-      profile.enabledWorkers = names.sort();
-      profile.retentionWorkerNames = (
-        profile.retentionWorkerNames ?? []
-      ).filter((name) => names.includes(name));
+      Object.assign(
+        profile,
+        resolveReleaseWorkerProfile(
+          profile,
+          names,
+          release.releaseSource,
+          descriptor.environment,
+        ),
+      );
     }
     for (const [key, value] of Object.entries({
       runtimeManaged: true,

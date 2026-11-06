@@ -201,6 +201,18 @@ test("preview deploys only successful same-repository main CI and uses its own e
   assert.match(preview, /name: preview/);
   assert.match(preview, /SAVIA_DEPLOY_ENVIRONMENT: preview/);
   assert.match(preview, /environment\.mjs apply --environment preview/);
+  assert.match(
+    preview,
+    /name: Publish sanitized runtime operation timings\n\s+continue-on-error: true\n\s+if: \$\{\{ always\(\) \}\}\n\s+run: node infra\/pulumi\/runtime-timing\.mjs summary\n\s+env:\n\s+SAVIA_RUNTIME_OPERATION_DIRECTORY: \$\{\{ runner\.temp \}\}\/savia-runtime/,
+  );
+  assert.ok(
+    preview.indexOf("name: Publish sanitized runtime operation timings") >
+      preview.indexOf("name: Apply the exact managed runtime plan"),
+  );
+  assert.ok(
+    preview.indexOf("name: Encrypt private command diagnostics") >
+      preview.indexOf("name: Publish sanitized runtime operation timings"),
+  );
   assert.match(preview, /prepare-release\.mjs --environment preview/);
   assert.doesNotMatch(preview, /\n\s+secrets:/);
   assert.doesNotMatch(preview, /command:.*deploy --config/);

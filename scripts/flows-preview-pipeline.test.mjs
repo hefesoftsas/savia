@@ -103,7 +103,10 @@ test("preview delegates publication and recovery to the managed runtime and reta
   assert.match(pipeline, /environment\.mjs plan --environment preview/);
   assert.match(pipeline, /environment\.mjs apply --environment preview/);
   assert.doesNotMatch(
-    pipeline,
+    pipeline.replace(
+      /      - name: Publish sanitized runtime operation timings\n[\s\S]*?(?=      - name:)/,
+      "",
+    ),
     /wrangler deploy|command: deploy|flows-preview-recovery\.mjs --action restore|continue-on-error:/,
   );
   const archive = pipeline

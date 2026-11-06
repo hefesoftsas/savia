@@ -1,5 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { createRuntimeOperations } from "./runtime-operations.mjs";
 const inputs = {
   accountId: "a".repeat(32),
@@ -69,4 +72,73 @@ test("production publication cannot bypass the existing operations gate", async 
     { env: {}, client: {} },
   );
   await assert.rejects(operations.verifyArtifact(), /production.*disabled/i);
+});
+
+test("bootstrap command timing uses the configured Worker role and preserves failures", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "savia-runtime-ops-"));
+  try {
+    const normalizedInputs = {
+      ...inputs,
+      environment: "branch-timing-check",
+      workers: [
+        { name: "savia-auth-preview-timing-check", cloudId: "c".repeat(32) },
+      ],
+    };
+    const operationDirectory = join(directory, "operations");
+    const operations = createRuntimeOperations(normalizedInputs, {
+      env: {
+        CLOUDFLARE_ACCOUNT_ID: normalizedInputs.accountId,
+        SAVIA_RUNTIME_OPERATION_DIRECTORY: operationDirectory,
+      },
+      client: {
+        api: async () => ({
+          id: "c".repeat(32),
+          name: "savia-auth-preview-timing-check",
+          deployed_on: null,
+        }),
+      },
+      runWrangler: async () => ({ stdout: "PRIVATE_COMMAND_OUTPUT" }),
+    });
+    await operations.bootstrap();
+    const file = (await readdir(operationDirectory)).find((name) =>
+      name.startsWith("timings-"),
+    );
+    const content = await readFile(join(operationDirectory, file), "utf8");
+    assert.match(content, /worker-deploy:auth/);
+    assert.match(content, /"outcome":"success"/);
+    assert.doesNotMatch(content, /PRIVATE_COMMAND_OUTPUT|args|env/);
+
+    const failingDirectory = join(directory, "failure");
+    const failing = createRuntimeOperations(normalizedInputs, {
+      env: {
+        CLOUDFLARE_ACCOUNT_ID: normalizedInputs.accountId,
+        SAVIA_RUNTIME_OPERATION_DIRECTORY: failingDirectory,
+      },
+      client: {
+        api: async () => ({
+          id: "c".repeat(32),
+          name: "savia-auth-preview-timing-check",
+          deployed_on: null,
+        }),
+      },
+      runWrangler: async () => {
+        const error = new Error("PRIVATE_SENTINEL");
+        error.stdout = "PRIVATE_SENTINEL";
+        throw error;
+      },
+    });
+    await assert.rejects(failing.bootstrap(), /Runtime helper failed/);
+    const failureFile = (await readdir(failingDirectory)).find((name) =>
+      name.startsWith("timings-"),
+    );
+    const failureContent = await readFile(
+      join(failingDirectory, failureFile),
+      "utf8",
+    );
+    assert.match(failureContent, /worker-deploy:auth/);
+    assert.match(failureContent, /"outcome":"failure"/);
+    assert.doesNotMatch(failureContent, /PRIVATE_SENTINEL/);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
 });

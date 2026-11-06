@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { prepareEnvironmentRelease } from "./prepare-release.mjs";
 import { resolveInfraNames } from "./naming.mjs";
-test("standard preparation derives actual binding IDs, freezes the exact source and builds before publication", async () => {
+test("standard preparation derives actual binding IDs and freezes the exact source", async () => {
   const accountId = "a".repeat(32),
     names = resolveInfraNames({
       environment: "preview",
@@ -66,24 +66,145 @@ test("standard preparation derives actual binding IDs, freezes the exact source 
           head: "b".repeat(40),
           targets: ["api"],
         });
-        assert.equal(options.configs.length, 9);
+        assert.equal(options.configs.length, 1);
         assert.ok(
-          options.configs.some((path) =>
-            path.endsWith("plugin-editor-runtime/wrangler.preview.jsonc"),
-          ),
+          options.configs[0].endsWith("apps/api/wrangler.preview.jsonc"),
         );
         events.push("freeze");
         return { artifactDigest: "c".repeat(64) };
       },
     },
   );
-  assert.deepEqual(events, [
-    "render",
-    "build:plugin-editor",
-    "build:assets",
-    "freeze",
-  ]);
+  assert.deepEqual(events, ["render", "freeze"]);
   assert.equal(result.sourceRevision, "b".repeat(40));
+});
+
+test("verified Preview code scope is selected before builds and freezes only its Worker targets", async () => {
+  const accountId = "a".repeat(32),
+    names = resolveInfraNames({
+      environment: "preview",
+      documentsBucket: "savia-documents-preview",
+      publicOrigin: "https://savia-preview.hefesoft.com",
+    }),
+    events = [];
+  const outputs = {
+    cloudflareAccountId: accountId,
+    authD1Id: "auth-id",
+    domainD1Id: "domain-id",
+    documentsBucketName: names.bucket,
+    resolvedEnvironment: "preview",
+    resolvedPublicOrigin: names.publicOrigin,
+    workerNames: names.workers,
+    databaseNames: names.databases,
+    deletionProtected: false,
+    flowsEnabled: false,
+    flowsResources: null,
+    flowsExecutionEnabled: false,
+    plannedFlowsResourceNames: names.flows,
+    tenantSubdomains: [],
+    vectorizeIndex: names.vectorizeIndex,
+  };
+  await prepareEnvironmentRelease(
+    { environment: "preview", destination: "/tmp/not-created-code-only" },
+    {
+      env: {
+        CLOUDFLARE_ACCOUNT_ID: accountId,
+        SAVIA_PREVIEW_RELEASE_BASE: "a".repeat(40),
+      },
+      readOutputs: async () => outputs,
+      client: {
+        api: async () => assert.fail("code-only scope read account API"),
+      },
+      render: async () => events.push("render"),
+      run: async (binary, args) => {
+        if (binary === "git") {
+          if (args[0] === "rev-parse") return { stdout: "b".repeat(40) };
+          if (args[0] === "merge-base") return { stdout: "" };
+          if (args[0] === "diff")
+            return { stdout: "apps/api/src/auth/admin-oauth.ts" };
+          if (args[0] === "show") return { stdout: "export const x = 1" };
+        }
+        events.push(`build:${args.at(-1)}`);
+        return { stdout: "" };
+      },
+      freeze: async (options) => {
+        assert.deepEqual(options.codeOnly, {
+          base: "a".repeat(40),
+          head: "b".repeat(40),
+          targets: ["api"],
+        });
+        assert.deepEqual(
+          options.configs.map((path) => path.split("/").slice(-2).join("/")),
+          ["api/wrangler.preview.jsonc"],
+        );
+        assert.ok(options.domainMigrations.endsWith("packages/db/migrations"));
+        events.push("freeze");
+        return { artifactDigest: "c".repeat(64) };
+      },
+    },
+  );
+  assert.deepEqual(events, ["render", "freeze"]);
+});
+
+test("a Preview full-release fallback still builds assets and freezes the full Worker set", async () => {
+  const accountId = "a".repeat(32),
+    names = resolveInfraNames({
+      environment: "preview",
+      documentsBucket: "savia-documents-preview",
+      publicOrigin: "https://savia-preview.hefesoft.com",
+    }),
+    events = [];
+  await prepareEnvironmentRelease(
+    { environment: "preview", destination: "/tmp/not-created-full-release" },
+    {
+      env: {
+        CLOUDFLARE_ACCOUNT_ID: accountId,
+        SAVIA_PREVIEW_RELEASE_BASE: "a".repeat(40),
+      },
+      readOutputs: async () => ({
+        cloudflareAccountId: accountId,
+        authD1Id: "auth-id",
+        domainD1Id: "domain-id",
+        documentsBucketName: names.bucket,
+        resolvedEnvironment: "preview",
+        resolvedPublicOrigin: names.publicOrigin,
+        workerNames: names.workers,
+        databaseNames: names.databases,
+        deletionProtected: false,
+        flowsEnabled: false,
+        flowsResources: null,
+        flowsExecutionEnabled: false,
+        plannedFlowsResourceNames: names.flows,
+        tenantSubdomains: [],
+        vectorizeIndex: names.vectorizeIndex,
+      }),
+      client: { api: async () => ({ subdomain: "test-account" }) },
+      render: async () => events.push("render"),
+      run: async (binary, args) => {
+        if (binary === "git")
+          return {
+            stdout:
+              args[0] === "rev-parse"
+                ? "b".repeat(40)
+                : args[0] === "diff"
+                  ? "apps/api/src/auth/admin-oauth.ts"
+                  : args[0] === "show"
+                    ? "CREATE TABLE incompatible_change (id INTEGER)"
+                    : "",
+          };
+        events.push(args.at(-1));
+        return { stdout: "" };
+      },
+      freeze: async (options) => {
+        assert.equal(options.codeOnly, undefined);
+        assert.equal(options.configs.length, 9);
+        events.push("freeze");
+        return { artifactDigest: "c".repeat(64) };
+      },
+    },
+  );
+  assert.ok(events.includes("build:plugin-editor"));
+  assert.ok(events.includes("build:assets"));
 });
 test("production preparation cannot build or read credentials outside reviewed main", async () => {
   await assert.rejects(

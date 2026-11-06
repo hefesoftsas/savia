@@ -1,5 +1,38 @@
 import { resourcePolicy } from "./environments.mjs";
-export function assertRuntimeBindings(inputs, configs) {
+const codeOnlyWorkerNames = Object.freeze({
+  auth: "savia-auth-preview",
+  api: "savia-agencies-preview",
+  request: "savia-request-preview",
+  connectors: "savia-connectors-preview",
+});
+export function expectedPreviewCodeOnlyWorkers(releaseSource) {
+  if (!releaseSource || !Object.hasOwn(releaseSource, "codeOnly")) return null;
+  const scope = releaseSource.codeOnly,
+    targets = scope?.targets;
+  if (
+    Object.keys(releaseSource).sort().join(",") !==
+      "codeOnly,sourceRevision,version" ||
+    releaseSource.version !== 1 ||
+    !/^[a-f\d]{40}$/.test(releaseSource.sourceRevision ?? "") ||
+    !scope ||
+    Object.keys(scope).sort().join(",") !== "base,head,targets" ||
+    !/^[a-f\d]{40}$/.test(scope.base ?? "") ||
+    !/^[a-f\d]{40}$/.test(scope.head ?? "") ||
+    scope.base === scope.head ||
+    scope.head !== releaseSource.sourceRevision ||
+    !Array.isArray(targets) ||
+    !targets.length ||
+    targets.some(
+      (target) =>
+        typeof target !== "string" ||
+        !Object.hasOwn(codeOnlyWorkerNames, target),
+    ) ||
+    new Set(targets).size !== targets.length
+  )
+    throw new Error("Invalid verified Preview code scope");
+  return targets.map((target) => codeOnlyWorkerNames[target]).sort();
+}
+export function assertRuntimeBindings(inputs, configs, { releaseSource } = {}) {
   const policy = resourcePolicy(
       inputs.environment,
       inputs.adoptionManifest?.profile ?? {},
@@ -7,6 +40,9 @@ export function assertRuntimeBindings(inputs, configs) {
     own = new Set(inputs.workers.map((row) => row.name)),
     seen = new Set(),
     resources = inputs.adoptionManifest?.resources ?? [];
+  const expected = expectedPreviewCodeOnlyWorkers(releaseSource);
+  if (expected && inputs.environment !== "preview")
+    throw new Error("Verified code scope is only allowed in Preview");
   const data = (kind, id, byName = false) => {
     if (
       !resources.some(
@@ -86,7 +122,16 @@ export function assertRuntimeBindings(inputs, configs) {
       );
     }
   }
-  if (seen.size !== own.size)
+  if (expected) {
+    if (
+      configs.length !== expected.length ||
+      [...seen].sort().join("\n") !== expected.join("\n") ||
+      expected.some((name) => !own.has(name))
+    )
+      throw new Error(
+        "Prepared Workers do not exactly match verified code scope",
+      );
+  } else if (seen.size !== own.size)
     throw new Error("Missing prepared Worker profile");
   return true;
 }

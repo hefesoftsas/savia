@@ -41,6 +41,15 @@ export async function prepareEnvironmentRelease(
   ).stdout.trim();
   if (!/^[a-f\d]{40}$/.test(revision))
     throw new Error("Exact checked-out source revision required");
+  const codeOnly =
+    environment === "preview"
+      ? await derivePreviewCodeScope({
+          base: env.SAVIA_PREVIEW_RELEASE_BASE,
+          head: revision,
+          cwd: root,
+          run,
+        })
+      : null;
   let configs,
     operationEnv = { ...env };
   if (descriptor.kind === "application") {
@@ -59,7 +68,7 @@ export async function prepareEnvironmentRelease(
       ...(outputs.flowsEnabled ? ["flows/api"] : []),
       ...(environment === "preview" ? ["plugin-editor-runtime"] : []),
     ];
-    if (environment === "preview") {
+    if (environment === "preview" && !codeOnly) {
       client ??= createRuntimeCloudClient(
         { accountId: env.CLOUDFLARE_ACCOUNT_ID, workers: [] },
         { env },
@@ -75,27 +84,34 @@ export async function prepareEnvironmentRelease(
         { cwd: root, env: operationEnv },
       );
     }
-    await run("pnpm", ["--filter", "@savia/admin", "run", "build:assets"], {
-      cwd: root,
-      env: operationEnv,
-    });
+    if (!codeOnly)
+      await run("pnpm", ["--filter", "@savia/admin", "run", "build:assets"], {
+        cwd: root,
+        env: operationEnv,
+      });
     configs = apps.map((app) =>
       join(root, "apps", app, `wrangler.${environment}.jsonc`),
     );
+    if (codeOnly) {
+      const appForTarget = {
+        auth: "auth",
+        api: "api",
+        request: "savia-request",
+        connectors: "connector-gateway",
+      };
+      configs = configs.filter((path) =>
+        codeOnly.targets.some((target) =>
+          path.endsWith(`/apps/${appForTarget[target]}/wrangler.preview.jsonc`),
+        ),
+      );
+      if (configs.length !== codeOnly.targets.length)
+        throw new Error("Preview code scope contains an unsupported Worker");
+    }
   } else {
     await sharedOutputs({ env, run });
     await renderShared({ env, run });
     configs = [join(root, "apps/plugin-registry/wrangler.production.jsonc")];
   }
-  const codeOnly =
-    environment === "preview"
-      ? await derivePreviewCodeScope({
-          base: env.SAVIA_PREVIEW_RELEASE_BASE,
-          head: revision,
-          cwd: root,
-          run,
-        })
-      : null;
   const artifact = await freeze({
     environment,
     configs,

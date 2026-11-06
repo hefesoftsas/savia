@@ -396,6 +396,13 @@ jobs:
           SAVIA_FLOWS_BACKUP_KEY: ${{ secrets.SAVIA_FLOWS_BACKUP_KEY }}
           SAVIA_RUNTIME_OPERATION_DIRECTORY: ${{ runner.temp }}/savia-runtime
 
+      - name: Publish sanitized runtime operation timings
+        continue-on-error: true
+        if: ${{ always() }}
+        run: node infra/pulumi/runtime-timing.mjs summary
+        env:
+          SAVIA_RUNTIME_OPERATION_DIRECTORY: ${{ runner.temp }}/savia-runtime
+
       - name: Encrypt private command diagnostics
         if: ${{ always() }}
         env:
