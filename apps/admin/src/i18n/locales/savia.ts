@@ -600,7 +600,7 @@ const saviaSpanish = {
         "domain-packages": "plugins extensiones paquetes",
       },
       searchLabel: "Buscar en el menú",
-      searchPlaceholder: "Buscar en el menú",
+      searchPlaceholder: "Buscar en el menú…",
       loadingNavigation: "Cargando navegación…",
       organizeMenu: "Organizar menú",
       done: "Listo",
