@@ -10,7 +10,7 @@
     "test": "vitest run --maxWorkers=1"
   },
   "dependencies": {
-    "fast-xml-parser": "^5.2.5",
+    "fast-xml-parser": "^5.12.0",
     "hono": "^4.13.11",
     "@savia/db": "workspace:*"
   },
