@@ -1210,7 +1210,7 @@ describe("plugin store por tenant", () => {
         {
           id: "detail",
           kind: "mcp",
-          sourceId: "secop_live",
+          sourceId: "sample_mcp",
           tool: "detalle_licitacion",
           mapping: { idField: ":id" },
           inputArguments: ["id"],
@@ -3190,7 +3190,7 @@ describe("read-only MCP store execution", () => {
     const action = {
       id: "search",
       kind: "mcp",
-      sourceId: "secop_live",
+      sourceId: "sample_mcp",
       tool: "buscar_licitaciones",
       mapping: { idField: ":id", itemsPointer: "/data", arguments: {} },
       inputArguments: ["q"],

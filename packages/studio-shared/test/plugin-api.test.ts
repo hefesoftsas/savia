@@ -24,7 +24,7 @@ describe("plugin collection API", () => {
   it("opens the native assistant through the owning extension host route", async () => {
     const calls: unknown[][] = [];
     const savia = createPluginApi({
-      extensionId: "procurement.secop",
+      extensionId: "sample.plugin",
       request: async (...args) => {
         calls.push(args);
         return { data: null };
@@ -32,7 +32,7 @@ describe("plugin collection API", () => {
     });
 
     await savia.assistant?.open({
-      title: "Tender dossier",
+      title: "Sample dossier",
       actionId: "dossier-call",
       connectionId: "private-service",
       context: { dossierId: "dossier-1", companyProfileId: "company-2" },
@@ -40,10 +40,10 @@ describe("plugin collection API", () => {
 
     expect(calls).toEqual([
       [
-        "/extensions/procurement.secop/assistant/open",
+        "/extensions/sample.plugin/assistant/open",
         "POST",
         {
-          title: "Tender dossier",
+          title: "Sample dossier",
           actionId: "dossier-call",
           connectionId: "private-service",
           context: { dossierId: "dossier-1", companyProfileId: "company-2" },

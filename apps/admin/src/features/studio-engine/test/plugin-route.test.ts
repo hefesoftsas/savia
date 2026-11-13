@@ -5,11 +5,11 @@ describe("plugin URL state", () => {
   const href =
     "https://savia.test/#/studio?tenantId=12&object=opportunities&plugin.other.tab=keep";
   it("round trips a tender and tab without changing workspace or another plugin", () => {
-    const url = writePluginRoute(href, "procurement.secop", {
+    const url = writePluginRoute(href, "sample.plugin", {
       tender: "CO1.REQ.123",
       tab: "documents",
     });
-    expect(readPluginRoute(url.href, "procurement.secop")).toEqual({
+    expect(readPluginRoute(url.href, "sample.plugin")).toEqual({
       tender: "CO1.REQ.123",
       tab: "documents",
     });
@@ -17,8 +17,8 @@ describe("plugin URL state", () => {
     expect(url.hash).toContain("tenantId=12&object=opportunities");
     expect(
       readPluginRoute(
-        writePluginRoute(url.href, "procurement.secop", {}).href,
-        "procurement.secop",
+        writePluginRoute(url.href, "sample.plugin", {}).href,
+        "sample.plugin",
       ),
     ).toEqual({});
   });

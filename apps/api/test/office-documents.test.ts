@@ -234,7 +234,7 @@ describe("private office document API", () => {
     const owner = appFor(actor("office-owner", 9461));
     const firstResponse = await createDocWithSource(
       owner,
-      "proposal:secop:123",
+      "proposal:sample:123",
     );
     const first = ((await firstResponse.json()) as any).data;
     const saved = await saveDoc(owner, first.id, 1);
@@ -245,7 +245,7 @@ describe("private office document API", () => {
     });
     const reused = await createDocWithSource(
       owner,
-      "proposal:secop:123",
+      "proposal:sample:123",
       new File(["invalid Office package"], "bad.docx", {
         type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
       }),

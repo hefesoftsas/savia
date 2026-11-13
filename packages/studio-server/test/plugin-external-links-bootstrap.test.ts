@@ -20,7 +20,7 @@ function harness(requestHost = vi.fn().mockResolvedValue(null)) {
   )(requestHost, "panel-7", document, vi.fn());
   const anchor = {
     target: "_blank",
-    href: "https://community.secop.gov.co/Public/Tendering/OpportunityDetail/Index?noticeUID=CO1.NTC.10247078",
+    href: "https://portal.example.test/Public/OpportunityDetail/Index?noticeUID=ITEM.10247078",
     hasAttribute: vi.fn(() => false),
     isConnected: true,
     nextElementSibling: null,

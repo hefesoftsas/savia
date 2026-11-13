@@ -44,7 +44,7 @@ const fetcher: typeof fetch = async (input, init) => {
     result = {
       tools: [
         {
-          name: "buscar_licitaciones",
+          name: "search_records",
           inputSchema: {
             type: "object",
             properties: {
@@ -69,8 +69,8 @@ const tenantId = "mcp-plugin-tests";
 const action = storeMcpActionSchema.parse({
   id: "search",
   kind: "mcp",
-  sourceId: "secop_live",
-  tool: "buscar_licitaciones",
+  sourceId: "sample_mcp",
+  tool: "search_records",
   mapping: {
     arguments: {},
     idField: ":id",
@@ -82,7 +82,7 @@ const action = storeMcpActionSchema.parse({
 const request = {
   tenantId,
   principalId: "owner",
-  extensionId: "procurement.secop",
+  extensionId: "sample.plugin",
   action,
   input: { q: "software", page: 1, perPage: 20 },
 };
@@ -106,12 +106,12 @@ it("uses only a declared read tool on the current owner's source and allowlisted
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
-      id: "secop_live",
-      label: "SECOP",
+      id: "sample_mcp",
+      label: "Sample MCP",
       kind: "mcp",
       endpoint: "https://mcp.public.dev/mcp",
       authMode: "none",
-      readOnlyTools: ["buscar_licitaciones"],
+      readOnlyTools: ["search_records"],
     }),
   });
   expect(created.status, await created.clone().text()).toBe(201);
@@ -122,7 +122,7 @@ it("uses only a declared read tool on the current owner's source and allowlisted
     perPage: 20,
   });
   expect(calls.at(-1)).toMatchObject({
-    name: "buscar_licitaciones",
+    name: "search_records",
     arguments: { q: "software", limit: 20, offset: 0 },
   });
   const before = calls.length;
@@ -160,7 +160,7 @@ it("forwards declared flat primitive arrays unchanged to MCP", async () => {
 
   expect(output).toMatchObject({ page: 2, perPage: 10 });
   expect(calls.at(-1)).toMatchObject({
-    name: "buscar_licitaciones",
+    name: "search_records",
     arguments: {
       q: "software",
       estado: ["Publicado", "Abierto"],
