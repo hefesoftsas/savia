@@ -36,7 +36,7 @@
     "aws4fetch": "1.0.20",
     "cron-parser": "5.10.0",
     "drizzle-orm": "0.45.2",
-    "hono": "4.13.11",
+    "hono": "4.13.16",
     "jose": "6.2.11",
     "nanoid": "5.1.16",
     "openai": "6.49.0",
