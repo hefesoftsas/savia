@@ -209,8 +209,8 @@ it("opens only its own extension assistant and invokes its declared action throu
     }),
   );
   setStudioRuntime({ embedded: false, transport });
-  render(<CustomPluginFrame pluginId="procurement.secop" title="SECOP" />);
-  const frame = screen.getByTitle("SECOP") as HTMLIFrameElement;
+  render(<CustomPluginFrame pluginId="sample.plugin" title="Sample Plugin" />);
+  const frame = screen.getByTitle("Sample Plugin") as HTMLIFrameElement;
   const send = vi.spyOn(frame.contentWindow!, "postMessage");
   const request = (path: string, id: string) =>
     fireEvent(
@@ -234,13 +234,13 @@ it("opens only its own extension assistant and invokes its declared action throu
 
   request("/extensions/other.plugin/assistant/open", "foreign");
   expect(getPluginAssistantProvider()).toBeNull();
-  request("/extensions/procurement.secop/assistant/open", "own");
+  request("/extensions/sample.plugin/assistant/open", "own");
   expect(getPluginAssistantProvider()?.title).toBe("Tender dossier");
   await act(async () => {
     await getPluginAssistantProvider()!.invoke({ method: "load" });
   });
   expect(transport).toHaveBeenCalledWith(
-    "/api/extensions/procurement.secop/actions/assistant-chat",
+    "/api/extensions/sample.plugin/actions/assistant-chat",
     expect.objectContaining({
       method: "POST",
       body: JSON.stringify({
@@ -597,7 +597,7 @@ it("allows a plugin to download a generated PDF while keeping its origin isolate
 });
 
 it.each([
-  "https://www.colombiacompra.gov.co/secop",
+  "https://portal.example.test/item",
   `${window.location.origin}/v1/studio/12/api/file/test/download`,
 ])("opens safe navigation URL %s during a user gesture", (url) => {
   Object.defineProperty(navigator, "userActivation", {
@@ -616,7 +616,7 @@ it.each([
       data: {
         ns: "savia-plugin",
         type: "request",
-        id: "open-secops",
+        id: "open-portal",
         path: "/navigation/external",
         method: "POST",
         body: { url },
@@ -630,7 +630,7 @@ it.each([
     expect.objectContaining({
       ns: "savia-plugin",
       type: "response",
-      id: "open-secops",
+      id: "open-portal",
       panelId: "panel-1",
       ok: true,
       data: null,
@@ -654,7 +654,7 @@ it("rejects invalid external navigation requests without opening a window", () =
     { id: "data", body: { url: "data:text/html,hello" } },
     { id: "file", body: { url: "file:///etc/passwd" } },
     { id: "credentials", body: { url: "https://user:secret@example.com" } },
-    { id: "relative", body: { url: "/secop" } },
+    { id: "relative", body: { url: "/portal" } },
     { id: "control", body: { url: "https://example.com/\nnext" } },
     {
       id: "too-long",
@@ -1744,11 +1744,11 @@ it("binds task writes, documents and source resolution to the current assistant 
               revision: 1,
               messages: [],
               source: {
-                url: "https://secop.example/private/source/ticket#page=4",
+                url: "https://provider.example/private/source/ticket#page=4",
                 page: 4,
               },
               document: {
-                url: "https://secop.example/private/proposal/ticket",
+                url: "https://provider.example/private/proposal/ticket",
                 fileName: "proposal.docx",
                 format: "docx",
               },

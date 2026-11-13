@@ -327,9 +327,9 @@ it("preserves bounded source and requirement task capabilities", () => {
       title: "Tender",
       actionId: "chat",
       context: { id: "x" },
-      taskCollection: "secop_application_tasks",
+      taskCollection: "plugin_application_tasks",
     })?.taskCollection,
-  ).toBe("secop_application_tasks");
+  ).toBe("plugin_application_tasks");
 });
 
 it("rejects unsafe source URLs and malformed task suggestions", () => {

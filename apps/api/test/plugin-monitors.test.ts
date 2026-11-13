@@ -446,13 +446,13 @@ it("does not send a hidden lookup field to the provider when row access lacks re
       .revision,
     grants: [
       {
-        resource: "collection:procurement_opportunities",
+        resource: "collection:tracked_opportunities",
         action: "read",
         predicate: { all: true },
         fields: ["name", "notes"],
       },
       {
-        resource: "collection:procurement_opportunities",
+        resource: "collection:tracked_opportunities",
         action: "update",
         predicate: { all: true },
         fields: Object.keys(store.collections[0].object.config.fields),

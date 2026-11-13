@@ -204,7 +204,7 @@ const panelScript = String.raw`
   pauseButton.addEventListener('click', () => { if (!busy && !sessionExpired) dialog.showModal(); });
   previewButton.addEventListener('click', async () => {
     if (busy || sessionExpired) return;
-    if (!window.confirm('Approve Savia preview only? This leaves the account stop latch and spending limit unchanged. SECOP and all other services remain paused. A later “Pause all environments” action revokes this approval.')) return;
+    if (!window.confirm('Approve Savia preview only? This leaves the account stop latch and spending limit unchanged. All other services remain paused. A later “Pause all environments” action revokes this approval.')) return;
     const generation = sessionGeneration;
     setBusy(true);
     message.className = 'action-message';
@@ -215,7 +215,7 @@ const panelScript = String.raw`
       });
       if (generation !== sessionGeneration) return;
       renderStatus(result);
-      message.textContent = 'Preview approval recorded. The account stop latch and spending limits remain active; SECOP stays paused.';
+      message.textContent = 'Preview approval recorded. The account stop latch and spending limits remain active; all other services stay paused.';
       message.className = 'action-message is-success';
     } catch (error) {
       if (generation !== sessionGeneration) return;

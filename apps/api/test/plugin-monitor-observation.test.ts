@@ -7,8 +7,8 @@ import {
 } from "../src/studio/plugin-monitor-observation";
 
 const monitor: StoreRecordMonitor = {
-  id: "secop-opportunities",
-  collection: "procurement_opportunities",
+  id: "sample-opportunities",
+  collection: "tracked_opportunities",
   actionId: "search",
   lookup: { field: "process_id", argument: "id_del_proceso" },
   matchField: "source_id",

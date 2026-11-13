@@ -18,7 +18,7 @@
   "monitors": [
     {
       "id": "tracking",
-      "collection": "procurement_opportunities",
+      "collection": "tracked_opportunities",
       "actionId": "detail",
       "lookup": {
         "field": "process_id",
@@ -62,7 +62,7 @@
   "collections": [
     {
       "object": {
-        "name": "procurement_opportunities",
+        "name": "tracked_opportunities",
         "label": "remote source opportunities",
         "description": "Opportunities intentionally saved by workspace users for follow-up.",
         "config": {
@@ -120,10 +120,10 @@
             },
             "modality": {
               "type": "Textbox",
-              "label": "Procurement modality",
+              "label": "Tracking modality",
               "labels": {
                 "es": "Modalidad de contrataci\u00f3n",
-                "en": "Procurement modality",
+                "en": "Tracking modality",
                 "pt": "Modalidade de contrata\u00e7\u00e3o"
               }
             },

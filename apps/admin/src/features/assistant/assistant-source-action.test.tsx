@@ -34,7 +34,7 @@ it("opens the server-resolved PDF at the cited page without sending document URL
     revision: 1,
     messages: [],
     source: {
-      url: "https://secop.example/private/source/ticket",
+      url: "https://provider.example/private/source/ticket",
       page: 4,
     },
   }));
@@ -48,7 +48,7 @@ it("opens the server-resolved PDF at the cited page without sending document URL
   fireEvent.click(screen.getByRole("button", { name: "Open source" }));
   await waitFor(() =>
     expect(popup.location.replace).toHaveBeenCalledWith(
-      "https://secop.example/private/source/ticket#page=4",
+      "https://provider.example/private/source/ticket#page=4",
     ),
   );
   expect(invoke).toHaveBeenCalledWith({

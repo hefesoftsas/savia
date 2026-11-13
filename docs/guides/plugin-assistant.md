@@ -93,14 +93,7 @@ The provider returns `{ revision: 0, messages: [], document: { url, fileName, fo
 The HTTPS download URL must not contain embedded credentials, and the file name
 must be a bounded safe DOCX name. A context change revokes an unfinished download.
 Generation and failure states are visible, and errors can be retried explicitly.
-
-The SECOP provider generates an editable proposal using the current dossier and
-selected company profile. It checks the current complete report index and includes
-the saved requirements and source references, evidence gaps and review cautions.
-Missing company data, prices, experience and declarations remain placeholders;
-company evidence is not automatically treated as a verified compliance decision.
-The SECOP backend returns a short-lived private attachment that the host imports into the Savia Office suite before opening the editor.
-No SECOP proposal logic or client-side persistence is added to Savia core.
+No provider-specific proposal logic or client-side persistence is added to Savia core.
 
 ### Generated documents in the Office suite
 

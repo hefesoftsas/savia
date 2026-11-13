@@ -30,8 +30,8 @@ it("persists the reviewed task using backend CRUD and reuses the same requiremen
     },
   );
   const options = {
-    collection: "secop_application_tasks",
-    pluginId: "procurement.secop",
+    collection: "plugin_application_tasks",
+    pluginId: "sample.plugin",
     context: { dossierId: "CO1.REQ.1" },
     sourceUrl: "https://savia-preview.hefesoft.com/#/studio",
     request: request as never,

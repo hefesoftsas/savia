@@ -699,7 +699,7 @@ the literal placeholders `{name}`, `{previous}`, `{current}`, `{deadline}` and
 `{hours}`. A monitor's MCP source is resolved for the immutable creator of the
 record, so a tenant member's OAuth grant cannot be reused for another creator.
 The monitor integration tests use an independent fixture package to exercise this
-contract. The former SECOP package has been [retired](secop-tenders-plugin.md).
+contract.
 
 ## PDF analysis from installed plugins
 

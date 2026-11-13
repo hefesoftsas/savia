@@ -124,10 +124,10 @@ const expiredOAuthSource = async (
 };
 it("stores MCP credentials encrypted and scopes source management", async () => {
   const r = await call("sources", "POST", {
-    id: "secop",
-    label: "SECOP",
+    id: "sample_mcp",
+    label: "Sample MCP",
     kind: "mcp",
-    endpoint: "https://secop-live-worker.jose-douglas-dev.workers.dev/mcp",
+    endpoint: "https://mcp.public.dev/mcp",
     authMode: "oauth",
     oauth: {
       clientId: "savia",
@@ -140,7 +140,7 @@ it("stores MCP credentials encrypted and scopes source management", async () => 
   const row = await env.DB.prepare(
     "SELECT config,encrypted_secret FROM studio_collection_sources WHERE tenant_id=? AND id=?",
   )
-    .bind("mcp-sources", "secop")
+    .bind("mcp-sources", "sample_mcp")
     .first<{ config: string; encrypted_secret: string }>();
   expect(row?.config).not.toContain("private-client-secret");
   expect(row?.encrypted_secret).toBeTruthy();
@@ -151,7 +151,7 @@ it("stores MCP credentials encrypted and scopes source management", async () => 
   expect(
     (
       await call(
-        "sources/secop/test",
+        "sources/sample_mcp/test",
         "POST",
         {},
         make("owner", "other-tenant"),
@@ -159,7 +159,7 @@ it("stores MCP credentials encrypted and scopes source management", async () => 
     ).status,
   ).toBe(404);
   expect(
-    (await call("sources/secop", "PUT", { writeEnabled: true })).status,
+    (await call("sources/sample_mcp", "PUT", { writeEnabled: true })).status,
   ).toBe(422);
 });
 it("rejects private endpoints and source writes before making network requests", async () => {
@@ -189,13 +189,13 @@ it("rejects private endpoints and source writes before making network requests",
   expect(await (await call("sources")).text()).not.toContain("private-bearer");
   expect(
     (
-      await call("sources/secop/oauth/start", "POST", {
+      await call("sources/sample_mcp/oauth/start", "POST", {
         redirectUri: "https://evil.dev/callback",
       })
     ).status,
   ).toBe(422);
   expect(
-    (await call("sources/secop/oauth/callback?state=missing&code=x")).status,
+    (await call("sources/sample_mcp/oauth/callback?state=missing&code=x")).status,
   ).toBe(422);
 });
 

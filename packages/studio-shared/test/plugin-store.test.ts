@@ -351,7 +351,7 @@ describe("store.json declarativo", () => {
         {
           id: "detail",
           kind: "mcp",
-          sourceId: "secop_live",
+          sourceId: "sample_mcp",
           tool: "detalle_licitacion",
           mapping: { idField: ":id" },
           inputArguments: ["id_del_proceso"],
@@ -434,7 +434,7 @@ describe("store.json declarativo", () => {
         {
           id: "detail",
           kind: "mcp",
-          sourceId: "secop_live",
+          sourceId: "sample_mcp",
           tool: "detalle",
           mapping: { idField: ":id" },
           inputArguments: ["id"],
@@ -547,7 +547,7 @@ describe("store.json declarativo", () => {
         {
           id: "detail",
           kind: "mcp",
-          sourceId: "secop_live",
+          sourceId: "sample_mcp",
           tool: "detalle",
           mapping: { idField: ":id" },
           inputArguments: ["id"],
@@ -879,7 +879,7 @@ describe("read-only MCP store actions", () => {
   const action = {
     id: "search",
     kind: "mcp",
-    sourceId: "secop_live",
+    sourceId: "sample_mcp",
     tool: "buscar_licitaciones",
     mapping: {
       idField: ":id",
@@ -896,7 +896,7 @@ describe("read-only MCP store actions", () => {
       actions: [action],
     });
     expect(parsed.actions[0]).toMatchObject(action);
-    expect(storeMcpActions("procurement.secop", parsed)).toEqual([]);
+    expect(storeMcpActions("sample.plugin", parsed)).toEqual([]);
   });
   it.each([
     { endpoint: "https://other.dev/mcp" },

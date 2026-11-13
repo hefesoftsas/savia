@@ -182,7 +182,7 @@ test("preview approval appears only after a complete pause and submits one confi
   assert.notEqual(h.elements.get("preview-approved-at").textContent, "—");
   assert.match(
     h.elements.get("action-message").textContent,
-    /SECOP stays paused/,
+    /all other services stay paused/,
   );
 });
 

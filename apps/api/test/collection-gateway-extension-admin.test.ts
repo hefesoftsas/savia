@@ -144,7 +144,7 @@ describe("extension administration authorization", () => {
       accessPolicy,
     });
     await gateway.fetch(
-      new Request("https://crm.internal/api/sources/secop/oauth/start", {
+      new Request("https://crm.internal/api/sources/sample_mcp/oauth/start", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ redirectUri: "https://savia.dev/callback" }),

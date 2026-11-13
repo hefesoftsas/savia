@@ -42,7 +42,7 @@ function provider(
     title: "Tender",
     actionId: "assistant-chat",
     context: { dossierId: "tender-1" },
-    taskCollection: "secop_application_tasks",
+    taskCollection: "plugin_application_tasks",
     sessionId: "session-1",
     invoke: vi.fn(),
     createTask,
@@ -65,7 +65,7 @@ describe("assistant task action", () => {
     window.history.replaceState(
       null,
       "",
-      "/#/studio?tenantId=12&plugin=secop-tenders&object=opportunities",
+      "/#/studio?tenantId=12&plugin=sample-plugin&object=opportunities",
     );
     const createTask = vi
       .fn()

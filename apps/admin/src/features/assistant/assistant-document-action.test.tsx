@@ -56,7 +56,7 @@ function generated(
     revision: 1,
     messages: [],
     document: {
-      url: "https://secop.example/private/download/signed-token",
+      url: "https://provider.example/private/download/signed-token",
       fileName: "propuesta-tender-1.docx",
       format: "docx" as const,
     },
@@ -210,7 +210,7 @@ it("uploads the generated DOCX to Savia, then opens its Office editor", async ()
     actionId: "proposal-docx",
   });
   expect(fetch).toHaveBeenCalledWith(
-    "https://secop.example/private/download/signed-token",
+    "https://provider.example/private/download/signed-token",
     expect.objectContaining({
       credentials: "omit",
       redirect: "error",
@@ -327,7 +327,7 @@ it("aborts work on context change before a late provider result can fetch or nav
     revision: 1,
     messages: [],
     document: {
-      url: "https://secop.example/private/download/token",
+      url: "https://provider.example/private/download/token",
       fileName: "proposal.docx",
       format: "docx",
     },
