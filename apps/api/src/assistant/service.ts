@@ -5,9 +5,11 @@ import { createMCPClient, type MCPClient } from "@ai-sdk/mcp";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { z } from "@hono/zod-openapi";
 import {
+  APICallError,
   convertToModelMessages,
   hasToolCall,
   isStepCount,
+  RetryError,
   streamText,
   type UIMessage,
 } from "ai";
@@ -562,6 +564,14 @@ export class SaviaAssistantService implements AssistantService {
                   }
                 : undefined
           : undefined,
+        onError: ({ error }) => {
+          const cause = RetryError.isInstance(error) ? error.lastError : error;
+          console.error("assistant_openrouter_stream_error", {
+            upstreamStatus: APICallError.isInstance(cause)
+              ? (cause.statusCode ?? null)
+              : null,
+          });
+        },
         onEnd: () => {
           void mcpClient?.close().catch(() => undefined);
         },

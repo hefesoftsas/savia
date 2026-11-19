@@ -1,4 +1,5 @@
 import { env } from "cloudflare:workers";
+import { APICallError, RetryError } from "ai";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { AssistantConfigurationUnavailableError } from "../src/assistant/configuration";
 import { PendingActionRepository } from "../src/assistant/pending-actions";
@@ -1171,6 +1172,38 @@ it.each(["savia_get_quote_form", "savia_lookup_quote_vehicle"])(
     expect(execute).not.toHaveBeenCalled();
   },
 );
+
+it("logs only the upstream status for a failed OpenRouter chat stream", async () => {
+  const { service } = textOnlyService(textOnlyEmployee([]));
+  const log = vi.spyOn(console, "error").mockImplementation(() => {});
+  try {
+    await service.chat({
+      principalId: "user",
+      authorization: "Bearer user",
+      employeeId: "employee-text-only",
+      responseMode: "text",
+      messages: [],
+    });
+    const providerError = new APICallError({
+      message: "private provider detail",
+      url: "https://openrouter.ai/api/v1/chat/completions",
+      requestBodyValues: { messages: ["private chat text"] },
+      statusCode: 401,
+      responseBody: "private response body",
+    });
+    const error = new RetryError({
+      message: "private retry detail",
+      reason: "errorNotRetryable",
+      errors: [providerError],
+    });
+    await streamTextMock.mock.calls[0][0].onError({ error });
+    expect(log.mock.calls).toEqual([
+      ["assistant_openrouter_stream_error", { upstreamStatus: 401 }],
+    ]);
+  } finally {
+    log.mockRestore();
+  }
+});
 
 it("uses an admin-enabled model override for selection text tasks", async () => {
   const { service, mcpClientFactory } = textOnlyService(textOnlyEmployee([]), [
