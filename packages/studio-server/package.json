@@ -14,7 +14,7 @@
   "dependencies": {
     "@savia/studio-shared": "workspace:*",
     "@savia/flows-native": "workspace:*",
-    "hono": "^4.13.11",
+    "hono": "^4.13.16",
     "zod": "^4.1.0",
     "@savia/db": "workspace:*"
   },
