@@ -43,6 +43,11 @@ for the request.
 Invoking an unknown, inactive, or out-of-scope employee ID returns an
 unavailable/not-found result without substituting another employee.
 
+An assistant chat can return HTTP 200 and then fail inside its response stream.
+In Workers Logs, look up the request by Ray ID and use its trace ID to find the
+`assistant_openrouter_stream_error` event. The event records the upstream HTTP
+status when available and omits message bodies and credentials.
+
 See [Remote MCP](../remote-mcp.md) for connecting external clients and the
 employee discovery and invocation tools.
 
