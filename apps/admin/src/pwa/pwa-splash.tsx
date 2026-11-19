@@ -57,15 +57,20 @@ export function PwaSplash({
   message = PWA_SPLASH_MESSAGE,
   contained = false,
   recoveryHref,
+  recoverOnTimeout = true,
 }: {
   message?: string;
   contained?: boolean;
   recoveryHref?: string;
+  recoverOnTimeout?: boolean;
   loadingPrimary?: string;
   loadingSecondary?: string;
 }) {
   const Container = contained ? "div" : "main";
-  const timedOut = useLoadingTimeout(`${message}:${contained}`);
+  const timedOut = useLoadingTimeout(
+    `${message}:${contained}`,
+    recoverOnTimeout,
+  );
   return (
     <Container
       role="status"

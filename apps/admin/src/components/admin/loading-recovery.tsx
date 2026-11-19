@@ -25,18 +25,19 @@ function getRecoveryCopy() {
   };
 }
 
-export function useLoadingTimeout(resetKey?: string): boolean {
+export function useLoadingTimeout(resetKey?: string, enabled = true): boolean {
   const [timedOutForKey, setTimedOutForKey] = useState<string>();
 
   useEffect(() => {
+    if (!enabled) return;
     const timeout = window.setTimeout(
       () => setTimedOutForKey(resetKey ?? ""),
       LOADING_RECOVERY_DELAY_MS,
     );
     return () => window.clearTimeout(timeout);
-  }, [resetKey]);
+  }, [resetKey, enabled]);
 
-  return timedOutForKey === (resetKey ?? "");
+  return enabled && timedOutForKey === (resetKey ?? "");
 }
 
 export function LoadingRecovery({

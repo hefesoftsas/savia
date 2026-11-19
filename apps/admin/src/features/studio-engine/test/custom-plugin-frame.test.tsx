@@ -489,6 +489,14 @@ it("sizes plugin screens to their content and resets on navigation", () => {
       }),
     );
   resize(1250);
+  expect(frame).toHaveStyle({ height: "512px" });
+  fireEvent(
+    window,
+    new MessageEvent("message", {
+      source: frame.contentWindow,
+      data: { ns: "savia-plugin", type: "ready" },
+    }),
+  );
   expect(frame).toHaveStyle({ height: "1250px" });
   resize(480);
   expect(frame).toHaveStyle({ height: "480px" });
@@ -1231,9 +1239,35 @@ it("offers retry when a frame never announces readiness", () => {
   render(
     <CustomPluginFrame pluginId="custom.stalled" title="Stalled plugin" />,
   );
-  act(() => vi.advanceTimersByTime(30_000));
+  act(() => vi.advanceTimersByTime(15_000));
+  expect(screen.getByTestId("pwa-spinner")).toBeVisible();
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  act(() => vi.advanceTimersByTime(15_000));
   expect(screen.getByRole("alert")).toBeVisible();
   expect(screen.getByRole("button", { name: "Retry" })).toBeEnabled();
+});
+
+it("waits for a new readiness message when returning to a previous screen", () => {
+  const plugin = (object: string) => (
+    <CustomPluginFrame
+      pluginId="custom.demo"
+      title="Plugin"
+      screen={{ object, view: "records" }}
+    />
+  );
+  const { rerender } = render(plugin("first"));
+  const first = screen.getByTitle("Plugin") as HTMLIFrameElement;
+  fireEvent(
+    window,
+    new MessageEvent("message", {
+      source: first.contentWindow,
+      data: { ns: "savia-plugin", type: "ready" },
+    }),
+  );
+  rerender(plugin("second"));
+  rerender(plugin("first"));
+  expect(screen.getByTitle("Plugin")).toHaveClass("invisible");
+  expect(screen.getByRole("status")).toBeVisible();
 });
 
 it("does not send a previous screen's pending response to a replacement frame", async () => {

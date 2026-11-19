@@ -32,9 +32,12 @@ Cloudflare from injecting analytics scripts into the sandbox HTML; its existing
 This caches executable artifacts only, not application records, credentials, or
 permission decisions. The iframe remains sandboxed with an opaque origin, and
 all business requests still pass through the authenticated host transport.
-The host shows a loading state until the sandbox announces readiness; startup
-errors or a missing readiness message after 30 seconds offer a retry. Retrying
-creates a fresh iframe, and pending replies from the previous frame are discarded.
+The host centers the loading indicator in a stable screen frame until that
+iframe announces readiness. Content height updates take effect once it is ready.
+Startup errors or a missing readiness message after 30 seconds offer a retry
+inside Studio. Retrying or returning to a previous screen requires the new
+iframe to announce readiness, and pending replies from the previous frame are
+discarded.
 
 For screen frames, the host starts the standard tenant-scoped settings GET while
 the shell and entry module load. The first `savia.settings.get()` consumes that

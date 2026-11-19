@@ -328,7 +328,13 @@ export function CustomPluginFrame({
     [screenUrl],
   );
   const shellUrl = `${screenUrl}${screenUrl.includes("?") ? "&" : "?"}theme=${initialTheme}${panelBinding ? `&panel=1${panelBinding.reusable ? "&standby=1" : ""}` : ""}`;
-  const frameKey = `${shellUrl}#${attempt}:${sessionRevision}:${installationVersion ?? ""}`;
+  const frameSource = `${shellUrl}#${attempt}:${sessionRevision}:${installationVersion ?? ""}`;
+  const [frame, setFrame] = useState({ source: frameSource, revision: 0 });
+  if (frame.source !== frameSource) {
+    // Returning to the same URL mounts a new iframe with its own readiness.
+    setFrame({ source: frameSource, revision: frame.revision + 1 });
+  }
+  const frameKey = `${frameSource}:${frame.revision}`;
   const settingsPath = `/extensions/${encodeURIComponent(pluginId)}/settings`;
 
   useEffect(() => {
@@ -1062,7 +1068,11 @@ export function CustomPluginFrame({
           </div>
         ) : readyFrame !== frameKey ? (
           <div className="absolute inset-0 z-10 bg-background">
-            <PwaSplash contained message={t("Cargando…")} />
+            <PwaSplash
+              contained
+              message={t("Cargando…")}
+              recoverOnTimeout={false}
+            />
           </div>
         ) : null}
         <iframe
@@ -1077,6 +1087,7 @@ export function CustomPluginFrame({
             fitContent
               ? {
                   height:
+                    readyFrame === frameKey &&
                     contentSize?.frameKey === frameKey
                       ? contentSize.height
                       : 512,
