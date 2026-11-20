@@ -2,6 +2,13 @@
 
 This runbook distinguishes deterministic gateway tests from external smoke tests. The deterministic suite uses injected responses and must remain stable. The smoke test invokes the configured local gateway and records only status and safe error categories.
 
+## Studio quote diagnostics
+
+Embedded Studio allows up to 90 seconds for extension action POSTs. This
+lets a provider sequence, such as OAuth followed by quoting, finish within its
+own per-step limits even when it exceeds the ordinary 15-second API timeout.
+Check the corresponding Savia Request run before replaying a timed-out quote.
+
 ## Command
 
 ```sh
