@@ -1,4 +1,8 @@
 import type { ApiClient } from "./api-client";
+
+const LONG_EXTENSION_REQUEST_PATH =
+  /^\/api\/extensions\/[a-z0-9.-]+\/(?:document-analysis|actions\/[a-z0-9._-]+)$/;
+
 export function createEmbeddedTransport(client: ApiClient, prefix: string) {
   return async (path: string, init: RequestInit = {}): Promise<Response> => {
     let decoded = path;
@@ -19,7 +23,7 @@ export function createEmbeddedTransport(client: ApiClient, prefix: string) {
         prefix + path,
         init,
         (init.method ?? "GET").toUpperCase() === "POST" &&
-          /^\/api\/extensions\/[a-z0-9.-]+\/document-analysis$/.test(decoded)
+          LONG_EXTENSION_REQUEST_PATH.test(decoded)
           ? 90000
           : undefined,
       );

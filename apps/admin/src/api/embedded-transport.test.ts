@@ -96,3 +96,30 @@ it("preserves safe document retry metadata through normalized errors", async () 
     fileId: "550e8400-e29b-41d4-a716-446655440000",
   });
 });
+
+it("waits for a quote that takes longer than the ordinary API timeout", async () => {
+  vi.useFakeTimers();
+  try {
+    const api = new ApiClient({
+      baseUrl: "https://savia.test",
+      tokenSource: { getAccessToken: async () => "test" },
+      fetcher: async () => {
+        await new Promise((resolve) => setTimeout(resolve, 35_000));
+        return Response.json({ data: { quoteNumber: "TEST-QUOTE" } });
+      },
+    });
+    const result = createEmbeddedTransport(api, "/v1/studio/12")(
+      "/api/extensions/insurance.quotes/actions/quote",
+      { method: "POST" },
+    );
+
+    await vi.advanceTimersByTimeAsync(35_000);
+    const response = await result;
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      data: { quoteNumber: "TEST-QUOTE" },
+    });
+  } finally {
+    vi.useRealTimers();
+  }
+});
